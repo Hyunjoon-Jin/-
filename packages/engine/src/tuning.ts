@@ -18,7 +18,7 @@ export const TUNING = {
   shotK: 0.025,             // (attack - defense) 민감도
 
   /** 기회 유형별 기본 득점 기대치(xG 베이스). */
-  baseXg: { open: 0.15, cross: 0.13, setpiece: 0.10 } as const,
+  baseXg: { open: 0.16, cross: 0.14, setpiece: 0.11 } as const,
 
   /** 득점 확률 보정 민감도. */
   finishK: 0.010,           // 공격력 → 득점 배율

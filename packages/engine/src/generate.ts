@@ -68,6 +68,7 @@ function genPlayer(rng: Rng, position: Position, tier: number, fixedAge?: number
     potential,
     condition: 1.0,
     morale: 0.5,
+    injuryMatches: 0,
     contractYears: rng.int(1, 4),
     wage: 0,
   };
@@ -103,11 +104,17 @@ export function generateYouthPlayer(rng: Rng, position: Position, tier: number):
   return genPlayer(rng, position, tier, rng.int(17, 19));
 }
 
-/** 생성된 구단의 선발 11명으로 기본 4-3-3 전술 구성. */
+/**
+ * 기본 4-3-3 전술 (AI용).
+ * 부상 선수를 피해 가용 선수를 우선 배치하고, 모자라면 부상 선수로 채운다.
+ */
 export function defaultTactic(club: Club): Tactic {
+  const available = club.players.filter((p) => p.injuryMatches === 0);
+  const injured = club.players.filter((p) => p.injuryMatches > 0);
+  const pool = [...available, ...injured];
   const lineup = FORMATION_433.map((position, i) => ({
     position,
-    playerId: club.players[i]!.id,
+    playerId: (pool[i] ?? club.players[i])!.id,
   }));
   return { formation: '4-3-3', lineup, mentality: 0.5, tempo: 0.5, pressing: 0.5 };
 }

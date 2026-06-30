@@ -8,6 +8,11 @@ import { ALL_ATTRS } from './types.js';
 import { DERIVED_WEIGHTS, type DerivedKey, type Weights } from './roleWeights.js';
 import { clamp, weightedMean } from './math.js';
 
+/** 부상 여부. 부상 중인 선수는 출전할 수 없다. */
+export function isInjured(player: Player): boolean {
+  return player.injuryMatches > 0;
+}
+
 /**
  * 현재 능력(CA) 근사: 36개 능력치 평균 × 10 (0~200 척도).
  * 가치·연봉·성장 계산의 공통 기준 (engine.md 1.4 단순화판).

@@ -7,6 +7,8 @@ import type { Club, MatchResult, Tactic } from './types.js';
 import { doubleRoundRobin, type Fixture } from './schedule.js';
 import { simulateMatch } from './simulateMatch.js';
 import { defaultTactic } from './generate.js';
+import { applyMatchEffects } from './matchEffects.js';
+import { Rng } from './rng.js';
 
 export interface TableRow {
   clubId: string;
@@ -60,17 +62,22 @@ function tacticFor(club: Club, tactics: TacticMap): Tactic {
   return tactics?.get(club.id) ?? defaultTactic(club);
 }
 
-/** 다음 한 경기 진행. clubs/결과가 변경된다. */
+/** 다음 한 경기 진행. clubs/결과가 변경되고, 선수 상태(피로·부상·사기)가 반영된다. */
 export function playNext(s: SeasonState, tactics?: TacticMap): MatchResult {
   const fx = s.fixtures[s.cursor]!;
   const byId = new Map(s.clubs.map((c) => [c.id, c]));
   const home = byId.get(fx.homeId)!;
   const away = byId.get(fx.awayId)!;
+  const homeTactic = tacticFor(home, tactics);
+  const awayTactic = tacticFor(away, tactics);
   const result = simulateMatch({
-    home: { club: home, tactic: tacticFor(home, tactics) },
-    away: { club: away, tactic: tacticFor(away, tactics) },
+    home: { club: home, tactic: homeTactic },
+    away: { club: away, tactic: awayTactic },
     seed: s.baseSeed + s.cursor,
   });
+  // 경기 후 상태 변화 (경기 시뮬과 별도 난수 스트림)
+  applyMatchEffects(home, homeTactic, away, awayTactic, result,
+    new Rng(s.baseSeed * 2 + s.cursor + 7919));
   s.results.push(result);
   s.cursor++;
   return result;

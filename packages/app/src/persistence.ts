@@ -9,8 +9,8 @@
 import type { GameState } from './game.js';
 import type { SeasonSummary, SeasonFinanceReport } from '@soccer-tycoon/engine';
 
-// v2: GameState에 tactics/live(경기 단위 진행) 필드 추가.
-export const SAVE_VERSION = 2;
+// v2: tactics/live 필드. v3: Player.injuryMatches(부상) 필드 추가.
+export const SAVE_VERSION = 3;
 
 type SerializedSummary = Omit<SeasonSummary, 'finance'> & {
   finance: Record<string, SeasonFinanceReport>;

@@ -6,7 +6,7 @@
 import {
   generateClub, runTransferWindow, runOffseason, settleSeason, Rng,
   createSeasonState, playRound as enginePlayRound, playToEnd, computeTable, totalRounds, currentRound,
-  commitResult, simulateMatch, defaultTactic,
+  commitResult, simulateMatch, defaultTactic, applyMatchEffects,
   buyPlayer, sellPlayer, releasePlayer,
   type Club, type Tactic, type MatchResult, type MatchSetup, type SeasonSummary, type Fixture, type TableRow,
 } from '@soccer-tycoon/engine';
@@ -275,20 +275,25 @@ export function commitWatchedRound(state: GameState, watched: MatchResult): Game
   const round = ss.fixtures[ss.cursor]!.round;
   const clubById = (id: string) => state.clubs.find((c) => c.id === id)!;
 
+  const userTactic = myTactic(state);
   while (ss.cursor < ss.fixtures.length && ss.fixtures[ss.cursor]!.round === round) {
     const fx = ss.fixtures[ss.cursor]!;
+    const homeClub = clubById(fx.homeId);
+    const awayClub = clubById(fx.awayId);
     const isUser = fx.homeId === state.myClubId || fx.awayId === state.myClubId;
-    if (isUser) {
-      commitResult(ss, watched);
-    } else {
-      const homeClub = clubById(fx.homeId);
-      const awayClub = clubById(fx.awayId);
-      commitResult(ss, simulateMatch({
-        home: { club: homeClub, tactic: defaultTactic(homeClub) },
-        away: { club: awayClub, tactic: defaultTactic(awayClub) },
-        seed: ss.baseSeed + ss.cursor,
-      }));
-    }
+    const homeTactic = fx.homeId === state.myClubId ? userTactic : defaultTactic(homeClub);
+    const awayTactic = fx.awayId === state.myClubId ? userTactic : defaultTactic(awayClub);
+    const result = isUser
+      ? watched
+      : simulateMatch({
+          home: { club: homeClub, tactic: homeTactic },
+          away: { club: awayClub, tactic: awayTactic },
+          seed: ss.baseSeed + ss.cursor,
+        });
+    // playNext와 동일한 난수 스킴으로 상태 변화 반영(관전/자동 일관성)
+    applyMatchEffects(homeClub, homeTactic, awayClub, awayTactic, result,
+      new Rng(ss.baseSeed * 2 + ss.cursor + 7919));
+    commitResult(ss, result);
   }
   return { ...state, live: { ...state.live, results: ss.results, cursor: ss.cursor } };
 }

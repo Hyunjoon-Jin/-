@@ -2,7 +2,7 @@
  * 전술/라인업 유틸 (앱 측).
  * 포메이션 프리셋, 자동 베스트 XI, 스쿼드 변동 시 라인업 보정.
  */
-import { currentAbility, type Club, type Player, type Position, type Tactic } from '@soccer-tycoon/engine';
+import { currentAbility, isInjured, type Club, type Player, type Position, type Tactic } from '@soccer-tycoon/engine';
 
 export const FORMATIONS: Record<string, Position[]> = {
   '4-3-3': ['GK', 'DL', 'DC', 'DC', 'DR', 'MC', 'MC', 'MC', 'AML', 'ST', 'AMR'],
@@ -18,9 +18,10 @@ function familiarity(p: Player, pos: Position): number {
   return p.familiarity[pos] ?? 0.2;
 }
 
-/** 슬롯 적합도 점수: 포지션 숙련도 우선, 그다음 능력. */
+/** 슬롯 적합도 점수: 부상 선수는 최후순위, 그다음 포지션 숙련도, 능력 순. */
 function slotScore(p: Player, pos: Position): number {
-  return familiarity(p, pos) * 1000 + currentAbility(p);
+  const injuryPenalty = isInjured(p) ? 1_000_000 : 0;
+  return familiarity(p, pos) * 1000 + currentAbility(p) - injuryPenalty;
 }
 
 /** 포메이션에 맞춰 자동으로 베스트 XI를 뽑는다. */

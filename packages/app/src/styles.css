@@ -170,6 +170,14 @@ body {
 .muted { color: var(--muted); }
 .arrow { color: var(--muted); }
 
+/* 컨디션 / 부상 */
+.cond { font-weight: 700; }
+.cond-good { color: var(--accent); }
+.cond-mid { color: #e0c14a; }
+.cond-low { color: #ff9d5c; }
+.injury { color: #ff6b6b; font-weight: 700; }
+.slot-injured { background: #2e1c1c; }
+
 h2 { font-size: 18px; }
 h3 { font-size: 14px; margin: 0 0 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
 

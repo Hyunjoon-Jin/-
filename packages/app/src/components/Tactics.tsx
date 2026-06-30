@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import {
-  computeTeamStrength, currentAbility, type Club, type Tactic, type TeamStrength,
+  computeTeamStrength, currentAbility, isInjured, type Club, type Tactic, type TeamStrength,
 } from '@soccer-tycoon/engine';
 import { FORMATION_NAMES, autoPickLineup, swapPlayer } from '../tactics.js';
 
@@ -58,8 +58,9 @@ export function Tactics({ club, tactic, onChange, disabled }: Props) {
           <tbody>
             {tactic.lineup.map((slot, i) => {
               const p = byId.get(slot.playerId);
+              const injured = p ? isInjured(p) : false;
               return (
-                <tr key={i}>
+                <tr key={i} className={injured ? 'slot-injured' : ''}>
                   <td className="slot-pos">{slot.position}</td>
                   <td className="slot-player">
                     <select
@@ -69,12 +70,12 @@ export function Tactics({ club, tactic, onChange, disabled }: Props) {
                     >
                       {club.players.map((pl) => (
                         <option key={pl.id} value={pl.id}>
-                          {pl.name} ({pl.position} · {currentAbility(pl).toFixed(0)})
+                          {isInjured(pl) ? '🤕 ' : ''}{pl.name} ({pl.position} · {currentAbility(pl).toFixed(0)})
                         </option>
                       ))}
                     </select>
                   </td>
-                  <td>{p ? currentAbility(p).toFixed(0) : '-'}</td>
+                  <td>{injured ? <span className="injury">🤕{p!.injuryMatches}</span> : p ? currentAbility(p).toFixed(0) : '-'}</td>
                 </tr>
               );
             })}

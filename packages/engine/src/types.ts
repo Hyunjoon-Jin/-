@@ -66,10 +66,12 @@ export interface Player {
   attributes: Attributes;
   /** 잠재력 상한 (CA 척도, 0~200). 성장에 사용. */
   potential: number;
-  /** 컨디션 (0~1). 1 = 완전. 피로/부상 반영. */
+  /** 컨디션 (0~1). 1 = 완전. 경기 출전으로 하락, 휴식으로 회복. */
   condition: number;
-  /** 사기 (0~1). 0.5 = 중립. */
+  /** 사기 (0~1). 0.5 = 중립. 승패로 변동. */
   morale: number;
+  /** 남은 부상 경기 수. 0 = 정상. >0 이면 출전 불가. */
+  injuryMatches: number;
   /** 잔여 계약 연수. */
   contractYears: number;
   /** 주급 (만원). */
