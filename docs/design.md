@@ -188,7 +188,7 @@ soccer-tycoon/
 
 ## 8. 다음 단계 (Backlog)
 
-- [ ] `docs/engine.md`: 세부 능력치 목록 확정 + 경기 시뮬 알고리즘 설계.
+- [x] `docs/engine.md`: 세부 능력치 목록 확정 + 경기 시뮬 알고리즘 설계.
 - [ ] `docs/economy.md`: 이적료/연봉 산정 공식, 재정 모델.
 - [ ] 데이터 생성기 사양: 선수 능력치 분포, 이름/국적 풀.
 - [ ] 모노레포 스캐폴딩 (packages/engine, data, app).

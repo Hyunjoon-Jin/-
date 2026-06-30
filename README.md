@@ -10,6 +10,7 @@
 ## 문서
 
 - [기획서 (docs/design.md)](docs/design.md) — 핵심 의사결정, 도메인 모델, MVP 범위, 기술 스택.
+- [경기 엔진 & 능력치 설계 (docs/engine.md)](docs/engine.md) — 능력치 36종, 포지션, 팀 강도 산출, 틱 기반 경기 시뮬 알고리즘.
 
 ## 계획된 기술 스택
 
