@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { startGame, advance } from '../src/game.js';
+import { startGame, advanceFullSeason } from '../src/game.js';
 import { serialize, deserialize } from '../src/persistence.js';
 import { WebSaveStore } from '../src/storage.js';
 
@@ -18,8 +18,8 @@ function fakeStorage(): Storage {
 
 function makeGame() {
   let g = startGame(2026, 'c5');
-  g = advance(g); // 시즌 1 진행 → history에 Map 포함 요약 생성
-  g = advance(g);
+  g = advanceFullSeason(g); // 시즌 1 진행 → history에 Map 포함 요약 생성
+  g = advanceFullSeason(g);
   return g;
 }
 
@@ -83,7 +83,7 @@ describe('storage: 슬롯 저장소', () => {
     const store = new WebSaveStore(fakeStorage());
     let g = makeGame();
     store.save('slot1', g);
-    g = advance(g);
+    g = advanceFullSeason(g);
     store.save('slot1', g);
     expect(store.list()).toHaveLength(1);
     expect(store.load('slot1')!.season).toBe(g.season);

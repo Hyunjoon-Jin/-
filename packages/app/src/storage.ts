@@ -71,8 +71,12 @@ export class WebSaveStore implements SaveStore {
   load(id: string): GameState | null {
     const raw = this.storage.getItem(KEY_PREFIX + id);
     if (!raw) return null;
-    const file = JSON.parse(raw) as SaveFile;
-    return deserialize(file);
+    try {
+      return deserialize(JSON.parse(raw) as SaveFile);
+    } catch {
+      // 손상되었거나 호환되지 않는(구버전) 세이브 → 로드 불가
+      return null;
+    }
   }
 
   remove(id: string): void {

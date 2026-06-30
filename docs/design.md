@@ -208,8 +208,11 @@ soccer-tycoon/
 - [x] UI 1차 (packages/app): 구단 선택 + 대시보드·스쿼드·리그·이적 + 시즌 진행.
 - [x] 저장 계층 1차: 버전드 직렬화 + 슬롯 저장(localStorage) + 자동 저장/이어하기.
       (SQLite 구현은 Electron 메인 프로세스 도입 시 동일 인터페이스로 교체.)
+- [x] 경기 단위 진행: 라운드 로빈 일정(schedule) + 상태 기반 시즌(season) +
+      프리시즌→킥오프→라운드 진행→정산 루프.
+- [x] 전술 편집: 포메이션·라인업(베스트 XI/슬롯 교체)·지시 슬라이더 + 실시간 팀 전력.
 
-남은 큰 축: **Electron 패키징 + SQLite SaveStore**, 경기 단위 진행, 전술 편집 화면.
+남은 큰 축: **Electron 패키징 + SQLite SaveStore**, 직접 이적 인터랙션, 경기 중 중계/개입.
 
 ---
 

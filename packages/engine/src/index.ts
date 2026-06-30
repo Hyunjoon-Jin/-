@@ -5,10 +5,16 @@ export { simulateMatch, type MatchSetup } from './simulateMatch.js';
 export { computeTeamStrength, lineOf } from './teamStrength.js';
 export { playerDerived, currentAbility, type DerivedRatings } from './derived.js';
 export { generateClub, generateYouthPlayer, defaultTactic, FORMATION_433 } from './generate.js';
-export { simulateSeason, type SeasonResult, type TableRow } from './league.js';
+export { simulateSeason, type SeasonResult } from './league.js';
+export { doubleRoundRobin, type Fixture } from './schedule.js';
+export {
+  createSeasonState, isSeasonOver, totalRounds, currentRound,
+  playNext, playRound, playToEnd, computeTable,
+  type SeasonState, type TableRow,
+} from './season.js';
 export { progressPlayer } from './progression.js';
 export {
-  advanceSeason, runFranchise, type SeasonSummary,
+  advanceSeason, runFranchise, runOffseason, type SeasonSummary,
 } from './franchise.js';
 export { TUNING } from './tuning.js';
 export { DERIVED_WEIGHTS, type DerivedKey } from './roleWeights.js';

@@ -43,7 +43,7 @@ export function Dashboard({ game }: { game: GameState }) {
             )}
           </div>
         ) : (
-          <p className="muted">아직 시즌을 진행하지 않았습니다. 상단의 "시즌 진행"을 눌러 시작하세요.</p>
+          <p className="muted">아직 완료된 시즌이 없습니다. "경기" 탭에서 시즌을 시작하세요.</p>
         )}
       </section>
     </div>

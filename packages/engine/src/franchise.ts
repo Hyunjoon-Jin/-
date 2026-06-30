@@ -25,6 +25,31 @@ export interface SeasonSummary {
 }
 
 /**
+ * 오프시즌 진행: 전 선수 성장/노화 + 은퇴(유스 1:1 충원).
+ * 헤드리스 루프와 앱(경기 단위 진행)이 시즌 종료 시 공통으로 호출한다.
+ * @returns 은퇴(=유스 충원) 인원.
+ */
+export function runOffseason(clubs: Club[], rng: Rng): number {
+  let retirements = 0;
+  for (const club of clubs) {
+    for (const player of club.players) progressPlayer(player, rng);
+
+    const survivors: Player[] = [];
+    const retiredPositions: Position[] = [];
+    for (const p of club.players) {
+      if (p.age >= RETIRE_AGE) retiredPositions.push(p.position);
+      else survivors.push(p);
+    }
+    for (const pos of retiredPositions) {
+      survivors.push(generateYouthPlayer(rng, pos, club.finance.reputation));
+      retirements++;
+    }
+    club.players = survivors;
+  }
+  return retirements;
+}
+
+/**
  * 한 시즌 진행. clubs 객체(선수단·재정·선수 능력치)가 직접 변경된다.
  * @param baseSeed 시즌별로 다른 시드를 넣어 재현성을 유지한다.
  */
@@ -44,24 +69,8 @@ export function advanceSeason(clubs: Club[], season: number, baseSeed: number): 
     finance.set(club.id, settleSeason(club, pos, clubs.length));
   });
 
-  // 4) 성장/노화 + 5) 은퇴·유스 유입
-  let retirements = 0;
-  for (const club of clubs) {
-    for (const player of club.players) progressPlayer(player, rng);
-
-    const survivors: Player[] = [];
-    const retiredPositions: Position[] = [];
-    for (const p of club.players) {
-      if (p.age >= RETIRE_AGE) retiredPositions.push(p.position);
-      else survivors.push(p);
-    }
-    // 은퇴한 만큼 같은 포지션 유스로 충원 (스쿼드 크기 유지)
-    for (const pos of retiredPositions) {
-      survivors.push(generateYouthPlayer(rng, pos, club.finance.reputation));
-      retirements++;
-    }
-    club.players = survivors;
-  }
+  // 4) 오프시즌: 성장/노화 + 은퇴·유스 유입
+  const retirements = runOffseason(clubs, rng);
 
   const champ = table[0]!;
   return {

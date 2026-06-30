@@ -1,55 +1,62 @@
 /**
  * UI ↔ 엔진 어댑터.
- * 엔진은 clubs 객체를 직접 변경(mutate)하므로, React 갱신을 위해
- * advance 후 새로운 GameState 래퍼 객체를 돌려준다.
+ * 시즌을 경기 단위로 진행한다: 프리시즌 → 킥오프(이적) → 라운드 진행 → 시즌 종료(정산·성장).
+ * 엔진이 clubs를 직접 변경하므로, 각 동작 후 새 GameState 래퍼를 돌려준다.
  */
 import {
-  generateClub, advanceSeason, Rng,
-  type Club, type SeasonSummary,
+  generateClub, runTransferWindow, runOffseason, settleSeason, Rng,
+  createSeasonState, playRound as enginePlayRound, playToEnd, computeTable, totalRounds, currentRound,
+  type Club, type Tactic, type MatchResult, type SeasonSummary, type Fixture, type TableRow,
 } from '@soccer-tycoon/engine';
+import { makeDefaultTactic, repairTactic } from './tactics.js';
+
+/** 진행 중 시즌 스냅샷 (clubs는 GameState가 보유하므로 제외 → 직렬화 중복 방지). */
+export interface LiveSeason {
+  fixtures: Fixture[];
+  results: MatchResult[];
+  cursor: number;
+  baseSeed: number;
+  /** 이 시즌 킥오프 때 발생한 이적(시즌 종료 요약에 사용). */
+  transfers: SeasonSummary['transfers'];
+}
 
 export interface GameState {
   seed: number;
   clubs: Club[];
   myClubId: string;
-  /** 다음에 진행할 시즌 번호 (1부터). */
   season: number;
   history: SeasonSummary[];
+  /** clubId → 전술. 최소한 내 구단. AI는 기본 전술. */
+  tactics: Record<string, Tactic>;
+  /** 진행 중 시즌. null = 프리시즌. */
+  live: LiveSeason | null;
 }
 
 const N_CLUBS = 12;
-
-/** 시작 화면용: 선택 가능한 구단 목록(생성 후). */
-export function createLeague(seed: number): Club[] {
-  const rng = new Rng(seed);
-  const clubs: Club[] = [];
-  for (let i = 0; i < N_CLUBS; i++) {
-    const tier = 8 + Math.round((i / (N_CLUBS - 1)) * 8);
-    clubs.push(generateClub(rng, `c${i}`, clubName(i), tier));
-  }
-  return clubs;
-}
 
 const NAMES = [
   'FC 서울리온', '부산 유나이티드', '대구 다이너모', '인천 아틀레틱',
   '광주 시티', '수원 로버스', '울산 스파르탄', '전주 레인저스',
   '제주 위너스', '창원 캐슬', '청주 코메츠', '강릉 포레스트',
 ];
-function clubName(i: number): string {
-  return NAMES[i] ?? `Club ${i + 1}`;
+
+export function createLeague(seed: number): Club[] {
+  const rng = new Rng(seed);
+  const clubs: Club[] = [];
+  for (let i = 0; i < N_CLUBS; i++) {
+    const tier = 8 + Math.round((i / (N_CLUBS - 1)) * 8);
+    clubs.push(generateClub(rng, `c${i}`, NAMES[i] ?? `Club ${i + 1}`, tier));
+  }
+  return clubs;
 }
 
 export function startGame(seed: number, myClubId: string): GameState {
-  return { seed, clubs: createLeague(seed), myClubId, season: 1, history: [] };
-}
-
-/** 한 시즌 진행. 엔진이 clubs를 변경하고, 새 래퍼를 반환한다. */
-export function advance(state: GameState): GameState {
-  const summary = advanceSeason(state.clubs, state.season, state.seed + state.season * 1000);
+  const clubs = createLeague(seed);
+  const mine = clubs.find((c) => c.id === myClubId)!;
   return {
-    ...state,
-    season: state.season + 1,
-    history: [...state.history, summary],
+    seed, clubs, myClubId, season: 1, history: [],
+    tactics: { [myClubId]: makeDefaultTactic(mine) },
+    live: null,
   };
 }
 
@@ -57,11 +64,141 @@ export function myClub(state: GameState): Club {
   return state.clubs.find((c) => c.id === state.myClubId)!;
 }
 
+export function myTactic(state: GameState): Tactic {
+  return state.tactics[state.myClubId]!;
+}
+
+// ── 시드 파생 (재현성) ──
+const transferSeed = (s: GameState) => s.seed + s.season * 1000 + 1;
+const seasonSeed = (s: GameState) => s.seed + s.season * 1000 + 2;
+const offseasonSeed = (s: GameState) => s.seed + s.season * 1000 + 3;
+
+/** live 스냅샷 → 엔진 SeasonState 복원 (clubs 부착). */
+function toSeasonState(state: GameState) {
+  const live = state.live!;
+  return {
+    clubs: state.clubs,
+    fixtures: live.fixtures,
+    results: live.results,
+    cursor: live.cursor,
+    baseSeed: live.baseSeed,
+  };
+}
+
+function tacticMap(state: GameState): Map<string, Tactic> {
+  return new Map([[state.myClubId, myTactic(state)]]);
+}
+
+/** 프리시즌 → 킥오프: 이적 창 실행 후 일정 생성. */
+export function startSeason(state: GameState): GameState {
+  // 내 구단은 AI 매매에서 제외(직접 관리)
+  const transfers = runTransferWindow(state.clubs, transferSeed(state), state.myClubId);
+  // 이적으로 다른 구단 구성이 바뀌어도 내 라인업만 보정하면 됨
+  const repaired = repairTactic(myClub(state), myTactic(state));
+  const ss = createSeasonState(state.clubs, seasonSeed(state));
+  return {
+    ...state,
+    tactics: { ...state.tactics, [state.myClubId]: repaired },
+    live: { fixtures: ss.fixtures, results: ss.results, cursor: ss.cursor, baseSeed: ss.baseSeed, transfers },
+  };
+}
+
+/** 현재 라운드 진행. */
+export function playRound(state: GameState): GameState {
+  if (!state.live) return state;
+  const ss = toSeasonState(state);
+  enginePlayRound(ss, tacticMap(state));
+  return { ...state, live: { ...state.live, results: ss.results, cursor: ss.cursor } };
+}
+
+/** 남은 모든 경기 진행. */
+export function playRestOfSeason(state: GameState): GameState {
+  if (!state.live) return state;
+  const ss = toSeasonState(state);
+  playToEnd(ss, tacticMap(state));
+  return { ...state, live: { ...state.live, results: ss.results, cursor: ss.cursor } };
+}
+
+/** 시즌 종료: 정산 + 오프시즌(성장·은퇴) + 요약 기록 → 다음 시즌 프리시즌. */
+export function finishSeason(state: GameState): GameState {
+  if (!state.live) return state;
+  const ss = toSeasonState(state);
+  playToEnd(ss, tacticMap(state));
+  const table = computeTable(ss);
+
+  const finance = new Map();
+  table.forEach((row, pos) => {
+    const club = state.clubs.find((c) => c.id === row.clubId)!;
+    finance.set(club.id, settleSeason(club, pos, state.clubs.length));
+  });
+
+  const retirements = runOffseason(state.clubs, new Rng(offseasonSeed(state)));
+  const champ = table[0]!;
+  const summary: SeasonSummary = {
+    season: state.season,
+    table,
+    championId: champ.clubId,
+    championName: champ.name,
+    transfers: state.live.transfers,
+    finance,
+    retirements,
+  };
+
+  // 오프시즌으로 스쿼드가 바뀌었으니 라인업 보정
+  const repaired = repairTactic(myClub(state), myTactic(state));
+  return {
+    ...state,
+    season: state.season + 1,
+    history: [...state.history, summary],
+    tactics: { ...state.tactics, [state.myClubId]: repaired },
+    live: null,
+  };
+}
+
+export function setMyTactic(state: GameState, tactic: Tactic): GameState {
+  return { ...state, tactics: { ...state.tactics, [state.myClubId]: tactic } };
+}
+
+/** 프리시즌에서 한 시즌 전체를 한 번에 진행(킥오프→전 경기→정산). */
+export function advanceFullSeason(state: GameState): GameState {
+  return finishSeason(playRestOfSeason(startSeason(state)));
+}
+
+// ── 조회 헬퍼 ──
+
+export function liveTable(state: GameState): TableRow[] {
+  if (!state.live) return [];
+  return computeTable(toSeasonState(state));
+}
+
+export function liveProgress(state: GameState): { round: number; total: number; over: boolean } {
+  if (!state.live) return { round: 0, total: 0, over: false };
+  const ss = toSeasonState(state);
+  const total = totalRounds(ss);
+  const over = ss.cursor >= ss.fixtures.length;
+  return { round: over ? total : currentRound(ss), total, over };
+}
+
+/** 내 구단의 다음 라운드 경기. */
+export function myNextFixture(state: GameState): { fx: Fixture; opponent: Club; home: boolean } | null {
+  if (!state.live) return null;
+  const live = state.live;
+  if (live.cursor >= live.fixtures.length) return null;
+  const round = live.fixtures[live.cursor]!.round;
+  const fx = live.fixtures.find(
+    (f, i) => i >= live.cursor && f.round === round &&
+      (f.homeId === state.myClubId || f.awayId === state.myClubId),
+  );
+  if (!fx) return null;
+  const home = fx.homeId === state.myClubId;
+  const opponent = state.clubs.find((c) => c.id === (home ? fx.awayId : fx.homeId))!;
+  return { fx, opponent, home };
+}
+
 export function lastSummary(state: GameState): SeasonSummary | undefined {
   return state.history[state.history.length - 1];
 }
 
-/** 내 구단의 최근 시즌 최종 순위(1-index). 없으면 undefined. */
 export function myLastPosition(state: GameState): number | undefined {
   const s = lastSummary(state);
   if (!s) return undefined;

@@ -1,18 +1,25 @@
 import { useMemo, useState } from 'react';
-import { startGame, advance, myClub, type GameState } from './game.js';
+import {
+  startGame, myClub, myTactic, setMyTactic,
+  startSeason, playRound, playRestOfSeason, finishSeason, advanceFullSeason,
+  type GameState,
+} from './game.js';
+import type { Tactic } from '@soccer-tycoon/engine';
 import { WebSaveStore } from './storage.js';
 import { StartScreen } from './components/StartScreen.js';
 import { Dashboard } from './components/Dashboard.js';
 import { Squad } from './components/Squad.js';
-import { LeagueTable } from './components/LeagueTable.js';
+import { Tactics } from './components/Tactics.js';
+import { Match } from './components/Match.js';
 import { Transfers } from './components/Transfers.js';
 
-type Tab = 'dashboard' | 'squad' | 'league' | 'transfers';
+type Tab = 'dashboard' | 'squad' | 'tactics' | 'match' | 'transfers';
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'dashboard', label: '대시보드' },
   { key: 'squad', label: '스쿼드' },
-  { key: 'league', label: '리그' },
+  { key: 'tactics', label: '전술' },
+  { key: 'match', label: '경기' },
   { key: 'transfers', label: '이적' },
 ];
 
@@ -27,9 +34,10 @@ export function App() {
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>('dashboard');
 
-  function persist(id: string, state: GameState) {
-    const meta = store.save(id, state);
-    setSavedAt(meta.savedAt);
+  /** 상태 갱신 + 자동 저장. */
+  function update(next: GameState) {
+    setGame(next);
+    if (slotId) setSavedAt(store.save(slotId, next).savedAt);
   }
 
   function handleStart(seed: number, clubId: string) {
@@ -37,7 +45,7 @@ export function App() {
     const id = newSlotId();
     setGame(state);
     setSlotId(id);
-    persist(id, state);
+    setSavedAt(store.save(id, state).savedAt);
     setTab('dashboard');
   }
 
@@ -46,13 +54,6 @@ export function App() {
     setSlotId(id);
     setSavedAt(null);
     setTab('dashboard');
-  }
-
-  function handleAdvance() {
-    if (!game || !slotId) return;
-    const next = advance(game);
-    setGame(next);
-    persist(slotId, next);
   }
 
   function quitToMenu() {
@@ -70,19 +71,18 @@ export function App() {
     ? `저장됨 ${new Date(savedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}`
     : '';
 
+  const handleTacticChange = (t: Tactic) => update(setMyTactic(game, t));
+
   return (
     <div className="app">
       <header className="topbar">
         <div className="brand">⚽ Soccer Tycoon</div>
-        <button className="btn-ghost" onClick={quitToMenu} title="메뉴로 (자동 저장됨)">
-          ← 메뉴
-        </button>
+        <button className="btn-ghost" onClick={quitToMenu} title="메뉴로 (자동 저장됨)">← 메뉴</button>
         <div className="club-info">
           {savedLabel && <span className="saved-badge">{savedLabel}</span>}
           <span className="club-name">{club.name}</span>
-          <span className="season-badge">시즌 {game.season}</span>
+          <span className="season-badge">시즌 {game.season}{game.live ? ' 진행중' : ' 프리시즌'}</span>
         </div>
-        <button className="btn-advance" onClick={handleAdvance}>▶ 시즌 진행</button>
       </header>
 
       <nav className="tabs">
@@ -100,7 +100,19 @@ export function App() {
       <main className="content">
         {tab === 'dashboard' && <Dashboard game={game} />}
         {tab === 'squad' && <Squad club={club} />}
-        {tab === 'league' && <LeagueTable game={game} />}
+        {tab === 'tactics' && (
+          <Tactics club={club} tactic={myTactic(game)} onChange={handleTacticChange} />
+        )}
+        {tab === 'match' && (
+          <Match
+            game={game}
+            onStartSeason={() => update(startSeason(game))}
+            onPlayRound={() => update(playRound(game))}
+            onPlayRest={() => update(playRestOfSeason(game))}
+            onFinish={() => update(finishSeason(game))}
+            onAdvanceFull={() => update(advanceFullSeason(game))}
+          />
+        )}
         {tab === 'transfers' && <Transfers game={game} />}
       </main>
     </div>

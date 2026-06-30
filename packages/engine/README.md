@@ -14,7 +14,9 @@
 | `teamStrength.ts` | 라인업 → 팀 강도 7지표 집계 |
 | `tuning.ts` | 밸런싱 상수 (xG·로지스틱 계수 등) |
 | `simulateMatch.ts` | 틱 기반 경기 시뮬 (점유→전진→슈팅→결과) |
-| `league.ts` | 더블 라운드로빈 시즌 시뮬 + 순위표 |
+| `schedule.ts` | 라운드 로빈 일정 생성 (서클 메서드) |
+| `season.ts` | 상태 기반 시즌(경기 단위 진행 + 순위표 집계) |
+| `league.ts` | 헤드리스 일괄 시즌 시뮬 (season.ts 래퍼) |
 | `generate.ts` | 가상 선수·구단 절차적 생성 |
 | `simSeason.ts` | 헤드리스 밸런싱 검증 하니스 |
 | `money.ts` | 화폐 단위(만원) + 억/만원 표시 |

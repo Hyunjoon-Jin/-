@@ -171,3 +171,56 @@ body {
 .arrow { color: var(--muted); }
 
 h2 { font-size: 18px; }
+h3 { font-size: 14px; margin: 0 0 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
+
+/* ── Tactics ── */
+.tactics { display: grid; grid-template-columns: 1.3fr 1fr; gap: 18px; }
+.field-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 12px; }
+.field-controls .label { color: var(--muted); font-size: 13px; margin-right: 4px; }
+.chip {
+  background: var(--panel); color: var(--text); border: 1px solid var(--line);
+  border-radius: 16px; padding: 5px 12px; cursor: pointer; font-size: 13px;
+}
+.chip:hover { border-color: var(--accent-2); }
+.chip.active { background: var(--accent-2); color: #06203f; border-color: var(--accent-2); font-weight: 700; }
+.chip.auto { margin-left: auto; }
+.lineup-table select {
+  background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+  border-radius: 6px; padding: 4px 8px; width: 100%; font-size: 13px;
+}
+.lineup-table .slot-pos { font-weight: 700; color: var(--accent); width: 56px; }
+.lineup-table td.slot-player { text-align: left; }
+.tactics-right { display: flex; flex-direction: column; gap: 14px; }
+
+.slider { margin-bottom: 14px; }
+.slider-head { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; }
+.slider input[type=range] { width: 100%; accent-color: var(--accent); }
+.slider-ends { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
+
+.bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.bar-label { width: 36px; font-size: 13px; color: var(--muted); }
+.bar-track { flex: 1; height: 8px; background: var(--panel-2); border-radius: 4px; overflow: hidden; }
+.bar-fill { height: 100%; background: var(--accent); }
+.bar-val { width: 28px; text-align: right; font-size: 13px; font-weight: 700; }
+
+/* ── Match / Season ── */
+.match-screen { max-width: 1000px; }
+.phase-banner { margin-bottom: 14px; }
+.phase-banner h2 { margin: 0 0 4px; }
+.phase-actions { display: flex; gap: 10px; margin-bottom: 8px; }
+.hint { font-size: 13px; }
+.next-fixture { font-size: 15px; }
+.match-cols { display: grid; grid-template-columns: 1.4fr 1fr; gap: 18px; margin-top: 12px; }
+
+.result-list { list-style: none; padding: 0; margin: 0; }
+.result-list li {
+  display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
+  gap: 8px; padding: 7px 10px; border-bottom: 1px solid var(--line); font-size: 13px;
+}
+.result-list .rl-home { text-align: right; }
+.result-list .rl-away { text-align: left; }
+.result-list .rl-score { font-weight: 700; background: var(--panel-2); border-radius: 4px; padding: 1px 8px; }
+.result-list li.mine { border-radius: 6px; }
+.result-list li.mine.win { background: #1f3a26; }
+.result-list li.mine.loss { background: #3a2020; }
+.result-list li.mine.draw { background: #33321f; }

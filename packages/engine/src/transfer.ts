@@ -46,16 +46,20 @@ function bestCAInLine(club: Club, line: Line): number {
 
 /**
  * 이적 창 실행.
+ * @param excludeClubId 지정 시 해당 구단은 AI 매매에서 제외(매수·매도 모두).
+ *   사용자가 직접 관리하는 구단을 보호하는 데 쓴다.
  * @returns 성사된 이적 목록. 구단 객체(선수단/재정)는 직접 변경된다.
  */
-export function runTransferWindow(clubs: Club[], seed: number): TransferDeal[] {
+export function runTransferWindow(
+  clubs: Club[], seed: number, excludeClubId?: string,
+): TransferDeal[] {
   const rng = new Rng(seed);
   const deals: TransferDeal[] = [];
   // 한 창에서 선수는 최대 1회만 이적 (재판매 방지).
   const moved = new Set<string>();
 
-  // 구단 처리 순서 무작위(시드 고정)
-  const order = [...clubs];
+  // 구단 처리 순서 무작위(시드 고정). 제외 구단은 매수자에서 뺀다.
+  const order = clubs.filter((c) => c.id !== excludeClubId);
   for (let i = order.length - 1; i > 0; i--) {
     const j = rng.int(0, i);
     [order[i], order[j]] = [order[j]!, order[i]!];
@@ -70,6 +74,7 @@ export function runTransferWindow(clubs: Club[], seed: number): TransferDeal[] {
     let best: { seller: Club; player: Player; fee: number } | null = null;
     for (const seller of clubs) {
       if (seller.id === buyer.id) continue;
+      if (seller.id === excludeClubId) continue; // 보호 구단은 매도 대상에서 제외
       // 매도 구단은 해당 라인에 최소 인원(3)을 남겨야 판다
       if (playersInLine(seller, need).length <= 3) continue;
       for (const player of playersInLine(seller, need)) {
