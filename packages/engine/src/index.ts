@@ -1,0 +1,9 @@
+/** 엔진 공개 API. */
+export * from './types.js';
+export { Rng } from './rng.js';
+export { simulateMatch, type MatchSetup } from './simulateMatch.js';
+export { computeTeamStrength, lineOf } from './teamStrength.js';
+export { playerDerived, type DerivedRatings } from './derived.js';
+export { generateClub, defaultTactic, FORMATION_433 } from './generate.js';
+export { TUNING } from './tuning.js';
+export { DERIVED_WEIGHTS, type DerivedKey } from './roleWeights.js';

@@ -1,0 +1,18 @@
+{
+  "name": "@soccer-tycoon/engine",
+  "version": "0.0.1",
+  "description": "헤드리스 축구 시뮬레이션 엔진 (UI 의존성 0)",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "demo": "tsx src/demo.ts",
+    "sim-season": "tsx src/simSeason.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

@@ -5,12 +5,23 @@
 
 ## 현재 상태
 
-초기 기획 단계입니다. 코드는 아직 없으며, 설계 문서를 정리하고 있습니다.
+기획 + 엔진 프로토타입 단계. 헤드리스 경기/시즌 시뮬레이션이 동작하며 밸런스 검증을 통과합니다.
 
 ## 문서
 
 - [기획서 (docs/design.md)](docs/design.md) — 핵심 의사결정, 도메인 모델, MVP 범위, 기술 스택.
 - [경기 엔진 & 능력치 설계 (docs/engine.md)](docs/engine.md) — 능력치 36종, 포지션, 팀 강도 산출, 틱 기반 경기 시뮬 알고리즘.
+
+## 빠른 실행
+
+```bash
+npm install
+npm run demo                # 경기 1건 텍스트 중계
+npm run test                # 엔진 테스트 (재현성 + 분포 가드레일)
+npm run sim-season --workspace @soccer-tycoon/engine   # 시즌 밸런스 지표
+```
+
+엔진 패키지 상세: [`packages/engine/README.md`](packages/engine/README.md).
 
 ## 계획된 기술 스택
 

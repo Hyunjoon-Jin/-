@@ -1,0 +1,13 @@
+{
+  "name": "soccer-tycoon",
+  "version": "0.0.1",
+  "private": true,
+  "description": "축구 구단주 게임 — 하드코어 시뮬레이션 (모노레포 루트)",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "test": "npm run test --workspaces --if-present",
+    "demo": "npm run demo --workspace @soccer-tycoon/engine"
+  }
+}
