@@ -4,6 +4,9 @@
   "description": "헤드리스 축구 시뮬레이션 엔진 (UI 의존성 0)",
   "type": "module",
   "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "scripts": {
     "demo": "tsx src/demo.ts",
     "sim-season": "tsx src/simSeason.ts",
