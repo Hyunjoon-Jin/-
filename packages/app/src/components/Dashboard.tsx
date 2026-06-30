@@ -29,7 +29,10 @@ export function Dashboard({ game }: { game: GameState }) {
           <div className="last-season">
             <p>
               최종 순위: <b>{pos}위</b> / {last.table.length}팀 &nbsp;·&nbsp;
-              우승: <b>{last.championName}</b>
+              리그 우승: <b>{last.championName}</b>
+              {last.cupChampionName && (
+                <> &nbsp;·&nbsp; 컵 우승: <b>{last.cupChampionName}</b></>
+              )}
             </p>
             {myReport && (
               <p className={myReport.net >= 0 ? 'pos' : 'neg'}>

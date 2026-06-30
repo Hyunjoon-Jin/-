@@ -9,8 +9,9 @@ import {
   commitResult, simulateMatch, defaultTactic, applyMatchEffects,
   buyPlayer, sellPlayer, releasePlayer,
   summarizeStats, aggregatePlayerStats, topScorers as engineTopScorers,
+  createCup, playCupRound as enginePlayCupRound, playCupToEnd, isCupOver,
   type Club, type Tactic, type MatchResult, type MatchSetup, type SeasonSummary,
-  type Fixture, type TableRow, type PlayerSeasonStat,
+  type Fixture, type TableRow, type PlayerSeasonStat, type CupState,
 } from '@soccer-tycoon/engine';
 import { makeDefaultTactic, repairTactic } from './tactics.js';
 
@@ -34,7 +35,12 @@ export interface GameState {
   tactics: Record<string, Tactic>;
   /** 진행 중 시즌. null = 프리시즌. */
   live: LiveSeason | null;
+  /** 병행 컵대회. null = 미진행. */
+  cup: CupState | null;
 }
+
+/** 컵 우승 상금 (만원). */
+const CUP_PRIZE = 30_000;
 
 const N_CLUBS = 12;
 
@@ -61,6 +67,7 @@ export function startGame(seed: number, myClubId: string): GameState {
     seed, clubs, myClubId, season: 1, history: [],
     tactics: { [myClubId]: makeDefaultTactic(mine) },
     live: null,
+    cup: null,
   };
 }
 
@@ -100,11 +107,20 @@ export function startSeason(state: GameState): GameState {
   // 이적으로 다른 구단 구성이 바뀌어도 내 라인업만 보정하면 됨
   const repaired = repairTactic(myClub(state), myTactic(state));
   const ss = createSeasonState(state.clubs, seasonSeed(state));
+  const cup = createCup(state.clubs, state.seed + state.season * 1000 + 4);
   return {
     ...state,
     tactics: { ...state.tactics, [state.myClubId]: repaired },
     live: { fixtures: ss.fixtures, results: ss.results, cursor: ss.cursor, baseSeed: ss.baseSeed, transfers },
+    cup,
   };
+}
+
+/** 컵 다음 라운드 진행 (선수 상태도 변동). */
+export function playCupRound(state: GameState): GameState {
+  if (!state.cup || isCupOver(state.cup)) return state;
+  const cup = enginePlayCupRound(state.cup, state.clubs, tacticMap(state));
+  return { ...state, cup };
 }
 
 /** 현재 라운드 진행. */
@@ -137,6 +153,22 @@ export function finishSeason(state: GameState): GameState {
     finance.set(club.id, settleSeason(club, pos, state.clubs.length));
   });
 
+  // 컵 자동 완료 + 우승 상금
+  let cupChampionId: string | undefined;
+  let cupChampionName: string | undefined;
+  if (state.cup) {
+    const finishedCup = playCupToEnd(state.cup, state.clubs, tacticMap(state));
+    if (finishedCup.championId) {
+      cupChampionId = finishedCup.championId;
+      const champClub = state.clubs.find((c) => c.id === finishedCup.championId);
+      cupChampionName = champClub?.name;
+      if (champClub) {
+        champClub.finance.balance += CUP_PRIZE;
+        champClub.finance.transferBudget += CUP_PRIZE;
+      }
+    }
+  }
+
   const retirements = runOffseason(state.clubs, new Rng(offseasonSeed(state)));
   const champ = table[0]!;
   const summary: SeasonSummary = {
@@ -149,6 +181,8 @@ export function finishSeason(state: GameState): GameState {
     retirements,
     topScorers,
     awards,
+    cupChampionId,
+    cupChampionName,
   };
 
   // 오프시즌으로 스쿼드가 바뀌었으니 라인업 보정
@@ -159,6 +193,7 @@ export function finishSeason(state: GameState): GameState {
     history: [...state.history, summary],
     tactics: { ...state.tactics, [state.myClubId]: repaired },
     live: null,
+    cup: null,
   };
 }
 

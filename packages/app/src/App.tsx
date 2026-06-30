@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import {
   startGame, myClub, myTactic, setMyTactic,
   startSeason, playRound, playRestOfSeason, finishSeason, advanceFullSeason,
-  buy, sell, release, watchSetup, commitWatchedRound,
+  playCupRound, buy, sell, release, watchSetup, commitWatchedRound,
   type GameState, type ActionOutcome, type WatchSetup,
 } from './game.js';
 import type { Tactic, MatchResult } from '@soccer-tycoon/engine';
@@ -14,15 +14,17 @@ import { Tactics } from './components/Tactics.js';
 import { Match } from './components/Match.js';
 import { Transfers } from './components/Transfers.js';
 import { Stats } from './components/Stats.js';
+import { Cup } from './components/Cup.js';
 import { WatchMatch } from './components/WatchMatch.js';
 
-type Tab = 'dashboard' | 'squad' | 'tactics' | 'match' | 'stats' | 'transfers';
+type Tab = 'dashboard' | 'squad' | 'tactics' | 'match' | 'cup' | 'stats' | 'transfers';
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'dashboard', label: '대시보드' },
   { key: 'squad', label: '스쿼드' },
   { key: 'tactics', label: '전술' },
   { key: 'match', label: '경기' },
+  { key: 'cup', label: '컵' },
   { key: 'stats', label: '통계' },
   { key: 'transfers', label: '이적' },
 ];
@@ -146,6 +148,7 @@ export function App() {
                 onWatch={handleWatch}
               />
             )}
+            {tab === 'cup' && <Cup game={game} onPlayCupRound={() => update(playCupRound(game))} />}
             {tab === 'stats' && <Stats game={game} />}
             {tab === 'transfers' && (
               <Transfers

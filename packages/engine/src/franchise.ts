@@ -25,6 +25,9 @@ export interface SeasonSummary {
   retirements: number;
   topScorers: PlayerSeasonStat[];
   awards: SeasonAwards;
+  /** 컵 우승 구단(앱의 병행 컵대회). 헤드리스 프랜차이즈에선 미설정. */
+  cupChampionId?: string;
+  cupChampionName?: string;
 }
 
 /**

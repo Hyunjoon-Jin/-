@@ -29,6 +29,10 @@ export { marketValue, weeklyWage } from './valuation.js';
 export { settleSeason, leaguePrize, type SeasonFinanceReport } from './finance.js';
 export { runTransferWindow, type TransferDeal } from './transfer.js';
 export {
+  createCup, playCupRound, playCupToEnd, isCupOver, cupSurvivors,
+  type CupState, type CupRound, type CupTie,
+} from './cup.js';
+export {
   transferTargets, buyPlayer, sellPlayer, releasePlayer,
   MIN_SQUAD, MAX_SQUAD,
   type TransferTarget, type BuyResult, type SellResult,
