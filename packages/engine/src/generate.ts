@@ -9,6 +9,7 @@ import type {
 import { ALL_ATTRS, GOALKEEPING_ATTRS } from './types.js';
 import { Rng } from './rng.js';
 import { clamp } from './math.js';
+import { weeklyWage } from './valuation.js';
 
 const FIRST = [
   'Min', 'Jun', 'Leo', 'Marco', 'Diego', 'Yuki', 'Omar', 'Kai', 'Luka', 'Tom',
@@ -56,7 +57,7 @@ function genPlayer(rng: Rng, position: Position, tier: number): Player {
     ALL_ATTRS.reduce((s, k) => s + attributes[k], 0) / ALL_ATTRS.length;
   const ca = mean * 10;
   const potential = clamp(ca + (age < 23 ? rng.int(10, 40) : rng.int(0, 10)), 0, 200);
-  return {
+  const player: Player = {
     id: `p_${rng.int(100000, 999999)}_${position}`,
     name: genName(rng),
     nationality: rng.pick(NATIONS),
@@ -67,7 +68,11 @@ function genPlayer(rng: Rng, position: Position, tier: number): Player {
     potential,
     condition: 1.0,
     morale: 0.5,
+    contractYears: rng.int(1, 4),
+    wage: 0,
   };
+  player.wage = weeklyWage(player);
+  return player;
 }
 
 /**
@@ -85,7 +90,12 @@ export function generateClub(rng: Rng, id: string, name: string, tier: number): 
   for (const pos of benchPos) {
     players.push(genPlayer(rng, pos, tier - 1));
   }
-  return { id, name, players };
+
+  // 재정: 평판 ≈ tier, 자금/예산은 평판 기반.
+  const reputation = clamp(tier, 1, 20);
+  const balance = reputation * 50_000 + rng.int(0, 100_000);   // 만원
+  const transferBudget = Math.round(balance * 0.4);
+  return { id, name, players, finance: { balance, transferBudget, reputation } };
 }
 
 /** 생성된 구단의 선발 11명으로 기본 4-3-3 전술 구성. */

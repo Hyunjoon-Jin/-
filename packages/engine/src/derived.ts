@@ -4,8 +4,18 @@
  * 컨디션·사기·포지션 숙련도 보정까지 포함.
  */
 import type { Player, Position } from './types.js';
+import { ALL_ATTRS } from './types.js';
 import { DERIVED_WEIGHTS, type DerivedKey, type Weights } from './roleWeights.js';
 import { clamp, weightedMean } from './math.js';
+
+/**
+ * 현재 능력(CA) 근사: 36개 능력치 평균 × 10 (0~200 척도).
+ * 가치·연봉·성장 계산의 공통 기준 (engine.md 1.4 단순화판).
+ */
+export function currentAbility(player: Player): number {
+  const sum = ALL_ATTRS.reduce((s, k) => s + player.attributes[k], 0);
+  return (sum / ALL_ATTRS.length) * 10;
+}
 
 /** 원시 능력치(1~20) 가중평균을 0~100으로 정규화. */
 function derivedRaw(player: Player, weights: Weights): number {

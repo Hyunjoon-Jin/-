@@ -17,6 +17,11 @@
 | `league.ts` | 더블 라운드로빈 시즌 시뮬 + 순위표 |
 | `generate.ts` | 가상 선수·구단 절차적 생성 |
 | `simSeason.ts` | 헤드리스 밸런싱 검증 하니스 |
+| `money.ts` | 화폐 단위(만원) + 억/만원 표시 |
+| `valuation.ts` | 선수 시장 가치 · 주급 산정 |
+| `finance.ts` | 구단 재정 · 시즌 정산 · 리그 상금 |
+| `transfer.ts` | 이적 시장 AI 시뮬 (약점 보강) |
+| `economyDemo.ts` | 가치평가 + 이적 창 + 재정 정산 데모 |
 
 ## 실행
 
@@ -26,6 +31,9 @@ npm run demo --workspace @soccer-tycoon/engine
 
 # 시즌 시뮬 + 밸런스 지표 출력
 npm run sim-season --workspace @soccer-tycoon/engine
+
+# 경영·이적 데모 (가치평가 + 이적 창 + 재정 정산)
+npm run economy-demo --workspace @soccer-tycoon/engine
 
 # 테스트 (재현성 + 분포 가드레일)
 npm test --workspace @soccer-tycoon/engine

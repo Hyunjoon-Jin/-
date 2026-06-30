@@ -70,6 +70,10 @@ export interface Player {
   condition: number;
   /** 사기 (0~1). 0.5 = 중립. */
   morale: number;
+  /** 잔여 계약 연수. */
+  contractYears: number;
+  /** 주급 (만원). */
+  wage: number;
 }
 
 // ── 전술 ──────────────────────────────────────────────────
@@ -89,10 +93,22 @@ export interface Tactic {
 
 // ── 구단 ──────────────────────────────────────────────────
 
+/** 구단 재정 상태 (economy.md 4장). 단위: 만원. */
+export interface ClubFinance {
+  /** 보유 자금. */
+  balance: number;
+  /** 이적 가능 예산. */
+  transferBudget: number;
+  /** 평판 (1~20). 수입 규모에 영향. */
+  reputation: number;
+}
+
 export interface Club {
   id: string;
   name: string;
   players: Player[];
+  /** 재정. 생성 시 부여. */
+  finance: ClubFinance;
 }
 
 // ── 경기 입력/출력 ────────────────────────────────────────
