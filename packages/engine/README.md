@@ -23,6 +23,7 @@
 | `valuation.ts` | 선수 시장 가치 · 주급 산정 |
 | `finance.ts` | 구단 재정 · 시즌 정산 · 리그 상금 |
 | `transfer.ts` | 이적 시장 AI 시뮬 (약점 보강) |
+| `transferActions.ts` | 사용자 주도 이적 (영입/판매/방출) |
 | `progression.ts` | 시즌 경계 성장·노화 (잠재력 수렴 / 노장 하락) |
 | `franchise.ts` | 멀티시즌 루프 (이적→경기→정산→성장→은퇴·유스) |
 | `economyDemo.ts` | 가치평가 + 이적 창 + 재정 정산 데모 |

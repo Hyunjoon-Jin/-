@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react';
 import {
   startGame, myClub, myTactic, setMyTactic,
   startSeason, playRound, playRestOfSeason, finishSeason, advanceFullSeason,
-  type GameState,
+  buy, sell, release,
+  type GameState, type ActionOutcome,
 } from './game.js';
 import type { Tactic } from '@soccer-tycoon/engine';
 import { WebSaveStore } from './storage.js';
@@ -73,6 +74,12 @@ export function App() {
 
   const handleTacticChange = (t: Tactic) => update(setMyTactic(game, t));
 
+  const runAction = (fn: (s: GameState, id: string) => ActionOutcome, id: string): ActionOutcome => {
+    const outcome = fn(game, id);
+    if (outcome.ok) update(outcome.state);
+    return outcome;
+  };
+
   return (
     <div className="app">
       <header className="topbar">
@@ -113,7 +120,14 @@ export function App() {
             onAdvanceFull={() => update(advanceFullSeason(game))}
           />
         )}
-        {tab === 'transfers' && <Transfers game={game} />}
+        {tab === 'transfers' && (
+          <Transfers
+            game={game}
+            onBuy={(id) => runAction(buy, id)}
+            onSell={(id) => runAction(sell, id)}
+            onRelease={(id) => runAction(release, id)}
+          />
+        )}
       </main>
     </div>
   );

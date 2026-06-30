@@ -22,3 +22,8 @@ export { formatMoney, EOK } from './money.js';
 export { marketValue, weeklyWage } from './valuation.js';
 export { settleSeason, leaguePrize, type SeasonFinanceReport } from './finance.js';
 export { runTransferWindow, type TransferDeal } from './transfer.js';
+export {
+  transferTargets, buyPlayer, sellPlayer, releasePlayer,
+  MIN_SQUAD, MAX_SQUAD,
+  type TransferTarget, type BuyResult, type SellResult,
+} from './transferActions.js';

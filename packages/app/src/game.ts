@@ -6,6 +6,7 @@
 import {
   generateClub, runTransferWindow, runOffseason, settleSeason, Rng,
   createSeasonState, playRound as enginePlayRound, playToEnd, computeTable, totalRounds, currentRound,
+  buyPlayer, sellPlayer, releasePlayer,
   type Club, type Tactic, type MatchResult, type SeasonSummary, type Fixture, type TableRow,
 } from '@soccer-tycoon/engine';
 import { makeDefaultTactic, repairTactic } from './tactics.js';
@@ -162,6 +163,37 @@ export function setMyTactic(state: GameState, tactic: Tactic): GameState {
 /** 프리시즌에서 한 시즌 전체를 한 번에 진행(킥오프→전 경기→정산). */
 export function advanceFullSeason(state: GameState): GameState {
   return finishSeason(playRestOfSeason(startSeason(state)));
+}
+
+// ── 직접 이적 (프리시즌에만) ──────────────────────────────
+
+export interface ActionOutcome { state: GameState; ok: boolean; message: string }
+
+/** 스쿼드 변동 후 라인업 보정 + 새 래퍼. */
+function afterSquadChange(state: GameState): GameState {
+  const repaired = repairTactic(myClub(state), myTactic(state));
+  return { ...state, tactics: { ...state.tactics, [state.myClubId]: repaired } };
+}
+
+export function buy(state: GameState, playerId: string): ActionOutcome {
+  if (state.live) return { state, ok: false, message: '이적은 프리시즌에만 가능합니다.' };
+  const r = buyPlayer(state.clubs, state.myClubId, playerId);
+  if (!r.ok) return { state, ok: false, message: r.reason! };
+  return { state: afterSquadChange(state), ok: true, message: `${r.playerName} 영입 완료` };
+}
+
+export function sell(state: GameState, playerId: string): ActionOutcome {
+  if (state.live) return { state, ok: false, message: '이적은 프리시즌에만 가능합니다.' };
+  const r = sellPlayer(state.clubs, state.myClubId, playerId);
+  if (!r.ok) return { state, ok: false, message: r.reason! };
+  return { state: afterSquadChange(state), ok: true, message: `${r.playerName} → ${r.buyerName} 판매 완료` };
+}
+
+export function release(state: GameState, playerId: string): ActionOutcome {
+  if (state.live) return { state, ok: false, message: '이적은 프리시즌에만 가능합니다.' };
+  const r = releasePlayer(state.clubs, state.myClubId, playerId);
+  if (!r.ok) return { state, ok: false, message: r.reason! };
+  return { state: afterSquadChange(state), ok: true, message: `${r.playerName} 방출 완료` };
 }
 
 // ── 조회 헬퍼 ──
