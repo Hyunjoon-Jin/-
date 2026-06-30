@@ -10,6 +10,7 @@ interface Props {
   onPlayRest: () => void;
   onFinish: () => void;
   onAdvanceFull: () => void;
+  onWatch: () => void;
 }
 
 export function Match(props: Props) {
@@ -47,7 +48,7 @@ function Preseason({ game, onStartSeason, onAdvanceFull }: Props) {
 }
 
 function InSeason(props: Props) {
-  const { game, onPlayRound, onPlayRest } = props;
+  const { game, onPlayRound, onPlayRest, onWatch } = props;
   const prog = liveProgress(game);
   const next = myNextFixture(game);
   const table = liveTable(game);
@@ -65,7 +66,8 @@ function InSeason(props: Props) {
         )}
       </div>
       <div className="phase-actions">
-        <button className="btn-advance" onClick={onPlayRound}>다음 라운드 진행 ▶</button>
+        {next && <button className="btn-advance" onClick={onWatch}>내 경기 관전 ▶</button>}
+        <button className="btn-ghost" onClick={onPlayRound}>다음 라운드 진행</button>
         <button className="btn-ghost" onClick={onPlayRest}>남은 경기 시뮬 ▶▶</button>
       </div>
 

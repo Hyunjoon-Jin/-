@@ -6,8 +6,9 @@
 import {
   generateClub, runTransferWindow, runOffseason, settleSeason, Rng,
   createSeasonState, playRound as enginePlayRound, playToEnd, computeTable, totalRounds, currentRound,
+  commitResult, simulateMatch, defaultTactic,
   buyPlayer, sellPlayer, releasePlayer,
-  type Club, type Tactic, type MatchResult, type SeasonSummary, type Fixture, type TableRow,
+  type Club, type Tactic, type MatchResult, type MatchSetup, type SeasonSummary, type Fixture, type TableRow,
 } from '@soccer-tycoon/engine';
 import { makeDefaultTactic, repairTactic } from './tactics.js';
 
@@ -225,6 +226,71 @@ export function myNextFixture(state: GameState): { fx: Fixture; opponent: Club; 
   const home = fx.homeId === state.myClubId;
   const opponent = state.clubs.find((c) => c.id === (home ? fx.awayId : fx.homeId))!;
   return { fx, opponent, home };
+}
+
+// ── 경기 관전 (라이브 + 하프타임 개입) ──────────────────────
+
+export interface WatchSetup {
+  setup: MatchSetup;
+  userIsHome: boolean;
+  opponent: Club;
+}
+
+/** 현재 라운드 내 사용자 경기를 라이브로 관전하기 위한 셋업. */
+export function watchSetup(state: GameState): WatchSetup | null {
+  if (!state.live) return null;
+  const live = state.live;
+  if (live.cursor >= live.fixtures.length) return null;
+  const round = live.fixtures[live.cursor]!.round;
+
+  let idx = -1;
+  for (let i = live.cursor; i < live.fixtures.length && live.fixtures[i]!.round === round; i++) {
+    const f = live.fixtures[i]!;
+    if (f.homeId === state.myClubId || f.awayId === state.myClubId) { idx = i; break; }
+  }
+  if (idx < 0) return null;
+
+  const fx = live.fixtures[idx]!;
+  const clubById = (id: string) => state.clubs.find((c) => c.id === id)!;
+  const homeClub = clubById(fx.homeId);
+  const awayClub = clubById(fx.awayId);
+  const userIsHome = fx.homeId === state.myClubId;
+  const userTactic = myTactic(state);
+  const setup: MatchSetup = {
+    home: { club: homeClub, tactic: userIsHome ? userTactic : defaultTactic(homeClub) },
+    away: { club: awayClub, tactic: userIsHome ? defaultTactic(awayClub) : userTactic },
+    seed: live.baseSeed + idx,
+  };
+  return { setup, userIsHome, opponent: userIsHome ? awayClub : homeClub };
+}
+
+/**
+ * 관전한 사용자 경기 결과로 현재 라운드 전체를 커밋.
+ * 다른 경기는 일괄 시뮬(기본 전술), 사용자 경기는 watched 결과를 fixture 순서대로 주입.
+ */
+export function commitWatchedRound(state: GameState, watched: MatchResult): GameState {
+  if (!state.live) return state;
+  const ss = toSeasonState(state);
+  if (ss.cursor >= ss.fixtures.length) return state;
+  const round = ss.fixtures[ss.cursor]!.round;
+  const clubById = (id: string) => state.clubs.find((c) => c.id === id)!;
+
+  while (ss.cursor < ss.fixtures.length && ss.fixtures[ss.cursor]!.round === round) {
+    const fx = ss.fixtures[ss.cursor]!;
+    const isUser = fx.homeId === state.myClubId || fx.awayId === state.myClubId;
+    if (isUser) {
+      commitResult(ss, watched);
+    } else {
+      const homeClub = clubById(fx.homeId);
+      const awayClub = clubById(fx.awayId);
+      commitResult(ss, simulateMatch({
+        home: { club: homeClub, tactic: defaultTactic(homeClub) },
+        away: { club: awayClub, tactic: defaultTactic(awayClub) },
+        seed: ss.baseSeed + ss.cursor,
+      }));
+    }
+  }
+  return { ...state, live: { ...state.live, results: ss.results, cursor: ss.cursor } };
 }
 
 export function lastSummary(state: GameState): SeasonSummary | undefined {

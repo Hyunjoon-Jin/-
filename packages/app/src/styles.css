@@ -243,3 +243,33 @@ h3 { font-size: 14px; margin: 0 0 10px; color: var(--muted); text-transform: upp
 .data-table.compact th, .data-table.compact td { padding: 5px 7px; font-size: 13px; }
 .data-table .small { font-size: 12px; }
 .sell-actions { display: flex; gap: 4px; }
+
+/* ── Watch match ── */
+.scoreboard {
+  display: grid; grid-template-columns: auto 1fr auto 1fr auto; align-items: center; gap: 14px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  padding: 14px 18px; margin-bottom: 16px;
+}
+.scoreboard .back { justify-self: start; }
+.sb-team { font-weight: 700; font-size: 16px; text-align: center; }
+.sb-team.mine { color: var(--accent); }
+.sb-score { font-size: 26px; font-weight: 800; background: var(--panel-2); border-radius: 8px; padding: 4px 18px; }
+.sb-clock { justify-self: end; color: var(--muted); font-weight: 700; }
+
+.watch-center { text-align: center; padding: 40px 0; }
+.btn-advance.big { font-size: 17px; padding: 14px 28px; }
+
+.watch-body { display: grid; grid-template-columns: 1fr 1.1fr; gap: 18px; }
+.commentary { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px; }
+.feed { list-style: none; padding: 0; margin: 0 0 12px; }
+.feed li { display: flex; gap: 10px; padding: 6px 8px; border-bottom: 1px solid var(--line); font-size: 14px; }
+.feed .feed-min { color: var(--muted); width: 34px; font-weight: 700; }
+.feed li.goal { background: #243a2a; border-radius: 6px; font-weight: 600; }
+.feed li.goal.mine { background: #1f3a26; color: var(--accent); }
+
+.watch-side { display: flex; flex-direction: column; gap: 12px; }
+.ht-banner { background: var(--accent-2); color: #06203f; font-weight: 700; padding: 10px 14px; border-radius: 8px; text-align: center; }
+.ft-panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px; text-align: center; }
+.ft-score { font-size: 18px; font-weight: 700; margin: 8px 0 16px; }
+/* 하프타임 전술 편집은 좁은 칼럼이므로 1열로 */
+.watch-side .tactics { grid-template-columns: 1fr; }

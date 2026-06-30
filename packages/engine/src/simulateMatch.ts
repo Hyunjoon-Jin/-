@@ -2,6 +2,10 @@
  * 틱 기반 경기 시뮬레이션 (engine.md 4장).
  * 점유 → 전진 → 슈팅 → 결과 순서로 매 분 확률 판정.
  * 시드 고정 시 완전 재현 가능.
+ *
+ * 내부는 컨텍스트(createContext) + 분 단위 스텝(stepMinute) + 마무리(finalize)로
+ * 분리되어, 일괄 시뮬(simulateMatch)과 재개 가능한 라이브 경기(liveMatch.ts)가
+ * 동일한 로직을 공유한다.
  */
 import type {
   ChanceType, Club, MatchEvent, MatchResult, Player,
@@ -26,7 +30,6 @@ interface Side {
   goals: number;
   shots: number;
   possessionTicks: number;
-  /** 슈팅 후보(전방·중원) — 골 기여 배분용. */
   attackers: Player[];
 }
 
@@ -41,37 +44,27 @@ function buildSide(club: Club, tactic: Tactic, isHome: boolean): Side {
     .filter((s) => lineOf(s.position) === 'ATT' || lineOf(s.position) === 'MID')
     .map((s) => byId.get(s.playerId))
     .filter((p): p is Player => Boolean(p));
-  return {
-    club, tactic, strength, isHome,
-    goals: 0, shots: 0, possessionTicks: 0,
-    attackers,
-  };
+  return { club, tactic, strength, isHome, goals: 0, shots: 0, possessionTicks: 0, attackers };
 }
 
-/** 공격 기여 가중 선택: 전방일수록 골 확률↑ (attack 파생값 가중). */
 function pickShooter(side: Side, rng: Rng): Player {
   const pool = side.attackers.length > 0 ? side.attackers : side.club.players;
-  // 공격 라인업 인덱스가 뒤일수록(=ST 쪽) 가중 부여. 단순화: 균등에 약간의 무작위.
   return pool[rng.int(0, pool.length - 1)]!;
 }
 
 function pickChanceType(tactic: Tactic, rng: Rng): ChanceType {
-  // 측면 지향(가정: tempo 높을수록 빠른 전개=오픈, 낮으면 크로스 비중↑) + 세트피스 고정 비율.
   const r = rng.next();
   if (r < 0.12) return 'setpiece';
   if (r < 0.12 + 0.33 * (1 - tactic.tempo) + 0.10) return 'cross';
   return 'open';
 }
 
-function resolveShot(
-  attack: number, gk: number, chance: ChanceType, rng: Rng,
-): ShotOutcome {
+function resolveShot(attack: number, gk: number, chance: ChanceType, rng: Rng): ShotOutcome {
   const base = TUNING.baseXg[chance];
   const finishMul = 1 + (attack - 50) * TUNING.finishK;
   const gkMul = 1 + (gk - 50) * TUNING.gkK;
   const goalP = clamp((base * finishMul) / gkMul, 0.02, 0.75);
   if (rng.roll(goalP)) return 'GOAL';
-
   const s = TUNING.nonGoalSplit;
   const r = rng.next();
   if (r < s.save) return 'SAVE';
@@ -79,85 +72,118 @@ function resolveShot(
   return 'BLOCKED';
 }
 
-export function simulateMatch(setup: MatchSetup): MatchResult {
-  const rng = new Rng(setup.seed);
-  const home = buildSide(setup.home.club, setup.home.tactic, true);
-  const away = buildSide(setup.away.club, setup.away.tactic, false);
+// ── 공유 컨텍스트 ──────────────────────────────────────────
 
-  const events: MatchEvent[] = [];
-  const statMap = new Map<string, PlayerMatchStat>();
+export interface MatchContext {
+  rng: Rng;
+  home: Side;
+  away: Side;
+  events: MatchEvent[];
+  statMap: Map<string, PlayerMatchStat>;
+  pPossHome: number;
+  seed: number;
+}
 
-  const ensureStat = (p: Player): PlayerMatchStat => {
-    let st = statMap.get(p.id);
-    if (!st) {
-      st = { playerId: p.id, name: p.name, rating: 6.0, shots: 0, goals: 0 };
-      statMap.set(p.id, st);
-    }
-    return st;
+function recomputePossession(ctx: MatchContext): void {
+  ctx.pPossHome =
+    ctx.home.strength.midfield / (ctx.home.strength.midfield + ctx.away.strength.midfield || 1);
+}
+
+export function createContext(setup: MatchSetup): MatchContext {
+  const ctx: MatchContext = {
+    rng: new Rng(setup.seed),
+    home: buildSide(setup.home.club, setup.home.tactic, true),
+    away: buildSide(setup.away.club, setup.away.tactic, false),
+    events: [],
+    statMap: new Map(),
+    pPossHome: 0.5,
+    seed: setup.seed,
   };
+  recomputePossession(ctx);
+  return ctx;
+}
 
-  const pPossHome =
-    home.strength.midfield / (home.strength.midfield + away.strength.midfield || 1);
+/** 라이브 경기에서 한 팀의 전술을 교체(하프타임 개입). 전력·점유 확률 재계산. */
+export function applyTactic(ctx: MatchContext, side: 'home' | 'away', tactic: Tactic): void {
+  const cur = ctx[side];
+  const next = buildSide(cur.club, tactic, cur.isHome);
+  // 누적 스코어/슈팅/점유 틱은 유지하고 전력·라인업만 교체
+  next.goals = cur.goals;
+  next.shots = cur.shots;
+  next.possessionTicks = cur.possessionTicks;
+  ctx[side] = next;
+  recomputePossession(ctx);
+}
 
-  for (let minute = 1; minute <= TUNING.matchLength; minute++) {
-    const homeHasBall = rng.roll(pPossHome);
-    const att = homeHasBall ? home : away;
-    const def = homeHasBall ? away : home;
-    att.possessionTicks++;
+function ensureStat(ctx: MatchContext, p: Player): PlayerMatchStat {
+  let st = ctx.statMap.get(p.id);
+  if (!st) {
+    st = { playerId: p.id, name: p.name, rating: 6.0, shots: 0, goals: 0 };
+    ctx.statMap.set(p.id, st);
+  }
+  return st;
+}
 
-    // (b) 전진 시도
-    const pAdvance = clamp(
-      TUNING.advanceBase +
-        0.5 * (logistic(TUNING.advanceK * (att.strength.creation - def.strength.defense)) - 0.5),
-      0.02, 0.95,
-    );
-    if (!rng.roll(pAdvance)) continue;
+/** 한 분(틱) 진행. 생성된 이벤트가 있으면 반환(없으면 null). */
+export function stepMinute(ctx: MatchContext, minute: number): MatchEvent | null {
+  const { rng } = ctx;
+  const homeHasBall = rng.roll(ctx.pPossHome);
+  const att = homeHasBall ? ctx.home : ctx.away;
+  const def = homeHasBall ? ctx.away : ctx.home;
+  att.possessionTicks++;
 
-    // (c) 기회 유형
-    const chance = pickChanceType(att.tactic, rng);
+  const pAdvance = clamp(
+    TUNING.advanceBase +
+      0.5 * (logistic(TUNING.advanceK * (att.strength.creation - def.strength.defense)) - 0.5),
+    0.02, 0.95,
+  );
+  if (!rng.roll(pAdvance)) return null;
 
-    // (d) 슈팅 발생
-    const pShot = clamp(
-      TUNING.shotBase +
-        0.5 * (logistic(TUNING.shotK * (att.strength.attack - def.strength.defense)) - 0.5),
-      0.02, 0.95,
-    );
-    if (!rng.roll(pShot)) continue;
+  const chance = pickChanceType(att.tactic, rng);
 
-    // (e) 슛 결과
-    const shooter = pickShooter(att, rng);
-    const st = ensureStat(shooter);
-    att.shots++;
-    st.shots++;
-    const outcome = resolveShot(att.strength.attack, def.strength.gk, chance, rng);
+  const pShot = clamp(
+    TUNING.shotBase +
+      0.5 * (logistic(TUNING.shotK * (att.strength.attack - def.strength.defense)) - 0.5),
+    0.02, 0.95,
+  );
+  if (!rng.roll(pShot)) return null;
 
-    if (outcome === 'GOAL') {
-      att.goals++;
-      st.goals++;
-      st.rating = clamp(st.rating + 1.2, 0, 10);
-    } else if (outcome === 'OFF_TARGET') {
-      st.rating = clamp(st.rating - 0.1, 0, 10);
-    }
+  const shooter = pickShooter(att, rng);
+  const st = ensureStat(ctx, shooter);
+  att.shots++;
+  st.shots++;
+  const outcome = resolveShot(att.strength.attack, def.strength.gk, chance, rng);
 
-    events.push({
-      minute,
-      side: homeHasBall ? 'home' : 'away',
-      chanceType: chance,
-      outcome,
-      playerId: shooter.id,
-      playerName: shooter.name,
-    });
+  if (outcome === 'GOAL') {
+    att.goals++;
+    st.goals++;
+    st.rating = clamp(st.rating + 1.2, 0, 10);
+  } else if (outcome === 'OFF_TARGET') {
+    st.rating = clamp(st.rating - 0.1, 0, 10);
   }
 
+  const ev: MatchEvent = {
+    minute,
+    side: homeHasBall ? 'home' : 'away',
+    chanceType: chance,
+    outcome,
+    playerId: shooter.id,
+    playerName: shooter.name,
+  };
+  ctx.events.push(ev);
+  return ev;
+}
+
+export function finalize(ctx: MatchContext): MatchResult {
+  const { home, away } = ctx;
   const totalTicks = home.possessionTicks + away.possessionTicks || 1;
   const possession: [number, number] = [
     Math.round((home.possessionTicks / totalTicks) * 100),
     Math.round((away.possessionTicks / totalTicks) * 100),
   ];
-
   const splitStats = (club: Club): PlayerMatchStat[] =>
     club.players
-      .map((p) => statMap.get(p.id))
+      .map((p) => ctx.statMap.get(p.id))
       .filter((s): s is PlayerMatchStat => Boolean(s));
 
   return {
@@ -168,8 +194,19 @@ export function simulateMatch(setup: MatchSetup): MatchResult {
     score: [home.goals, away.goals],
     possession,
     shots: [home.shots, away.shots],
-    events,
+    events: ctx.events,
     playerStats: { home: splitStats(home.club), away: splitStats(away.club) },
-    seed: setup.seed,
+    seed: ctx.seed,
   };
+}
+
+export const MATCH_LENGTH = TUNING.matchLength;
+
+/** 일괄 시뮬: 컨텍스트 생성 → 전 분 진행 → 마무리. */
+export function simulateMatch(setup: MatchSetup): MatchResult {
+  const ctx = createContext(setup);
+  for (let minute = 1; minute <= TUNING.matchLength; minute++) {
+    stepMinute(ctx, minute);
+  }
+  return finalize(ctx);
 }

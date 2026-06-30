@@ -2,10 +2,10 @@ import { useMemo, useState } from 'react';
 import {
   startGame, myClub, myTactic, setMyTactic,
   startSeason, playRound, playRestOfSeason, finishSeason, advanceFullSeason,
-  buy, sell, release,
-  type GameState, type ActionOutcome,
+  buy, sell, release, watchSetup, commitWatchedRound,
+  type GameState, type ActionOutcome, type WatchSetup,
 } from './game.js';
-import type { Tactic } from '@soccer-tycoon/engine';
+import type { Tactic, MatchResult } from '@soccer-tycoon/engine';
 import { WebSaveStore } from './storage.js';
 import { StartScreen } from './components/StartScreen.js';
 import { Dashboard } from './components/Dashboard.js';
@@ -13,6 +13,7 @@ import { Squad } from './components/Squad.js';
 import { Tactics } from './components/Tactics.js';
 import { Match } from './components/Match.js';
 import { Transfers } from './components/Transfers.js';
+import { WatchMatch } from './components/WatchMatch.js';
 
 type Tab = 'dashboard' | 'squad' | 'tactics' | 'match' | 'transfers';
 
@@ -34,6 +35,7 @@ export function App() {
   const [slotId, setSlotId] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>('dashboard');
+  const [watching, setWatching] = useState<WatchSetup | null>(null);
 
   /** 상태 갱신 + 자동 저장. */
   function update(next: GameState) {
@@ -80,6 +82,15 @@ export function App() {
     return outcome;
   };
 
+  const handleWatch = () => {
+    const ws = watchSetup(game);
+    if (ws) setWatching(ws);
+  };
+  const handleWatchDone = (result: MatchResult) => {
+    update(commitWatchedRound(game, result));
+    setWatching(null);
+  };
+
   return (
     <div className="app">
       <header className="topbar">
@@ -92,41 +103,56 @@ export function App() {
         </div>
       </header>
 
-      <nav className="tabs">
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            className={tab === t.key ? 'tab active' : 'tab'}
-            onClick={() => setTab(t.key)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </nav>
+      {!watching && (
+        <nav className="tabs">
+          {TABS.map((t) => (
+            <button
+              key={t.key}
+              className={tab === t.key ? 'tab active' : 'tab'}
+              onClick={() => setTab(t.key)}
+            >
+              {t.label}
+            </button>
+          ))}
+        </nav>
+      )}
 
       <main className="content">
-        {tab === 'dashboard' && <Dashboard game={game} />}
-        {tab === 'squad' && <Squad club={club} />}
-        {tab === 'tactics' && (
-          <Tactics club={club} tactic={myTactic(game)} onChange={handleTacticChange} />
-        )}
-        {tab === 'match' && (
-          <Match
-            game={game}
-            onStartSeason={() => update(startSeason(game))}
-            onPlayRound={() => update(playRound(game))}
-            onPlayRest={() => update(playRestOfSeason(game))}
-            onFinish={() => update(finishSeason(game))}
-            onAdvanceFull={() => update(advanceFullSeason(game))}
+        {watching ? (
+          <WatchMatch
+            watch={watching}
+            myClub={club}
+            initialTactic={myTactic(game)}
+            onDone={handleWatchDone}
+            onCancel={() => setWatching(null)}
           />
-        )}
-        {tab === 'transfers' && (
-          <Transfers
-            game={game}
-            onBuy={(id) => runAction(buy, id)}
-            onSell={(id) => runAction(sell, id)}
-            onRelease={(id) => runAction(release, id)}
-          />
+        ) : (
+          <>
+            {tab === 'dashboard' && <Dashboard game={game} />}
+            {tab === 'squad' && <Squad club={club} />}
+            {tab === 'tactics' && (
+              <Tactics club={club} tactic={myTactic(game)} onChange={handleTacticChange} />
+            )}
+            {tab === 'match' && (
+              <Match
+                game={game}
+                onStartSeason={() => update(startSeason(game))}
+                onPlayRound={() => update(playRound(game))}
+                onPlayRest={() => update(playRestOfSeason(game))}
+                onFinish={() => update(finishSeason(game))}
+                onAdvanceFull={() => update(advanceFullSeason(game))}
+                onWatch={handleWatch}
+              />
+            )}
+            {tab === 'transfers' && (
+              <Transfers
+                game={game}
+                onBuy={(id) => runAction(buy, id)}
+                onSell={(id) => runAction(sell, id)}
+                onRelease={(id) => runAction(release, id)}
+              />
+            )}
+          </>
         )}
       </main>
     </div>

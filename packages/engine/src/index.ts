@@ -1,7 +1,8 @@
 /** 엔진 공개 API. */
 export * from './types.js';
 export { Rng } from './rng.js';
-export { simulateMatch, type MatchSetup } from './simulateMatch.js';
+export { simulateMatch, MATCH_LENGTH, type MatchSetup } from './simulateMatch.js';
+export { LiveMatch, HALF_TIME } from './liveMatch.js';
 export { computeTeamStrength, lineOf } from './teamStrength.js';
 export { playerDerived, currentAbility, type DerivedRatings } from './derived.js';
 export { generateClub, generateYouthPlayer, defaultTactic, FORMATION_433 } from './generate.js';
@@ -9,7 +10,7 @@ export { simulateSeason, type SeasonResult } from './league.js';
 export { doubleRoundRobin, type Fixture } from './schedule.js';
 export {
   createSeasonState, isSeasonOver, totalRounds, currentRound,
-  playNext, playRound, playToEnd, computeTable,
+  playNext, playRound, playToEnd, computeTable, commitResult,
   type SeasonState, type TableRow,
 } from './season.js';
 export { progressPlayer } from './progression.js';

@@ -76,6 +76,16 @@ export function playNext(s: SeasonState, tactics?: TacticMap): MatchResult {
   return result;
 }
 
+/**
+ * 미리 계산된 결과를 다음 fixture로 커밋(라이브 관전 결과 주입용).
+ * 호출자는 fixtures[cursor]와 일치하는 결과를 fixture 순서대로 넣어야 한다.
+ */
+export function commitResult(s: SeasonState, result: MatchResult): void {
+  if (isSeasonOver(s)) return;
+  s.results.push(result);
+  s.cursor++;
+}
+
 /** 현재 라운드의 모든 경기를 진행. */
 export function playRound(s: SeasonState, tactics?: TacticMap): MatchResult[] {
   if (isSeasonOver(s)) return [];
