@@ -8,7 +8,9 @@ import {
   createSeasonState, playRound as enginePlayRound, playToEnd, computeTable, totalRounds, currentRound,
   commitResult, simulateMatch, defaultTactic, applyMatchEffects,
   buyPlayer, sellPlayer, releasePlayer,
-  type Club, type Tactic, type MatchResult, type MatchSetup, type SeasonSummary, type Fixture, type TableRow,
+  summarizeStats, aggregatePlayerStats, topScorers as engineTopScorers,
+  type Club, type Tactic, type MatchResult, type MatchSetup, type SeasonSummary,
+  type Fixture, type TableRow, type PlayerSeasonStat,
 } from '@soccer-tycoon/engine';
 import { makeDefaultTactic, repairTactic } from './tactics.js';
 
@@ -127,6 +129,7 @@ export function finishSeason(state: GameState): GameState {
   const ss = toSeasonState(state);
   playToEnd(ss, tacticMap(state));
   const table = computeTable(ss);
+  const { topScorers, awards } = summarizeStats(ss.results, totalRounds(ss));
 
   const finance = new Map();
   table.forEach((row, pos) => {
@@ -144,6 +147,8 @@ export function finishSeason(state: GameState): GameState {
     transfers: state.live.transfers,
     finance,
     retirements,
+    topScorers,
+    awards,
   };
 
   // 오프시즌으로 스쿼드가 바뀌었으니 라인업 보정
@@ -226,6 +231,20 @@ export function myNextFixture(state: GameState): { fx: Fixture; opponent: Club; 
   const home = fx.homeId === state.myClubId;
   const opponent = state.clubs.find((c) => c.id === (home ? fx.awayId : fx.homeId))!;
   return { fx, opponent, home };
+}
+
+/** 진행 중 시즌의 리그 득점 순위(라이브). */
+export function liveTopScorers(state: GameState, n = 10): PlayerSeasonStat[] {
+  if (!state.live) return [];
+  return engineTopScorers(aggregatePlayerStats(state.live.results), n);
+}
+
+/** 진행 중 시즌, 내 구단 선수들의 시즌 통계(평점순). */
+export function liveSquadStats(state: GameState): PlayerSeasonStat[] {
+  if (!state.live) return [];
+  return aggregatePlayerStats(state.live.results)
+    .filter((s) => s.clubId === state.myClubId)
+    .sort((a, b) => b.avgRating - a.avgRating);
 }
 
 // ── 경기 관전 (라이브 + 하프타임 개입) ──────────────────────

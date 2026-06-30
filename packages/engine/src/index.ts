@@ -6,6 +6,10 @@ export { LiveMatch, HALF_TIME } from './liveMatch.js';
 export { computeTeamStrength, lineOf } from './teamStrength.js';
 export { playerDerived, currentAbility, isInjured, type DerivedRatings } from './derived.js';
 export { applyMatchEffects } from './matchEffects.js';
+export {
+  aggregatePlayerStats, topScorers, playerOfSeason, seasonAwards, summarizeStats,
+  type PlayerSeasonStat, type SeasonAwards,
+} from './stats.js';
 export { generateClub, generateYouthPlayer, defaultTactic, FORMATION_433 } from './generate.js';
 export { simulateSeason, type SeasonResult } from './league.js';
 export { doubleRoundRobin, type Fixture } from './schedule.js';

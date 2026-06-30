@@ -178,6 +178,17 @@ body {
 .injury { color: #ff6b6b; font-weight: 700; }
 .slot-injured { background: #2e1c1c; }
 
+/* ── Stats / Awards ── */
+.awards { display: flex; gap: 12px; margin: 12px 0 20px; }
+.award {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  padding: 14px 20px; min-width: 200px;
+}
+.award-title { color: var(--muted); font-size: 13px; margin-bottom: 6px; }
+.award-name { font-size: 18px; font-weight: 800; }
+.stats-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.stats-cols h3 { margin-top: 0; }
+
 h2 { font-size: 18px; }
 h3 { font-size: 14px; margin: 0 0 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
 

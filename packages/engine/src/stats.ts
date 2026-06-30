@@ -1,0 +1,94 @@
+/**
+ * 시즌 선수 통계 집계 + 어워드 (표현 심화).
+ * 경기 결과(MatchResult.playerStats)를 모아 출전·득점·평균 평점을 산출하고,
+ * 득점왕·시즌 베스트 플레이어를 뽑는다.
+ */
+import type { Club, MatchResult } from './types.js';
+
+export interface PlayerSeasonStat {
+  playerId: string;
+  name: string;
+  clubId: string;
+  clubName: string;
+  apps: number;
+  goals: number;
+  shots: number;
+  avgRating: number;
+}
+
+export interface SeasonAwards {
+  topScorer?: { playerId: string; name: string; clubName: string; goals: number };
+  playerOfSeason?: { playerId: string; name: string; clubName: string; avgRating: number };
+}
+
+interface Acc {
+  playerId: string; name: string; clubId: string; clubName: string;
+  apps: number; goals: number; shots: number; totalRating: number;
+}
+
+/** 시즌 전 경기 결과에서 선수별 통계 집계. */
+export function aggregatePlayerStats(results: MatchResult[]): PlayerSeasonStat[] {
+  const map = new Map<string, Acc>();
+  const add = (
+    st: MatchResult['playerStats']['home'][number], clubId: string, clubName: string,
+  ) => {
+    let a = map.get(st.playerId);
+    if (!a) {
+      a = { playerId: st.playerId, name: st.name, clubId, clubName, apps: 0, goals: 0, shots: 0, totalRating: 0 };
+      map.set(st.playerId, a);
+    }
+    // 이적으로 소속이 바뀌면 최신 소속으로 갱신
+    a.clubId = clubId; a.clubName = clubName;
+    a.apps++;
+    a.goals += st.goals;
+    a.shots += st.shots;
+    a.totalRating += st.rating;
+  };
+  for (const r of results) {
+    for (const st of r.playerStats.home) add(st, r.homeClubId, r.homeClubName);
+    for (const st of r.playerStats.away) add(st, r.awayClubId, r.awayClubName);
+  }
+  return [...map.values()].map((a) => ({
+    playerId: a.playerId, name: a.name, clubId: a.clubId, clubName: a.clubName,
+    apps: a.apps, goals: a.goals, shots: a.shots,
+    avgRating: a.apps > 0 ? a.totalRating / a.apps : 0,
+  }));
+}
+
+/** 득점 → 평균 평점 → 출전 순 정렬. */
+export function topScorers(stats: PlayerSeasonStat[], n = 10): PlayerSeasonStat[] {
+  return [...stats]
+    .sort((a, b) => b.goals - a.goals || b.avgRating - a.avgRating || b.apps - a.apps)
+    .slice(0, n);
+}
+
+/** 최소 출전 이상에서 평균 평점 최고 = 시즌 베스트 플레이어. */
+export function playerOfSeason(stats: PlayerSeasonStat[], minApps: number): PlayerSeasonStat | undefined {
+  return [...stats]
+    .filter((s) => s.apps >= minApps)
+    .sort((a, b) => b.avgRating - a.avgRating || b.goals - a.goals)[0];
+}
+
+/** 시즌 어워드 산출. minApps는 보통 (총 라운드의 절반). */
+export function seasonAwards(stats: PlayerSeasonStat[], minApps: number): SeasonAwards {
+  const scorer = topScorers(stats, 1)[0];
+  const potm = playerOfSeason(stats, minApps);
+  return {
+    topScorer: scorer && scorer.goals > 0
+      ? { playerId: scorer.playerId, name: scorer.name, clubName: scorer.clubName, goals: scorer.goals }
+      : undefined,
+    playerOfSeason: potm
+      ? { playerId: potm.playerId, name: potm.name, clubName: potm.clubName, avgRating: potm.avgRating }
+      : undefined,
+  };
+}
+
+/** clubs 인자는 향후 확장용(현재는 결과만으로 충분). */
+export function summarizeStats(results: MatchResult[], totalRounds: number): {
+  topScorers: PlayerSeasonStat[];
+  awards: SeasonAwards;
+} {
+  const stats = aggregatePlayerStats(results);
+  const minApps = Math.max(1, Math.floor(totalRounds / 2));
+  return { topScorers: topScorers(stats, 10), awards: seasonAwards(stats, minApps) };
+}

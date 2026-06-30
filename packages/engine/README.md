@@ -26,6 +26,7 @@
 | `transfer.ts` | 이적 시장 AI 시뮬 (약점 보강) |
 | `transferActions.ts` | 사용자 주도 이적 (영입/판매/방출) |
 | `matchEffects.ts` | 경기 후 상태 변화 (피로·부상·사기) |
+| `stats.ts` | 시즌 선수 통계 집계 + 어워드(득점왕·시즌 베스트) |
 | `progression.ts` | 시즌 경계 성장·노화 (잠재력 수렴 / 노장 하락) |
 | `franchise.ts` | 멀티시즌 루프 (이적→경기→정산→성장→은퇴·유스) |
 | `economyDemo.ts` | 가치평가 + 이적 창 + 재정 정산 데모 |

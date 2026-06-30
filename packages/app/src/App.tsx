@@ -13,15 +13,17 @@ import { Squad } from './components/Squad.js';
 import { Tactics } from './components/Tactics.js';
 import { Match } from './components/Match.js';
 import { Transfers } from './components/Transfers.js';
+import { Stats } from './components/Stats.js';
 import { WatchMatch } from './components/WatchMatch.js';
 
-type Tab = 'dashboard' | 'squad' | 'tactics' | 'match' | 'transfers';
+type Tab = 'dashboard' | 'squad' | 'tactics' | 'match' | 'stats' | 'transfers';
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'dashboard', label: '대시보드' },
   { key: 'squad', label: '스쿼드' },
   { key: 'tactics', label: '전술' },
   { key: 'match', label: '경기' },
+  { key: 'stats', label: '통계' },
   { key: 'transfers', label: '이적' },
 ];
 
@@ -144,6 +146,7 @@ export function App() {
                 onWatch={handleWatch}
               />
             )}
+            {tab === 'stats' && <Stats game={game} />}
             {tab === 'transfers' && (
               <Transfers
                 game={game}

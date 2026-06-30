@@ -9,6 +9,7 @@ import { settleSeason, type SeasonFinanceReport } from './finance.js';
 import { runTransferWindow, type TransferDeal } from './transfer.js';
 import { progressPlayer } from './progression.js';
 import { generateYouthPlayer } from './generate.js';
+import { summarizeStats, type PlayerSeasonStat, type SeasonAwards } from './stats.js';
 import { Rng } from './rng.js';
 
 /** 이 나이 이상이면 시즌 후 은퇴. */
@@ -22,6 +23,8 @@ export interface SeasonSummary {
   transfers: TransferDeal[];
   finance: Map<string, SeasonFinanceReport>;
   retirements: number;
+  topScorers: PlayerSeasonStat[];
+  awards: SeasonAwards;
 }
 
 /**
@@ -66,7 +69,8 @@ export function advanceSeason(clubs: Club[], season: number, baseSeed: number): 
   const transfers = runTransferWindow(clubs, baseSeed + 1);
 
   // 2) 리그 경기
-  const { table } = simulateSeason(clubs, baseSeed + 2);
+  const { table, matches } = simulateSeason(clubs, baseSeed + 2);
+  const { topScorers, awards } = summarizeStats(matches, 2 * (clubs.length - 1));
 
   // 3) 재정 정산 (순위별)
   const finance = new Map<string, SeasonFinanceReport>();
@@ -87,6 +91,8 @@ export function advanceSeason(clubs: Club[], season: number, baseSeed: number): 
     transfers,
     finance,
     retirements,
+    topScorers,
+    awards,
   };
 }
 

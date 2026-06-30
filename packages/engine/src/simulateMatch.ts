@@ -174,7 +174,32 @@ export function stepMinute(ctx: MatchContext, minute: number): MatchEvent | null
   return ev;
 }
 
+/**
+ * 출전 선수 평점 마감: 선발 전원에게 기본 평점(6.0)을 부여하고,
+ * 경기 결과(승/무/패)와 실점(GK·수비 감점)을 반영한다.
+ * 득점 보너스는 stepMinute에서 이미 누적됨.
+ */
+function finalizeRatings(ctx: MatchContext): void {
+  const settle = (side: Side, conceded: number, resultMod: number) => {
+    const byId = new Map(side.club.players.map((p) => [p.id, p]));
+    for (const slot of side.tactic.lineup) {
+      const player = byId.get(slot.playerId);
+      if (!player || player.injuryMatches > 0) continue;
+      const st = ensureStat(ctx, player);
+      let r = st.rating + resultMod;
+      const line = lineOf(slot.position);
+      if (line === 'GK' || line === 'DEF') r -= 0.18 * Math.max(0, conceded - 1);
+      st.rating = clamp(r, 1, 10);
+    }
+  };
+  const [hg, ag] = [ctx.home.goals, ctx.away.goals];
+  const mod = (gf: number, ga: number) => (gf > ga ? 0.3 : gf < ga ? -0.3 : 0);
+  settle(ctx.home, ag, mod(hg, ag));
+  settle(ctx.away, hg, mod(ag, hg));
+}
+
 export function finalize(ctx: MatchContext): MatchResult {
+  finalizeRatings(ctx);
   const { home, away } = ctx;
   const totalTicks = home.possessionTicks + away.possessionTicks || 1;
   const possession: [number, number] = [
