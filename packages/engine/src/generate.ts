@@ -48,9 +48,9 @@ function genAttributes(rng: Rng, tier: number, isGk: boolean): Attributes {
   return attrs;
 }
 
-function genPlayer(rng: Rng, position: Position, tier: number): Player {
+function genPlayer(rng: Rng, position: Position, tier: number, fixedAge?: number): Player {
   const isGk = position === 'GK';
-  const age = rng.int(17, 34);
+  const age = fixedAge ?? rng.int(17, 34);
   const attributes = genAttributes(rng, tier, isGk);
   // CA 근사: 전체 평균 × 10 (0~200 척도). 데모용 단순화.
   const mean =
@@ -96,6 +96,11 @@ export function generateClub(rng: Rng, id: string, name: string, tier: number): 
   const balance = reputation * 50_000 + rng.int(0, 100_000);   // 만원
   const transferBudget = Math.round(balance * 0.4);
   return { id, name, players, finance: { balance, transferBudget, reputation } };
+}
+
+/** 유스 신인 1명 생성 (17~19세). 은퇴 선수 대체·유스 유입에 사용. */
+export function generateYouthPlayer(rng: Rng, position: Position, tier: number): Player {
+  return genPlayer(rng, position, tier, rng.int(17, 19));
 }
 
 /** 생성된 구단의 선발 11명으로 기본 4-3-3 전술 구성. */

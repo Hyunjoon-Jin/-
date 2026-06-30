@@ -21,7 +21,10 @@
 | `valuation.ts` | 선수 시장 가치 · 주급 산정 |
 | `finance.ts` | 구단 재정 · 시즌 정산 · 리그 상금 |
 | `transfer.ts` | 이적 시장 AI 시뮬 (약점 보강) |
+| `progression.ts` | 시즌 경계 성장·노화 (잠재력 수렴 / 노장 하락) |
+| `franchise.ts` | 멀티시즌 루프 (이적→경기→정산→성장→은퇴·유스) |
 | `economyDemo.ts` | 가치평가 + 이적 창 + 재정 정산 데모 |
+| `franchiseDemo.ts` | 멀티시즌 + 유망주 성장 곡선 추적 데모 |
 
 ## 실행
 
@@ -34,6 +37,9 @@ npm run sim-season --workspace @soccer-tycoon/engine
 
 # 경영·이적 데모 (가치평가 + 이적 창 + 재정 정산)
 npm run economy-demo --workspace @soccer-tycoon/engine
+
+# 멀티시즌 데모 (성장·노화·은퇴 + 유망주 성장 곡선)
+npm run franchise-demo --workspace @soccer-tycoon/engine
 
 # 테스트 (재현성 + 분포 가드레일)
 npm test --workspace @soccer-tycoon/engine

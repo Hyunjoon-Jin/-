@@ -21,6 +21,7 @@ npm run demo                # 경기 1건 텍스트 중계
 npm run test                # 엔진 테스트 (재현성 + 분포 가드레일)
 npm run sim-season --workspace @soccer-tycoon/engine     # 시즌 밸런스 지표
 npm run economy-demo --workspace @soccer-tycoon/engine   # 가치평가·이적·재정
+npm run franchise-demo --workspace @soccer-tycoon/engine # 멀티시즌 성장·노화
 ```
 
 엔진 패키지 상세: [`packages/engine/README.md`](packages/engine/README.md).

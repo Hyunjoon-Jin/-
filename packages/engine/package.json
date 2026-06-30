@@ -8,6 +8,7 @@
     "demo": "tsx src/demo.ts",
     "sim-season": "tsx src/simSeason.ts",
     "economy-demo": "tsx src/economyDemo.ts",
+    "franchise-demo": "tsx src/franchiseDemo.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },

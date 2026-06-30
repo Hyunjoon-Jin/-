@@ -4,8 +4,12 @@ export { Rng } from './rng.js';
 export { simulateMatch, type MatchSetup } from './simulateMatch.js';
 export { computeTeamStrength, lineOf } from './teamStrength.js';
 export { playerDerived, currentAbility, type DerivedRatings } from './derived.js';
-export { generateClub, defaultTactic, FORMATION_433 } from './generate.js';
+export { generateClub, generateYouthPlayer, defaultTactic, FORMATION_433 } from './generate.js';
 export { simulateSeason, type SeasonResult, type TableRow } from './league.js';
+export { progressPlayer } from './progression.js';
+export {
+  advanceSeason, runFranchise, type SeasonSummary,
+} from './franchise.js';
 export { TUNING } from './tuning.js';
 export { DERIVED_WEIGHTS, type DerivedKey } from './roleWeights.js';
 export { formatMoney, EOK } from './money.js';
