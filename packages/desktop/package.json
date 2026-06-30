@@ -1,0 +1,18 @@
+{
+  "name": "@soccer-tycoon/desktop",
+  "version": "0.0.1",
+  "private": true,
+  "description": "축구 구단주 게임 Electron 데스크톱 셸 (SQLite 저장)",
+  "main": "dist-main/main.js",
+  "scripts": {
+    "build:main": "tsc -p tsconfig.main.json",
+    "start": "npm run build:main && electron .",
+    "test": "node --import tsx --test test/*.test.ts",
+    "typecheck": "tsc -p tsconfig.main.json --noEmit"
+  },
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

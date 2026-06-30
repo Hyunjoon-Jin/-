@@ -36,8 +36,9 @@ npm run franchise-demo --workspace @soccer-tycoon/engine # 멀티시즌 성장·
 
 | 패키지 | 역할 |
 |---|---|
-| `@soccer-tycoon/engine` | 헤드리스 시뮬레이션 엔진 (경기·경영·이적·성장). 28 테스트. |
-| `@soccer-tycoon/app` | Vite + React 데스크톱 UI (Electron 렌더러). |
+| `@soccer-tycoon/engine` | 헤드리스 시뮬레이션 엔진 (경기·경영·이적·성장·컵·통계). 62 테스트. |
+| `@soccer-tycoon/app` | Vite + React UI (8개 화면 + 경기 관전). 8 테스트. |
+| `@soccer-tycoon/desktop` | Electron 셸 + SQLite 세이브(`node:sqlite`). 4 테스트. |
 
 ## 계획된 기술 스택
 

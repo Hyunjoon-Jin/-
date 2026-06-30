@@ -84,3 +84,53 @@ export class WebSaveStore implements SaveStore {
     this.writeIndex(this.readIndex().filter((m) => m.id !== id));
   }
 }
+
+/** Electron 프리로드가 노출하는 SQLite 세이브 API(동기 IPC). */
+export interface SaveApi {
+  list(): SaveSlotMeta[];
+  load(id: string): string | null;
+  save(id: string, json: string, meta: SaveSlotMeta): void;
+  remove(id: string): void;
+}
+
+/**
+ * Electron(메인 프로세스 SQLite) 기반 저장소.
+ * 직렬화는 렌더러에서 수행하고, 본문 JSON과 메타를 IPC로 메인에 넘긴다.
+ * WebSaveStore와 동일한 SaveStore 인터페이스 → App 코드는 어느 쪽이든 동일.
+ */
+export class ElectronSaveStore implements SaveStore {
+  constructor(private api: SaveApi) {}
+
+  list(): SaveSlotMeta[] {
+    return this.api.list().sort((a, b) => b.savedAt.localeCompare(a.savedAt));
+  }
+
+  save(id: string, state: GameState): SaveSlotMeta {
+    const file = serialize(state);
+    const meta: SaveSlotMeta = {
+      id, clubName: clubNameOf(state), season: state.season, savedAt: file.savedAt,
+    };
+    this.api.save(id, JSON.stringify(file), meta);
+    return meta;
+  }
+
+  load(id: string): GameState | null {
+    const json = this.api.load(id);
+    if (!json) return null;
+    try {
+      return deserialize(JSON.parse(json) as SaveFile);
+    } catch {
+      return null;
+    }
+  }
+
+  remove(id: string): void {
+    this.api.remove(id);
+  }
+}
+
+/** 환경에 맞는 저장소 선택: Electron이면 SQLite, 아니면 localStorage. */
+export function createSaveStore(): SaveStore {
+  const api = (globalThis as { saveAPI?: SaveApi }).saveAPI;
+  return api ? new ElectronSaveStore(api) : new WebSaveStore(window.localStorage);
+}

@@ -219,8 +219,11 @@ soccer-tycoon/
 - [x] 선수 통계·어워드: 출전/득점/평점 집계, 리그 득점 순위, 득점왕·시즌 베스트.
       (경기 마감 시 선발 전원 평점 부여.)
 - [x] 컵대회: 리그 병행 단판 녹아웃(승부차기·부전승), 우승 상금, 브래킷 화면.
+- [x] Electron 셸 + SQLite 세이브: packages/desktop. node:sqlite 저장소,
+      IPC로 렌더러에 노출, createSaveStore()가 환경 감지(SQLite/localStorage).
+      (GUI 패키징은 데스크톱 환경에서 수행 — 저장 계층은 node:test로 검증.)
 
-남은 큰 축: **Electron 패키징 + SQLite SaveStore**, 스태프·징계·온보딩 등 콘텐츠.
+남은 큰 축: **설치형 패키징(electron-builder)**, 스태프·징계·온보딩 등 콘텐츠.
 
 ---
 

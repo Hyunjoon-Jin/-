@@ -6,7 +6,7 @@ import {
   type GameState, type ActionOutcome, type WatchSetup,
 } from './game.js';
 import type { Tactic, MatchResult } from '@soccer-tycoon/engine';
-import { WebSaveStore } from './storage.js';
+import { createSaveStore } from './storage.js';
 import { StartScreen } from './components/StartScreen.js';
 import { Dashboard } from './components/Dashboard.js';
 import { Squad } from './components/Squad.js';
@@ -34,7 +34,7 @@ function newSlotId(): string {
 }
 
 export function App() {
-  const store = useMemo(() => new WebSaveStore(window.localStorage), []);
+  const store = useMemo(() => createSaveStore(), []);
   const [game, setGame] = useState<GameState | null>(null);
   const [slotId, setSlotId] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<string | null>(null);
