@@ -10,7 +10,7 @@ import { ALL_ATTRS, GOALKEEPING_ATTRS } from './types.js';
 import { Rng } from './rng.js';
 import { clamp } from './math.js';
 import { weeklyWage } from './valuation.js';
-import { currentAbility, isInjured } from './derived.js';
+import { currentAbility, isAvailable } from './derived.js';
 
 const FIRST = [
   'Min', 'Jun', 'Leo', 'Marco', 'Diego', 'Yuki', 'Omar', 'Kai', 'Luka', 'Tom',
@@ -70,6 +70,8 @@ function genPlayer(rng: Rng, position: Position, tier: number, fixedAge?: number
     condition: 1.0,
     morale: 0.5,
     injuryMatches: 0,
+    yellowCards: 0,
+    suspensionMatches: 0,
     contractYears: rng.int(1, 4),
     wage: 0,
   };
@@ -132,10 +134,10 @@ export function generateAcademyIntake(rng: Rng, tier: number, youthLevel: number
   return out;
 }
 
-/** 슬롯 적합도: 포지션 숙련도 우선, 그다음 능력. 부상은 최후순위. */
+/** 슬롯 적합도: 포지션 숙련도 우선, 그다음 능력. 부상·정지는 최후순위. */
 function slotScore(p: Player, pos: Position): number {
   const fam = p.position === pos ? 1 : (p.familiarity[pos] ?? 0.2);
-  return fam * 1000 + currentAbility(p) - (isInjured(p) ? 1_000_000 : 0);
+  return fam * 1000 + currentAbility(p) - (isAvailable(p) ? 0 : 1_000_000);
 }
 
 /**

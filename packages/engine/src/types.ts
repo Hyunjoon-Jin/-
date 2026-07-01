@@ -72,6 +72,10 @@ export interface Player {
   morale: number;
   /** 남은 부상 경기 수. 0 = 정상. >0 이면 출전 불가. */
   injuryMatches: number;
+  /** 시즌 누적 경고. 일정 수마다 출전 정지. */
+  yellowCards: number;
+  /** 남은 출전 정지 경기 수. 0 = 정상. >0 이면 출전 불가. */
+  suspensionMatches: number;
   /** 잔여 계약 연수. */
   contractYears: number;
   /** 주급 (만원). */
@@ -151,6 +155,16 @@ export interface MatchEvent {
   playerName: string;
 }
 
+export type CardType = 'yellow' | 'red';
+
+export interface CardEvent {
+  minute: number;
+  side: 'home' | 'away';
+  playerId: string;
+  playerName: string;
+  type: CardType;
+}
+
 export interface PlayerMatchStat {
   playerId: string;
   name: string;
@@ -168,6 +182,7 @@ export interface MatchResult {
   possession: [number, number];
   shots: [number, number];
   events: MatchEvent[];
+  cards: CardEvent[];
   playerStats: { home: PlayerMatchStat[]; away: PlayerMatchStat[] };
   seed: number;
 }

@@ -21,6 +21,10 @@ const TUNING = {
   /** 승/패 사기 변동. */
   moraleWin: 0.06,
   moraleLoss: 0.06,
+  /** 경고 누적 출전정지 임계 (n장마다 1경기). */
+  yellowThreshold: 5,
+  /** 퇴장 출전정지 경기 수. */
+  redSuspension: 2,
 } as const;
 
 type Outcome = 'W' | 'D' | 'L';
@@ -52,11 +56,27 @@ function applySide(club: Club, tactic: Tactic, outcome: Outcome, rng: Rng): void
         p.condition = 0.3;
       }
     } else {
-      // 벤치/로테이션: 회복 (자연회복 + 의료 보너스)
+      // 벤치/정지/로테이션: 회복 + 출전정지 카운트다운(미출전으로 1경기 소화)
       const recovery = TUNING.recoveryBase * (0.5 + p.attributes.naturalFitness / 20) * recoveryBonus;
       p.condition = Math.min(1, p.condition + recovery);
+      if (p.suspensionMatches > 0) p.suspensionMatches--;
     }
     p.morale = clamp(p.morale + dMorale, 0, 1);
+  }
+}
+
+/** 이번 경기 카드 → 징계 반영 (경고 누적/퇴장). 새 정지는 다음 경기부터. */
+function processDiscipline(home: Club, away: Club, cards: MatchResult['cards']): void {
+  const byId = new Map([...home.players, ...away.players].map((p) => [p.id, p]));
+  for (const card of cards) {
+    const p = byId.get(card.playerId);
+    if (!p) continue;
+    if (card.type === 'red') {
+      p.suspensionMatches += TUNING.redSuspension;
+    } else {
+      p.yellowCards++;
+      if (p.yellowCards % TUNING.yellowThreshold === 0) p.suspensionMatches += 1;
+    }
   }
 }
 
@@ -74,4 +94,5 @@ export function applyMatchEffects(
   const awayOutcome: Outcome = ag > hg ? 'W' : ag < hg ? 'L' : 'D';
   applySide(home, homeTactic, homeOutcome, rng);
   applySide(away, awayTactic, awayOutcome, rng);
+  processDiscipline(home, away, result.cards);
 }

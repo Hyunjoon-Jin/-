@@ -4,7 +4,10 @@ export { Rng } from './rng.js';
 export { simulateMatch, MATCH_LENGTH, type MatchSetup } from './simulateMatch.js';
 export { LiveMatch, HALF_TIME } from './liveMatch.js';
 export { computeTeamStrength, lineOf } from './teamStrength.js';
-export { playerDerived, currentAbility, isInjured, type DerivedRatings } from './derived.js';
+export {
+  playerDerived, currentAbility, isInjured, isSuspended, isAvailable,
+  type DerivedRatings,
+} from './derived.js';
 export { applyMatchEffects } from './matchEffects.js';
 export {
   aggregatePlayerStats, topScorers, playerOfSeason, seasonAwards, summarizeStats,

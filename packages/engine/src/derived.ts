@@ -8,9 +8,19 @@ import { ALL_ATTRS } from './types.js';
 import { DERIVED_WEIGHTS, type DerivedKey, type Weights } from './roleWeights.js';
 import { clamp, weightedMean } from './math.js';
 
-/** 부상 여부. 부상 중인 선수는 출전할 수 없다. */
+/** 부상 여부. */
 export function isInjured(player: Player): boolean {
   return player.injuryMatches > 0;
+}
+
+/** 출전 정지 여부. */
+export function isSuspended(player: Player): boolean {
+  return player.suspensionMatches > 0;
+}
+
+/** 출전 가능 여부 (부상·정지 아님). */
+export function isAvailable(player: Player): boolean {
+  return player.injuryMatches === 0 && player.suspensionMatches === 0;
 }
 
 /**

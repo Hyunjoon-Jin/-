@@ -63,9 +63,11 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
   for (const club of clubs) {
     for (const player of club.players) {
       progressPlayer(player, rng, club.staff.coaching);
-      // 새 시즌은 풀 컨디션·부상 회복으로 시작, 사기는 중립으로 회귀
+      // 새 시즌은 풀 컨디션·부상/징계 리셋으로 시작, 사기는 중립으로 회귀
       player.condition = 1;
       player.injuryMatches = 0;
+      player.yellowCards = 0;
+      player.suspensionMatches = 0;
       player.morale = 0.5 + (player.morale - 0.5) * 0.4;
     }
 

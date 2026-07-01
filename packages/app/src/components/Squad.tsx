@@ -1,12 +1,15 @@
 import { useMemo, useState } from 'react';
-import { formatMoney, currentAbility, marketValue, isInjured, type Club, type Player } from '@soccer-tycoon/engine';
+import { formatMoney, currentAbility, marketValue, isInjured, isSuspended, type Club, type Player } from '@soccer-tycoon/engine';
 
 type SortKey = 'ca' | 'age' | 'value' | 'wage' | 'condition';
 
-/** 컨디션(0~1)을 색상 점 + %로. 부상은 🤕 N. */
+/** 컨디션(0~1)을 색상 점 + %로. 부상은 🤕 N, 정지는 🟥 N. */
 function ConditionCell({ player }: { player: Player }) {
   if (isInjured(player)) {
     return <span className="injury">🤕 {player.injuryMatches}</span>;
+  }
+  if (isSuspended(player)) {
+    return <span className="suspended">🟥 {player.suspensionMatches}</span>;
   }
   const pct = Math.round(player.condition * 100);
   const cls = pct >= 80 ? 'cond-good' : pct >= 55 ? 'cond-mid' : 'cond-low';

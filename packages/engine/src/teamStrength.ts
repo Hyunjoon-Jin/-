@@ -3,7 +3,7 @@
  * 선수별 보정 파생값을 라인별로 집계하고 전술로 가중한다.
  */
 import type { Club, Line, Player, Position, Tactic, TeamStrength } from './types.js';
-import { playerDerived, isInjured, type DerivedRatings } from './derived.js';
+import { playerDerived, isAvailable, type DerivedRatings } from './derived.js';
 import { clamp } from './math.js';
 
 const LINE_OF: Record<Position, Line> = {
@@ -36,7 +36,7 @@ function evalLineup(club: Club, tactic: Tactic): SlotEval[] {
   const out: SlotEval[] = [];
   for (const slot of tactic.lineup) {
     const player = byId.get(slot.playerId);
-    if (!player || isInjured(player)) continue; // 부상 선수는 출전 불가(빈 슬롯 처리)
+    if (!player || !isAvailable(player)) continue; // 부상·정지 선수는 출전 불가(빈 슬롯 처리)
     out.push({ line: lineOf(slot.position), d: playerDerived(player, slot.position) });
   }
   return out;

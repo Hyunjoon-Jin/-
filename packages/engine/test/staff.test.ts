@@ -32,7 +32,7 @@ describe('staff: 코칭 → 성장', () => {
 function fakeResult(home: Club, away: Club): MatchResult {
   return {
     homeClubId: home.id, awayClubId: away.id, homeClubName: home.name, awayClubName: away.name,
-    score: [1, 0], possession: [50, 50], shots: [0, 0], events: [],
+    score: [1, 0], possession: [50, 50], shots: [0, 0], events: [], cards: [],
     playerStats: { home: [], away: [] }, seed: 1,
   };
 }

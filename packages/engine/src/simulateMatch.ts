@@ -8,7 +8,7 @@
  * 동일한 로직을 공유한다.
  */
 import type {
-  ChanceType, Club, MatchEvent, MatchResult, Player,
+  CardEvent, ChanceType, Club, MatchEvent, MatchResult, Player,
   PlayerMatchStat, ShotOutcome, Tactic, TeamStrength,
 } from './types.js';
 import { computeTeamStrength, lineOf } from './teamStrength.js';
@@ -198,9 +198,37 @@ function finalizeRatings(ctx: MatchContext): void {
   settle(ctx.away, hg, mod(ag, hg));
 }
 
+/**
+ * 카드 생성 (징계). 경기 rng와 독립된 시드로 결정론적 생성.
+ * 선발(출전 가능)만 대상, 적극성(aggression)이 높을수록 카드 확률↑.
+ */
+function generateCards(ctx: MatchContext): CardEvent[] {
+  const cards: CardEvent[] = [];
+  const rng = new Rng(ctx.seed * 3 + 12345);
+  const roll = (side: Side, sideKey: 'home' | 'away') => {
+    const byId = new Map(side.club.players.map((p) => [p.id, p]));
+    for (const slot of side.tactic.lineup) {
+      const p = byId.get(slot.playerId);
+      if (!p || p.injuryMatches > 0 || p.suspensionMatches > 0) continue;
+      const aggr = p.attributes.aggression;
+      const yellowP = clamp(0.03 + (aggr - 10) * 0.006, 0.01, 0.16);
+      const redP = clamp(0.002 + (aggr - 10) * 0.0006, 0.0005, 0.02);
+      if (rng.roll(redP)) {
+        cards.push({ minute: rng.int(20, 90), side: sideKey, playerId: p.id, playerName: p.name, type: 'red' });
+      } else if (rng.roll(yellowP)) {
+        cards.push({ minute: rng.int(5, 90), side: sideKey, playerId: p.id, playerName: p.name, type: 'yellow' });
+      }
+    }
+  };
+  roll(ctx.home, 'home');
+  roll(ctx.away, 'away');
+  return cards.sort((a, b) => a.minute - b.minute);
+}
+
 export function finalize(ctx: MatchContext): MatchResult {
   finalizeRatings(ctx);
   const { home, away } = ctx;
+  const cards = generateCards(ctx);
   const totalTicks = home.possessionTicks + away.possessionTicks || 1;
   const possession: [number, number] = [
     Math.round((home.possessionTicks / totalTicks) * 100),
@@ -220,6 +248,7 @@ export function finalize(ctx: MatchContext): MatchResult {
     possession,
     shots: [home.shots, away.shots],
     events: ctx.events,
+    cards,
     playerStats: { home: splitStats(home.club), away: splitStats(away.club) },
     seed: ctx.seed,
   };

@@ -91,6 +91,20 @@ export function WatchMatch({ watch, myClub, initialTactic, onDone, onCancel }: P
               <div className="ft-panel">
                 <h3>경기 종료</h3>
                 <p className="ft-score">{homeName} {score[0]} : {score[1]} {awayName}</p>
+                {(() => {
+                  const cards = live.result().cards;
+                  if (cards.length === 0) return null;
+                  return (
+                    <ul className="card-list">
+                      {cards.map((c, i) => (
+                        <li key={i}>
+                          <span className="feed-min">{c.minute}'</span>
+                          <span>{c.type === 'red' ? '🟥' : '🟨'} {c.playerName}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  );
+                })()}
                 <button className="btn-advance" onClick={() => onDone(live.result())}>
                   결과 확정 및 라운드 진행 →
                 </button>

@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import {
-  computeTeamStrength, currentAbility, isInjured, type Club, type Tactic, type TeamStrength,
+  computeTeamStrength, currentAbility, isInjured, isSuspended, isAvailable,
+  type Club, type Tactic, type TeamStrength,
 } from '@soccer-tycoon/engine';
 import { FORMATION_NAMES, autoPickLineup, swapPlayer } from '../tactics.js';
 
@@ -58,9 +59,11 @@ export function Tactics({ club, tactic, onChange, disabled }: Props) {
           <tbody>
             {tactic.lineup.map((slot, i) => {
               const p = byId.get(slot.playerId);
-              const injured = p ? isInjured(p) : false;
+              const unavailable = p ? !isAvailable(p) : false;
+              const mark = (pl: typeof club.players[number]) =>
+                isInjured(pl) ? '🤕 ' : isSuspended(pl) ? '🟥 ' : '';
               return (
-                <tr key={i} className={injured ? 'slot-injured' : ''}>
+                <tr key={i} className={unavailable ? 'slot-injured' : ''}>
                   <td className="slot-pos">{slot.position}</td>
                   <td className="slot-player">
                     <select
@@ -70,12 +73,16 @@ export function Tactics({ club, tactic, onChange, disabled }: Props) {
                     >
                       {club.players.map((pl) => (
                         <option key={pl.id} value={pl.id}>
-                          {isInjured(pl) ? '🤕 ' : ''}{pl.name} ({pl.position} · {currentAbility(pl).toFixed(0)})
+                          {mark(pl)}{pl.name} ({pl.position} · {currentAbility(pl).toFixed(0)})
                         </option>
                       ))}
                     </select>
                   </td>
-                  <td>{injured ? <span className="injury">🤕{p!.injuryMatches}</span> : p ? currentAbility(p).toFixed(0) : '-'}</td>
+                  <td>
+                    {p && isInjured(p) ? <span className="injury">🤕{p.injuryMatches}</span>
+                      : p && isSuspended(p) ? <span className="suspended">🟥{p.suspensionMatches}</span>
+                      : p ? currentAbility(p).toFixed(0) : '-'}
+                  </td>
                 </tr>
               );
             })}
