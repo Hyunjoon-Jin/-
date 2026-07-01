@@ -90,9 +90,14 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, onDone, onCa
     setPhase('playing2');
   }
 
+  // 현재 포메이션(하프타임 전술 변경 반영): 사용자 측은 라이브 tactic, 상대는 셋업 고정.
+  const homeTactic = watch.userIsHome ? tactic : watch.setup.home.tactic;
+  const awayTactic = watch.userIsHome ? watch.setup.away.tactic : tactic;
   const pitch: PitchState = {
     homeName, awayName, score: view.score, minute: view.minute,
     ball: view.ball, goalFlash: view.goalFlash, userIsHome: watch.userIsHome,
+    homeFormation: homeTactic.lineup.map((s) => s.position),
+    awayFormation: awayTactic.lineup.map((s) => s.position),
   };
 
   return (

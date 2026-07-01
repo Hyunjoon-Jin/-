@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import type { Position } from '@soccer-tycoon/engine';
 
 export interface PitchState {
   homeName: string;
@@ -10,10 +11,52 @@ export interface PitchState {
   /** 방금 골 이벤트 하이라이트. */
   goalFlash: 'home' | 'away' | null;
   userIsHome: boolean;
+  /** 홈/원정 선발 포메이션(슬롯 포지션 순서). 선수 점 배치에 사용. */
+  homeFormation: Position[];
+  awayFormation: Position[];
 }
 
 const W = 760;
 const H = 460;
+
+// 우측 공격(홈) 기준 포지션별 기본 좌표(0~1). 원정은 x를 반전.
+const LINE_X: Record<Position, number> = {
+  GK: 0.05,
+  DL: 0.20, DC: 0.19, DR: 0.20,
+  WBL: 0.27, WBR: 0.27,
+  DM: 0.35,
+  ML: 0.50, MC: 0.48, MR: 0.50,
+  AML: 0.66, AMC: 0.66, AMR: 0.66,
+  ST: 0.84,
+};
+const SIDE_Y: Record<Position, number> = {
+  GK: 0.5,
+  DL: 0.18, DC: 0.5, DR: 0.82,
+  WBL: 0.10, WBR: 0.90,
+  DM: 0.5,
+  ML: 0.18, MC: 0.5, MR: 0.82,
+  AML: 0.20, AMC: 0.5, AMR: 0.80,
+  ST: 0.5,
+};
+
+/** 포메이션 → 정규화 좌표. 같은 x열에 몰린 선수는 y로 고르게 벌린다. */
+function formationCoords(positions: Position[]): { x: number; y: number }[] {
+  const raw = positions.map((p) => ({ x: LINE_X[p], y: SIDE_Y[p] }));
+  const groups = new Map<number, number[]>();
+  raw.forEach((r, i) => {
+    const key = Math.round(r.x * 50);
+    const arr = groups.get(key);
+    if (arr) arr.push(i);
+    else groups.set(key, [i]);
+  });
+  for (const idxs of groups.values()) {
+    if (idxs.length < 2) continue;
+    idxs.sort((a, b) => raw[a]!.y - raw[b]!.y);
+    const n = idxs.length;
+    idxs.forEach((idx, k) => { raw[idx]!.y = 0.18 + 0.64 * (k / (n - 1)); });
+  }
+  return raw;
+}
 
 export function MatchPitch(props: PitchState) {
   const ref = useRef<HTMLCanvasElement | null>(null);
@@ -66,20 +109,47 @@ function draw(ctx: CanvasRenderingContext2D, s: PitchState) {
   };
   drawBox(true); drawBox(false);
 
+  // ── 선수 점 배치 ──────────────────────────────────────────
+  // 공 x에 따라 양 팀이 함께 밀린다(콤팩트 블록). y는 미세하게 흔들려 생동감.
+  const shift = (s.ball.x - 0.5) * 0.12;
+  const userColor = '#3ddc84', oppColor = '#e0574b';
+  const homeColor = s.userIsHome ? userColor : oppColor;
+  const awayColor = s.userIsHome ? oppColor : userColor;
+
+  const drawTeam = (formation: Position[], mirror: boolean, color: string) => {
+    const coords = formationCoords(formation);
+    coords.forEach((c, i) => {
+      const baseX = mirror ? 1 - c.x : c.x;
+      const sway = Math.sin(s.minute * 0.6 + i * 1.7) * 0.015;
+      const nx = Math.min(0.97, Math.max(0.03, baseX + shift));
+      const ny = Math.min(0.95, Math.max(0.05, c.y + sway));
+      const px = m + nx * pw;
+      const py = m + ny * ph;
+      ctx.beginPath();
+      ctx.arc(px, py, 8, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    });
+  };
+  drawTeam(s.homeFormation, false, homeColor);
+  drawTeam(s.awayFormation, true, awayColor);
+
   // 공
   const bx = m + s.ball.x * pw;
   const by = m + s.ball.y * ph;
   ctx.beginPath();
-  ctx.arc(bx, by, 7, 0, Math.PI * 2);
+  ctx.arc(bx, by, 6, 0, Math.PI * 2);
   ctx.fillStyle = '#ffffff';
   ctx.fill();
-  ctx.strokeStyle = '#333'; ctx.lineWidth = 1; ctx.stroke();
+  ctx.strokeStyle = '#111'; ctx.lineWidth = 1.5; ctx.stroke();
 
   // 골 하이라이트
   if (s.goalFlash) {
-    const left = s.goalFlash === 'away'; // away가 넣으면 홈 골문(좌측)
-    const gx = left ? m + 12 : m + pw - 12;
-    ctx.fillStyle = 'rgba(255,215,0,0.9)';
+    const gx = s.goalFlash === 'away' ? m + 12 : m + pw - 12;
+    ctx.fillStyle = 'rgba(255,215,0,0.95)';
     ctx.font = 'bold 22px sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText('⚽ GOAL!', gx > W / 2 ? W / 2 + 120 : W / 2 - 120, H / 2);
