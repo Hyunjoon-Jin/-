@@ -1,7 +1,9 @@
+import { useState } from 'react';
 import {
   liveTable, liveProgress, myNextFixture, lastSummary, myLastPosition, type GameState,
 } from '../game.js';
 import type { MatchResult } from '@soccer-tycoon/engine';
+import { MatchDetailModal } from './MatchStats.js';
 
 interface Props {
   game: GameState;
@@ -125,6 +127,7 @@ function Standings({ game, table }: { game: GameState; table: ReturnType<typeof 
 
 function RecentResults({ game }: { game: GameState }) {
   const live = game.live!;
+  const [detail, setDetail] = useState<MatchResult | null>(null);
   if (live.cursor === 0) return <div className="results"><h3>최근 결과</h3><p className="muted">아직 경기가 없습니다.</p></div>;
 
   const lastRound = live.fixtures[live.cursor - 1]!.round;
@@ -132,7 +135,7 @@ function RecentResults({ game }: { game: GameState }) {
 
   return (
     <div className="results">
-      <h3>{lastRound}라운드 결과</h3>
+      <h3>{lastRound}라운드 결과 <span className="muted small">(클릭해 상세)</span></h3>
       <ul className="result-list">
         {recent.map((m, i) => {
           const mine = m.homeClubId === game.myClubId || m.awayClubId === game.myClubId;
@@ -141,7 +144,8 @@ function RecentResults({ game }: { game: GameState }) {
             (m.awayClubId === game.myClubId && m.score[1] > m.score[0]);
           const draw = m.score[0] === m.score[1];
           return (
-            <li key={i} className={mine ? (draw ? 'mine draw' : win ? 'mine win' : 'mine loss') : ''}>
+            <li key={i} className={`clickable ${mine ? (draw ? 'mine draw' : win ? 'mine win' : 'mine loss') : ''}`}
+              onClick={() => setDetail(m)}>
               <span className="rl-home">{m.homeClubName}</span>
               <span className="rl-score">{m.score[0]} : {m.score[1]}</span>
               <span className="rl-away">{m.awayClubName}</span>
@@ -149,6 +153,7 @@ function RecentResults({ game }: { game: GameState }) {
           );
         })}
       </ul>
+      {detail && <MatchDetailModal result={detail} myClubId={game.myClubId} onClose={() => setDetail(null)} />}
     </div>
   );
 }

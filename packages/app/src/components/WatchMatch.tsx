@@ -6,6 +6,7 @@ import {
 import type { WatchSetup } from '../game.js';
 import { Tactics } from './Tactics.js';
 import { MatchPitch, type PitchState } from './MatchPitch.js';
+import { MatchStats } from './MatchStats.js';
 
 interface Props {
   watch: WatchSetup;
@@ -129,7 +130,7 @@ export function WatchMatch({ watch, myClub, initialTactic, onDone, onCancel }: P
               <Tactics club={myClub} tactic={tactic} onChange={setTactic} />
             </>
           ) : phase === 'fulltime' ? (
-            <FullTime result={live.result()} homeName={homeName} awayName={awayName} score={view.score} />
+            <FullTime result={live.result()} homeName={homeName} awayName={awayName} score={view.score} myClubId={myClub.id} />
           ) : (
             <div className="commentary">
               <h3>중계</h3>
@@ -157,8 +158,8 @@ function Feed({ events, userSide }: { events: MatchEvent[]; userSide: 'home' | '
 }
 
 function FullTime({
-  result, homeName, awayName, score,
-}: { result: MatchResult; homeName: string; awayName: string; score: [number, number] }) {
+  result, homeName, awayName, score, myClubId,
+}: { result: MatchResult; homeName: string; awayName: string; score: [number, number]; myClubId: string }) {
   return (
     <div className="ft-panel">
       <h3>경기 종료</h3>
@@ -173,6 +174,7 @@ function FullTime({
           ))}
         </ul>
       )}
+      <MatchStats result={result} myClubId={myClubId} />
     </div>
   );
 }
