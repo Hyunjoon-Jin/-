@@ -85,6 +85,7 @@ export function PlayerDetail({ player, onClose, onSetFocus, onRenew }: Props) {
           <span className={status.cls}>{status.text}</span>
           <span className={moraleLabel(player.morale).cls}>사기 {moraleLabel(player.morale).text}</span>
           <span className="muted">시즌 {player.seasonApps}경기</span>
+          {(player.caps ?? 0) > 0 && <span className="pd-caps" title="국가대표 A매치 출전 캡">🎽 A매치 {player.caps}경</span>}
         </div>
 
         {onRenew && (

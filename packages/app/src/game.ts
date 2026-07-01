@@ -10,7 +10,7 @@ import {
   buyPlayer, sellPlayer, releasePlayer,
   summarizeStats, aggregatePlayerStats, topScorers as engineTopScorers,
   createCup, playCupRound as enginePlayCupRound, playCupToEnd, isCupOver,
-  applyPromotionRelegation, clubsInDivision,
+  applyPromotionRelegation, clubsInDivision, runInternationalBreak,
   upgradeStaff as engineUpgradeStaff, formatMoney,
   computeTeamStrength, currentAbility, recentForm,
   type Club, type Tactic, type MatchResult, type MatchSetup, type SeasonSummary,
@@ -253,6 +253,11 @@ export function finishSeason(state: GameState): GameState {
   // 5) 오프시즌 (전 구단)
   const { retirements, intakeByClub, fireSalesByClub } = runOffseason(state.clubs, new Rng(offseasonSeed(state)));
 
+  // 5.5) 국가대표 차출 (오프시즌 리셋 이후 — 피로/부상이 새 시즌에 반영)
+  const intl = runInternationalBreak(state.clubs, new Rng(offseasonSeed(state) + 777));
+  const myCallUps = intl.byClub.get(state.myClubId) ?? 0;
+  const myIntlInjuries = myClub(state).players.filter((p) => p.injuryMatches > 0).length;
+
   // 6) 승강 (1부↔2부)
   const d1Table = myDiv === 0 ? myTable : otherTable;
   const d2Table = myDiv === 1 ? myTable : otherTable;
@@ -278,6 +283,8 @@ export function finishSeason(state: GameState): GameState {
     division: myDiv,
     promoted,
     relegated,
+    nationalCallUps: myCallUps,
+    nationalInjuries: myIntlInjuries,
   };
 
   const repaired = repairTactic(myClub(state), myTactic(state));

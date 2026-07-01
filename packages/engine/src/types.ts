@@ -86,6 +86,8 @@ export interface Player {
   trainingFocus: TrainingFocus;
   /** 고유 특성(0~2개). 경기·성장·부상에 영향. */
   traits: PlayerTrait[];
+  /** 국가대표 A매치 출전 캡. 차출로 누적. */
+  caps: number;
 }
 
 export type TrainingFocus =

@@ -46,6 +46,10 @@ export {
   recentForm, type FormResult, type FormSummary,
 } from './form.js';
 export {
+  selectCallUps, runInternationalBreak,
+  type CallUp, type InternationalResult,
+} from './international.js';
+export {
   transferTargets, buyPlayer, sellPlayer, releasePlayer,
   MIN_SQUAD, MAX_SQUAD,
   type TransferTarget, type BuyResult, type SellResult,

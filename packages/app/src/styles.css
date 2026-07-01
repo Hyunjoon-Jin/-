@@ -144,6 +144,7 @@ body {
 .pd-meta { display: flex; flex-wrap: wrap; gap: 16px; margin: 8px 0; font-size: 14px; }
 .pd-meta b { font-size: 15px; }
 .pd-fam { font-size: 13px; margin-bottom: 10px; }
+.pd-caps { color: #6cb6ff; font-weight: 600; }
 .pd-traits { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
 .trait-chip {
   background: rgba(240, 190, 70, 0.14); color: #f0be46;

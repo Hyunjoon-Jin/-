@@ -78,6 +78,8 @@ function genPlayer(rng: Rng, position: Position, tier: number, fixedAge?: number
     wage: 0,
     trainingFocus: 'balanced',
     traits: [],
+    // 실력 있는 선수는 시작부터 A매치 경력 보유(결정론적, ca 기반).
+    caps: ca >= 155 ? Math.min(90, Math.round((ca - 150) / 3.5)) : 0,
   };
   player.wage = weeklyWage(player);
   player.traits = rollTraits(player, rng);

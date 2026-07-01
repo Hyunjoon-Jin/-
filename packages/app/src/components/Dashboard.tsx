@@ -79,6 +79,13 @@ export function Dashboard({ game }: { game: GameState }) {
               {last.fireSales !== undefined && last.fireSales > 0 && (
                 <> &nbsp;·&nbsp; <span className="neg">💸 재정 강제 매각: {last.fireSales}명</span></>
               )}
+              {last.nationalCallUps !== undefined && last.nationalCallUps > 0 && (
+                <> &nbsp;·&nbsp; 🎽 국가대표 차출: <b>{last.nationalCallUps}명</b>
+                  {last.nationalInjuries !== undefined && last.nationalInjuries > 0 && (
+                    <span className="neg"> (부상 {last.nationalInjuries})</span>
+                  )}
+                </>
+              )}
             </p>
             {myReport && (
               <p className={myReport.net >= 0 ? 'pos' : 'neg'}>

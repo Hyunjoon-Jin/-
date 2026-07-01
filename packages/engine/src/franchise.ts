@@ -10,6 +10,7 @@ import { runTransferWindow, type TransferDeal } from './transfer.js';
 import { progressPlayer } from './progression.js';
 import { generateAcademyIntake } from './generate.js';
 import { enforceFinancialFairPlay } from './financeControl.js';
+import { runInternationalBreak } from './international.js';
 import { currentAbility } from './derived.js';
 import { hasTrait } from './traits.js';
 import { clamp } from './math.js';
@@ -44,6 +45,10 @@ export interface SeasonSummary {
   /** 컵 우승 구단(앱의 병행 컵대회). 헤드리스 프랜차이즈에선 미설정. */
   cupChampionId?: string;
   cupChampionName?: string;
+  /** 국가대표 차출 인원(내 구단 기준, 앱). */
+  nationalCallUps?: number;
+  /** 국가대표 차출 중 부상 인원(내 구단 기준, 앱). */
+  nationalInjuries?: number;
 }
 
 /**
@@ -144,6 +149,9 @@ export function advanceSeason(clubs: Club[], season: number, baseSeed: number): 
 
   // 4) 오프시즌: 성장/노화 + 은퇴·유스 아카데미
   const { retirements } = runOffseason(clubs, rng);
+
+  // 5) 국가대표 차출(오프시즌 리셋 이후 — 피로/부상이 새 시즌에 반영)
+  runInternationalBreak(clubs, rng);
 
   const champ = table[0]!;
   return {
