@@ -53,6 +53,24 @@ describe('LiveMatch', () => {
     expect(goals).toBe(r.score[0] + r.score[1]);
   });
 
+  it('stats(): 점유율 합 100, 유효슈팅 ≤ 슈팅, 종료 시 최종 결과와 일치', () => {
+    const live = new LiveMatch(setup(321));
+    live.runUntil(30);
+    const mid = live.stats();
+    expect(mid.possession[0] + mid.possession[1]).toBe(100);
+    expect(mid.shotsOnTarget[0]).toBeLessThanOrEqual(mid.shots[0]);
+    expect(mid.shotsOnTarget[1]).toBeLessThanOrEqual(mid.shots[1]);
+
+    live.runToEnd();
+    const end = live.stats();
+    const r = live.result();
+    expect(end.shots).toEqual(r.shots);
+    expect(end.possession).toEqual(r.possession);
+    // 유효슈팅(골+선방)은 최소한 골 수 이상
+    expect(end.shotsOnTarget[0]).toBeGreaterThanOrEqual(r.score[0]);
+    expect(end.shotsOnTarget[1]).toBeGreaterThanOrEqual(r.score[1]);
+  });
+
   it('하프타임 전술 변경은 결과를 바꾼다(공격적으로 전환 시 다른 전개)', () => {
     const base = setup(2024);
     // 기준: 변경 없음

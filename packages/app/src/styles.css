@@ -479,3 +479,18 @@ h3 { font-size: 14px; margin: 0 0 10px; color: var(--muted); text-transform: upp
   pointer-events: none;
 }
 .pv-hint { margin: 14px 0 0; }
+
+/* 실시간 경기 통계 패널 */
+.live-stats { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; }
+.ls-head { display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+.ls-head .mine { color: var(--accent); }
+.ls-poss-nums { display: flex; justify-content: space-between; align-items: center; font-size: 14px; }
+.ls-poss-bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; background: var(--panel-2); margin: 5px 0 10px; }
+.ls-seg.mine { background: var(--accent); }
+.ls-seg.opp { background: #55617a; }
+.ls-row { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; margin: 3px 0; }
+.ls-row .ls-num { font-size: 14px; color: var(--muted); }
+.ls-row .ls-num:first-child { text-align: left; }
+.ls-row .ls-num:last-child { text-align: right; }
+.ls-row .ls-num.lead { color: var(--text); font-weight: 700; }
+.ls-label { text-align: center; }

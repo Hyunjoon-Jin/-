@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   LiveMatch, HALF_TIME, MATCH_LENGTH, currentAbility,
-  type Club, type Tactic, type MatchEvent, type MatchResult,
+  type Club, type Tactic, type MatchEvent, type MatchResult, type LiveStats,
 } from '@soccer-tycoon/engine';
 import type { WatchSetup, MatchPreview as MatchPreviewData } from '../game.js';
 import { Tactics } from './Tactics.js';
@@ -46,6 +46,7 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, onDone, onCa
   const [view, setView] = useState<View>({ minute: 0, score: [0, 0], ball: { x: 0.5, y: 0.5 }, goalFlash: null });
   const [feed, setFeed] = useState<MatchEvent[]>([]);
   const [tactic, setTactic] = useState<Tactic>(initialTactic);
+  const [stats, setStats] = useState<LiveStats>({ possession: [50, 50], shots: [0, 0], shotsOnTarget: [0, 0] });
 
   function applyMinute(target: number, evs: MatchEvent[]) {
     const last = evs[evs.length - 1];
@@ -54,6 +55,7 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, onDone, onCa
       ? { x: last.side === 'home' ? 0.84 : 0.16, y: 0.28 + Math.random() * 0.44 }
       : { x: 0.4 + Math.random() * 0.2, y: 0.34 + Math.random() * 0.32 };
     setView({ minute: target, score: live.score(), ball, goalFlash: goal ? goal.side : null });
+    setStats(live.stats());
     const notable = evs.filter((e) => e.outcome === 'GOAL' || e.outcome === 'SAVE');
     if (notable.length) setFeed((f) => [...notable.reverse(), ...f]);
   }
@@ -136,18 +138,53 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, onDone, onCa
           ) : phase === 'halftime' ? (
             <>
               <div className="ht-banner">하프타임 — 전술을 조정할 수 있습니다</div>
+              <LiveStatsPanel stats={stats} homeName={homeName} awayName={awayName} userSide={userSide} />
               <Tactics club={myClub} tactic={tactic} onChange={setTactic} />
             </>
           ) : phase === 'fulltime' ? (
             <FullTime result={live.result()} homeName={homeName} awayName={awayName} score={view.score} myClubId={myClub.id} />
           ) : (
             <div className="commentary">
+              <LiveStatsPanel stats={stats} homeName={homeName} awayName={awayName} userSide={userSide} />
               <h3>중계</h3>
               <Feed events={feed} userSide={userSide} />
             </div>
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function LiveStatsPanel({
+  stats, homeName, awayName, userSide,
+}: { stats: LiveStats; homeName: string; awayName: string; userSide: 'home' | 'away' }) {
+  const [hp, ap] = stats.possession;
+  const rows: { label: string; h: number; a: number }[] = [
+    { label: '슈팅', h: stats.shots[0], a: stats.shots[1] },
+    { label: '유효슈팅', h: stats.shotsOnTarget[0], a: stats.shotsOnTarget[1] },
+  ];
+  return (
+    <div className="live-stats">
+      <div className="ls-head">
+        <span className={userSide === 'home' ? 'mine' : ''}>{homeName}</span>
+        <span className="muted small">실시간</span>
+        <span className={userSide === 'away' ? 'mine' : ''}>{awayName}</span>
+      </div>
+      <div className="ls-poss-nums">
+        <b>{hp}%</b><span className="muted small">점유율</span><b>{ap}%</b>
+      </div>
+      <div className="ls-poss-bar">
+        <div className={`ls-seg ${userSide === 'home' ? 'mine' : 'opp'}`} style={{ width: `${hp}%` }} />
+        <div className={`ls-seg ${userSide === 'away' ? 'mine' : 'opp'}`} style={{ width: `${ap}%` }} />
+      </div>
+      {rows.map((r) => (
+        <div className="ls-row" key={r.label}>
+          <span className={`ls-num ${r.h >= r.a ? 'lead' : ''}`}>{r.h}</span>
+          <span className="ls-label muted small">{r.label}</span>
+          <span className={`ls-num ${r.a >= r.h ? 'lead' : ''}`}>{r.a}</span>
+        </div>
+      ))}
     </div>
   );
 }

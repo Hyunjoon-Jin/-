@@ -11,6 +11,13 @@ import type { MatchEvent, MatchResult, Tactic } from './types.js';
 
 export const HALF_TIME = Math.floor(MATCH_LENGTH / 2); // 45분
 
+/** 진행 중 실시간 팀 통계(관전 패널용). [홈, 원정]. */
+export interface LiveStats {
+  possession: [number, number];
+  shots: [number, number];
+  shotsOnTarget: [number, number];
+}
+
 export class LiveMatch {
   private ctx: MatchContext;
   private current = 0; // 진행된 분
@@ -29,6 +36,22 @@ export class LiveMatch {
 
   score(): [number, number] {
     return [this.ctx.home.goals, this.ctx.away.goals];
+  }
+
+  /** 현재까지 실시간 통계(점유율·슈팅·유효슈팅). 유효슈팅=골+선방. */
+  stats(): LiveStats {
+    const { home, away, events } = this.ctx;
+    const totalTicks = home.possessionTicks + away.possessionTicks || 1;
+    const onTarget = (side: 'home' | 'away'): number =>
+      events.filter((e) => e.side === side && (e.outcome === 'GOAL' || e.outcome === 'SAVE')).length;
+    return {
+      possession: [
+        Math.round((home.possessionTicks / totalTicks) * 100),
+        Math.round((away.possessionTicks / totalTicks) * 100),
+      ],
+      shots: [home.shots, away.shots],
+      shotsOnTarget: [onTarget('home'), onTarget('away')],
+    };
   }
 
   /** 지정 분까지 진행하고, 그 구간에 발생한 이벤트만 반환. */
