@@ -265,6 +265,12 @@ body {
 .stats-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
 .stats-cols h3 { margin-top: 0; }
 
+/* ── History ── */
+.honors { margin-bottom: 18px; }
+.honors h2 { margin: 0 0 12px; }
+.history-cols { display: grid; grid-template-columns: 1.7fr 1fr; gap: 20px; align-items: start; }
+.history-cols h3 { margin-top: 0; }
+
 /* ── Cup ── */
 .cup-head { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
 .cup-head h2 { margin: 0; }

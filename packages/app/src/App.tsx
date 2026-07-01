@@ -17,12 +17,13 @@ import { Transfers } from './components/Transfers.js';
 import { Stats } from './components/Stats.js';
 import { Cup } from './components/Cup.js';
 import { Staff } from './components/Staff.js';
+import { History } from './components/History.js';
 import { Help } from './components/Help.js';
 import { PlayerDetail } from './components/PlayerDetail.js';
 import { WatchMatch } from './components/WatchMatch.js';
 import type { Player } from '@soccer-tycoon/engine';
 
-type Tab = 'dashboard' | 'squad' | 'tactics' | 'match' | 'cup' | 'stats' | 'transfers' | 'staff';
+type Tab = 'dashboard' | 'squad' | 'tactics' | 'match' | 'cup' | 'stats' | 'transfers' | 'staff' | 'history';
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'dashboard', label: '대시보드' },
@@ -33,6 +34,7 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'stats', label: '통계' },
   { key: 'transfers', label: '이적' },
   { key: 'staff', label: '스태프' },
+  { key: 'history', label: '히스토리' },
 ];
 
 function newSlotId(): string {
@@ -172,6 +174,7 @@ export function App() {
             )}
             {tab === 'cup' && <Cup game={game} onPlayCupRound={() => update(playCupRound(game))} />}
             {tab === 'staff' && <Staff game={game} onUpgrade={(kind) => runAction(upgradeStaffAction, kind)} />}
+            {tab === 'history' && <History game={game} />}
             {tab === 'stats' && <Stats game={game} />}
             {tab === 'transfers' && (
               <Transfers
