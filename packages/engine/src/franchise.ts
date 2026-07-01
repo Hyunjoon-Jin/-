@@ -97,12 +97,16 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
       player.morale = clamp(0.4 * player.morale + 0.6 * (target + leaderBonus), 0, 1);
 
       progressPlayer(player, rng, club.staff.coaching);
+      // 통산 기록 누적 후 시즌 카운터 리셋
+      player.careerApps = (player.careerApps ?? 0) + player.seasonApps;
+      player.careerGoals = (player.careerGoals ?? 0) + (player.seasonGoals ?? 0);
       // 새 시즌은 풀 컨디션·부상/징계 리셋으로 시작
       player.condition = 1;
       player.injuryMatches = 0;
       player.yellowCards = 0;
       player.suspensionMatches = 0;
       player.seasonApps = 0;
+      player.seasonGoals = 0;
     }
 
     // 은퇴

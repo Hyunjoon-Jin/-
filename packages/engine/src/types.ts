@@ -88,6 +88,12 @@ export interface Player {
   traits: PlayerTrait[];
   /** 국가대표 A매치 출전 캡. 차출로 누적. */
   caps: number;
+  /** 이번 시즌 득점(리그+컵). 시즌 경계 리셋. */
+  seasonGoals: number;
+  /** 통산 선발 출전 수(전 시즌 누적). */
+  careerApps: number;
+  /** 통산 득점(전 시즌 누적). */
+  careerGoals: number;
 }
 
 export type TrainingFocus =

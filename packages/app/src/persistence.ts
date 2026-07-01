@@ -13,7 +13,8 @@ import type { SeasonSummary, SeasonFinanceReport } from '@soccer-tycoon/engine';
 // v14: 선수 고유 특성(Player.traits)
 // v15: 국가대표 A매치 캡(Player.caps) + 시즌 요약 차출 정보
 // v16: 이사회 신뢰도(boardConfidence) + 경질(sacked)
-export const SAVE_VERSION = 16;
+// v17: 선수 통산/시즌 득점(seasonGoals·careerApps·careerGoals)
+export const SAVE_VERSION = 17;
 
 type SerializedSummary = Omit<SeasonSummary, 'finance'> & {
   finance: Record<string, SeasonFinanceReport>;

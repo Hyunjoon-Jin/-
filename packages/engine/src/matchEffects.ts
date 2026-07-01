@@ -70,6 +70,15 @@ function applySide(club: Club, tactic: Tactic, outcome: Outcome, rng: Rng): void
   }
 }
 
+/** 이번 경기 득점 → 선수 시즌 득점 누적(통산 집계의 소스). */
+function accumulateGoals(club: Club, stats: MatchResult['playerStats']['home']): void {
+  const byId = new Map(club.players.map((p) => [p.id, p]));
+  for (const st of stats) {
+    const p = byId.get(st.playerId);
+    if (p && st.goals > 0) p.seasonGoals = (p.seasonGoals ?? 0) + st.goals;
+  }
+}
+
 /** 이번 경기 카드 → 징계 반영 (경고 누적/퇴장). 새 정지는 다음 경기부터. */
 function processDiscipline(home: Club, away: Club, cards: MatchResult['cards']): void {
   const byId = new Map([...home.players, ...away.players].map((p) => [p.id, p]));
@@ -99,5 +108,7 @@ export function applyMatchEffects(
   const awayOutcome: Outcome = ag > hg ? 'W' : ag < hg ? 'L' : 'D';
   applySide(home, homeTactic, homeOutcome, rng);
   applySide(away, awayTactic, awayOutcome, rng);
+  accumulateGoals(home, result.playerStats.home);
+  accumulateGoals(away, result.playerStats.away);
   processDiscipline(home, away, result.cards);
 }

@@ -84,7 +84,10 @@ export function PlayerDetail({ player, onClose, onSetFocus, onRenew }: Props) {
           <span>주급 <b>{formatMoney(player.wage)}</b></span>
           <span className={status.cls}>{status.text}</span>
           <span className={moraleLabel(player.morale).cls}>사기 {moraleLabel(player.morale).text}</span>
-          <span className="muted">시즌 {player.seasonApps}경기</span>
+          <span className="muted">시즌 {player.seasonApps}경 {player.seasonGoals ?? 0}골</span>
+          {((player.careerApps ?? 0) > 0 || (player.careerGoals ?? 0) > 0) && (
+            <span className="muted" title="이전 시즌까지 통산 기록">통산 {player.careerApps ?? 0}경 {player.careerGoals ?? 0}골</span>
+          )}
           {(player.caps ?? 0) > 0 && <span className="pd-caps" title="국가대표 A매치 출전 캡">🎽 A매치 {player.caps}경</span>}
         </div>
 

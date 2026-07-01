@@ -271,6 +271,8 @@ soccer-tycoon/
       목표가 달라져 실패 압박이 조절된다.
 - [x] 컵 경기 관전: nextCupPairings(순수 대진)로 내 컵 경기를 리그처럼 2D 관전(프리뷰 제외).
       playCupRound에 watched 결과 주입 — 내 경기는 관전 결과, 나머지는 시뮬. 하프타임 개입 가능.
+- [x] 선수 통산 기록: 경기 득점을 matchEffects에서 seasonGoals로 누적(리그+컵), 오프시즌에
+      careerApps/careerGoals로 이월·시즌 카운터 리셋. 선수 상세에 시즌/통산 득점 표시.
 
 기획했던 핵심·확장 시스템이 모두 구현됨. 이후는 콘텐츠 확충·디테일 다듬기 영역.
 
