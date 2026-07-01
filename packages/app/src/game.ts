@@ -540,15 +540,15 @@ function keyPlayerOf(club: Club, tactic: Tactic): { name: string; ca: number } |
   return best;
 }
 
-/** 관전 예정 경기의 프리뷰(전력·폼·순위·키플레이어). live·watchSetup 없으면 null. */
-export function matchPreview(state: GameState): MatchPreview | null {
-  const ws = watchSetup(state);
-  if (!ws || !state.live) return null;
+/** 셋업(양 팀 전술)으로 프리뷰 구성. 폼·순위는 진행 중 리그 결과 기준. */
+function buildPreviewFrom(state: GameState, setup: MatchSetup): MatchPreview | null {
+  if (!state.live) return null;
+  const results = state.live.results;
   const table = liveTable(state);
   const posOf = (clubId: string): number | null => {
-    if (state.live!.results.length === 0) return null;
+    if (results.length === 0) return null;
     const i = table.findIndex((r) => r.clubId === clubId);
-    return i < 0 ? null : i + 1;
+    return i < 0 ? null : i + 1; // 타 부 상대는 순위 정보 없음(null)
   };
   const build = (club: Club, tactic: Tactic): TeamPreview => ({
     clubId: club.id,
@@ -556,13 +556,19 @@ export function matchPreview(state: GameState): MatchPreview | null {
     isMine: club.id === state.myClubId,
     position: posOf(club.id),
     strength: computeTeamStrength(club, tactic),
-    form: recentForm(state.live!.results, club.id, 5),
+    form: recentForm(results, club.id, 5),
     keyPlayer: keyPlayerOf(club, tactic),
   });
   return {
-    home: build(ws.setup.home.club, ws.setup.home.tactic),
-    away: build(ws.setup.away.club, ws.setup.away.tactic),
+    home: build(setup.home.club, setup.home.tactic),
+    away: build(setup.away.club, setup.away.tactic),
   };
+}
+
+/** 관전 예정 리그 경기의 프리뷰(전력·폼·순위·키플레이어). */
+export function matchPreview(state: GameState): MatchPreview | null {
+  const ws = watchSetup(state);
+  return ws ? buildPreviewFrom(state, ws.setup) : null;
 }
 
 /**
@@ -620,6 +626,12 @@ export function watchCupSetup(state: GameState): WatchSetup | null {
     seed: pr.seed,
   };
   return { setup, userIsHome, opponent: userIsHome ? awayClub : homeClub };
+}
+
+/** 관전 예정 컵 경기의 프리뷰. 폼·순위는 진행 중 리그 기준(타 부 상대는 미표시). */
+export function cupPreview(state: GameState): MatchPreview | null {
+  const ws = watchCupSetup(state);
+  return ws ? buildPreviewFrom(state, ws.setup) : null;
 }
 
 /** 관전한 컵 경기 결과로 컵 라운드 전체를 커밋(내 경기는 watched, 나머지는 시뮬). */
