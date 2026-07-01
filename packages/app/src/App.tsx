@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import {
   startGame, myClub, myTactic, setMyTactic,
   startSeason, playRound, playRestOfSeason, finishSeason, advanceFullSeason,
-  playCupRound, buy, sell, release, upgradeStaffAction, setTrainingFocus,
+  playCupRound, buy, sell, release, upgradeStaffAction, setTrainingFocus, renewContract,
   watchSetup, commitWatchedRound,
   type GameState, type ActionOutcome, type WatchSetup, type Difficulty,
 } from './game.js';
@@ -126,6 +126,11 @@ export function App() {
           onSetFocus={
             club.players.some((p) => p.id === detailPlayer.id)
               ? (focus) => update(setTrainingFocus(game, detailPlayer.id, focus))
+              : undefined
+          }
+          onRenew={
+            club.players.some((p) => p.id === detailPlayer.id)
+              ? () => { const o = renewContract(game, detailPlayer.id); if (o.ok) update(o.state); return o; }
               : undefined
           }
         />

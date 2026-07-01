@@ -233,6 +233,21 @@ export function setMyTactic(state: GameState, tactic: Tactic): GameState {
   return { ...state, tactics: { ...state.tactics, [state.myClubId]: tactic } };
 }
 
+/** 내 선수 재계약 (계약 연장 + 임금 인상 + 사기 상승, 계약금 지출). */
+export function renewContract(state: GameState, playerId: string): ActionOutcome {
+  const club = myClub(state);
+  const p = club.players.find((pl) => pl.id === playerId);
+  if (!p) return { state, ok: false, message: '선수를 찾을 수 없습니다.' };
+  if (p.contractYears > 2) return { state, ok: false, message: '아직 재계약이 필요하지 않습니다.' };
+  const cost = Math.round(p.wage * 20);
+  if (club.finance.balance < cost) return { state, ok: false, message: '자금이 부족합니다.' };
+  club.finance.balance -= cost;
+  p.contractYears = 4;
+  p.wage = Math.round(p.wage * 1.1);
+  p.morale = Math.min(1, p.morale + 0.15);
+  return { state: { ...state }, ok: true, message: `${p.name} 재계약 완료 (계약금 ${formatMoney(cost)})` };
+}
+
 /** 내 선수의 훈련 포커스 설정. */
 export function setTrainingFocus(
   state: GameState, playerId: string, focus: import('@soccer-tycoon/engine').TrainingFocus,

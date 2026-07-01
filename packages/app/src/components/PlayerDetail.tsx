@@ -1,9 +1,16 @@
+import { useState } from 'react';
 import {
   TECHNICAL_ATTRS, MENTAL_ATTRS, PHYSICAL_ATTRS, GOALKEEPING_ATTRS,
   TRAINING_FOCUSES, TRAINING_LABELS,
   currentAbility, marketValue, playerDerived, isInjured, isSuspended,
   formatMoney, type AttrKey, type Player, type DerivedRatings, type TrainingFocus,
 } from '@soccer-tycoon/engine';
+
+function moraleLabel(m: number): { text: string; cls: string } {
+  if (m >= 0.65) return { text: '😀 만족', cls: 'cond-good' };
+  if (m >= 0.4) return { text: '😐 보통', cls: '' };
+  return { text: '😠 불만', cls: 'injury' };
+}
 
 const ATTR_LABELS: Record<AttrKey, string> = {
   finishing: '결정력', shooting: '슈팅력', passing: '패스', crossing: '크로스',
@@ -25,6 +32,10 @@ const DERIVED_LABELS: { key: keyof DerivedRatings; label: string }[] = [
   { key: 'gk', label: '골키핑' },
 ];
 
+function pickOut(o: { ok: boolean; message: string }): { text: string; ok: boolean } {
+  return { text: o.message, ok: o.ok };
+}
+
 function attrClass(v: number): string {
   return v >= 15 ? 'attr-hi' : v >= 10 ? 'attr-mid' : 'attr-lo';
 }
@@ -40,9 +51,12 @@ interface Props {
   onClose: () => void;
   /** 내 선수면 훈련 포커스 설정 가능. */
   onSetFocus?: (focus: TrainingFocus) => void;
+  /** 내 선수면 재계약 가능. */
+  onRenew?: () => { ok: boolean; message: string };
 }
 
-export function PlayerDetail({ player, onClose, onSetFocus }: Props) {
+export function PlayerDetail({ player, onClose, onSetFocus, onRenew }: Props) {
+  const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const ca = currentAbility(player);
   const derived = playerDerived(player, player.position);
   const status = statusBadge(player);
@@ -69,7 +83,23 @@ export function PlayerDetail({ player, onClose, onSetFocus }: Props) {
           <span>가치 <b>{formatMoney(marketValue(player))}</b></span>
           <span>주급 <b>{formatMoney(player.wage)}</b></span>
           <span className={status.cls}>{status.text}</span>
+          <span className={moraleLabel(player.morale).cls}>사기 {moraleLabel(player.morale).text}</span>
+          <span className="muted">시즌 {player.seasonApps}경기</span>
         </div>
+
+        {onRenew && (
+          <div className="pd-renew">
+            {player.contractYears <= 2 ? (
+              <>
+                <span className="muted">계약 만료 임박 ({player.contractYears}년) — </span>
+                <button className="btn-small" onClick={() => setMsg(pickOut(onRenew()))}>재계약 (계약금 {formatMoney(player.wage * 20)})</button>
+              </>
+            ) : (
+              <span className="muted small">계약 {player.contractYears}년 남음 — 재계약 불필요.</span>
+            )}
+            {msg && <span className={msg.ok ? 'toast ok' : 'toast err'}>{msg.text}</span>}
+          </div>
+        )}
         <div className="pd-fam muted">가능 포지션: {fam.join(', ') || player.position}</div>
 
         {onSetFocus && (

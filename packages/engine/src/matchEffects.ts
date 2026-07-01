@@ -47,6 +47,7 @@ function applySide(club: Club, tactic: Tactic, outcome: Outcome, rng: Rng): void
       p.injuryMatches--;
       if (p.injuryMatches === 0) p.condition = Math.max(p.condition, TUNING.returnCondition);
     } else if (starters.has(p.id)) {
+      p.seasonApps++; // 선발 출전 기록(사기·재계약 판단)
       // 선발: 피로 누적 (스태미너 높을수록 덜 지침)
       const fatigue = TUNING.fatigueBase * (1 - p.attributes.stamina / 40);
       p.condition = Math.max(TUNING.minCondition, p.condition - fatigue);

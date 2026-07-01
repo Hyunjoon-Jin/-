@@ -148,6 +148,7 @@ body {
   background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
   border-radius: 6px; padding: 5px 10px; font-size: 14px;
 }
+.pd-renew { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; font-size: 14px; flex-wrap: wrap; }
 .pd-cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
 .attr-group { }
 .attr-group h3 { margin: 0 0 6px; }

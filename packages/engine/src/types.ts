@@ -68,8 +68,10 @@ export interface Player {
   potential: number;
   /** 컨디션 (0~1). 1 = 완전. 경기 출전으로 하락, 휴식으로 회복. */
   condition: number;
-  /** 사기 (0~1). 0.5 = 중립. 승패로 변동. */
+  /** 사기 (0~1). 0.5 = 중립. 승패·출전시간으로 변동. */
   morale: number;
+  /** 이번 시즌 선발 출전 수 (시즌 경계 리셋). */
+  seasonApps: number;
   /** 남은 부상 경기 수. 0 = 정상. >0 이면 출전 불가. */
   injuryMatches: number;
   /** 시즌 누적 경고. 일정 수마다 출전 정지. */

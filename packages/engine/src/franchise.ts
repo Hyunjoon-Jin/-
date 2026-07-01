@@ -11,6 +11,7 @@ import { progressPlayer } from './progression.js';
 import { generateAcademyIntake } from './generate.js';
 import { enforceFinancialFairPlay } from './financeControl.js';
 import { currentAbility } from './derived.js';
+import { clamp } from './math.js';
 import { summarizeStats, type PlayerSeasonStat, type SeasonAwards } from './stats.js';
 import { Rng } from './rng.js';
 
@@ -66,15 +67,29 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
   let retirements = 0;
   const intakeByClub = new Map<string, number>();
   const fireSalesByClub = new Map<string, number>();
+  const expectedMatches = 2 * (clubs.length - 1); // 리그 기준 기대 출전
   for (const club of clubs) {
+    // 스쿼드 중간 능력(주전 기대치 판단용)
+    const cas = club.players.map(currentAbility).sort((a, b) => a - b);
+    const medianCA = cas[Math.floor(cas.length / 2)] ?? 0;
+
     for (const player of club.players) {
+      // 출전 시간 기반 사기 갱신 (핵심 선수가 벤치면 불만)
+      const ratio = Math.min(1, player.seasonApps / Math.max(1, expectedMatches));
+      const key = currentAbility(player) >= medianCA;
+      let target = 0.55;
+      if (ratio >= 0.55) target = 0.8;
+      else if (ratio < 0.25 && key) target = 0.3;
+      else if (ratio < 0.25) target = 0.5;
+      player.morale = clamp(0.4 * player.morale + 0.6 * target, 0, 1);
+
       progressPlayer(player, rng, club.staff.coaching);
-      // 새 시즌은 풀 컨디션·부상/징계 리셋으로 시작, 사기는 중립으로 회귀
+      // 새 시즌은 풀 컨디션·부상/징계 리셋으로 시작
       player.condition = 1;
       player.injuryMatches = 0;
       player.yellowCards = 0;
       player.suspensionMatches = 0;
-      player.morale = 0.5 + (player.morale - 0.5) * 0.4;
+      player.seasonApps = 0;
     }
 
     // 은퇴

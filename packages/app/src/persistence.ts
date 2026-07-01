@@ -9,8 +9,8 @@
 import type { GameState } from './game.js';
 import type { SeasonSummary, SeasonFinanceReport } from '@soccer-tycoon/engine';
 
-// v2~v10 …, v11: 훈련 포커스(Player.trainingFocus)
-export const SAVE_VERSION = 11;
+// v2~v11 …, v12: 사기·재계약(Player.seasonApps)
+export const SAVE_VERSION = 12;
 
 type SerializedSummary = Omit<SeasonSummary, 'finance'> & {
   finance: Record<string, SeasonFinanceReport>;

@@ -69,6 +69,7 @@ function genPlayer(rng: Rng, position: Position, tier: number, fixedAge?: number
     potential,
     condition: 1.0,
     morale: 0.5,
+    seasonApps: 0,
     injuryMatches: 0,
     yellowCards: 0,
     suspensionMatches: 0,
