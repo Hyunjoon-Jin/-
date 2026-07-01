@@ -25,9 +25,17 @@ const TUNING = {
 
 type Outcome = 'W' | 'D' | 'L';
 
+/** 의료 레벨(1~20) → 부상 확률/기간 배율. 10=1.0x, 20=0.7x, 1≈1.27x. */
+function medicalFactor(medical: number): number {
+  return clamp(1 - (medical - 10) * 0.03, 0.4, 1.3);
+}
+
 function applySide(club: Club, tactic: Tactic, outcome: Outcome, rng: Rng): void {
   const starters = new Set(tactic.lineup.map((s) => s.playerId));
   const dMorale = outcome === 'W' ? TUNING.moraleWin : outcome === 'L' ? -TUNING.moraleLoss : 0;
+  const medFactor = medicalFactor(club.staff.medical);
+  // 의료 레벨이 높을수록 회복 보너스 (0.9~1.15배)
+  const recoveryBonus = clamp(0.9 + (club.staff.medical / 20) * 0.5, 0.9, 1.15);
 
   for (const p of club.players) {
     if (p.injuryMatches > 0) {
@@ -38,14 +46,14 @@ function applySide(club: Club, tactic: Tactic, outcome: Outcome, rng: Rng): void
       // 선발: 피로 누적 (스태미너 높을수록 덜 지침)
       const fatigue = TUNING.fatigueBase * (1 - p.attributes.stamina / 40);
       p.condition = Math.max(TUNING.minCondition, p.condition - fatigue);
-      // 부상 판정
-      if (rng.roll(TUNING.injuryChance)) {
-        p.injuryMatches = rng.int(2, 8);
+      // 부상 판정 (의료가 좋을수록 확률↓, 기간↓)
+      if (rng.roll(TUNING.injuryChance * medFactor)) {
+        p.injuryMatches = Math.max(1, Math.round(rng.int(2, 8) * medFactor));
         p.condition = 0.3;
       }
     } else {
-      // 벤치/로테이션: 회복 (자연회복 높을수록 빠름)
-      const recovery = TUNING.recoveryBase * (0.5 + p.attributes.naturalFitness / 20);
+      // 벤치/로테이션: 회복 (자연회복 + 의료 보너스)
+      const recovery = TUNING.recoveryBase * (0.5 + p.attributes.naturalFitness / 20) * recoveryBonus;
       p.condition = Math.min(1, p.condition + recovery);
     }
     p.morale = clamp(p.morale + dMorale, 0, 1);

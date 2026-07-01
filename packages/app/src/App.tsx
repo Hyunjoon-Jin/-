@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import {
   startGame, myClub, myTactic, setMyTactic,
   startSeason, playRound, playRestOfSeason, finishSeason, advanceFullSeason,
-  playCupRound, buy, sell, release, watchSetup, commitWatchedRound,
+  playCupRound, buy, sell, release, upgradeStaffAction, watchSetup, commitWatchedRound,
   type GameState, type ActionOutcome, type WatchSetup,
 } from './game.js';
 import type { Tactic, MatchResult } from '@soccer-tycoon/engine';
@@ -15,9 +15,10 @@ import { Match } from './components/Match.js';
 import { Transfers } from './components/Transfers.js';
 import { Stats } from './components/Stats.js';
 import { Cup } from './components/Cup.js';
+import { Staff } from './components/Staff.js';
 import { WatchMatch } from './components/WatchMatch.js';
 
-type Tab = 'dashboard' | 'squad' | 'tactics' | 'match' | 'cup' | 'stats' | 'transfers';
+type Tab = 'dashboard' | 'squad' | 'tactics' | 'match' | 'cup' | 'stats' | 'transfers' | 'staff';
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'dashboard', label: '대시보드' },
@@ -27,6 +28,7 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'cup', label: '컵' },
   { key: 'stats', label: '통계' },
   { key: 'transfers', label: '이적' },
+  { key: 'staff', label: '스태프' },
 ];
 
 function newSlotId(): string {
@@ -149,6 +151,7 @@ export function App() {
               />
             )}
             {tab === 'cup' && <Cup game={game} onPlayCupRound={() => update(playCupRound(game))} />}
+            {tab === 'staff' && <Staff game={game} onUpgrade={(kind) => runAction(upgradeStaffAction, kind)} />}
             {tab === 'stats' && <Stats game={game} />}
             {tab === 'transfers' && (
               <Transfers

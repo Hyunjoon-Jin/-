@@ -101,13 +101,12 @@ describe('transfer: 이적 창 불변식', () => {
     expect(after).toBe(before);
   });
 
-  it('이적료는 매수 구단 예산 범위를 넘지 않는다', () => {
+  it('이적 후에도 어떤 구단의 이적 예산도 음수가 되지 않는다', () => {
+    // (매도로 예산이 늘 수 있으므로 시작 예산이 아니라 '음수 불가'가 올바른 불변식)
     const clubs = makeLeague();
-    const budgetBefore = new Map(clubs.map((c) => [c.id, c.finance.transferBudget]));
     const deals = runTransferWindow(clubs, 7);
-    for (const d of deals) {
-      expect(d.fee).toBeLessThanOrEqual(budgetBefore.get(d.toClubId)!);
-    }
+    for (const d of deals) expect(d.fee).toBeGreaterThan(0);
+    for (const c of clubs) expect(c.finance.transferBudget).toBeGreaterThanOrEqual(0);
   });
 });
 

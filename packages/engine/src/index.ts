@@ -37,3 +37,7 @@ export {
   MIN_SQUAD, MAX_SQUAD,
   type TransferTarget, type BuyResult, type SellResult,
 } from './transferActions.js';
+export {
+  upgradeStaff, upgradeCost, STAFF_KINDS, STAFF_MAX,
+  type StaffKind, type UpgradeResult,
+} from './staffActions.js';

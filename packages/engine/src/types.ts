@@ -95,6 +95,16 @@ export interface Tactic {
 
 // ── 구단 ──────────────────────────────────────────────────
 
+/** 스태프 능력 (1~20). 경영으로 업그레이드. */
+export interface Staff {
+  /** 코칭: 선수 성장률↑. */
+  coaching: number;
+  /** 의료: 부상 확률·기간↓, 컨디션 회복↑. */
+  medical: number;
+  /** 스카우팅: 이적 매물 잠재력 정보 정확도↑. */
+  scouting: number;
+}
+
 /** 구단 재정 상태 (economy.md 4장). 단위: 만원. */
 export interface ClubFinance {
   /** 보유 자금. */
@@ -111,6 +121,8 @@ export interface Club {
   players: Player[];
   /** 재정. 생성 시 부여. */
   finance: ClubFinance;
+  /** 스태프. 생성 시 부여. */
+  staff: Staff;
 }
 
 // ── 경기 입력/출력 ────────────────────────────────────────

@@ -63,15 +63,21 @@ function applyPoints(
   }
 }
 
+/** 코칭 레벨(1~20) → 성장률 배율. 10=1.0x, 20≈1.3x, 1≈0.73x. */
+function coachingMultiplier(coaching: number): number {
+  return clamp(0.7 + (coaching / 20) * 0.6, 0.7, 1.3);
+}
+
 /**
  * 한 선수의 시즌 경계 진행. 객체를 직접 변경한다.
+ * @param coaching 구단 코칭 레벨(기본 10=중립).
  */
-export function progressPlayer(player: Player, rng: Rng): void {
+export function progressPlayer(player: Player, rng: Rng, coaching = 10): void {
   player.age += 1;
   player.contractYears = Math.max(0, player.contractYears - 1);
 
   const ca = currentAbility(player);
-  const rate = developmentRate(player.age);
+  const rate = developmentRate(player.age) * coachingMultiplier(coaching);
 
   if (rate > 0 && ca < player.potential) {
     const gap = player.potential - ca;

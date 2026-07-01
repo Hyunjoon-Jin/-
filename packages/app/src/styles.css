@@ -213,6 +213,23 @@ body {
 .cup-ties .tie.mine.win { background: #1f3a26; border-radius: 6px; }
 .cup-ties .tie.mine.loss { background: #3a2020; border-radius: 6px; }
 
+/* ── Staff ── */
+.staff-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+.staff-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.staff-card {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  padding: 20px; text-align: center;
+}
+.staff-icon { font-size: 34px; }
+.staff-name { font-size: 18px; font-weight: 800; margin: 6px 0; }
+.staff-level { font-size: 14px; color: var(--muted); margin-bottom: 8px; }
+.staff-level b { color: var(--text); font-size: 18px; }
+.staff-bar { height: 8px; background: var(--panel-2); border-radius: 4px; overflow: hidden; margin-bottom: 12px; }
+.staff-bar-fill { height: 100%; background: var(--accent-2); }
+.staff-effect { font-size: 13px; min-height: 34px; margin-bottom: 12px; }
+.staff-btn { width: 100%; }
+.staff-btn:disabled { opacity: .4; cursor: not-allowed; }
+
 h2 { font-size: 18px; }
 h3 { font-size: 14px; margin: 0 0 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
 

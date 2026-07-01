@@ -222,8 +222,10 @@ soccer-tycoon/
 - [x] Electron 셸 + SQLite 세이브: packages/desktop. node:sqlite 저장소,
       IPC로 렌더러에 노출, createSaveStore()가 환경 감지(SQLite/localStorage).
       (GUI 패키징은 데스크톱 환경에서 수행 — 저장 계층은 node:test로 검증.)
+- [x] 스태프 시스템: 코칭(성장률)·의료(부상 감소·회복)·스카우팅(매물 정보),
+      자금으로 업그레이드, 스태프 연봉 지출. 기존 성장·부상·이적과 연동.
 
-남은 큰 축: **설치형 패키징(electron-builder)**, 스태프·징계·온보딩 등 콘텐츠.
+남은 큰 축: **설치형 패키징(electron-builder)**, 징계·유스아카데미·온보딩 등 콘텐츠.
 
 ---
 

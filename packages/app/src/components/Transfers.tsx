@@ -27,6 +27,18 @@ export function Transfers({ game, onBuy, onSell, onRelease }: Props) {
   return <TransferMarket game={game} onBuy={onBuy} onSell={onSell} onRelease={onRelease} />;
 }
 
+/** 스카우팅 레벨에 따라 매물 잠재력 공개 정도가 달라진다. */
+function revealPotential(scouting: number, potential: number): string {
+  if (scouting >= 15) return potential.toFixed(0);
+  if (scouting >= 8) {
+    const band = 12 - Math.round((scouting - 8) * 1.2); // 8→12, 14→5 폭
+    const lo = Math.max(0, Math.round(potential - band));
+    const hi = Math.round(potential + band);
+    return `${lo}~${hi}`;
+  }
+  return '?';
+}
+
 function TransferMarket({ game, onBuy, onSell, onRelease }: Props) {
   const club = myClub(game);
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
@@ -35,6 +47,7 @@ function TransferMarket({ game, onBuy, onSell, onRelease }: Props) {
   const [affordableOnly, setAffordableOnly] = useState(true);
 
   const budget = club.finance.transferBudget;
+  const scouting = club.staff.scouting;
 
   const targets = useMemo(() => {
     let list = transferTargets(game.clubs, game.myClubId);
@@ -85,7 +98,10 @@ function TransferMarket({ game, onBuy, onSell, onRelease }: Props) {
             value={search} onChange={(e) => setSearch(e.target.value)} />
           <table className="data-table compact">
             <thead>
-              <tr><th>선수</th><th>구단</th><th>P</th><th>나이</th><th>CA</th><th>가치</th><th></th></tr>
+              <tr>
+                <th>선수</th><th>구단</th><th>P</th><th>나이</th><th>CA</th>
+                <th title={`스카우팅 Lv.${scouting}`}>잠재</th><th>가치</th><th></th>
+              </tr>
             </thead>
             <tbody>
               {targets.map((t) => (
@@ -95,6 +111,7 @@ function TransferMarket({ game, onBuy, onSell, onRelease }: Props) {
                   <td>{t.player.position}</td>
                   <td>{t.player.age}</td>
                   <td><b>{currentAbility(t.player).toFixed(0)}</b></td>
+                  <td className="muted">{revealPotential(scouting, t.player.potential)}</td>
                   <td>{formatMoney(t.value)}</td>
                   <td>
                     <button className="btn-small"
@@ -104,7 +121,7 @@ function TransferMarket({ game, onBuy, onSell, onRelease }: Props) {
                 </tr>
               ))}
               {targets.length === 0 && (
-                <tr><td colSpan={7} className="muted">조건에 맞는 매물이 없습니다.</td></tr>
+                <tr><td colSpan={8} className="muted">조건에 맞는 매물이 없습니다.</td></tr>
               )}
             </tbody>
           </table>

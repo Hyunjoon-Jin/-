@@ -38,9 +38,10 @@ export function settleSeason(
   const prize = leaguePrize(finalPosition, nClubs);
   const incomeTotal = tv + matchday + sponsor + prize;
 
-  // 지출
+  // 지출 (인건비 + 운영 + 스태프 급여)
   const wages = club.players.reduce((s, p) => s + p.wage, 0) * 52;
-  const operations = rep * 8_000;
+  const staffWage = (club.staff.coaching + club.staff.medical + club.staff.scouting) * 600;
+  const operations = rep * 8_000 + staffWage;
   const expenseTotal = wages + operations;
 
   const net = incomeTotal - expenseTotal;

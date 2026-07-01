@@ -96,7 +96,9 @@ export function generateClub(rng: Rng, id: string, name: string, tier: number): 
   const reputation = clamp(tier, 1, 20);
   const balance = reputation * 50_000 + rng.int(0, 100_000);   // 만원
   const transferBudget = Math.round(balance * 0.4);
-  return { id, name, players, finance: { balance, transferBudget, reputation } };
+  const staffLevel = () => clamp(tier + rng.int(-3, 2), 1, 20);
+  const staff = { coaching: staffLevel(), medical: staffLevel(), scouting: staffLevel() };
+  return { id, name, players, finance: { balance, transferBudget, reputation }, staff };
 }
 
 /** 유스 신인 1명 생성 (17~19세). 은퇴 선수 대체·유스 유입에 사용. */

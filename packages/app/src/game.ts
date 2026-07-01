@@ -10,8 +10,9 @@ import {
   buyPlayer, sellPlayer, releasePlayer,
   summarizeStats, aggregatePlayerStats, topScorers as engineTopScorers,
   createCup, playCupRound as enginePlayCupRound, playCupToEnd, isCupOver,
+  upgradeStaff as engineUpgradeStaff, formatMoney,
   type Club, type Tactic, type MatchResult, type MatchSetup, type SeasonSummary,
-  type Fixture, type TableRow, type PlayerSeasonStat, type CupState,
+  type Fixture, type TableRow, type PlayerSeasonStat, type CupState, type StaffKind,
 } from '@soccer-tycoon/engine';
 import { makeDefaultTactic, repairTactic } from './tactics.js';
 
@@ -235,6 +236,19 @@ export function release(state: GameState, playerId: string): ActionOutcome {
   const r = releasePlayer(state.clubs, state.myClubId, playerId);
   if (!r.ok) return { state, ok: false, message: r.reason! };
   return { state: afterSquadChange(state), ok: true, message: `${r.playerName} 방출 완료` };
+}
+
+const STAFF_LABEL: Record<string, string> = { coaching: '코칭', medical: '의료', scouting: '스카우팅' };
+
+/** 스태프 업그레이드 (보유 자금 사용). */
+export function upgradeStaffAction(state: GameState, kind: string): ActionOutcome {
+  const r = engineUpgradeStaff(myClub(state), kind as StaffKind);
+  if (!r.ok) return { state, ok: false, message: r.reason! };
+  return {
+    state: { ...state },
+    ok: true,
+    message: `${STAFF_LABEL[kind]} Lv.${r.newLevel} (−${formatMoney(r.cost!)})`,
+  };
 }
 
 // ── 조회 헬퍼 ──
