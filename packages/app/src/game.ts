@@ -197,8 +197,9 @@ export function finishSeason(state: GameState): GameState {
     }
   }
 
-  const { retirements, intakeByClub } = runOffseason(state.clubs, new Rng(offseasonSeed(state)));
+  const { retirements, intakeByClub, fireSalesByClub } = runOffseason(state.clubs, new Rng(offseasonSeed(state)));
   const youthPromotions = intakeByClub.get(state.myClubId);
+  const fireSales = fireSalesByClub.get(state.myClubId);
   const champ = table[0]!;
   const summary: SeasonSummary = {
     season: state.season,
@@ -209,6 +210,7 @@ export function finishSeason(state: GameState): GameState {
     finance,
     retirements,
     youthPromotions,
+    fireSales,
     topScorers,
     awards,
     cupChampionId,

@@ -44,3 +44,7 @@ export {
   upgradeStaff, upgradeCost, STAFF_KINDS, STAFF_MAX,
   type StaffKind, type UpgradeResult,
 } from './staffActions.js';
+export {
+  enforceFinancialFairPlay, inFinancialCrisis, wageBudget, annualWageBill,
+  type FireSaleResult,
+} from './financeControl.js';

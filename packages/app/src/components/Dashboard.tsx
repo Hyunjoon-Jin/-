@@ -1,5 +1,5 @@
 import { myClub, lastSummary, myLastPosition, DIFFICULTIES, type GameState } from '../game.js';
-import { formatMoney, currentAbility } from '@soccer-tycoon/engine';
+import { formatMoney, currentAbility, wageBudget, annualWageBill, inFinancialCrisis } from '@soccer-tycoon/engine';
 
 export function Dashboard({ game }: { game: GameState }) {
   const club = myClub(game);
@@ -13,6 +13,9 @@ export function Dashboard({ game }: { game: GameState }) {
   const myReport = last?.finance.get(club.id);
   const firstRun = game.history.length === 0 && !game.live;
 
+  const crisis = inFinancialCrisis(club);
+  const overWages = annualWageBill(club) > wageBudget(club);
+
   return (
     <div className="dashboard">
       {firstRun && (
@@ -25,6 +28,17 @@ export function Dashboard({ game }: { game: GameState }) {
           </p>
         </div>
       )}
+
+      {crisis ? (
+        <div className="fin-warn crisis">
+          ⚠ 재정 위기 — 보유 자금이 마이너스입니다. 선수를 매각해 자금을 확보하지 않으면
+          시즌 후 보드진이 고가 선수를 강제 매각합니다.
+        </div>
+      ) : overWages ? (
+        <div className="fin-warn caution">
+          ⚠ 임금 과다 — 임금 총액이 지속가능 수준을 넘었습니다. 장기 재정에 주의하세요.
+        </div>
+      ) : null}
 
       <div className="objective">
         🎯 보드진 목표: <b>리그 {game.objective}위 이내</b>
@@ -57,6 +71,9 @@ export function Dashboard({ game }: { game: GameState }) {
               )}
               {last.youthPromotions !== undefined && last.youthPromotions > 0 && (
                 <> &nbsp;·&nbsp; 🎓 유스 승격: <b>{last.youthPromotions}명</b></>
+              )}
+              {last.fireSales !== undefined && last.fireSales > 0 && (
+                <> &nbsp;·&nbsp; <span className="neg">💸 재정 강제 매각: {last.fireSales}명</span></>
               )}
             </p>
             {myReport && (

@@ -9,6 +9,7 @@ import { settleSeason, type SeasonFinanceReport } from './finance.js';
 import { runTransferWindow, type TransferDeal } from './transfer.js';
 import { progressPlayer } from './progression.js';
 import { generateAcademyIntake } from './generate.js';
+import { enforceFinancialFairPlay } from './financeControl.js';
 import { currentAbility } from './derived.js';
 import { summarizeStats, type PlayerSeasonStat, type SeasonAwards } from './stats.js';
 import { Rng } from './rng.js';
@@ -29,6 +30,8 @@ export interface SeasonSummary {
   retirements: number;
   /** 앱: 내 구단 유스 승격 인원(헤드리스에선 미설정). */
   youthPromotions?: number;
+  /** 앱: 내 구단 재정 위기 강제 매각 인원. */
+  fireSales?: number;
   topScorers: PlayerSeasonStat[];
   awards: SeasonAwards;
   /** 컵 우승 구단(앱의 병행 컵대회). 헤드리스 프랜차이즈에선 미설정. */
@@ -55,11 +58,14 @@ export interface OffseasonResult {
   retirements: number;
   /** clubId → 유스 아카데미 배출 인원. */
   intakeByClub: Map<string, number>;
+  /** clubId → 재정 위기 강제 매각 인원. */
+  fireSalesByClub: Map<string, number>;
 }
 
 export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
   let retirements = 0;
   const intakeByClub = new Map<string, number>();
+  const fireSalesByClub = new Map<string, number>();
   for (const club of clubs) {
     for (const player of club.players) {
       progressPlayer(player, rng, club.staff.coaching);
@@ -77,6 +83,10 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
       return true;
     });
 
+    // 재정 위기 시 강제 매각(파이낸셜 페어플레이)
+    const fire = enforceFinancialFairPlay(club);
+    fireSalesByClub.set(club.id, fire.sold.length);
+
     // 유스 아카데미 배출
     const intake = generateAcademyIntake(rng, club.finance.reputation, club.staff.youth);
     club.players.push(...intake);
@@ -85,7 +95,7 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
     // 스쿼드 상한 정리
     trimSquad(club);
   }
-  return { retirements, intakeByClub };
+  return { retirements, intakeByClub, fireSalesByClub };
 }
 
 /**
