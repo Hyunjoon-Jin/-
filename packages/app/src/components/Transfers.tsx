@@ -10,6 +10,7 @@ interface Props {
   onBuy: (playerId: string) => ActionOutcome;
   onSell: (playerId: string) => ActionOutcome;
   onRelease: (playerId: string) => ActionOutcome;
+  onSelect: (p: Player) => void;
 }
 
 type LineFilter = 'ALL' | Line;
@@ -21,10 +22,10 @@ const LINE_FILTERS: { key: LineFilter; label: string }[] = [
   { key: 'ATT', label: '공격' },
 ];
 
-export function Transfers({ game, onBuy, onSell, onRelease }: Props) {
+export function Transfers({ game, onBuy, onSell, onRelease, onSelect }: Props) {
   // 시즌 진행 중에는 직접 이적 불가 → 지난 시즌 내역(읽기 전용)
   if (game.live) return <TransferHistory game={game} />;
-  return <TransferMarket game={game} onBuy={onBuy} onSell={onSell} onRelease={onRelease} />;
+  return <TransferMarket game={game} onBuy={onBuy} onSell={onSell} onRelease={onRelease} onSelect={onSelect} />;
 }
 
 /** 스카우팅 레벨에 따라 매물 잠재력 공개 정도가 달라진다. */
@@ -39,7 +40,7 @@ function revealPotential(scouting: number, potential: number): string {
   return '?';
 }
 
-function TransferMarket({ game, onBuy, onSell, onRelease }: Props) {
+function TransferMarket({ game, onBuy, onSell, onRelease, onSelect }: Props) {
   const club = myClub(game);
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const [line, setLine] = useState<LineFilter>('ALL');
@@ -106,7 +107,7 @@ function TransferMarket({ game, onBuy, onSell, onRelease }: Props) {
             <tbody>
               {targets.map((t) => (
                 <tr key={t.player.id}>
-                  <td className="name">{t.player.name}</td>
+                  <td className="name link" onClick={() => onSelect(t.player)}>{t.player.name}</td>
                   <td className="muted small">{t.clubName}</td>
                   <td>{t.player.position}</td>
                   <td>{t.player.age}</td>
@@ -137,7 +138,7 @@ function TransferMarket({ game, onBuy, onSell, onRelease }: Props) {
             <tbody>
               {[...club.players].sort((a, b) => currentAbility(b) - currentAbility(a)).map((p: Player) => (
                 <tr key={p.id}>
-                  <td className="name">{p.name}</td>
+                  <td className="name link" onClick={() => onSelect(p)}>{p.name}</td>
                   <td>{p.position}</td>
                   <td>{p.age}</td>
                   <td><b>{currentAbility(p).toFixed(0)}</b></td>

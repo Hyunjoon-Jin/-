@@ -16,7 +16,7 @@ function ConditionCell({ player }: { player: Player }) {
   return <span className={`cond ${cls}`}>{pct}%</span>;
 }
 
-export function Squad({ club }: { club: Club }) {
+export function Squad({ club, onSelect }: { club: Club; onSelect: (p: Player) => void }) {
   const [sort, setSort] = useState<SortKey>('ca');
 
   const rows = useMemo(() => {
@@ -56,7 +56,7 @@ export function Squad({ club }: { club: Club }) {
         </thead>
         <tbody>
           {rows.map(({ player, ca, value }) => (
-            <tr key={player.id}>
+            <tr key={player.id} className="clickable" onClick={() => onSelect(player)}>
               <td className="name">{player.name}</td>
               <td>{player.position}</td>
               <td>{player.age}</td>

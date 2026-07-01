@@ -17,7 +17,9 @@ import { Stats } from './components/Stats.js';
 import { Cup } from './components/Cup.js';
 import { Staff } from './components/Staff.js';
 import { Help } from './components/Help.js';
+import { PlayerDetail } from './components/PlayerDetail.js';
 import { WatchMatch } from './components/WatchMatch.js';
+import type { Player } from '@soccer-tycoon/engine';
 
 type Tab = 'dashboard' | 'squad' | 'tactics' | 'match' | 'cup' | 'stats' | 'transfers' | 'staff';
 
@@ -44,6 +46,7 @@ export function App() {
   const [tab, setTab] = useState<Tab>('dashboard');
   const [watching, setWatching] = useState<WatchSetup | null>(null);
   const [showHelp, setShowHelp] = useState(false);
+  const [detailPlayer, setDetailPlayer] = useState<Player | null>(null);
 
   /** 상태 갱신 + 자동 저장. */
   function update(next: GameState) {
@@ -113,6 +116,7 @@ export function App() {
       </header>
 
       {showHelp && <Help onClose={() => setShowHelp(false)} />}
+      {detailPlayer && <PlayerDetail player={detailPlayer} onClose={() => setDetailPlayer(null)} />}
 
       {!watching && (
         <nav className="tabs">
@@ -140,7 +144,7 @@ export function App() {
         ) : (
           <>
             {tab === 'dashboard' && <Dashboard game={game} />}
-            {tab === 'squad' && <Squad club={club} />}
+            {tab === 'squad' && <Squad club={club} onSelect={setDetailPlayer} />}
             {tab === 'tactics' && (
               <Tactics club={club} tactic={myTactic(game)} onChange={handleTacticChange} />
             )}
@@ -164,6 +168,7 @@ export function App() {
                 onBuy={(id) => runAction(buy, id)}
                 onSell={(id) => runAction(sell, id)}
                 onRelease={(id) => runAction(release, id)}
+                onSelect={setDetailPlayer}
               />
             )}
           </>
