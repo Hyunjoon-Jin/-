@@ -46,8 +46,24 @@ npm run dev --workspace @soccer-tycoon/app   # localhost:5173
 VITE_DEV_SERVER_URL=http://localhost:5173 npm run start --workspace @soccer-tycoon/desktop
 ```
 
+## 설치형 패키징 (electron-builder)
+
+```bash
+# 렌더러 조립(app/dist → renderer) + 메인 컴파일 + 설치 파일 생성
+npm run dist --workspace @soccer-tycoon/desktop
+# → release/ 에 AppImage(Linux) / nsis(Windows) / dmg(macOS) 생성
+```
+
+구성:
+- `scripts/prepare-renderer.mjs` — `packages/app/dist`를 `packages/desktop/renderer`로 복사
+  (모노레포 sibling 참조 회피). 메인은 `../renderer/index.html`을 로드(없으면 app/dist 폴백).
+- `package.json`의 `build` 필드 — appId, 타깃(AppImage/nsis/dmg), 포함 파일(dist-main·renderer).
+
+> **주의**: 실제 설치 파일 생성은 GUI/Electron 런타임이 있는 **대상 OS 데스크톱 환경**에서
+> 수행한다. 헤드리스 CI에서는 렌더러 조립·메인 컴파일·SQLite 저장소 테스트까지 검증되며,
+> 설치 파일 산출물 자체는 데스크톱 빌드 단계에서 생성된다.
+
 ## 참고
 
 - `node:sqlite`는 Node 22 내장(실험적) 모듈이라 better-sqlite3 같은 네이티브
   재빌드가 필요 없다. 저장소 로직은 `node:test`로 검증된다.
-- 설치형 패키징(electron-builder 등)은 대상 OS 데스크톱 환경에서 수행한다(후속).

@@ -4,6 +4,7 @@
  * SQLite 세이브 저장소를 IPC(sendSync)로 노출한다.
  */
 import { app, BrowserWindow, ipcMain } from 'electron';
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { SqliteSaveStore, type SaveMeta } from './sqliteStore';
 
@@ -35,8 +36,10 @@ function createWindow(): void {
   if (devUrl) {
     win.loadURL(devUrl);
   } else {
-    // packages/desktop/dist-main/main.js → packages/app/dist/index.html
-    win.loadFile(join(__dirname, '../../app/dist/index.html'));
+    // 패키징 시 조립된 렌더러(../renderer). 없으면 개발 편의상 app/dist로 폴백.
+    const bundled = join(__dirname, '../renderer/index.html');
+    const fallback = join(__dirname, '../../app/dist/index.html');
+    win.loadFile(existsSync(bundled) ? bundled : fallback);
   }
 }
 
