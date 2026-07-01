@@ -15,7 +15,7 @@ const TUNING = {
   /** 컨디션 하한. */
   minCondition: 0.35,
   /** 선발당 경기당 부상 확률. */
-  injuryChance: 0.007,
+  injuryChance: 0.008,
   /** 부상 복귀 시 컨디션. */
   returnCondition: 0.65,
   /** 승/패 사기 변동. */

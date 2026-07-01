@@ -10,6 +10,7 @@ import { ALL_ATTRS, GOALKEEPING_ATTRS } from './types.js';
 import { Rng } from './rng.js';
 import { clamp } from './math.js';
 import { weeklyWage } from './valuation.js';
+import { currentAbility, isInjured } from './derived.js';
 
 const FIRST = [
   'Min', 'Jun', 'Leo', 'Marco', 'Diego', 'Yuki', 'Omar', 'Kai', 'Luka', 'Tom',
@@ -131,17 +132,25 @@ export function generateAcademyIntake(rng: Rng, tier: number, youthLevel: number
   return out;
 }
 
+/** 슬롯 적합도: 포지션 숙련도 우선, 그다음 능력. 부상은 최후순위. */
+function slotScore(p: Player, pos: Position): number {
+  const fam = p.position === pos ? 1 : (p.familiarity[pos] ?? 0.2);
+  return fam * 1000 + currentAbility(p) - (isInjured(p) ? 1_000_000 : 0);
+}
+
 /**
- * 기본 4-3-3 전술 (AI용).
- * 부상 선수를 피해 가용 선수를 우선 배치하고, 모자라면 부상 선수로 채운다.
+ * 기본 4-3-3 전술 (AI용). 포지션별 최적 선수로 베스트 XI를 구성한다.
+ * (배열 순서가 아니라 능력·숙련도로 선발 → 전력이 결과에 제대로 반영됨.)
  */
 export function defaultTactic(club: Club): Tactic {
-  const available = club.players.filter((p) => p.injuryMatches === 0);
-  const injured = club.players.filter((p) => p.injuryMatches > 0);
-  const pool = [...available, ...injured];
-  const lineup = FORMATION_433.map((position, i) => ({
-    position,
-    playerId: (pool[i] ?? club.players[i])!.id,
-  }));
+  const used = new Set<string>();
+  const lineup = FORMATION_433.map((position) => {
+    const pick = club.players
+      .filter((p) => !used.has(p.id))
+      .sort((a, b) => slotScore(b, position) - slotScore(a, position))[0]
+      ?? club.players[0]!;
+    used.add(pick.id);
+    return { position, playerId: pick.id };
+  });
   return { formation: '4-3-3', lineup, mentality: 0.5, tempo: 0.5, pressing: 0.5 };
 }

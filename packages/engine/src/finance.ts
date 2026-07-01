@@ -31,10 +31,10 @@ export function settleSeason(
 ): SeasonFinanceReport {
   const rep = club.finance.reputation;
 
-  // 수입
-  const tv = rep * 100_000;                         // 중계 분배
+  // 수입 (중계는 균등 분배분 + 평판 비례분 → 약팀도 최소 보장)
+  const tv = 45_000 + rep * 48_000;
   const matchday = homeGames * rep * 5_000;         // 입장 수입
-  const sponsor = Math.round(Math.pow(rep, 1.5) * 8_000);
+  const sponsor = Math.round(Math.pow(rep, 1.5) * 5_500);
   const prize = leaguePrize(finalPosition, nClubs);
   const incomeTotal = tv + matchday + sponsor + prize;
 

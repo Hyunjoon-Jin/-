@@ -10,6 +10,7 @@
   "scripts": {
     "demo": "tsx src/demo.ts",
     "sim-season": "tsx src/simSeason.ts",
+    "balance": "tsx src/balance.ts",
     "economy-demo": "tsx src/economyDemo.ts",
     "franchise-demo": "tsx src/franchiseDemo.ts",
     "test": "vitest run",

@@ -134,7 +134,7 @@ export function stepMinute(ctx: MatchContext, minute: number): MatchEvent | null
 
   const pAdvance = clamp(
     TUNING.advanceBase +
-      0.5 * (logistic(TUNING.advanceK * (att.strength.creation - def.strength.defense)) - 0.5),
+      TUNING.strengthSwing * (logistic(TUNING.advanceK * (att.strength.creation - def.strength.defense)) - 0.5),
     0.02, 0.95,
   );
   if (!rng.roll(pAdvance)) return null;
@@ -143,7 +143,7 @@ export function stepMinute(ctx: MatchContext, minute: number): MatchEvent | null
 
   const pShot = clamp(
     TUNING.shotBase +
-      0.5 * (logistic(TUNING.shotK * (att.strength.attack - def.strength.defense)) - 0.5),
+      TUNING.strengthSwing * (logistic(TUNING.shotK * (att.strength.attack - def.strength.defense)) - 0.5),
     0.02, 0.95,
   );
   if (!rng.roll(pShot)) return null;

@@ -19,7 +19,8 @@
 | `season.ts` | 상태 기반 시즌(경기 단위 진행 + 순위표 집계) |
 | `league.ts` | 헤드리스 일괄 시즌 시뮬 (season.ts 래퍼) |
 | `generate.ts` | 가상 선수·구단 절차적 생성 |
-| `simSeason.ts` | 헤드리스 밸런싱 검증 하니스 |
+| `simSeason.ts` | 헤드리스 밸런싱 검증 하니스 (단일 시즌) |
+| `balance.ts` | 멀티시즌 밸런스 리포트 (전력↔순위·재정·연령 등) |
 | `money.ts` | 화폐 단위(만원) + 억/만원 표시 |
 | `valuation.ts` | 선수 시장 가치 · 주급 산정 |
 | `finance.ts` | 구단 재정 · 시즌 정산 · 리그 상금 |

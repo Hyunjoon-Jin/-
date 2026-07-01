@@ -9,6 +9,9 @@ export const TUNING = {
   /** 홈 어드밴티지: 홈팀 공격/창출에 곱하는 배율. */
   homeAdvantage: 1.06,
 
+  /** 능력차가 확률에 미치는 최대 진폭(±). 높을수록 전력이 결정적. */
+  strengthSwing: 0.5,
+
   /** pAdvance(전진 성공) 로지스틱. */
   advanceBase: 0.30,        // 능력 동일 시 기준 전진 확률
   advanceK: 0.030,          // (creation - defense) 민감도
@@ -18,7 +21,7 @@ export const TUNING = {
   shotK: 0.025,             // (attack - defense) 민감도
 
   /** 기회 유형별 기본 득점 기대치(xG 베이스). */
-  baseXg: { open: 0.16, cross: 0.14, setpiece: 0.11 } as const,
+  baseXg: { open: 0.135, cross: 0.115, setpiece: 0.09 } as const,
 
   /** 득점 확률 보정 민감도. */
   finishK: 0.010,           // 공격력 → 득점 배율
