@@ -11,6 +11,7 @@ import { currentAbility } from './derived.js';
 import { weeklyWage } from './valuation.js';
 import { clamp } from './math.js';
 import { TRAINING_FOCUS_ATTRS } from './training.js';
+import { hasTrait } from './traits.js';
 import type { Rng } from './rng.js';
 
 /** CA 1포인트 ≈ 능력치 합 3.6 변화 (CA = 평균×10, 평균 = 합/36). */
@@ -89,7 +90,9 @@ export function progressPlayer(player: Player, rng: Rng, coaching = 10): void {
   player.contractYears = Math.max(0, player.contractYears - 1);
 
   const ca = currentAbility(player);
-  const rate = developmentRate(player.age) * coachingMultiplier(coaching);
+  // 특급 유망주(wonderkid)는 성장 속도가 빠르다.
+  const wonderMul = hasTrait(player, 'wonderkid') ? 1.25 : 1;
+  const rate = developmentRate(player.age) * coachingMultiplier(coaching) * wonderMul;
 
   if (rate > 0 && ca < player.potential) {
     const gap = player.potential - ca;

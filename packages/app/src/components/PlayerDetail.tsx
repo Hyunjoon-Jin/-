@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   TECHNICAL_ATTRS, MENTAL_ATTRS, PHYSICAL_ATTRS, GOALKEEPING_ATTRS,
-  TRAINING_FOCUSES, TRAINING_LABELS,
+  TRAINING_FOCUSES, TRAINING_LABELS, TRAIT_LABELS, TRAIT_DESC,
   currentAbility, marketValue, playerDerived, isInjured, isSuspended,
   formatMoney, type AttrKey, type Player, type DerivedRatings, type TrainingFocus,
 } from '@soccer-tycoon/engine';
@@ -98,6 +98,13 @@ export function PlayerDetail({ player, onClose, onSetFocus, onRenew }: Props) {
               <span className="muted small">계약 {player.contractYears}년 남음 — 재계약 불필요.</span>
             )}
             {msg && <span className={msg.ok ? 'toast ok' : 'toast err'}>{msg.text}</span>}
+          </div>
+        )}
+        {(player.traits ?? []).length > 0 && (
+          <div className="pd-traits">
+            {(player.traits ?? []).map((t) => (
+              <span key={t} className="trait-chip" title={TRAIT_DESC[t]}>★ {TRAIT_LABELS[t]}</span>
+            ))}
           </div>
         )}
         <div className="pd-fam muted">가능 포지션: {fam.join(', ') || player.position}</div>

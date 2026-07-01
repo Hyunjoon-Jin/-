@@ -7,6 +7,7 @@ import type { Player, Position } from './types.js';
 import { ALL_ATTRS } from './types.js';
 import { DERIVED_WEIGHTS, type DerivedKey, type Weights } from './roleWeights.js';
 import { clamp, weightedMean } from './math.js';
+import { hasTrait } from './traits.js';
 
 /** 부상 여부. */
 export function isInjured(player: Player): boolean {
@@ -85,5 +86,9 @@ export function playerDerived(player: Player, slot: Position): DerivedRatings {
   for (const k of keys) {
     out[k] = derivedRaw(player, DERIVED_WEIGHTS[k]) * adj;
   }
+  // 특성 보정: 골잡이(공격)·플레이메이커(창출)·수비 바위(수비).
+  if (hasTrait(player, 'poacher')) out.attack *= 1.08;
+  if (hasTrait(player, 'playmaker')) out.creation *= 1.08;
+  if (hasTrait(player, 'rock')) out.defense *= 1.08;
   return out;
 }

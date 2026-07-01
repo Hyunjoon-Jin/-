@@ -24,6 +24,9 @@ export {
 export { progressPlayer } from './progression.js';
 export { TRAINING_FOCUSES, TRAINING_LABELS, TRAINING_FOCUS_ATTRS } from './training.js';
 export {
+  ALL_TRAITS, TRAIT_LABELS, TRAIT_DESC, hasTrait, rollTraits,
+} from './traits.js';
+export {
   advanceSeason, runFranchise, runOffseason, type SeasonSummary,
 } from './franchise.js';
 export { TUNING } from './tuning.js';

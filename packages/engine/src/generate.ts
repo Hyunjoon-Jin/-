@@ -11,6 +11,7 @@ import { Rng } from './rng.js';
 import { clamp } from './math.js';
 import { weeklyWage } from './valuation.js';
 import { currentAbility, isAvailable } from './derived.js';
+import { rollTraits } from './traits.js';
 
 const FIRST = [
   'Min', 'Jun', 'Leo', 'Marco', 'Diego', 'Yuki', 'Omar', 'Kai', 'Luka', 'Tom',
@@ -76,8 +77,10 @@ function genPlayer(rng: Rng, position: Position, tier: number, fixedAge?: number
     contractYears: rng.int(1, 4),
     wage: 0,
     trainingFocus: 'balanced',
+    traits: [],
   };
   player.wage = weeklyWage(player);
+  player.traits = rollTraits(player, rng);
   return player;
 }
 

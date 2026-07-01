@@ -144,6 +144,13 @@ body {
 .pd-meta { display: flex; flex-wrap: wrap; gap: 16px; margin: 8px 0; font-size: 14px; }
 .pd-meta b { font-size: 15px; }
 .pd-fam { font-size: 13px; margin-bottom: 10px; }
+.pd-traits { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.trait-chip {
+  background: rgba(240, 190, 70, 0.14); color: #f0be46;
+  border: 1px solid rgba(240, 190, 70, 0.4);
+  border-radius: 999px; padding: 3px 10px; font-size: 12px; font-weight: 600;
+  cursor: help;
+}
 .pd-training { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; font-size: 14px; }
 .pd-training select {
   background: var(--panel-2); color: var(--text); border: 1px solid var(--line);

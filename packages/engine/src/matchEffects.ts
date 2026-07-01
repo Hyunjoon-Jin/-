@@ -6,6 +6,7 @@
 import type { Club, MatchResult, Tactic } from './types.js';
 import { Rng } from './rng.js';
 import { clamp } from './math.js';
+import { hasTrait } from './traits.js';
 
 const TUNING = {
   /** 선발 출전 시 기본 컨디션 하락(스태미너로 경감). */
@@ -48,11 +49,14 @@ function applySide(club: Club, tactic: Tactic, outcome: Outcome, rng: Rng): void
       if (p.injuryMatches === 0) p.condition = Math.max(p.condition, TUNING.returnCondition);
     } else if (starters.has(p.id)) {
       p.seasonApps++; // 선발 출전 기록(사기·재계약 판단)
+      // 특성: 철강왕(부상↓·피로↓) / 유리몸(부상↑).
+      const fatMul = hasTrait(p, 'ironMan') ? 0.6 : 1;
+      const injMul = hasTrait(p, 'ironMan') ? 0.5 : hasTrait(p, 'injuryProne') ? 1.7 : 1;
       // 선발: 피로 누적 (스태미너 높을수록 덜 지침)
-      const fatigue = TUNING.fatigueBase * (1 - p.attributes.stamina / 40);
+      const fatigue = TUNING.fatigueBase * (1 - p.attributes.stamina / 40) * fatMul;
       p.condition = Math.max(TUNING.minCondition, p.condition - fatigue);
       // 부상 판정 (의료가 좋을수록 확률↓, 기간↓)
-      if (rng.roll(TUNING.injuryChance * medFactor)) {
+      if (rng.roll(TUNING.injuryChance * medFactor * injMul)) {
         p.injuryMatches = Math.max(1, Math.round(rng.int(2, 8) * medFactor));
         p.condition = 0.3;
       }

@@ -84,10 +84,16 @@ export interface Player {
   wage: number;
   /** 훈련 포커스 — 성장 시 강조할 능력 그룹. */
   trainingFocus: TrainingFocus;
+  /** 고유 특성(0~2개). 경기·성장·부상에 영향. */
+  traits: PlayerTrait[];
 }
 
 export type TrainingFocus =
   | 'balanced' | 'finishing' | 'playmaking' | 'defending' | 'physical' | 'goalkeeping';
+
+export type PlayerTrait =
+  | 'leader' | 'injuryProne' | 'ironMan' | 'wonderkid'
+  | 'poacher' | 'playmaker' | 'hothead' | 'rock';
 
 // ── 전술 ──────────────────────────────────────────────────
 

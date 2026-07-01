@@ -11,6 +11,7 @@ import { progressPlayer } from './progression.js';
 import { generateAcademyIntake } from './generate.js';
 import { enforceFinancialFairPlay } from './financeControl.js';
 import { currentAbility } from './derived.js';
+import { hasTrait } from './traits.js';
 import { clamp } from './math.js';
 import { summarizeStats, type PlayerSeasonStat, type SeasonAwards } from './stats.js';
 import { Rng } from './rng.js';
@@ -77,6 +78,8 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
     // 스쿼드 중간 능력(주전 기대치 판단용)
     const cas = club.players.map(currentAbility).sort((a, b) => a - b);
     const medianCA = cas[Math.floor(cas.length / 2)] ?? 0;
+    // 리더 특성 보유 선수가 있으면 스쿼드 전체 사기가 소폭 상승.
+    const leaderBonus = club.players.some((p) => hasTrait(p, 'leader')) ? 0.05 : 0;
 
     for (const player of club.players) {
       // 출전 시간 기반 사기 갱신 (핵심 선수가 벤치면 불만)
@@ -86,7 +89,7 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
       if (ratio >= 0.55) target = 0.8;
       else if (ratio < 0.25 && key) target = 0.3;
       else if (ratio < 0.25) target = 0.5;
-      player.morale = clamp(0.4 * player.morale + 0.6 * target, 0, 1);
+      player.morale = clamp(0.4 * player.morale + 0.6 * (target + leaderBonus), 0, 1);
 
       progressPlayer(player, rng, club.staff.coaching);
       // 새 시즌은 풀 컨디션·부상/징계 리셋으로 시작

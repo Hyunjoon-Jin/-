@@ -15,6 +15,7 @@ import { computeTeamStrength, lineOf } from './teamStrength.js';
 import { Rng } from './rng.js';
 import { clamp, logistic } from './math.js';
 import { TUNING } from './tuning.js';
+import { hasTrait } from './traits.js';
 
 export interface MatchSetup {
   home: { club: Club; tactic: Tactic };
@@ -211,8 +212,9 @@ function generateCards(ctx: MatchContext): CardEvent[] {
       const p = byId.get(slot.playerId);
       if (!p || p.injuryMatches > 0 || p.suspensionMatches > 0) continue;
       const aggr = p.attributes.aggression;
-      const yellowP = clamp(0.03 + (aggr - 10) * 0.006, 0.01, 0.16);
-      const redP = clamp(0.002 + (aggr - 10) * 0.0006, 0.0005, 0.02);
+      const cardMul = hasTrait(p, 'hothead') ? 1.6 : 1; // 다혈질: 카드 확률↑
+      const yellowP = clamp((0.03 + (aggr - 10) * 0.006) * cardMul, 0.01, 0.16);
+      const redP = clamp((0.002 + (aggr - 10) * 0.0006) * cardMul, 0.0005, 0.02);
       if (rng.roll(redP)) {
         cards.push({ minute: rng.int(20, 90), side: sideKey, playerId: p.id, playerName: p.name, type: 'red' });
       } else if (rng.roll(yellowP)) {
