@@ -1,5 +1,12 @@
 import { myClub, lastSummary, myLastPosition, DIFFICULTIES, DIVISION_LABELS, type GameState } from '../game.js';
-import { formatMoney, currentAbility, wageBudget, annualWageBill, inFinancialCrisis } from '@soccer-tycoon/engine';
+import {
+  formatMoney, currentAbility, wageBudget, annualWageBill, inFinancialCrisis,
+  boardStatus, type BoardStatus,
+} from '@soccer-tycoon/engine';
+
+const BOARD_LABEL: Record<BoardStatus, string> = {
+  secure: '신뢰 두터움', stable: '안정적', shaky: '불안', critical: '경질 위기',
+};
 
 export function Dashboard({ game }: { game: GameState }) {
   const club = myClub(game);
@@ -50,6 +57,8 @@ export function Dashboard({ game }: { game: GameState }) {
           </span>
         )}
       </div>
+
+      <BoardConfidence value={game.boardConfidence} />
 
       <div className="cards">
         <Card title="평판" value={`${club.finance.reputation} / 20`} />
@@ -111,6 +120,24 @@ function Card({ title, value }: { title: string; value: string }) {
     <div className="stat-card">
       <div className="stat-title">{title}</div>
       <div className="stat-value">{value}</div>
+    </div>
+  );
+}
+
+function BoardConfidence({ value }: { value: number }) {
+  const status = boardStatus(value);
+  return (
+    <div className="board-conf">
+      <div className="bc-head">
+        <span>🏛 이사회 신뢰도</span>
+        <b className={`bc-status ${status}`}>{BOARD_LABEL[status]} · {Math.round(value)}</b>
+      </div>
+      <div className="bc-bar">
+        <div className={`bc-fill ${status}`} style={{ width: `${value}%` }} />
+      </div>
+      {status === 'critical' && (
+        <p className="bc-warn">⚠ 보드진 인내심이 한계입니다. 이번 시즌 목표를 달성하지 못하면 경질됩니다.</p>
+      )}
     </div>
   );
 }

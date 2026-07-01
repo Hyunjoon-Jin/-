@@ -83,6 +83,10 @@ export function App() {
     return <StartScreen store={store} onStart={handleStart} onLoad={handleLoad} />;
   }
 
+  if (game.sacked) {
+    return <Sacked game={game} onQuit={quitToMenu} />;
+  }
+
   const club = myClub(game);
   const savedLabel = savedAt
     ? `저장됨 ${new Date(savedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}`
@@ -208,6 +212,32 @@ export function App() {
           </>
         )}
       </main>
+    </div>
+  );
+}
+
+function Sacked({ game, onQuit }: { game: GameState; onQuit: () => void }) {
+  const club = myClub(game);
+  const seasons = game.history.length;
+  const best = game.history.reduce<number | null>((b, s) => {
+    const pos = s.table.findIndex((r) => r.clubId === game.myClubId) + 1;
+    return pos > 0 && (b === null || pos < b) ? pos : b;
+  }, null);
+  return (
+    <div className="app">
+      <div className="sacked-screen">
+        <h1>🏛 경질</h1>
+        <p className="sacked-lead">
+          <b>{club.name}</b> 보드진이 신뢰를 거두었습니다. {game.season - 1}시즌을 끝으로 계약이 해지되었습니다.
+        </p>
+        <p className="muted">
+          재임 {seasons}시즌 · 최고 순위 {best ?? '-'}위
+        </p>
+        <p className="muted small">
+          목표를 꾸준히 달성하면 이사회 신뢰도를 유지할 수 있습니다. 다시 도전해 보세요.
+        </p>
+        <button className="btn-advance big" onClick={onQuit}>메뉴로 돌아가기</button>
+      </div>
     </div>
   );
 }

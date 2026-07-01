@@ -13,6 +13,7 @@ import {
   summarizeStats, aggregatePlayerStats, topScorers as engineTopScorers,
   createCup, playCupRound as enginePlayCupRound, playCupToEnd, isCupOver,
   applyPromotionRelegation, clubsInDivision, runInternationalBreak,
+  confidenceDelta, applyConfidence, isSacked, START_CONFIDENCE,
   upgradeStaff as engineUpgradeStaff, formatMoney,
   computeTeamStrength, currentAbility, recentForm,
   type Club, type Tactic, type MatchResult, type MatchSetup, type SeasonSummary,
@@ -64,6 +65,10 @@ export interface GameState {
   difficulty: Difficulty;
   /** 보드진 시즌 목표(리그 최종 순위, 1-index). 이 순위 이내면 성공. */
   objective: number;
+  /** 이사회 신뢰도(0~100). 시즌 성적으로 변동, 바닥나면 경질. */
+  boardConfidence: number;
+  /** 경질 여부(게임 오버). 신뢰도가 하한 미만이 되면 설정. */
+  sacked?: boolean;
 }
 
 /** 컵 우승 상금 (만원). */
@@ -130,6 +135,7 @@ export function startGame(seed: number, myClubId: string, difficulty: Difficulty
     cup: null,
     difficulty,
     objective,
+    boardConfidence: START_CONFIDENCE,
   };
 }
 
@@ -267,6 +273,15 @@ export function finishSeason(state: GameState): GameState {
   const promoted = promRel.promoted.includes(state.myClubId);
   const relegated = promRel.relegated.includes(state.myClubId);
 
+  // 6.5) 이사회 신뢰도 갱신 (이번 시즌 목표 대비 성적 + 승강 + 재정)
+  const myPosition = myTable.findIndex((r) => r.clubId === state.myClubId) + 1;
+  const myNet = finance.get(state.myClubId)?.net ?? 0;
+  const delta = confidenceDelta({
+    position: myPosition, objective: state.objective, promoted, relegated, netFinance: myNet,
+  });
+  const boardConfidence = applyConfidence(state.boardConfidence, delta);
+  const sacked = isSacked(boardConfidence);
+
   const champ = myTable[0]!;
   const summary: SeasonSummary = {
     season: state.season,
@@ -297,6 +312,8 @@ export function finishSeason(state: GameState): GameState {
     tactics: { ...state.tactics, [state.myClubId]: repaired },
     // 새 부 기준으로 목표 재설정
     objective: divisionObjective(myClub(state).division, state.difficulty),
+    boardConfidence,
+    sacked,
     live: null,
     cup: null,
   };

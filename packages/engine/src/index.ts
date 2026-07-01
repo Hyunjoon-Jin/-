@@ -50,6 +50,11 @@ export {
   type CallUp, type InternationalResult,
 } from './international.js';
 export {
+  START_CONFIDENCE, SACK_THRESHOLD, confidenceDelta, applyConfidence,
+  boardStatus, isSacked,
+  type SeasonConfidenceInput, type BoardStatus,
+} from './board.js';
+export {
   transferTargets, buyPlayer, buyPlayerAt, sellPlayer, releasePlayer,
   askingPrice, evaluateOffer, sellOffers, acceptSellOffer,
   MIN_SQUAD, MAX_SQUAD,
