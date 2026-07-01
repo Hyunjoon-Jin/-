@@ -26,6 +26,16 @@ export interface LiveSeason {
   transfers: SeasonSummary['transfers'];
 }
 
+export type Difficulty = 'easy' | 'normal' | 'hard';
+
+export const DIFFICULTIES: Record<Difficulty, {
+  label: string; financeMul: number; budgetMul: number; targetOffset: number; desc: string;
+}> = {
+  easy: { label: '쉬움', financeMul: 1.6, budgetMul: 1.8, targetOffset: 3, desc: '넉넉한 자금, 완화된 목표' },
+  normal: { label: '보통', financeMul: 1.0, budgetMul: 1.0, targetOffset: 0, desc: '기본 밸런스' },
+  hard: { label: '어려움', financeMul: 0.6, budgetMul: 0.5, targetOffset: -2, desc: '빠듯한 자금, 높은 기대치' },
+};
+
 export interface GameState {
   seed: number;
   clubs: Club[];
@@ -38,6 +48,10 @@ export interface GameState {
   live: LiveSeason | null;
   /** 병행 컵대회. null = 미진행. */
   cup: CupState | null;
+  /** 난이도. */
+  difficulty: Difficulty;
+  /** 보드진 시즌 목표(리그 최종 순위, 1-index). 이 순위 이내면 성공. */
+  objective: number;
 }
 
 /** 컵 우승 상금 (만원). */
@@ -61,14 +75,27 @@ export function createLeague(seed: number): Club[] {
   return clubs;
 }
 
-export function startGame(seed: number, myClubId: string): GameState {
+export function startGame(seed: number, myClubId: string, difficulty: Difficulty = 'normal'): GameState {
   const clubs = createLeague(seed);
   const mine = clubs.find((c) => c.id === myClubId)!;
+  const cfg = DIFFICULTIES[difficulty];
+
+  // 난이도로 내 구단 재정 조정 (AI는 그대로)
+  mine.finance.balance = Math.round(mine.finance.balance * cfg.financeMul);
+  mine.finance.transferBudget = Math.round(mine.finance.transferBudget * cfg.budgetMul);
+
+  // 보드진 목표: 평판 순위 ± 난이도 오프셋
+  const repRank = [...clubs].sort((a, b) => b.finance.reputation - a.finance.reputation)
+    .findIndex((c) => c.id === myClubId) + 1;
+  const objective = Math.max(1, Math.min(clubs.length, repRank + cfg.targetOffset));
+
   return {
     seed, clubs, myClubId, season: 1, history: [],
     tactics: { [myClubId]: makeDefaultTactic(mine) },
     live: null,
     cup: null,
+    difficulty,
+    objective,
   };
 }
 

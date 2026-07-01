@@ -3,7 +3,7 @@ import {
   startGame, myClub, myTactic, setMyTactic,
   startSeason, playRound, playRestOfSeason, finishSeason, advanceFullSeason,
   playCupRound, buy, sell, release, upgradeStaffAction, watchSetup, commitWatchedRound,
-  type GameState, type ActionOutcome, type WatchSetup,
+  type GameState, type ActionOutcome, type WatchSetup, type Difficulty,
 } from './game.js';
 import type { Tactic, MatchResult } from '@soccer-tycoon/engine';
 import { createSaveStore } from './storage.js';
@@ -16,6 +16,7 @@ import { Transfers } from './components/Transfers.js';
 import { Stats } from './components/Stats.js';
 import { Cup } from './components/Cup.js';
 import { Staff } from './components/Staff.js';
+import { Help } from './components/Help.js';
 import { WatchMatch } from './components/WatchMatch.js';
 
 type Tab = 'dashboard' | 'squad' | 'tactics' | 'match' | 'cup' | 'stats' | 'transfers' | 'staff';
@@ -42,6 +43,7 @@ export function App() {
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>('dashboard');
   const [watching, setWatching] = useState<WatchSetup | null>(null);
+  const [showHelp, setShowHelp] = useState(false);
 
   /** 상태 갱신 + 자동 저장. */
   function update(next: GameState) {
@@ -49,8 +51,8 @@ export function App() {
     if (slotId) setSavedAt(store.save(slotId, next).savedAt);
   }
 
-  function handleStart(seed: number, clubId: string) {
-    const state = startGame(seed, clubId);
+  function handleStart(seed: number, clubId: string, difficulty: Difficulty) {
+    const state = startGame(seed, clubId, difficulty);
     const id = newSlotId();
     setGame(state);
     setSlotId(id);
@@ -106,8 +108,11 @@ export function App() {
           {savedLabel && <span className="saved-badge">{savedLabel}</span>}
           <span className="club-name">{club.name}</span>
           <span className="season-badge">시즌 {game.season}{game.live ? ' 진행중' : ' 프리시즌'}</span>
+          <button className="btn-ghost help-btn" onClick={() => setShowHelp(true)} title="도움말">?</button>
         </div>
       </header>
+
+      {showHelp && <Help onClose={() => setShowHelp(false)} />}
 
       {!watching && (
         <nav className="tabs">

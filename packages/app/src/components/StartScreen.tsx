@@ -1,13 +1,14 @@
 import { useMemo, useState } from 'react';
-import { createLeague, type GameState } from '../game.js';
+import { createLeague, DIFFICULTIES, type Difficulty, type GameState } from '../game.js';
 import type { SaveStore, SaveSlotMeta } from '../storage.js';
 import { formatMoney } from '@soccer-tycoon/engine';
 
 const DEFAULT_SEED = 2026;
+const DIFF_ORDER: Difficulty[] = ['easy', 'normal', 'hard'];
 
 interface Props {
   store: SaveStore;
-  onStart: (seed: number, clubId: string) => void;
+  onStart: (seed: number, clubId: string, difficulty: Difficulty) => void;
   onLoad: (id: string, state: GameState) => void;
 }
 
@@ -15,6 +16,7 @@ export function StartScreen({ store, onStart, onLoad }: Props) {
   const [seed] = useState(DEFAULT_SEED);
   const clubs = useMemo(() => createLeague(seed), [seed]);
   const [selected, setSelected] = useState<string | null>(null);
+  const [difficulty, setDifficulty] = useState<Difficulty>('normal');
   const [saves, setSaves] = useState<SaveSlotMeta[]>(() => store.list());
 
   function loadSlot(id: string) {
@@ -54,7 +56,21 @@ export function StartScreen({ store, onStart, onLoad }: Props) {
         </section>
       )}
 
-      <h2 className="section-title">새 게임 — 맡을 구단 선택</h2>
+      <h2 className="section-title">새 게임 — 난이도</h2>
+      <div className="diff-row">
+        {DIFF_ORDER.map((d) => (
+          <button
+            key={d}
+            className={difficulty === d ? 'diff-card active' : 'diff-card'}
+            onClick={() => setDifficulty(d)}
+          >
+            <div className="diff-label">{DIFFICULTIES[d].label}</div>
+            <div className="diff-desc muted">{DIFFICULTIES[d].desc}</div>
+          </button>
+        ))}
+      </div>
+
+      <h2 className="section-title">맡을 구단 선택</h2>
       <p className="subtitle">평판이 높을수록 자금과 선수단이 강합니다.</p>
       <div className="club-grid">
         {clubs.map((c) => (
@@ -73,9 +89,9 @@ export function StartScreen({ store, onStart, onLoad }: Props) {
       <button
         className="btn-primary"
         disabled={!selected}
-        onClick={() => selected && onStart(seed, selected)}
+        onClick={() => selected && onStart(seed, selected, difficulty)}
       >
-        이 구단으로 시작
+        이 구단으로 시작 ({DIFFICULTIES[difficulty].label})
       </button>
     </div>
   );

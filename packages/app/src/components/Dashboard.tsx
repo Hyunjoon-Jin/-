@@ -1,4 +1,4 @@
-import { myClub, lastSummary, myLastPosition, type GameState } from '../game.js';
+import { myClub, lastSummary, myLastPosition, DIFFICULTIES, type GameState } from '../game.js';
 import { formatMoney, currentAbility } from '@soccer-tycoon/engine';
 
 export function Dashboard({ game }: { game: GameState }) {
@@ -11,9 +11,31 @@ export function Dashboard({ game }: { game: GameState }) {
   const wageBill = club.players.reduce((s, p) => s + p.wage, 0);
 
   const myReport = last?.finance.get(club.id);
+  const firstRun = game.history.length === 0 && !game.live;
 
   return (
     <div className="dashboard">
+      {firstRun && (
+        <div className="welcome">
+          <h2>👋 {club.name}에 오신 것을 환영합니다</h2>
+          <p className="muted">
+            보드진의 목표는 <b>리그 {game.objective}위 이내</b>입니다 (난이도: {DIFFICULTIES[game.difficulty].label}).
+            먼저 <b>전술</b> 탭에서 라인업을 점검하고, 필요하면 <b>이적</b>·<b>스태프</b>로 스쿼드를 보강한 뒤,
+            <b>경기</b> 탭에서 "시즌 시작"을 눌러 진행하세요. 내 경기는 직접 관전하며 하프타임에 전술을 바꿀 수 있습니다.
+          </p>
+        </div>
+      )}
+
+      <div className="objective">
+        🎯 보드진 목표: <b>리그 {game.objective}위 이내</b>
+        <span className="muted"> · 난이도 {DIFFICULTIES[game.difficulty].label}</span>
+        {last && pos !== undefined && (
+          <span className={pos <= game.objective ? 'obj-met' : 'obj-miss'}>
+            {' '}— 지난 시즌 {pos}위 ({pos <= game.objective ? '목표 달성 ✓' : '목표 미달'})
+          </span>
+        )}
+      </div>
+
       <div className="cards">
         <Card title="평판" value={`${club.finance.reputation} / 20`} />
         <Card title="보유 자금" value={formatMoney(club.finance.balance)} />
