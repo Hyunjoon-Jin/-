@@ -1,7 +1,8 @@
 import {
   TECHNICAL_ATTRS, MENTAL_ATTRS, PHYSICAL_ATTRS, GOALKEEPING_ATTRS,
+  TRAINING_FOCUSES, TRAINING_LABELS,
   currentAbility, marketValue, playerDerived, isInjured, isSuspended,
-  formatMoney, type AttrKey, type Player, type DerivedRatings,
+  formatMoney, type AttrKey, type Player, type DerivedRatings, type TrainingFocus,
 } from '@soccer-tycoon/engine';
 
 const ATTR_LABELS: Record<AttrKey, string> = {
@@ -34,7 +35,14 @@ function statusBadge(p: Player): { text: string; cls: string } {
   return { text: `컨디션 ${Math.round(p.condition * 100)}%`, cls: 'cond-good' };
 }
 
-export function PlayerDetail({ player, onClose }: { player: Player; onClose: () => void }) {
+interface Props {
+  player: Player;
+  onClose: () => void;
+  /** 내 선수면 훈련 포커스 설정 가능. */
+  onSetFocus?: (focus: TrainingFocus) => void;
+}
+
+export function PlayerDetail({ player, onClose, onSetFocus }: Props) {
   const ca = currentAbility(player);
   const derived = playerDerived(player, player.position);
   const status = statusBadge(player);
@@ -63,6 +71,18 @@ export function PlayerDetail({ player, onClose }: { player: Player; onClose: () 
           <span className={status.cls}>{status.text}</span>
         </div>
         <div className="pd-fam muted">가능 포지션: {fam.join(', ') || player.position}</div>
+
+        {onSetFocus && (
+          <div className="pd-training">
+            <span className="muted">훈련 포커스:</span>
+            <select value={player.trainingFocus} onChange={(e) => onSetFocus(e.target.value as TrainingFocus)}>
+              {TRAINING_FOCUSES.map((f) => (
+                <option key={f} value={f}>{TRAINING_LABELS[f]}</option>
+              ))}
+            </select>
+            <span className="muted small">시즌 성장 시 해당 능력 그룹을 강조합니다 (성장 중인 선수).</span>
+          </div>
+        )}
 
         <div className="pd-cols">
           <AttrGroup title="기술" attrs={TECHNICAL_ATTRS} player={player} />

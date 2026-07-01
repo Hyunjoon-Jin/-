@@ -80,7 +80,12 @@ export interface Player {
   contractYears: number;
   /** 주급 (만원). */
   wage: number;
+  /** 훈련 포커스 — 성장 시 강조할 능력 그룹. */
+  trainingFocus: TrainingFocus;
 }
+
+export type TrainingFocus =
+  | 'balanced' | 'finishing' | 'playmaking' | 'defending' | 'physical' | 'goalkeeping';
 
 // ── 전술 ──────────────────────────────────────────────────
 

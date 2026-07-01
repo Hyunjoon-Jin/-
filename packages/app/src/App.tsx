@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react';
 import {
   startGame, myClub, myTactic, setMyTactic,
   startSeason, playRound, playRestOfSeason, finishSeason, advanceFullSeason,
-  playCupRound, buy, sell, release, upgradeStaffAction, watchSetup, commitWatchedRound,
+  playCupRound, buy, sell, release, upgradeStaffAction, setTrainingFocus,
+  watchSetup, commitWatchedRound,
   type GameState, type ActionOutcome, type WatchSetup, type Difficulty,
 } from './game.js';
 import type { Tactic, MatchResult } from '@soccer-tycoon/engine';
@@ -116,7 +117,17 @@ export function App() {
       </header>
 
       {showHelp && <Help onClose={() => setShowHelp(false)} />}
-      {detailPlayer && <PlayerDetail player={detailPlayer} onClose={() => setDetailPlayer(null)} />}
+      {detailPlayer && (
+        <PlayerDetail
+          player={detailPlayer}
+          onClose={() => setDetailPlayer(null)}
+          onSetFocus={
+            club.players.some((p) => p.id === detailPlayer.id)
+              ? (focus) => update(setTrainingFocus(game, detailPlayer.id, focus))
+              : undefined
+          }
+        />
+      )}
 
       {!watching && (
         <nav className="tabs">

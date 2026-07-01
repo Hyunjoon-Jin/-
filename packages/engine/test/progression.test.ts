@@ -131,3 +131,28 @@ describe('franchise: 멀티시즌 루프', () => {
     expect(a).toEqual(b);
   });
 });
+
+describe('training: 훈련 포커스', () => {
+  it('포커스 능력 그룹이 다른 포커스보다 더 성장한다', () => {
+    // 동일 유망주를 finishing / defending 포커스로 각각 완만히 성장시켜 그룹 합 비교
+    function grow(focus: 'finishing' | 'defending') {
+      const rng = new Rng(1);
+      const club = generateClub(rng, 'c', 'C', 12);
+      const p = club.players[9]!; // ST
+      p.age = 19; p.potential = 145; // 완만한 성장 여지
+      for (const k in p.attributes) (p.attributes as Record<string, number>)[k] = 12;
+      p.trainingFocus = focus;
+      const growRng = new Rng(99);
+      for (let i = 0; i < 4; i++) { p.age = 19 + i; progressPlayer(p, growRng, 12); }
+      return p;
+    }
+    const fin = grow('finishing');
+    const def = grow('defending');
+    const finGroup = (p: typeof fin) =>
+      p.attributes.finishing + p.attributes.shooting + p.attributes.composure + p.attributes.offTheBall;
+    const defGroup = (p: typeof fin) =>
+      p.attributes.tackling + p.attributes.marking + p.attributes.positioning + p.attributes.anticipation;
+    expect(finGroup(fin)).toBeGreaterThan(finGroup(def));
+    expect(defGroup(def)).toBeGreaterThan(defGroup(fin));
+  });
+});

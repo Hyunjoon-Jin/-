@@ -22,6 +22,7 @@ export {
   type SeasonState, type TableRow,
 } from './season.js';
 export { progressPlayer } from './progression.js';
+export { TRAINING_FOCUSES, TRAINING_LABELS, TRAINING_FOCUS_ATTRS } from './training.js';
 export {
   advanceSeason, runFranchise, runOffseason, type SeasonSummary,
 } from './franchise.js';

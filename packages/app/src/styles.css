@@ -142,7 +142,12 @@ body {
 .pd-sub { font-size: 13px; margin-top: 2px; }
 .pd-meta { display: flex; flex-wrap: wrap; gap: 16px; margin: 8px 0; font-size: 14px; }
 .pd-meta b { font-size: 15px; }
-.pd-fam { font-size: 13px; margin-bottom: 14px; }
+.pd-fam { font-size: 13px; margin-bottom: 10px; }
+.pd-training { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; font-size: 14px; }
+.pd-training select {
+  background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+  border-radius: 6px; padding: 5px 10px; font-size: 14px;
+}
 .pd-cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
 .attr-group { }
 .attr-group h3 { margin: 0 0 6px; }

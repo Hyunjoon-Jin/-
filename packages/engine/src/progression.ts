@@ -10,6 +10,7 @@ import {
 import { currentAbility } from './derived.js';
 import { weeklyWage } from './valuation.js';
 import { clamp } from './math.js';
+import { TRAINING_FOCUS_ATTRS } from './training.js';
 import type { Rng } from './rng.js';
 
 /** CA 1포인트 ≈ 능력치 합 3.6 변화 (CA = 평균×10, 평균 = 합/36). */
@@ -40,6 +41,17 @@ function relevantGrowthAttrs(player: Player): AttrKey[] {
     return [...GOALKEEPING_ATTRS, ...MENTAL_ATTRS];
   }
   return [...TECHNICAL_ATTRS, ...MENTAL_ATTRS, ...PHYSICAL_ATTRS];
+}
+
+/**
+ * 성장 대상 능력 풀 (훈련 포커스 반영).
+ * 포커스 능력을 3배 가중해 해당 능력이 더 자주 성장한다.
+ */
+function growthPool(player: Player): AttrKey[] {
+  const base = relevantGrowthAttrs(player);
+  const baseSet = new Set(base);
+  const emphasized = (TRAINING_FOCUS_ATTRS[player.trainingFocus] ?? []).filter((k) => baseSet.has(k));
+  return [...base, ...emphasized, ...emphasized];
 }
 
 /** 노화로 먼저 떨어지는 신체 능력. */
@@ -83,7 +95,7 @@ export function progressPlayer(player: Player, rng: Rng, coaching = 10): void {
     const gap = player.potential - ca;
     const gainCA = gap * rate * (0.6 + rng.next() * 0.8); // 무작위 변동
     const points = gainCA / CA_PER_ATTR_POINT;
-    applyPoints(player, relevantGrowthAttrs(player), points, 1, rng);
+    applyPoints(player, growthPool(player), points, 1, rng);
   } else if (player.age >= 30) {
     const lossCA = declineCA(player.age, player.attributes.naturalFitness);
     if (lossCA > 0) {

@@ -233,6 +233,15 @@ export function setMyTactic(state: GameState, tactic: Tactic): GameState {
   return { ...state, tactics: { ...state.tactics, [state.myClubId]: tactic } };
 }
 
+/** 내 선수의 훈련 포커스 설정. */
+export function setTrainingFocus(
+  state: GameState, playerId: string, focus: import('@soccer-tycoon/engine').TrainingFocus,
+): GameState {
+  const p = myClub(state).players.find((pl) => pl.id === playerId);
+  if (p) p.trainingFocus = focus;
+  return { ...state };
+}
+
 /** 프리시즌에서 한 시즌 전체를 한 번에 진행(킥오프→전 경기→정산). */
 export function advanceFullSeason(state: GameState): GameState {
   return finishSeason(playRestOfSeason(startSeason(state)));

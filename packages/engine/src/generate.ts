@@ -74,6 +74,7 @@ function genPlayer(rng: Rng, position: Position, tier: number, fixedAge?: number
     suspensionMatches: 0,
     contractYears: rng.int(1, 4),
     wage: 0,
+    trainingFocus: 'balanced',
   };
   player.wage = weeklyWage(player);
   return player;
