@@ -97,13 +97,38 @@ export function generateClub(rng: Rng, id: string, name: string, tier: number): 
   const balance = reputation * 50_000 + rng.int(0, 100_000);   // 만원
   const transferBudget = Math.round(balance * 0.4);
   const staffLevel = () => clamp(tier + rng.int(-3, 2), 1, 20);
-  const staff = { coaching: staffLevel(), medical: staffLevel(), scouting: staffLevel() };
+  const staff = {
+    coaching: staffLevel(), medical: staffLevel(),
+    scouting: staffLevel(), youth: staffLevel(),
+  };
   return { id, name, players, finance: { balance, transferBudget, reputation }, staff };
 }
 
 /** 유스 신인 1명 생성 (17~19세). 은퇴 선수 대체·유스 유입에 사용. */
 export function generateYouthPlayer(rng: Rng, position: Position, tier: number): Player {
   return genPlayer(rng, position, tier, rng.int(17, 19));
+}
+
+const ACADEMY_POSITIONS: Position[] = [
+  'GK', 'DC', 'DL', 'DR', 'DM', 'MC', 'MC', 'AML', 'AMR', 'AMC', 'ST', 'ST',
+];
+
+/**
+ * 유스 아카데미 유망주 배출 (매 시즌).
+ * 유스 레벨이 높을수록 배출 인원↑·잠재력↑.
+ */
+export function generateAcademyIntake(rng: Rng, tier: number, youthLevel: number): Player[] {
+  const count = 1 + Math.floor(youthLevel / 8); // 1~7:1명, 8~15:2명, 16~20:3명
+  const out: Player[] = [];
+  for (let i = 0; i < count; i++) {
+    const pos = ACADEMY_POSITIONS[rng.int(0, ACADEMY_POSITIONS.length - 1)]!;
+    const p = genPlayer(rng, pos, tier - 2, rng.int(16, 18));
+    // 아카데미 수준에 따른 잠재력 보너스(유스 8=중립)
+    const bonus = Math.max(0, youthLevel - 8) * 2;
+    p.potential = clamp(p.potential + bonus, 0, 200);
+    out.push(p);
+  }
+  return out;
 }
 
 /**

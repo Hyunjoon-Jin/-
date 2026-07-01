@@ -100,16 +100,17 @@ describe('franchise: 멀티시즌 루프', () => {
     }
   });
 
-  it('은퇴는 유스로 1:1 충원되어 리그 전체 선수 수가 보존된다', () => {
-    // 이적은 구단 간 선수를 재분배하므로 개별 구단 크기는 변하지만,
-    // 은퇴=유스 충원이 1:1이라 리그 총원은 일정해야 한다.
+  it('유스 아카데미·정리로 스쿼드가 상한 내로 유지되고 유망주가 유입된다', () => {
+    // 은퇴 + 아카데미 배출 + 상한 정리로 스쿼드는 상한(26) 내에서 유지되고,
+    // 매 시즌 어린 유망주가 유입된다.
     const clubs = makeLeague(22);
-    const totalBefore = clubs.reduce((s, c) => s + c.players.length, 0);
     runFranchise(clubs, 6, 700);
-    const totalAfter = clubs.reduce((s, c) => s + c.players.length, 0);
-    expect(totalAfter).toBe(totalBefore);
-    // 어떤 구단도 선발(11명) 아래로 줄지 않는다
-    for (const c of clubs) expect(c.players.length).toBeGreaterThanOrEqual(11);
+    for (const c of clubs) {
+      expect(c.players.length).toBeGreaterThanOrEqual(11);
+      expect(c.players.length).toBeLessThanOrEqual(26);
+      // 최근 아카데미 유망주(18세 이하)가 스쿼드에 존재
+      expect(c.players.some((p) => p.age <= 18)).toBe(true);
+    }
   });
 
   it('한 시즌 뒤 모든 선수의 나이가 1살 많아진다', () => {

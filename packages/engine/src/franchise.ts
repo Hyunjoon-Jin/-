@@ -3,14 +3,18 @@
  * 한 시즌 = 이적 창 → 리그 경기 → 재정 정산 → 선수 성장/노화 → 은퇴·유스 유입.
  * 게임의 시간축을 닫는 핵심 루프.
  */
-import type { Club, Player, Position } from './types.js';
+import type { Club } from './types.js';
 import { simulateSeason, type TableRow } from './league.js';
 import { settleSeason, type SeasonFinanceReport } from './finance.js';
 import { runTransferWindow, type TransferDeal } from './transfer.js';
 import { progressPlayer } from './progression.js';
-import { generateYouthPlayer } from './generate.js';
+import { generateAcademyIntake } from './generate.js';
+import { currentAbility } from './derived.js';
 import { summarizeStats, type PlayerSeasonStat, type SeasonAwards } from './stats.js';
 import { Rng } from './rng.js';
+
+/** 스쿼드 상한(오프시즌 정리 목표). MAX_SQUAD보다 낮게 유지. */
+const SOFT_CAP = 26;
 
 /** 이 나이 이상이면 시즌 후 은퇴. */
 const RETIRE_AGE = 37;
@@ -23,6 +27,8 @@ export interface SeasonSummary {
   transfers: TransferDeal[];
   finance: Map<string, SeasonFinanceReport>;
   retirements: number;
+  /** 앱: 내 구단 유스 승격 인원(헤드리스에선 미설정). */
+  youthPromotions?: number;
   topScorers: PlayerSeasonStat[];
   awards: SeasonAwards;
   /** 컵 우승 구단(앱의 병행 컵대회). 헤드리스 프랜차이즈에선 미설정. */
@@ -35,8 +41,25 @@ export interface SeasonSummary {
  * 헤드리스 루프와 앱(경기 단위 진행)이 시즌 종료 시 공통으로 호출한다.
  * @returns 은퇴(=유스 충원) 인원.
  */
-export function runOffseason(clubs: Club[], rng: Rng): number {
+/** 스쿼드를 상한까지 정리: 21세 이상 중 가장 약한 선수부터 방출(유스 보호). */
+function trimSquad(club: Club): void {
+  while (club.players.length > SOFT_CAP) {
+    const established = club.players.filter((p) => p.age >= 21);
+    const pool = established.length > 0 ? established : club.players;
+    const weakest = pool.reduce((a, b) => (currentAbility(a) < currentAbility(b) ? a : b));
+    club.players = club.players.filter((p) => p.id !== weakest.id);
+  }
+}
+
+export interface OffseasonResult {
+  retirements: number;
+  /** clubId → 유스 아카데미 배출 인원. */
+  intakeByClub: Map<string, number>;
+}
+
+export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
   let retirements = 0;
+  const intakeByClub = new Map<string, number>();
   for (const club of clubs) {
     for (const player of club.players) {
       progressPlayer(player, rng, club.staff.coaching);
@@ -46,19 +69,21 @@ export function runOffseason(clubs: Club[], rng: Rng): number {
       player.morale = 0.5 + (player.morale - 0.5) * 0.4;
     }
 
-    const survivors: Player[] = [];
-    const retiredPositions: Position[] = [];
-    for (const p of club.players) {
-      if (p.age >= RETIRE_AGE) retiredPositions.push(p.position);
-      else survivors.push(p);
-    }
-    for (const pos of retiredPositions) {
-      survivors.push(generateYouthPlayer(rng, pos, club.finance.reputation));
-      retirements++;
-    }
-    club.players = survivors;
+    // 은퇴
+    club.players = club.players.filter((p) => {
+      if (p.age >= RETIRE_AGE) { retirements++; return false; }
+      return true;
+    });
+
+    // 유스 아카데미 배출
+    const intake = generateAcademyIntake(rng, club.finance.reputation, club.staff.youth);
+    club.players.push(...intake);
+    intakeByClub.set(club.id, intake.length);
+
+    // 스쿼드 상한 정리
+    trimSquad(club);
   }
-  return retirements;
+  return { retirements, intakeByClub };
 }
 
 /**
@@ -82,8 +107,8 @@ export function advanceSeason(clubs: Club[], season: number, baseSeed: number): 
     finance.set(club.id, settleSeason(club, pos, clubs.length));
   });
 
-  // 4) 오프시즌: 성장/노화 + 은퇴·유스 유입
-  const retirements = runOffseason(clubs, rng);
+  // 4) 오프시즌: 성장/노화 + 은퇴·유스 아카데미
+  const { retirements } = runOffseason(clubs, rng);
 
   const champ = table[0]!;
   return {

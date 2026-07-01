@@ -25,7 +25,7 @@
 | `finance.ts` | 구단 재정 · 시즌 정산 · 리그 상금 |
 | `transfer.ts` | 이적 시장 AI 시뮬 (약점 보강) |
 | `transferActions.ts` | 사용자 주도 이적 (영입/판매/방출) |
-| `staffActions.ts` | 스태프 업그레이드 (코칭·의료·스카우팅) |
+| `staffActions.ts` | 스태프 업그레이드 (코칭·의료·스카우팅·유스) |
 | `cup.ts` | 컵대회 (단판 녹아웃 토너먼트, 승부차기·부전승) |
 | `matchEffects.ts` | 경기 후 상태 변화 (피로·부상·사기) |
 | `stats.ts` | 시즌 선수 통계 집계 + 어워드(득점왕·시즌 베스트) |

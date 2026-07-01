@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { upgradeStaff, upgradeCost, STAFF_MAX } from '../src/staffActions.js';
 import { progressPlayer } from '../src/progression.js';
 import { applyMatchEffects } from '../src/matchEffects.js';
-import { generateClub, defaultTactic } from '../src/generate.js';
+import { generateClub, defaultTactic, generateAcademyIntake } from '../src/generate.js';
 import { currentAbility } from '../src/derived.js';
 import { Rng } from '../src/rng.js';
 import type { Club, MatchResult, Player } from '../src/types.js';
@@ -88,5 +88,25 @@ describe('staff: 업그레이드', () => {
     club.staff.scouting = STAFF_MAX;
     club.finance.balance = 10_000_000;
     expect(upgradeStaff(club, 'scouting').ok).toBe(false);
+  });
+});
+
+describe('staff: 유스 아카데미', () => {
+  it('유스 레벨이 높을수록 배출 인원이 많다', () => {
+    const rng1 = new Rng(5); const rng2 = new Rng(5);
+    // generateAcademyIntake는 generate에서 import
+    const lowCount = generateAcademyIntake(rng1, 12, 3).length;
+    const highCount = generateAcademyIntake(rng2, 12, 20).length;
+    expect(highCount).toBeGreaterThanOrEqual(lowCount);
+    expect(lowCount).toBeGreaterThanOrEqual(1);
+  });
+
+  it('배출 유망주는 어리고(16~18세) 잠재력 여지가 있다', () => {
+    const intake = generateAcademyIntake(new Rng(7), 14, 16);
+    for (const p of intake) {
+      expect(p.age).toBeGreaterThanOrEqual(16);
+      expect(p.age).toBeLessThanOrEqual(18);
+      expect(p.injuryMatches).toBe(0);
+    }
   });
 });

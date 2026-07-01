@@ -11,13 +11,15 @@ const STAFF: { key: StaffKind; label: string; icon: string; effect: string }[] =
   { key: 'coaching', label: '코칭', icon: '📋', effect: '선수 성장률 향상 (유망주 육성)' },
   { key: 'medical', label: '의료', icon: '🩺', effect: '부상 확률·기간 감소, 컨디션 회복 향상' },
   { key: 'scouting', label: '스카우팅', icon: '🔍', effect: '이적 매물 잠재력 정보 정확도 향상' },
+  { key: 'youth', label: '유스', icon: '🎓', effect: '매 시즌 아카데미 유망주 배출 수·잠재력 향상' },
 ];
 
 export function Staff({ game, onUpgrade }: Props) {
   const club = myClub(game);
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
 
-  const staffWage = (club.staff.coaching + club.staff.medical + club.staff.scouting) * 600;
+  const staffWage =
+    (club.staff.coaching + club.staff.medical + club.staff.scouting + club.staff.youth) * 600;
 
   return (
     <div className="staff">

@@ -103,6 +103,8 @@ export interface Staff {
   medical: number;
   /** 스카우팅: 이적 매물 잠재력 정보 정확도↑. */
   scouting: number;
+  /** 유스: 아카데미 유망주 배출 수·잠재력↑. */
+  youth: number;
 }
 
 /** 구단 재정 상태 (economy.md 4장). 단위: 만원. */

@@ -55,6 +55,9 @@ export function Dashboard({ game }: { game: GameState }) {
               {last.cupChampionName && (
                 <> &nbsp;·&nbsp; 컵 우승: <b>{last.cupChampionName}</b></>
               )}
+              {last.youthPromotions !== undefined && last.youthPromotions > 0 && (
+                <> &nbsp;·&nbsp; 🎓 유스 승격: <b>{last.youthPromotions}명</b></>
+              )}
             </p>
             {myReport && (
               <p className={myReport.net >= 0 ? 'pos' : 'neg'}>

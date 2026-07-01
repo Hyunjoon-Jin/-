@@ -5,7 +5,7 @@
 import type { Club, Staff } from './types.js';
 
 export type StaffKind = keyof Staff;
-export const STAFF_KINDS: StaffKind[] = ['coaching', 'medical', 'scouting'];
+export const STAFF_KINDS: StaffKind[] = ['coaching', 'medical', 'scouting', 'youth'];
 export const STAFF_MAX = 20;
 
 /** 현재 레벨에서 다음 레벨로 올리는 비용 (만원). */
