@@ -50,9 +50,11 @@ export {
   type CallUp, type InternationalResult,
 } from './international.js';
 export {
-  transferTargets, buyPlayer, sellPlayer, releasePlayer,
+  transferTargets, buyPlayer, buyPlayerAt, sellPlayer, releasePlayer,
+  askingPrice, evaluateOffer,
   MIN_SQUAD, MAX_SQUAD,
   type TransferTarget, type BuyResult, type SellResult,
+  type OfferOutcome, type OfferEvaluation,
 } from './transferActions.js';
 export {
   upgradeStaff, upgradeCost, STAFF_KINDS, STAFF_MAX,

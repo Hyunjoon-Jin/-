@@ -34,8 +34,51 @@ export function transferTargets(clubs: Club[], myClubId: string): TransferTarget
 
 export interface BuyResult { ok: boolean; fee?: number; playerName?: string; reason?: string }
 
-/** 타 구단 선수 영입 (시장가로). */
-export function buyPlayer(clubs: Club[], myClubId: string, playerId: string): BuyResult {
+/**
+ * 매도 구단의 호가(asking price).
+ * 시장가에 선수 중요도(포지션 내 서열)와 잔여 계약을 반영한다.
+ * 핵심 선수는 프리미엄, 계약 만료 임박·스쿼드 잉여는 할인.
+ */
+export function askingPrice(seller: Club, player: Player): number {
+  const line = lineOf(player.position);
+  const sameLine = seller.players
+    .filter((p) => lineOf(p.position) === line)
+    .sort((a, b) => currentAbility(b) - currentAbility(a));
+  const rank = sameLine.findIndex((p) => p.id === player.id); // 0 = 그 라인 최고
+  const depth = sameLine.length;
+
+  let importance = 1.0;
+  if (rank === 0) importance = 1.4;       // 핵심 → 프리미엄
+  else if (rank === 1) importance = 1.15; // 준주전
+  if (depth >= 4 && rank >= 2) importance *= 0.9; // 뎁스 여유 → 할인
+
+  const years = player.contractYears;
+  const contractMul = years <= 1 ? 0.75 : years === 2 ? 0.9 : 1.0;
+
+  return Math.round(marketValue(player) * importance * contractMul);
+}
+
+export type OfferOutcome = 'accepted' | 'countered' | 'rejected';
+
+export interface OfferEvaluation {
+  /** 협상 자체가 성립하는지(스쿼드·예산·매물 유효성). */
+  ok: boolean;
+  reason?: string;
+  outcome?: OfferOutcome;
+  /** 매도 구단 호가(제안 시 공개). */
+  asking?: number;
+  /** 역제안 금액(countered일 때). */
+  counter?: number;
+  playerName?: string;
+}
+
+/**
+ * 제안액에 대한 매도 구단의 반응(순수 함수 — 구단을 변경하지 않음).
+ * 호가 이상이면 수락, 하한 이상이면 역제안, 그 미만이면 거절.
+ */
+export function evaluateOffer(
+  clubs: Club[], myClubId: string, playerId: string, offer: number,
+): OfferEvaluation {
   const me = clubs.find((c) => c.id === myClubId);
   if (!me) return { ok: false, reason: '내 구단을 찾을 수 없습니다.' };
   if (me.players.length >= MAX_SQUAD) {
@@ -47,7 +90,38 @@ export function buyPlayer(clubs: Club[], myClubId: string, playerId: string): Bu
     return { ok: false, reason: '상대 구단이 최소 스쿼드 인원을 유지하려 합니다.' };
   }
   const player = seller.players.find((p) => p.id === playerId)!;
-  const fee = marketValue(player);
+  if (!(offer > 0)) return { ok: false, reason: '제안액을 입력하세요.' };
+  if (offer > me.finance.transferBudget) return { ok: false, reason: '이적 예산을 초과했습니다.' };
+
+  const asking = askingPrice(seller, player);
+  const floor = Math.round(asking * 0.82);
+  let outcome: OfferOutcome;
+  let counter: number | undefined;
+  if (offer >= asking) {
+    outcome = 'accepted';
+  } else if (offer >= floor) {
+    outcome = 'countered';
+    counter = Math.min(asking, Math.round((asking + offer) / 2));
+  } else {
+    outcome = 'rejected';
+  }
+  return { ok: true, outcome, asking, counter, playerName: player.name };
+}
+
+/** 지정 이적료로 영입 실행 (협상 타결분). 예산·스쿼드 제약 검증. */
+export function buyPlayerAt(clubs: Club[], myClubId: string, playerId: string, fee: number): BuyResult {
+  const me = clubs.find((c) => c.id === myClubId);
+  if (!me) return { ok: false, reason: '내 구단을 찾을 수 없습니다.' };
+  if (me.players.length >= MAX_SQUAD) {
+    return { ok: false, reason: `스쿼드가 가득 찼습니다 (최대 ${MAX_SQUAD}명).` };
+  }
+  const seller = clubs.find((c) => c.id !== myClubId && c.players.some((p) => p.id === playerId));
+  if (!seller) return { ok: false, reason: '해당 선수를 찾을 수 없습니다.' };
+  if (seller.players.length - 1 < MIN_SQUAD) {
+    return { ok: false, reason: '상대 구단이 최소 스쿼드 인원을 유지하려 합니다.' };
+  }
+  const player = seller.players.find((p) => p.id === playerId)!;
+  if (!(fee > 0)) return { ok: false, reason: '이적료가 올바르지 않습니다.' };
   if (me.finance.transferBudget < fee) {
     return { ok: false, reason: '이적 예산이 부족합니다.' };
   }
@@ -62,6 +136,14 @@ export function buyPlayer(clubs: Club[], myClubId: string, playerId: string): Bu
   me.players.push(player);
 
   return { ok: true, fee, playerName: player.name };
+}
+
+/** 타 구단 선수 영입 (시장가로 즉시 — AI/구버전 경로). */
+export function buyPlayer(clubs: Club[], myClubId: string, playerId: string): BuyResult {
+  const seller = clubs.find((c) => c.id !== myClubId && c.players.some((p) => p.id === playerId));
+  if (!seller) return { ok: false, reason: '해당 선수를 찾을 수 없습니다.' };
+  const player = seller.players.find((p) => p.id === playerId)!;
+  return buyPlayerAt(clubs, myClubId, playerId, marketValue(player));
 }
 
 export interface SellResult { ok: boolean; fee?: number; buyerName?: string; playerName?: string; reason?: string }

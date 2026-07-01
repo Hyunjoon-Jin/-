@@ -145,6 +145,13 @@ body {
 .pd-meta b { font-size: 15px; }
 .pd-fam { font-size: 13px; margin-bottom: 10px; }
 .pd-caps { color: #6cb6ff; font-weight: 600; }
+
+/* 이적 협상 모달 */
+.modal.negotiate { max-width: 520px; }
+.neg-sub { margin: 0 0 10px; font-size: 13px; }
+.neg-facts { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 12px; font-size: 14px; }
+.neg-counter { margin: 10px 0; display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.neg-offers { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 14px; }
 .pd-traits { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
 .trait-chip {
   background: rgba(240, 190, 70, 0.14); color: #f0be46;

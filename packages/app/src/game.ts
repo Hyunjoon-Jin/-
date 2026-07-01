@@ -7,7 +7,8 @@ import {
   generateClub, runTransferWindow, runOffseason, settleSeason, Rng,
   createSeasonState, playRound as enginePlayRound, playToEnd, computeTable, totalRounds, currentRound,
   commitResult, simulateMatch, simulateSeason, defaultTactic, applyMatchEffects,
-  buyPlayer, sellPlayer, releasePlayer,
+  buyPlayer, buyPlayerAt, evaluateOffer, sellPlayer, releasePlayer,
+  type OfferEvaluation,
   summarizeStats, aggregatePlayerStats, topScorers as engineTopScorers,
   createCup, playCupRound as enginePlayCupRound, playCupToEnd, isCupOver,
   applyPromotionRelegation, clubsInDivision, runInternationalBreak,
@@ -348,6 +349,20 @@ export function buy(state: GameState, playerId: string): ActionOutcome {
   const r = buyPlayer(state.clubs, state.myClubId, playerId);
   if (!r.ok) return { state, ok: false, message: r.reason! };
   return { state: afterSquadChange(state), ok: true, message: `${r.playerName} 영입 완료` };
+}
+
+/** 이적 협상: 제안액에 대한 매도 구단 반응(수락/역제안/거절). 상태 변경 없음. */
+export function negotiate(state: GameState, playerId: string, offer: number): OfferEvaluation {
+  if (state.live) return { ok: false, reason: '이적은 프리시즌에만 가능합니다.' };
+  return evaluateOffer(state.clubs, state.myClubId, playerId, offer);
+}
+
+/** 합의된 이적료로 영입 실행(협상 타결). */
+export function buyAt(state: GameState, playerId: string, fee: number): ActionOutcome {
+  if (state.live) return { state, ok: false, message: '이적은 프리시즌에만 가능합니다.' };
+  const r = buyPlayerAt(state.clubs, state.myClubId, playerId, fee);
+  if (!r.ok) return { state, ok: false, message: r.reason! };
+  return { state: afterSquadChange(state), ok: true, message: `${r.playerName} 영입 완료 (${formatMoney(r.fee!)})` };
 }
 
 export function sell(state: GameState, playerId: string): ActionOutcome {

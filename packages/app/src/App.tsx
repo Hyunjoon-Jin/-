@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import {
   startGame, myClub, myTactic, setMyTactic,
   startSeason, playRound, playRestOfSeason, finishSeason, advanceFullSeason,
-  playCupRound, buy, sell, release, upgradeStaffAction, setTrainingFocus, renewContract,
+  playCupRound, negotiate, buyAt, sell, release, upgradeStaffAction, setTrainingFocus, renewContract,
   watchSetup, matchPreview, commitWatchedRound,
   type GameState, type ActionOutcome, type WatchSetup, type Difficulty,
 } from './game.js';
@@ -96,6 +96,12 @@ export function App() {
     return outcome;
   };
 
+  const handleBuyAt = (id: string, fee: number): ActionOutcome => {
+    const outcome = buyAt(game, id, fee);
+    if (outcome.ok) update(outcome.state);
+    return outcome;
+  };
+
   const handleWatch = () => {
     const ws = watchSetup(game);
     if (ws) setWatching(ws);
@@ -185,7 +191,8 @@ export function App() {
             {tab === 'transfers' && (
               <Transfers
                 game={game}
-                onBuy={(id) => runAction(buy, id)}
+                onNegotiate={(id, offer) => negotiate(game, id, offer)}
+                onBuyAt={handleBuyAt}
                 onSell={(id) => runAction(sell, id)}
                 onRelease={(id) => runAction(release, id)}
                 onSelect={setDetailPlayer}

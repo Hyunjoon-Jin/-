@@ -2,16 +2,19 @@ import { useMemo, useState } from 'react';
 import { myClub, lastSummary, type GameState, type ActionOutcome } from '../game.js';
 import {
   transferTargets, marketValue, currentAbility, formatMoney, lineOf,
-  type Line, type Player,
+  type Line, type Player, type OfferEvaluation, type TransferTarget,
 } from '@soccer-tycoon/engine';
 
 interface Props {
   game: GameState;
-  onBuy: (playerId: string) => ActionOutcome;
+  onNegotiate: (playerId: string, offer: number) => OfferEvaluation;
+  onBuyAt: (playerId: string, fee: number) => ActionOutcome;
   onSell: (playerId: string) => ActionOutcome;
   onRelease: (playerId: string) => ActionOutcome;
   onSelect: (p: Player) => void;
 }
+
+type Msg = { text: string; ok: boolean };
 
 type LineFilter = 'ALL' | Line;
 const LINE_FILTERS: { key: LineFilter; label: string }[] = [
@@ -22,10 +25,10 @@ const LINE_FILTERS: { key: LineFilter; label: string }[] = [
   { key: 'ATT', label: '공격' },
 ];
 
-export function Transfers({ game, onBuy, onSell, onRelease, onSelect }: Props) {
+export function Transfers(props: Props) {
   // 시즌 진행 중에는 직접 이적 불가 → 지난 시즌 내역(읽기 전용)
-  if (game.live) return <TransferHistory game={game} />;
-  return <TransferMarket game={game} onBuy={onBuy} onSell={onSell} onRelease={onRelease} onSelect={onSelect} />;
+  if (props.game.live) return <TransferHistory game={props.game} />;
+  return <TransferMarket {...props} />;
 }
 
 /** 스카우팅 레벨에 따라 매물 잠재력 공개 정도가 달라진다. */
@@ -40,12 +43,13 @@ function revealPotential(scouting: number, potential: number): string {
   return '?';
 }
 
-function TransferMarket({ game, onBuy, onSell, onRelease, onSelect }: Props) {
+function TransferMarket({ game, onNegotiate, onBuyAt, onSell, onRelease, onSelect }: Props) {
   const club = myClub(game);
-  const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const [msg, setMsg] = useState<Msg | null>(null);
   const [line, setLine] = useState<LineFilter>('ALL');
   const [search, setSearch] = useState('');
   const [affordableOnly, setAffordableOnly] = useState(true);
+  const [negotiating, setNegotiating] = useState<TransferTarget | null>(null);
 
   const budget = club.finance.transferBudget;
   const scouting = club.staff.scouting;
@@ -116,8 +120,7 @@ function TransferMarket({ game, onBuy, onSell, onRelease, onSelect }: Props) {
                   <td>{formatMoney(t.value)}</td>
                   <td>
                     <button className="btn-small"
-                      disabled={t.value > budget}
-                      onClick={() => act(onBuy(t.player.id))}>영입</button>
+                      onClick={() => { setMsg(null); setNegotiating(t); }}>협상</button>
                   </td>
                 </tr>
               ))}
@@ -151,6 +154,103 @@ function TransferMarket({ game, onBuy, onSell, onRelease, onSelect }: Props) {
               ))}
             </tbody>
           </table>
+        </div>
+      </div>
+
+      {negotiating && (
+        <NegotiationModal
+          target={negotiating}
+          budget={budget}
+          scouting={scouting}
+          onNegotiate={onNegotiate}
+          onBuyAt={onBuyAt}
+          onResult={(m) => { setMsg(m); setNegotiating(null); }}
+          onClose={() => setNegotiating(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function NegotiationModal({
+  target, budget, scouting, onNegotiate, onBuyAt, onResult, onClose,
+}: {
+  target: TransferTarget;
+  budget: number;
+  scouting: number;
+  onNegotiate: (playerId: string, offer: number) => OfferEvaluation;
+  onBuyAt: (playerId: string, fee: number) => ActionOutcome;
+  onResult: (m: Msg) => void;
+  onClose: () => void;
+}) {
+  const { player, value } = target;
+  const [ev, setEv] = useState<OfferEvaluation | null>(null);
+
+  const offer = (amount: number) => {
+    const r = onNegotiate(player.id, amount);
+    if (r.ok && r.outcome === 'accepted') {
+      const bought = onBuyAt(player.id, amount);
+      onResult({ text: bought.message, ok: bought.ok });
+      return;
+    }
+    setEv(r);
+  };
+  const acceptCounter = (counter: number) => {
+    const bought = onBuyAt(player.id, counter);
+    onResult({ text: bought.message, ok: bought.ok });
+  };
+
+  const PRESETS: { label: string; pct: number }[] = [
+    { label: '가치의 90%', pct: 0.9 },
+    { label: '가치대로', pct: 1.0 },
+    { label: '가치의 110%', pct: 1.1 },
+  ];
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal negotiate" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <h2>협상 — {player.name}</h2>
+          <button className="btn-ghost" onClick={onClose}>닫기 ✕</button>
+        </div>
+        <p className="neg-sub muted">
+          {player.position} · {player.age}세 · CA <b>{currentAbility(player).toFixed(0)}</b>
+          {' · '}잠재 {revealPotential(scouting, player.potential)}
+        </p>
+        <div className="neg-facts">
+          <span>예상 가치 <b>{formatMoney(value)}</b></span>
+          <span>이적 예산 <b className="budget">{formatMoney(budget)}</b></span>
+          {ev?.asking !== undefined && <span>상대 호가 <b>{formatMoney(ev.asking)}</b></span>}
+        </div>
+
+        {ev && !ev.ok && <p className="toast err">{ev.reason}</p>}
+        {ev?.outcome === 'rejected' && (
+          <p className="toast err">제안이 너무 낮아 거절당했습니다. 더 높은 금액을 제시하세요.</p>
+        )}
+        {ev?.outcome === 'countered' && ev.counter !== undefined && (
+          <div className="neg-counter">
+            <p className="toast">상대가 <b>{formatMoney(ev.counter)}</b>를 요구합니다.</p>
+            <button
+              className="btn-advance"
+              disabled={ev.counter > budget}
+              onClick={() => acceptCounter(ev.counter!)}
+            >요구액 수락 ({formatMoney(ev.counter)})</button>
+          </div>
+        )}
+
+        <div className="neg-offers">
+          <span className="muted small">제안하기</span>
+          {PRESETS.map((p) => {
+            const amount = Math.round(value * p.pct);
+            return (
+              <button
+                key={p.label}
+                className="btn-small"
+                disabled={amount > budget}
+                onClick={() => offer(amount)}
+              >{p.label} ({formatMoney(amount)})</button>
+            );
+          })}
         </div>
       </div>
     </div>
