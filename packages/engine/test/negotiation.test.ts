@@ -1,9 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import {
   askingPrice, evaluateOffer, buyPlayerAt, transferTargets,
+  sellOffers, acceptSellOffer,
 } from '../src/transferActions.js';
 import { generateClub } from '../src/generate.js';
 import { marketValue } from '../src/valuation.js';
+import { currentAbility } from '../src/derived.js';
 import { Rng } from '../src/rng.js';
 import type { Club } from '../src/types.js';
 
@@ -88,5 +90,59 @@ describe('negotiation: 이적 협상', () => {
     expect(seller.players.length).toBe(beforeSeller - 1);
     expect(me.finance.transferBudget).toBe(budgetBefore - fee);
     expect(me.players.some((p) => p.id === t.player.id)).toBe(true);
+  });
+});
+
+function league(seed: number, n = 6): { clubs: Club[]; myId: string } {
+  const rng = new Rng(seed);
+  const clubs: Club[] = [];
+  for (let i = 0; i < n; i++) clubs.push(generateClub(rng, `c${i}`, `C${i}`, 8 + i));
+  // 구매 여력 보장
+  for (const c of clubs) c.finance.transferBudget = 300_000_000;
+  return { clubs, myId: 'c0' };
+}
+
+describe('negotiation: 판매 입찰', () => {
+  it('입찰은 내림차순 정렬, 각 입찰은 예산 이내', () => {
+    const { clubs, myId } = league(11);
+    const me = clubs.find((c) => c.id === myId)!;
+    const star = me.players.slice().sort((a, b) => currentAbility(b) - currentAbility(a))[0]!;
+    const offers = sellOffers(clubs, myId, star.id);
+    expect(offers.length).toBeGreaterThan(0);
+    for (let i = 1; i < offers.length; i++) {
+      expect(offers[i - 1]!.bid).toBeGreaterThanOrEqual(offers[i]!.bid);
+    }
+    for (const o of offers) {
+      const buyer = clubs.find((c) => c.id === o.clubId)!;
+      expect(o.bid).toBeLessThanOrEqual(buyer.finance.transferBudget);
+    }
+  });
+
+  it('입찰 수락 시 최고 입찰액으로 판매 실행', () => {
+    const { clubs, myId } = league(12);
+    const me = clubs.find((c) => c.id === myId)!;
+    const star = me.players.slice().sort((a, b) => currentAbility(b) - currentAbility(a))[0]!;
+    const offers = sellOffers(clubs, myId, star.id);
+    const best = offers[0]!;
+    const buyer = clubs.find((c) => c.id === best.clubId)!;
+    const beforeMe = me.players.length, beforeBuyer = buyer.players.length;
+    const balBefore = me.finance.balance;
+
+    const r = acceptSellOffer(clubs, myId, star.id, best.clubId);
+    expect(r.ok).toBe(true);
+    expect(r.fee).toBe(best.bid);
+    expect(me.players.length).toBe(beforeMe - 1);
+    expect(buyer.players.length).toBe(beforeBuyer + 1);
+    expect(me.finance.balance).toBe(balBefore + best.bid);
+    expect(buyer.players.some((p) => p.id === star.id)).toBe(true);
+  });
+
+  it('최소 스쿼드에서는 판매 불가', () => {
+    const { clubs, myId } = league(13);
+    const me = clubs.find((c) => c.id === myId)!;
+    me.players = me.players.slice(0, 14); // MIN_SQUAD
+    const p = me.players[0]!;
+    const r = acceptSellOffer(clubs, myId, p.id, clubs[1]!.id);
+    expect(r.ok).toBe(false);
   });
 });

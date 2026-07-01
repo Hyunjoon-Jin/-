@@ -51,10 +51,10 @@ export {
 } from './international.js';
 export {
   transferTargets, buyPlayer, buyPlayerAt, sellPlayer, releasePlayer,
-  askingPrice, evaluateOffer,
+  askingPrice, evaluateOffer, sellOffers, acceptSellOffer,
   MIN_SQUAD, MAX_SQUAD,
   type TransferTarget, type BuyResult, type SellResult,
-  type OfferOutcome, type OfferEvaluation,
+  type OfferOutcome, type OfferEvaluation, type SellOffer,
 } from './transferActions.js';
 export {
   upgradeStaff, upgradeCost, STAFF_KINDS, STAFF_MAX,

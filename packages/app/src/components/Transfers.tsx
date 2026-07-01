@@ -2,14 +2,15 @@ import { useMemo, useState } from 'react';
 import { myClub, lastSummary, type GameState, type ActionOutcome } from '../game.js';
 import {
   transferTargets, marketValue, currentAbility, formatMoney, lineOf,
-  type Line, type Player, type OfferEvaluation, type TransferTarget,
+  type Line, type Player, type OfferEvaluation, type TransferTarget, type SellOffer,
 } from '@soccer-tycoon/engine';
 
 interface Props {
   game: GameState;
   onNegotiate: (playerId: string, offer: number) => OfferEvaluation;
   onBuyAt: (playerId: string, fee: number) => ActionOutcome;
-  onSell: (playerId: string) => ActionOutcome;
+  onOffers: (playerId: string) => SellOffer[];
+  onAcceptSell: (playerId: string, buyerId: string) => ActionOutcome;
   onRelease: (playerId: string) => ActionOutcome;
   onSelect: (p: Player) => void;
 }
@@ -43,13 +44,14 @@ function revealPotential(scouting: number, potential: number): string {
   return '?';
 }
 
-function TransferMarket({ game, onNegotiate, onBuyAt, onSell, onRelease, onSelect }: Props) {
+function TransferMarket({ game, onNegotiate, onBuyAt, onOffers, onAcceptSell, onRelease, onSelect }: Props) {
   const club = myClub(game);
   const [msg, setMsg] = useState<Msg | null>(null);
   const [line, setLine] = useState<LineFilter>('ALL');
   const [search, setSearch] = useState('');
   const [affordableOnly, setAffordableOnly] = useState(true);
   const [negotiating, setNegotiating] = useState<TransferTarget | null>(null);
+  const [selling, setSelling] = useState<Player | null>(null);
 
   const budget = club.finance.transferBudget;
   const scouting = club.staff.scouting;
@@ -147,7 +149,7 @@ function TransferMarket({ game, onNegotiate, onBuyAt, onSell, onRelease, onSelec
                   <td><b>{currentAbility(p).toFixed(0)}</b></td>
                   <td>{formatMoney(marketValue(p))}</td>
                   <td className="sell-actions">
-                    <button className="btn-small" onClick={() => act(onSell(p.id))}>판매</button>
+                    <button className="btn-small" onClick={() => { setMsg(null); setSelling(p); }}>판매</button>
                     <button className="btn-small danger" onClick={() => act(onRelease(p.id))}>방출</button>
                   </td>
                 </tr>
@@ -168,6 +170,66 @@ function TransferMarket({ game, onNegotiate, onBuyAt, onSell, onRelease, onSelec
           onClose={() => setNegotiating(null)}
         />
       )}
+      {selling && (
+        <SellModal
+          player={selling}
+          offers={onOffers(selling.id)}
+          onAcceptSell={onAcceptSell}
+          onResult={(m) => { setMsg(m); setSelling(null); }}
+          onClose={() => setSelling(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+function SellModal({
+  player, offers, onAcceptSell, onResult, onClose,
+}: {
+  player: Player;
+  offers: SellOffer[];
+  onAcceptSell: (playerId: string, buyerId: string) => ActionOutcome;
+  onResult: (m: Msg) => void;
+  onClose: () => void;
+}) {
+  const accept = (buyerId: string) => {
+    const r = onAcceptSell(player.id, buyerId);
+    onResult({ text: r.message, ok: r.ok });
+  };
+  const value = marketValue(player);
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal negotiate" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <h2>판매 — {player.name}</h2>
+          <button className="btn-ghost" onClick={onClose}>닫기 ✕</button>
+        </div>
+        <p className="neg-sub muted">
+          {player.position} · {player.age}세 · CA <b>{currentAbility(player).toFixed(0)}</b>
+          {' · '}예상 가치 <b>{formatMoney(value)}</b>
+        </p>
+        {offers.length === 0 ? (
+          <p className="toast err">관심 구단이 없습니다. 방출을 이용하세요.</p>
+        ) : (
+          <>
+            <p className="muted small">{offers.length}개 구단이 입찰했습니다. 원하는 제안을 수락하세요.</p>
+            <table className="data-table compact">
+              <thead><tr><th>구단</th><th>입찰액</th><th></th></tr></thead>
+              <tbody>
+                {offers.map((o) => (
+                  <tr key={o.clubId}>
+                    <td className="name">{o.clubName}</td>
+                    <td><b>{formatMoney(o.bid)}</b>
+                      {o.bid >= value ? <span className="pos small"> (가치↑)</span> : <span className="muted small"> ({Math.round((o.bid / value) * 100)}%)</span>}
+                    </td>
+                    <td><button className="btn-small" onClick={() => accept(o.clubId)}>수락</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </>
+        )}
+      </div>
     </div>
   );
 }

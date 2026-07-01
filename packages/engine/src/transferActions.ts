@@ -6,6 +6,7 @@ import type { Club, Player } from './types.js';
 import { lineOf } from './teamStrength.js';
 import { currentAbility } from './derived.js';
 import { marketValue, weeklyWage } from './valuation.js';
+import { clamp } from './math.js';
 
 /** 스쿼드 크기 제약. */
 export const MIN_SQUAD = 14;
@@ -163,9 +164,80 @@ export function sellPlayer(clubs: Club[], myClubId: string, playerId: string): S
   // 관심 구단: 예산 충분 + 스쿼드 여유. 해당 라인이 약한 구단을 우선, 그다음 예산순.
   const buyers = clubs
     .filter((c) => c.id !== myClubId && c.players.length < MAX_SQUAD && c.finance.transferBudget >= fee)
-    .sort((a, b) => lineAvg(a, line) - lineAvg(b, line) || b.finance.transferBudget - a.finance.transferBudget);
+    .sort((a, b) => lineAbility(a, line) - lineAbility(b, line) || b.finance.transferBudget - a.finance.transferBudget);
   const buyer = buyers[0];
   if (!buyer) return { ok: false, reason: '관심 구단이 없습니다. 방출을 이용하세요.' };
+
+  me.players = me.players.filter((p) => p.id !== playerId);
+  me.finance.balance += fee;
+  me.finance.transferBudget += fee;
+  buyer.finance.balance -= fee;
+  buyer.finance.transferBudget -= fee;
+  player.contractYears = 4;
+  player.wage = weeklyWage(player);
+  buyer.players.push(player);
+
+  return { ok: true, fee, buyerName: buyer.name, playerName: player.name };
+}
+
+export interface SellOffer { clubId: string; clubName: string; bid: number; }
+
+/** 특정 라인의 평균 현재 능력(선수 없으면 0). */
+function lineAbility(club: Club, line: ReturnType<typeof lineOf>): number {
+  const ps = club.players.filter((p) => lineOf(p.position) === line);
+  if (ps.length === 0) return 0;
+  return ps.reduce((s, p) => s + currentAbility(p), 0) / ps.length;
+}
+
+/**
+ * 내 선수에 대한 AI 구단들의 입찰 목록(순수 함수).
+ * 관심·입찰액은 구단의 포지션 필요도·예산으로 결정론적으로 산출된다.
+ * 업그레이드가 되는(라인 평균보다 나은) 선수일수록·뎁스가 얕을수록 높게 부른다.
+ */
+export function sellOffers(clubs: Club[], myClubId: string, playerId: string): SellOffer[] {
+  const me = clubs.find((c) => c.id === myClubId);
+  if (!me) return [];
+  const player = me.players.find((p) => p.id === playerId);
+  if (!player) return [];
+  const mv = marketValue(player);
+  const line = lineOf(player.position);
+  const ca = currentAbility(player);
+
+  const offers: SellOffer[] = [];
+  for (const club of clubs) {
+    if (club.id === myClubId) continue;
+    if (club.players.length >= MAX_SQUAD) continue;
+    if (club.finance.transferBudget < mv * 0.7) continue; // 예산 부족
+
+    const lineCount = club.players.filter((p) => lineOf(p.position) === line).length;
+    const gap = ca - lineAbility(club, line);  // 양수 = 전력 업그레이드
+    const wants = gap > -8 || lineCount < 3;   // 향상 or 뎁스 부족일 때 관심
+    if (!wants) continue;
+
+    const need = clamp(0.9 + gap / 200, 0.85, 1.05);
+    const bid = Math.min(Math.round(mv * need), club.finance.transferBudget);
+    offers.push({ clubId: club.id, clubName: club.name, bid });
+  }
+  offers.sort((a, b) => b.bid - a.bid);
+  return offers;
+}
+
+/** 특정 구단의 입찰을 수락해 판매 실행(입찰액은 sellOffers와 동일하게 결정론적). */
+export function acceptSellOffer(
+  clubs: Club[], myClubId: string, playerId: string, buyerId: string,
+): SellResult {
+  const me = clubs.find((c) => c.id === myClubId);
+  if (!me) return { ok: false, reason: '내 구단을 찾을 수 없습니다.' };
+  if (me.players.length <= MIN_SQUAD) {
+    return { ok: false, reason: `최소 스쿼드 인원(${MIN_SQUAD}명)이라 판매할 수 없습니다.` };
+  }
+  const player = me.players.find((p) => p.id === playerId);
+  if (!player) return { ok: false, reason: '내 스쿼드에 없는 선수입니다.' };
+
+  const offer = sellOffers(clubs, myClubId, playerId).find((o) => o.clubId === buyerId);
+  if (!offer) return { ok: false, reason: '해당 구단의 제안이 유효하지 않습니다.' };
+  const buyer = clubs.find((c) => c.id === buyerId)!;
+  const fee = offer.bid;
 
   me.players = me.players.filter((p) => p.id !== playerId);
   me.finance.balance += fee;
@@ -192,10 +264,4 @@ export function releasePlayer(
   if (!player) return { ok: false, reason: '내 스쿼드에 없는 선수입니다.' };
   me.players = me.players.filter((p) => p.id !== playerId);
   return { ok: true, playerName: player.name };
-}
-
-function lineAvg(club: Club, line: ReturnType<typeof lineOf>): number {
-  const ps = club.players.filter((p) => lineOf(p.position) === line);
-  if (ps.length === 0) return 0;
-  return ps.reduce((s, p) => s + currentAbility(p), 0) / ps.length;
 }

@@ -8,7 +8,8 @@ import {
   createSeasonState, playRound as enginePlayRound, playToEnd, computeTable, totalRounds, currentRound,
   commitResult, simulateMatch, simulateSeason, defaultTactic, applyMatchEffects,
   buyPlayer, buyPlayerAt, evaluateOffer, sellPlayer, releasePlayer,
-  type OfferEvaluation,
+  sellOffers, acceptSellOffer,
+  type OfferEvaluation, type SellOffer,
   summarizeStats, aggregatePlayerStats, topScorers as engineTopScorers,
   createCup, playCupRound as enginePlayCupRound, playCupToEnd, isCupOver,
   applyPromotionRelegation, clubsInDivision, runInternationalBreak,
@@ -370,6 +371,23 @@ export function sell(state: GameState, playerId: string): ActionOutcome {
   const r = sellPlayer(state.clubs, state.myClubId, playerId);
   if (!r.ok) return { state, ok: false, message: r.reason! };
   return { state: afterSquadChange(state), ok: true, message: `${r.playerName} → ${r.buyerName} 판매 완료` };
+}
+
+/** 내 선수에 대한 AI 구단 입찰 목록(상태 변경 없음). */
+export function offersFor(state: GameState, playerId: string): SellOffer[] {
+  if (state.live) return [];
+  return sellOffers(state.clubs, state.myClubId, playerId);
+}
+
+/** 특정 구단 입찰 수락 → 판매 실행. */
+export function acceptSell(state: GameState, playerId: string, buyerId: string): ActionOutcome {
+  if (state.live) return { state, ok: false, message: '이적은 프리시즌에만 가능합니다.' };
+  const r = acceptSellOffer(state.clubs, state.myClubId, playerId, buyerId);
+  if (!r.ok) return { state, ok: false, message: r.reason! };
+  return {
+    state: afterSquadChange(state), ok: true,
+    message: `${r.playerName} → ${r.buyerName} 판매 완료 (${formatMoney(r.fee!)})`,
+  };
 }
 
 export function release(state: GameState, playerId: string): ActionOutcome {
