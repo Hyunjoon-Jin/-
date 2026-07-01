@@ -1,12 +1,13 @@
 import { isCupOver, cupSurvivors } from '@soccer-tycoon/engine';
-import type { GameState } from '../game.js';
+import { watchCupSetup, type GameState } from '../game.js';
 
 interface Props {
   game: GameState;
   onPlayCupRound: () => void;
+  onWatchCup: () => void;
 }
 
-export function Cup({ game, onPlayCupRound }: Props) {
+export function Cup({ game, onPlayCupRound, onWatchCup }: Props) {
   const cup = game.cup;
   if (!cup) {
     return <p className="muted">컵대회는 시즌 시작(킥오프) 후 진행됩니다. "경기" 탭에서 시즌을 시작하세요.</p>;
@@ -18,6 +19,7 @@ export function Cup({ game, onPlayCupRound }: Props) {
   const over = isCupOver(cup);
   const survivors = cupSurvivors(cup);
   const myAlive = survivors.includes(mine) || cup.championId === mine;
+  const canWatch = watchCupSetup(game) !== null;
 
   return (
     <div className="cup">
@@ -30,7 +32,8 @@ export function Cup({ game, onPlayCupRound }: Props) {
             <span className={myAlive ? 'cup-status alive' : 'cup-status out'}>
               {myAlive ? '우리 구단 생존 중' : '우리 구단 탈락'}
             </span>
-            <button className="btn-advance" onClick={onPlayCupRound}>컵 다음 라운드 ▶</button>
+            {canWatch && <button className="btn-advance" onClick={onWatchCup}>내 컵 경기 관전 ▶</button>}
+            <button className="btn-ghost" onClick={onPlayCupRound}>컵 다음 라운드 ▶▶</button>
           </>
         )}
       </div>

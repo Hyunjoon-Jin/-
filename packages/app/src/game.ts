@@ -11,7 +11,7 @@ import {
   sellOffers, acceptSellOffer,
   type OfferEvaluation, type SellOffer,
   summarizeStats, aggregatePlayerStats, topScorers as engineTopScorers,
-  createCup, playCupRound as enginePlayCupRound, playCupToEnd, isCupOver,
+  createCup, playCupRound as enginePlayCupRound, playCupToEnd, isCupOver, nextCupPairings,
   applyPromotionRelegation, clubsInDivision, runInternationalBreak,
   confidenceDelta, applyConfidence, isSacked, START_CONFIDENCE,
   upgradeStaff as engineUpgradeStaff, formatMoney,
@@ -597,6 +597,36 @@ export function commitWatchedRound(state: GameState, watched: MatchResult): Game
     commitResult(ss, result);
   }
   return { ...state, live: { ...state.live, results: ss.results, cursor: ss.cursor } };
+}
+
+// ── 컵 경기 관전 ────────────────────────────────────────────
+
+/** 다음 컵 라운드에서 내 경기를 관전하기 위한 셋업. 부전승·탈락·컵 종료면 null. */
+export function watchCupSetup(state: GameState): WatchSetup | null {
+  if (!state.cup || isCupOver(state.cup)) return null;
+  const next = nextCupPairings(state.cup, state.clubs);
+  if (!next) return null;
+  const pr = next.pairings.find((p) => p.homeId === state.myClubId || p.awayId === state.myClubId);
+  if (!pr) return null; // 부전승이거나 이미 탈락
+
+  const clubById = (id: string) => state.clubs.find((c) => c.id === id)!;
+  const homeClub = clubById(pr.homeId);
+  const awayClub = clubById(pr.awayId);
+  const userIsHome = pr.homeId === state.myClubId;
+  const userTactic = myTactic(state);
+  const setup: MatchSetup = {
+    home: { club: homeClub, tactic: userIsHome ? userTactic : defaultTactic(homeClub) },
+    away: { club: awayClub, tactic: userIsHome ? defaultTactic(awayClub) : userTactic },
+    seed: pr.seed,
+  };
+  return { setup, userIsHome, opponent: userIsHome ? awayClub : homeClub };
+}
+
+/** 관전한 컵 경기 결과로 컵 라운드 전체를 커밋(내 경기는 watched, 나머지는 시뮬). */
+export function commitWatchedCupRound(state: GameState, watched: MatchResult): GameState {
+  if (!state.cup) return state;
+  const cup = enginePlayCupRound(state.cup, state.clubs, tacticMap(state), watched);
+  return { ...state, cup };
 }
 
 export function lastSummary(state: GameState): SeasonSummary | undefined {

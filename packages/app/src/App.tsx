@@ -4,6 +4,7 @@ import {
   startSeason, playRound, playRestOfSeason, finishSeason, advanceFullSeason,
   playCupRound, negotiate, buyAt, offersFor, acceptSell, release, upgradeStaffAction, setTrainingFocus, renewContract,
   watchSetup, matchPreview, commitWatchedRound,
+  watchCupSetup, commitWatchedCupRound,
   type GameState, type ActionOutcome, type WatchSetup, type Difficulty,
 } from './game.js';
 import type { Tactic, MatchResult } from '@soccer-tycoon/engine';
@@ -48,6 +49,7 @@ export function App() {
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>('dashboard');
   const [watching, setWatching] = useState<WatchSetup | null>(null);
+  const [watchKind, setWatchKind] = useState<'league' | 'cup'>('league');
   const [showHelp, setShowHelp] = useState(false);
   const [detailPlayer, setDetailPlayer] = useState<Player | null>(null);
 
@@ -114,10 +116,14 @@ export function App() {
 
   const handleWatch = () => {
     const ws = watchSetup(game);
-    if (ws) setWatching(ws);
+    if (ws) { setWatchKind('league'); setWatching(ws); }
+  };
+  const handleWatchCup = () => {
+    const ws = watchCupSetup(game);
+    if (ws) { setWatchKind('cup'); setWatching(ws); }
   };
   const handleWatchDone = (result: MatchResult) => {
-    update(commitWatchedRound(game, result));
+    update(watchKind === 'cup' ? commitWatchedCupRound(game, result) : commitWatchedRound(game, result));
     setWatching(null);
   };
 
@@ -172,7 +178,7 @@ export function App() {
             watch={watching}
             myClub={club}
             initialTactic={myTactic(game)}
-            preview={matchPreview(game)}
+            preview={watchKind === 'league' ? matchPreview(game) : null}
             onDone={handleWatchDone}
             onCancel={() => setWatching(null)}
           />
@@ -194,7 +200,13 @@ export function App() {
                 onWatch={handleWatch}
               />
             )}
-            {tab === 'cup' && <Cup game={game} onPlayCupRound={() => update(playCupRound(game))} />}
+            {tab === 'cup' && (
+              <Cup
+                game={game}
+                onPlayCupRound={() => update(playCupRound(game))}
+                onWatchCup={handleWatchCup}
+              />
+            )}
             {tab === 'staff' && <Staff game={game} onUpgrade={(kind) => runAction(upgradeStaffAction, kind)} />}
             {tab === 'history' && <History game={game} />}
             {tab === 'stats' && <Stats game={game} />}

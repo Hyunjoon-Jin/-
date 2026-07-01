@@ -36,8 +36,8 @@ export { marketValue, weeklyWage } from './valuation.js';
 export { settleSeason, leaguePrize, type SeasonFinanceReport } from './finance.js';
 export { runTransferWindow, type TransferDeal } from './transfer.js';
 export {
-  createCup, playCupRound, playCupToEnd, isCupOver, cupSurvivors,
-  type CupState, type CupRound, type CupTie,
+  createCup, playCupRound, playCupToEnd, isCupOver, cupSurvivors, nextCupPairings,
+  type CupState, type CupRound, type CupTie, type CupPairing, type NextCupRound,
 } from './cup.js';
 export {
   applyPromotionRelegation, clubsInDivision, type PromRelResult,

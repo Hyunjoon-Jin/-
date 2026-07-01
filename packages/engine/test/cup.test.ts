@@ -1,8 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { createCup, playCupRound, playCupToEnd, cupSurvivors, isCupOver } from '../src/cup.js';
+import {
+  createCup, playCupRound, playCupToEnd, cupSurvivors, isCupOver, nextCupPairings,
+} from '../src/cup.js';
+import { simulateMatch } from '../src/simulateMatch.js';
+import { defaultTactic } from '../src/generate.js';
 import { generateClub } from '../src/generate.js';
 import { Rng } from '../src/rng.js';
-import type { Club } from '../src/types.js';
+import type { Club, MatchResult } from '../src/types.js';
 
 function makeClubs(n: number, seed = 1): Club[] {
   const rng = new Rng(seed);
@@ -69,5 +73,39 @@ describe('cup: 녹아웃 토너먼트', () => {
     const cup = playCupToEnd(createCup(clubs, 11), clubs);
     const hasBye = cup.rounds.some((r) => r.ties.some((t) => t.awayId === null));
     expect(hasBye).toBe(true);
+  });
+
+  it('nextCupPairings 대진이 실제 진행 결과와 일치한다', () => {
+    const clubs = makeClubs(12, 4);
+    const cup = createCup(clubs, 50);
+    const next = nextCupPairings(cup, clubs)!;
+    const played = playCupRound(cup, clubs);
+    const realPairs = played.rounds[0]!.ties
+      .filter((t) => t.awayId !== null)
+      .map((t) => `${t.homeId}-${t.awayId}`);
+    const predicted = next.pairings.map((p) => `${p.homeId}-${p.awayId}`);
+    expect(predicted).toEqual(realPairs);
+  });
+
+  it('watched 결과를 주면 해당 대진에 그 결과가 반영된다', () => {
+    const clubs = makeClubs(12, 8);
+    const cup = createCup(clubs, 60);
+    const next = nextCupPairings(cup, clubs)!;
+    const pr = next.pairings[0]!;
+    const home = clubs.find((c) => c.id === pr.homeId)!;
+    const away = clubs.find((c) => c.id === pr.awayId)!;
+    // 원정 5:0 대승으로 관전 결과를 조작
+    const base = simulateMatch({
+      home: { club: home, tactic: defaultTactic(home) },
+      away: { club: away, tactic: defaultTactic(away) },
+      seed: pr.seed,
+    });
+    const watched: MatchResult = { ...base, score: [0, 5] };
+
+    const played = playCupRound(cup, clubs, undefined, watched);
+    const tie = played.rounds[0]!.ties.find((t) => t.homeId === pr.homeId && t.awayId === pr.awayId)!;
+    expect(tie.homeScore).toBe(0);
+    expect(tie.awayScore).toBe(5);
+    expect(tie.winnerId).toBe(pr.awayId);
   });
 });
