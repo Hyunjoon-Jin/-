@@ -85,7 +85,7 @@ function genPlayer(rng: Rng, position: Position, tier: number, fixedAge?: number
  * 한 구단 생성: 선발 11 + 후보 7 = 18명.
  * tier(1~20)로 팀 전력 차등.
  */
-export function generateClub(rng: Rng, id: string, name: string, tier: number): Club {
+export function generateClub(rng: Rng, id: string, name: string, tier: number, division = 0): Club {
   const players: Player[] = [];
   // 선발 골격
   for (const pos of FORMATION_433) {
@@ -106,7 +106,7 @@ export function generateClub(rng: Rng, id: string, name: string, tier: number): 
     coaching: staffLevel(), medical: staffLevel(),
     scouting: staffLevel(), youth: staffLevel(),
   };
-  return { id, name, players, finance: { balance, transferBudget, reputation }, staff };
+  return { id, name, players, finance: { balance, transferBudget, reputation }, staff, division };
 }
 
 /** 유스 신인 1명 생성 (17~19세). 은퇴 선수 대체·유스 유입에 사용. */

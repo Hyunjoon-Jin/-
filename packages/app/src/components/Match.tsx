@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import {
-  liveTable, liveProgress, myNextFixture, lastSummary, myLastPosition, type GameState,
+  liveTable, liveProgress, myNextFixture, lastSummary, myLastPosition,
+  myClub, DIVISION_LABELS, type GameState,
 } from '../game.js';
 import type { MatchResult } from '@soccer-tycoon/engine';
 import { MatchDetailModal } from './MatchStats.js';
@@ -58,7 +59,7 @@ function InSeason(props: Props) {
   return (
     <div className="match-screen">
       <div className="phase-banner">
-        <h2>시즌 {game.season} · {prog.round}/{prog.total} 라운드</h2>
+        <h2>{DIVISION_LABELS[myClub(game).division]} · 시즌 {game.season} · {prog.round}/{prog.total} 라운드</h2>
         {next && (
           <p className="next-fixture">
             다음 경기: <b>{game.clubs.find((c) => c.id === game.myClubId)!.name}</b>{' '}

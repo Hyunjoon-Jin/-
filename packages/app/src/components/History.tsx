@@ -1,4 +1,4 @@
-import { myClub, type GameState } from '../game.js';
+import { myClub, DIVISION_LABELS, type GameState } from '../game.js';
 
 export function History({ game }: { game: GameState }) {
   const club = myClub(game);
@@ -46,7 +46,7 @@ export function History({ game }: { game: GameState }) {
           <h3>역대 시즌</h3>
           <table className="data-table compact">
             <thead>
-              <tr><th>시즌</th><th>리그 우승</th><th>컵 우승</th><th>득점왕</th><th>시즌 베스트</th><th>내 순위</th></tr>
+              <tr><th>시즌</th><th>부</th><th>리그 우승</th><th>컵 우승</th><th>득점왕</th><th>내 순위</th></tr>
             </thead>
             <tbody>
               {[...seasons].reverse().map((s) => {
@@ -54,11 +54,15 @@ export function History({ game }: { game: GameState }) {
                 return (
                   <tr key={s.season}>
                     <td>{s.season}</td>
+                    <td className="small muted">{s.division !== undefined ? DIVISION_LABELS[s.division] : '-'}</td>
                     <td className={s.championId === myId ? 'mine name' : 'name'}>{s.championName}</td>
                     <td className={s.cupChampionId === myId ? 'mine' : 'muted'}>{s.cupChampionName ?? '-'}</td>
                     <td className="small">{s.awards?.topScorer ? `${s.awards.topScorer.name} (${s.awards.topScorer.goals})` : '-'}</td>
-                    <td className="small muted">{s.awards?.playerOfSeason?.name ?? '-'}</td>
-                    <td className={pos === 1 ? 'pos' : ''}>{pos ? `${pos}위` : '-'}</td>
+                    <td className={pos === 1 ? 'pos' : ''}>
+                      {pos ? `${pos}위` : '-'}
+                      {s.promoted && <span className="pos"> ↑</span>}
+                      {s.relegated && <span className="neg"> ↓</span>}
+                    </td>
                   </tr>
                 );
               })}

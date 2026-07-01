@@ -1,4 +1,4 @@
-import { myClub, lastSummary, myLastPosition, DIFFICULTIES, type GameState } from '../game.js';
+import { myClub, lastSummary, myLastPosition, DIFFICULTIES, DIVISION_LABELS, type GameState } from '../game.js';
 import { formatMoney, currentAbility, wageBudget, annualWageBill, inFinancialCrisis } from '@soccer-tycoon/engine';
 
 export function Dashboard({ game }: { game: GameState }) {
@@ -41,7 +41,8 @@ export function Dashboard({ game }: { game: GameState }) {
       ) : null}
 
       <div className="objective">
-        🎯 보드진 목표: <b>리그 {game.objective}위 이내</b>
+        <b className="div-badge">{DIVISION_LABELS[club.division]}</b>{' '}
+        🎯 보드진 목표: <b>{club.division === 1 ? '승격' : '잔류'} — {game.objective}위 이내</b>
         <span className="muted"> · 난이도 {DIFFICULTIES[game.difficulty].label}</span>
         {last && pos !== undefined && (
           <span className={pos <= game.objective ? 'obj-met' : 'obj-miss'}>
@@ -64,8 +65,11 @@ export function Dashboard({ game }: { game: GameState }) {
         {last ? (
           <div className="last-season">
             <p>
-              최종 순위: <b>{pos}위</b> / {last.table.length}팀 &nbsp;·&nbsp;
-              리그 우승: <b>{last.championName}</b>
+              {last.division !== undefined && <><b>{DIVISION_LABELS[last.division]}</b> · </>}
+              최종 순위: <b>{pos}위</b> / {last.table.length}팀
+              {last.promoted && <span className="pos"> ↑ 승격!</span>}
+              {last.relegated && <span className="neg"> ↓ 강등</span>}
+              &nbsp;·&nbsp; 리그 우승: <b>{last.championName}</b>
               {last.cupChampionName && (
                 <> &nbsp;·&nbsp; 컵 우승: <b>{last.cupChampionName}</b></>
               )}

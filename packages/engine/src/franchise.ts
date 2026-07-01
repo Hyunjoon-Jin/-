@@ -33,6 +33,11 @@ export interface SeasonSummary {
   youthPromotions?: number;
   /** 앱: 내 구단 재정 위기 강제 매각 인원. */
   fireSales?: number;
+  /** 앱: 이 시즌 내 구단이 속했던 부(0=1부, 1=2부). */
+  division?: number;
+  /** 앱: 이 시즌 결과로 내 구단 승격/강등 여부. */
+  promoted?: boolean;
+  relegated?: boolean;
   topScorers: PlayerSeasonStat[];
   awards: SeasonAwards;
   /** 컵 우승 구단(앱의 병행 컵대회). 헤드리스 프랜차이즈에선 미설정. */

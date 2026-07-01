@@ -6,10 +6,11 @@
 import {
   generateClub, runTransferWindow, runOffseason, settleSeason, Rng,
   createSeasonState, playRound as enginePlayRound, playToEnd, computeTable, totalRounds, currentRound,
-  commitResult, simulateMatch, defaultTactic, applyMatchEffects,
+  commitResult, simulateMatch, simulateSeason, defaultTactic, applyMatchEffects,
   buyPlayer, sellPlayer, releasePlayer,
   summarizeStats, aggregatePlayerStats, topScorers as engineTopScorers,
   createCup, playCupRound as enginePlayCupRound, playCupToEnd, isCupOver,
+  applyPromotionRelegation, clubsInDivision,
   upgradeStaff as engineUpgradeStaff, formatMoney,
   type Club, type Tactic, type MatchResult, type MatchSetup, type SeasonSummary,
   type Fixture, type TableRow, type PlayerSeasonStat, type CupState, type StaffKind,
@@ -24,7 +25,14 @@ export interface LiveSeason {
   baseSeed: number;
   /** 이 시즌 킥오프 때 발생한 이적(시즌 종료 요약에 사용). */
   transfers: SeasonSummary['transfers'];
+  /** 이 시즌 내 구단이 속한 부의 구단 id들(순서 고정). */
+  divisionClubIds: string[];
 }
+
+export const DIVISIONS = 2;
+export const CLUBS_PER_DIV = 12;
+export const PROMOTE_COUNT = 3;
+export const DIVISION_LABELS = ['1부', '2부'];
 
 export type Difficulty = 'easy' | 'normal' | 'hard';
 
@@ -57,22 +65,46 @@ export interface GameState {
 /** 컵 우승 상금 (만원). */
 const CUP_PRIZE = 30_000;
 
-const N_CLUBS = 12;
-
 const NAMES = [
+  // 1부
   'FC 서울리온', '부산 유나이티드', '대구 다이너모', '인천 아틀레틱',
   '광주 시티', '수원 로버스', '울산 스파르탄', '전주 레인저스',
   '제주 위너스', '창원 캐슬', '청주 코메츠', '강릉 포레스트',
+  // 2부
+  '고양 그리핀', '천안 세이버스', '포항 타이드', '김해 팰컨스',
+  '원주 울브스', '안양 브레이커스', '진주 코르사', '목포 마리너스',
+  '춘천 아이스', '여수 오션', '군산 게일스', '충주 스톤즈',
 ];
 
+/** 24개 구단, 2개 부(각 12팀). 1부가 2부보다 전력·평판이 높다. */
 export function createLeague(seed: number): Club[] {
   const rng = new Rng(seed);
   const clubs: Club[] = [];
-  for (let i = 0; i < N_CLUBS; i++) {
-    const tier = 8 + Math.round((i / (N_CLUBS - 1)) * 8);
-    clubs.push(generateClub(rng, `c${i}`, NAMES[i] ?? `Club ${i + 1}`, tier));
+  for (let d = 0; d < DIVISIONS; d++) {
+    for (let i = 0; i < CLUBS_PER_DIV; i++) {
+      // 1부: tier 10~16, 2부: tier 6~12
+      const base = d === 0 ? 10 : 6;
+      const tier = base + Math.round((i / (CLUBS_PER_DIV - 1)) * 6);
+      const idx = d * CLUBS_PER_DIV + i;
+      clubs.push(generateClub(rng, `c${idx}`, NAMES[idx] ?? `Club ${idx + 1}`, tier, d));
+    }
   }
   return clubs;
+}
+
+/** 부 목표: 2부=승격(상위), 1부=잔류(하위권 회피). 난이도로 조정. */
+function divisionObjective(division: number, difficulty: Difficulty): number {
+  const off = DIFFICULTIES[difficulty].targetOffset;
+  const base = division === 1 ? PROMOTE_COUNT : CLUBS_PER_DIV - PROMOTE_COUNT; // 2부:3위, 1부:9위
+  return Math.max(1, Math.min(CLUBS_PER_DIV, base + off));
+}
+
+export function myDivision(state: GameState): number {
+  return myClub(state).division;
+}
+
+export function divisionClubs(state: GameState, division: number): Club[] {
+  return clubsInDivision(state.clubs, division);
 }
 
 export function startGame(seed: number, myClubId: string, difficulty: Difficulty = 'normal'): GameState {
@@ -84,10 +116,8 @@ export function startGame(seed: number, myClubId: string, difficulty: Difficulty
   mine.finance.balance = Math.round(mine.finance.balance * cfg.financeMul);
   mine.finance.transferBudget = Math.round(mine.finance.transferBudget * cfg.budgetMul);
 
-  // 보드진 목표: 평판 순위 ± 난이도 오프셋
-  const repRank = [...clubs].sort((a, b) => b.finance.reputation - a.finance.reputation)
-    .findIndex((c) => c.id === myClubId) + 1;
-  const objective = Math.max(1, Math.min(clubs.length, repRank + cfg.targetOffset));
+  // 보드진 목표: 소속 부에 따른 승격/잔류 목표
+  const objective = divisionObjective(mine.division, difficulty);
 
   return {
     seed, clubs, myClubId, season: 1, history: [],
@@ -112,11 +142,13 @@ const transferSeed = (s: GameState) => s.seed + s.season * 1000 + 1;
 const seasonSeed = (s: GameState) => s.seed + s.season * 1000 + 2;
 const offseasonSeed = (s: GameState) => s.seed + s.season * 1000 + 3;
 
-/** live 스냅샷 → 엔진 SeasonState 복원 (clubs 부착). */
+/** live 스냅샷 → 엔진 SeasonState 복원 (내 부 구단만 부착). */
 function toSeasonState(state: GameState) {
   const live = state.live!;
+  const byId = new Map(state.clubs.map((c) => [c.id, c]));
+  const clubs = live.divisionClubIds.map((id) => byId.get(id)!);
   return {
-    clubs: state.clubs,
+    clubs,
     fixtures: live.fixtures,
     results: live.results,
     cursor: live.cursor,
@@ -128,18 +160,23 @@ function tacticMap(state: GameState): Map<string, Tactic> {
   return new Map([[state.myClubId, myTactic(state)]]);
 }
 
-/** 프리시즌 → 킥오프: 이적 창 실행 후 일정 생성. */
+/** 프리시즌 → 킥오프: 이적 창 실행 후 내 부 일정 생성 (컵은 전 구단). */
 export function startSeason(state: GameState): GameState {
-  // 내 구단은 AI 매매에서 제외(직접 관리)
+  // 이적은 전 구단 대상(내 구단 제외)
   const transfers = runTransferWindow(state.clubs, transferSeed(state), state.myClubId);
-  // 이적으로 다른 구단 구성이 바뀌어도 내 라인업만 보정하면 됨
   const repaired = repairTactic(myClub(state), myTactic(state));
-  const ss = createSeasonState(state.clubs, seasonSeed(state));
+  // 내 부 리그 일정
+  const myDivClubs = divisionClubs(state, myDivision(state));
+  const ss = createSeasonState(myDivClubs, seasonSeed(state));
+  // 컵은 전 구단 참가
   const cup = createCup(state.clubs, state.seed + state.season * 1000 + 4);
   return {
     ...state,
     tactics: { ...state.tactics, [state.myClubId]: repaired },
-    live: { fixtures: ss.fixtures, results: ss.results, cursor: ss.cursor, baseSeed: ss.baseSeed, transfers },
+    live: {
+      fixtures: ss.fixtures, results: ss.results, cursor: ss.cursor, baseSeed: ss.baseSeed,
+      transfers, divisionClubIds: myDivClubs.map((c) => c.id),
+    },
     cup,
   };
 }
@@ -167,21 +204,35 @@ export function playRestOfSeason(state: GameState): GameState {
   return { ...state, live: { ...state.live, results: ss.results, cursor: ss.cursor } };
 }
 
-/** 시즌 종료: 정산 + 오프시즌(성장·은퇴) + 요약 기록 → 다음 시즌 프리시즌. */
+/** 시즌 종료: 내 부 완주 + 상대 부 자동 시뮬 + 정산 + 오프시즌 + 승강 → 다음 프리시즌. */
 export function finishSeason(state: GameState): GameState {
   if (!state.live) return state;
+  const myDiv = myDivision(state);
+
+  // 1) 내 부 완주
   const ss = toSeasonState(state);
   playToEnd(ss, tacticMap(state));
-  const table = computeTable(ss);
+  const myTable = computeTable(ss);
   const { topScorers, awards } = summarizeStats(ss.results, totalRounds(ss));
 
+  // 2) 상대 부 자동 시뮬 (통계엔 미포함, 순위/정산/승강용)
+  const otherDiv = myDiv === 0 ? 1 : 0;
+  const otherClubs = divisionClubs(state, otherDiv);
+  const otherResult = simulateSeason(otherClubs, seasonSeed(state) + 5000);
+  const otherTable = otherResult.table;
+
+  // 3) 정산 (부별 순위 기준)
   const finance = new Map();
-  table.forEach((row, pos) => {
+  myTable.forEach((row, pos) => {
     const club = state.clubs.find((c) => c.id === row.clubId)!;
-    finance.set(club.id, settleSeason(club, pos, state.clubs.length));
+    finance.set(club.id, settleSeason(club, pos, CLUBS_PER_DIV));
+  });
+  otherTable.forEach((row, pos) => {
+    const club = state.clubs.find((c) => c.id === row.clubId)!;
+    finance.set(club.id, settleSeason(club, pos, CLUBS_PER_DIV));
   });
 
-  // 컵 자동 완료 + 우승 상금
+  // 4) 컵 자동 완료 + 우승 상금 (전 구단)
   let cupChampionId: string | undefined;
   let cupChampionName: string | undefined;
   if (state.cup) {
@@ -197,33 +248,44 @@ export function finishSeason(state: GameState): GameState {
     }
   }
 
+  // 5) 오프시즌 (전 구단)
   const { retirements, intakeByClub, fireSalesByClub } = runOffseason(state.clubs, new Rng(offseasonSeed(state)));
-  const youthPromotions = intakeByClub.get(state.myClubId);
-  const fireSales = fireSalesByClub.get(state.myClubId);
-  const champ = table[0]!;
+
+  // 6) 승강 (1부↔2부)
+  const d1Table = myDiv === 0 ? myTable : otherTable;
+  const d2Table = myDiv === 1 ? myTable : otherTable;
+  const promRel = applyPromotionRelegation(state.clubs, d1Table, d2Table, PROMOTE_COUNT);
+  const promoted = promRel.promoted.includes(state.myClubId);
+  const relegated = promRel.relegated.includes(state.myClubId);
+
+  const champ = myTable[0]!;
   const summary: SeasonSummary = {
     season: state.season,
-    table,
+    table: myTable,
     championId: champ.clubId,
     championName: champ.name,
     transfers: state.live.transfers,
     finance,
     retirements,
-    youthPromotions,
-    fireSales,
+    youthPromotions: intakeByClub.get(state.myClubId),
+    fireSales: fireSalesByClub.get(state.myClubId),
     topScorers,
     awards,
     cupChampionId,
     cupChampionName,
+    division: myDiv,
+    promoted,
+    relegated,
   };
 
-  // 오프시즌으로 스쿼드가 바뀌었으니 라인업 보정
   const repaired = repairTactic(myClub(state), myTactic(state));
   return {
     ...state,
     season: state.season + 1,
     history: [...state.history, summary],
     tactics: { ...state.tactics, [state.myClubId]: repaired },
+    // 새 부 기준으로 목표 재설정
+    objective: divisionObjective(myClub(state).division, state.difficulty),
     live: null,
     cup: null,
   };

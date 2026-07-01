@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { createLeague, DIFFICULTIES, type Difficulty, type GameState } from '../game.js';
+import { createLeague, DIFFICULTIES, DIVISION_LABELS, type Difficulty, type GameState } from '../game.js';
 import type { SaveStore, SaveSlotMeta } from '../storage.js';
 import { formatMoney } from '@soccer-tycoon/engine';
 
@@ -71,21 +71,26 @@ export function StartScreen({ store, onStart, onLoad }: Props) {
       </div>
 
       <h2 className="section-title">맡을 구단 선택</h2>
-      <p className="subtitle">평판이 높을수록 자금과 선수단이 강합니다.</p>
-      <div className="club-grid">
-        {clubs.map((c) => (
-          <button
-            key={c.id}
-            className={selected === c.id ? 'club-card selected' : 'club-card'}
-            onClick={() => setSelected(c.id)}
-          >
-            <div className="club-card-name">{c.name}</div>
-            <div className="club-card-row">평판 <b>{c.finance.reputation}</b></div>
-            <div className="club-card-row">자금 {formatMoney(c.finance.balance)}</div>
-            <div className="club-card-row muted">선수 {c.players.length}명</div>
-          </button>
-        ))}
-      </div>
+      <p className="subtitle">1부는 강하지만 잔류가 목표, 2부는 약하지만 승격을 노립니다.</p>
+      {[0, 1].map((div) => (
+        <div key={div}>
+          <h3 className="section-title">{DIVISION_LABELS[div]}</h3>
+          <div className="club-grid">
+            {clubs.filter((c) => c.division === div).map((c) => (
+              <button
+                key={c.id}
+                className={selected === c.id ? 'club-card selected' : 'club-card'}
+                onClick={() => setSelected(c.id)}
+              >
+                <div className="club-card-name">{c.name}</div>
+                <div className="club-card-row">평판 <b>{c.finance.reputation}</b></div>
+                <div className="club-card-row">자금 {formatMoney(c.finance.balance)}</div>
+                <div className="club-card-row muted">선수 {c.players.length}명</div>
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
       <button
         className="btn-primary"
         disabled={!selected}

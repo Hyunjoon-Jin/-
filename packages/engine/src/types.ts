@@ -136,6 +136,8 @@ export interface Club {
   finance: ClubFinance;
   /** 스태프. 생성 시 부여. */
   staff: Staff;
+  /** 소속 부 (0 = 1부, 1 = 2부). 승강으로 변동. */
+  division: number;
 }
 
 // ── 경기 입력/출력 ────────────────────────────────────────

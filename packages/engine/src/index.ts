@@ -37,6 +37,9 @@ export {
   type CupState, type CupRound, type CupTie,
 } from './cup.js';
 export {
+  applyPromotionRelegation, clubsInDivision, type PromRelResult,
+} from './promotion.js';
+export {
   transferTargets, buyPlayer, sellPlayer, releasePlayer,
   MIN_SQUAD, MAX_SQUAD,
   type TransferTarget, type BuyResult, type SellResult,
