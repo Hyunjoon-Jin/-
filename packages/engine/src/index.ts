@@ -43,6 +43,9 @@ export {
   applyPromotionRelegation, clubsInDivision, type PromRelResult,
 } from './promotion.js';
 export {
+  recentForm, type FormResult, type FormSummary,
+} from './form.js';
+export {
   transferTargets, buyPlayer, sellPlayer, releasePlayer,
   MIN_SQUAD, MAX_SQUAD,
   type TransferTarget, type BuyResult, type SellResult,

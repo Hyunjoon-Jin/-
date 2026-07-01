@@ -3,15 +3,17 @@ import {
   LiveMatch, HALF_TIME, MATCH_LENGTH, currentAbility,
   type Club, type Tactic, type MatchEvent, type MatchResult,
 } from '@soccer-tycoon/engine';
-import type { WatchSetup } from '../game.js';
+import type { WatchSetup, MatchPreview as MatchPreviewData } from '../game.js';
 import { Tactics } from './Tactics.js';
 import { MatchPitch, type PitchState } from './MatchPitch.js';
 import { MatchStats } from './MatchStats.js';
+import { MatchPreview } from './MatchPreview.js';
 
 interface Props {
   watch: WatchSetup;
   myClub: Club;
   initialTactic: Tactic;
+  preview: MatchPreviewData | null;
   onDone: (result: MatchResult) => void;
   onCancel: () => void;
 }
@@ -30,7 +32,7 @@ interface View {
   goalFlash: 'home' | 'away' | null;
 }
 
-export function WatchMatch({ watch, myClub, initialTactic, onDone, onCancel }: Props) {
+export function WatchMatch({ watch, myClub, initialTactic, preview, onDone, onCancel }: Props) {
   const liveRef = useRef<LiveMatch | null>(null);
   if (liveRef.current === null) liveRef.current = new LiveMatch(watch.setup);
   const live = liveRef.current;
@@ -124,7 +126,9 @@ export function WatchMatch({ watch, myClub, initialTactic, onDone, onCancel }: P
         </div>
 
         <div className="watch-side">
-          {phase === 'halftime' ? (
+          {phase === 'ready' && preview ? (
+            <MatchPreview preview={preview} />
+          ) : phase === 'halftime' ? (
             <>
               <div className="ht-banner">하프타임 — 전술을 조정할 수 있습니다</div>
               <Tactics club={myClub} tactic={tactic} onChange={setTactic} />

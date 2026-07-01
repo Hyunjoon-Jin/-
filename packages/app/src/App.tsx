@@ -3,7 +3,7 @@ import {
   startGame, myClub, myTactic, setMyTactic,
   startSeason, playRound, playRestOfSeason, finishSeason, advanceFullSeason,
   playCupRound, buy, sell, release, upgradeStaffAction, setTrainingFocus, renewContract,
-  watchSetup, commitWatchedRound,
+  watchSetup, matchPreview, commitWatchedRound,
   type GameState, type ActionOutcome, type WatchSetup, type Difficulty,
 } from './game.js';
 import type { Tactic, MatchResult } from '@soccer-tycoon/engine';
@@ -156,6 +156,7 @@ export function App() {
             watch={watching}
             myClub={club}
             initialTactic={myTactic(game)}
+            preview={matchPreview(game)}
             onDone={handleWatchDone}
             onCancel={() => setWatching(null)}
           />

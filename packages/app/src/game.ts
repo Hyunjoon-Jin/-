@@ -12,8 +12,10 @@ import {
   createCup, playCupRound as enginePlayCupRound, playCupToEnd, isCupOver,
   applyPromotionRelegation, clubsInDivision,
   upgradeStaff as engineUpgradeStaff, formatMoney,
+  computeTeamStrength, currentAbility, recentForm,
   type Club, type Tactic, type MatchResult, type MatchSetup, type SeasonSummary,
   type Fixture, type TableRow, type PlayerSeasonStat, type CupState, type StaffKind,
+  type TeamStrength, type FormSummary,
 } from '@soccer-tycoon/engine';
 import { makeDefaultTactic, repairTactic } from './tactics.js';
 
@@ -447,6 +449,63 @@ export function watchSetup(state: GameState): WatchSetup | null {
     seed: live.baseSeed + idx,
   };
   return { setup, userIsHome, opponent: userIsHome ? awayClub : homeClub };
+}
+
+// ── 경기 프리뷰 (관전 전 스카우팅) ──────────────────────────
+
+export interface TeamPreview {
+  clubId: string;
+  name: string;
+  isMine: boolean;
+  /** 현재 리그 순위(1부터). 결과가 없으면 null. */
+  position: number | null;
+  strength: TeamStrength;
+  form: FormSummary;
+  /** 예상 선발 중 CA 최고 선수. */
+  keyPlayer: { name: string; ca: number } | null;
+}
+
+export interface MatchPreview {
+  home: TeamPreview;
+  away: TeamPreview;
+}
+
+/** 선발(전술 라인업) 중 현재 능력 최고 선수. */
+function keyPlayerOf(club: Club, tactic: Tactic): { name: string; ca: number } | null {
+  const byId = new Map(club.players.map((p) => [p.id, p]));
+  let best: { name: string; ca: number } | null = null;
+  for (const slot of tactic.lineup) {
+    const p = byId.get(slot.playerId);
+    if (!p) continue;
+    const ca = Math.round(currentAbility(p));
+    if (!best || ca > best.ca) best = { name: p.name, ca };
+  }
+  return best;
+}
+
+/** 관전 예정 경기의 프리뷰(전력·폼·순위·키플레이어). live·watchSetup 없으면 null. */
+export function matchPreview(state: GameState): MatchPreview | null {
+  const ws = watchSetup(state);
+  if (!ws || !state.live) return null;
+  const table = liveTable(state);
+  const posOf = (clubId: string): number | null => {
+    if (state.live!.results.length === 0) return null;
+    const i = table.findIndex((r) => r.clubId === clubId);
+    return i < 0 ? null : i + 1;
+  };
+  const build = (club: Club, tactic: Tactic): TeamPreview => ({
+    clubId: club.id,
+    name: club.name,
+    isMine: club.id === state.myClubId,
+    position: posOf(club.id),
+    strength: computeTeamStrength(club, tactic),
+    form: recentForm(state.live!.results, club.id, 5),
+    keyPlayer: keyPlayerOf(club, tactic),
+  });
+  return {
+    home: build(ws.setup.home.club, ws.setup.home.tactic),
+    away: build(ws.setup.away.club, ws.setup.away.tactic),
+  };
 }
 
 /**
