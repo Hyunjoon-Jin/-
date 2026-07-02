@@ -453,6 +453,16 @@ soccer-tycoon/
       기존 데이터만 재사용). 라이벌·컵 브래킷 때와 같은 패턴 — 새 로직이
       작고 컴포넌트에 갇혀 있어 별도 단위 테스트 없이 Playwright로
       렌더링만 확인.
+- [x] 라이벌전 기록에 컵 맞대결 포함: 기존엔 리그 맞대결만 rivalRecord에
+      집계돼, 컵에서 라이벌과 만나 이기거나 져도 전적에 반영되지 않는
+      게 아쉬웠다. finishSeason의 컵 완료 처리(finishedCup) 직후 그
+      라운드들의 CupTie를 훑어 라이벌과의 대진을 찾아 rivalRecord·
+      rivalMeetings에 함께 반영한다. RivalMeeting에 competition:
+      'league'|'cup'과 penalties?: boolean을 추가 — 컵은 승부차기로
+      결정되면 스코어가 같아도(예: 2:2 PK) 무승부가 아니라 winnerId
+      기준으로 승/패 처리한다(리그는 이런 경우가 없음). 히스토리의
+      라이벌전 전적표에 "대회" 컬럼과 "(PK)" 표기를 추가. RivalMeeting이
+      필드를 추가해 세이브 포맷이 바뀌므로 SAVE_VERSION 31로 상향.
 
 기획했던 핵심·확장 시스템이 모두 구현됨. 이후는 콘텐츠 확충·디테일 다듬기 영역.
 

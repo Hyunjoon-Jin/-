@@ -43,11 +43,25 @@ describe('라이벌 구단', () => {
     const draws = g.rivalMeetings.filter((m) => m.result === 'draw').length;
     const losses = g.rivalMeetings.filter((m) => m.result === 'loss').length;
     expect({ wins, draws, losses }).toEqual(g.rivalRecord);
-    // 각 기록의 결과가 스코어와 일치한다
+    // 각 기록의 결과가 스코어와 일치한다(승부차기로 결정된 컵 맞대결은 스코어가 같아도 무승부가 아니다).
     for (const m of g.rivalMeetings) {
+      if (m.penalties) { expect(['win', 'loss']).toContain(m.result); continue; }
       if (m.myGoals > m.oppGoals) expect(m.result).toBe('win');
       else if (m.myGoals < m.oppGoals) expect(m.result).toBe('loss');
       else expect(m.result).toBe('draw');
     }
+  });
+
+  it('컵에서 라이벌과 맞붙으면 리그와 별개로 competition="cup"으로 기록되고, 승부차기 결과는 항상 승/패다', () => {
+    let g = startGame(2026, 'c5');
+    for (let i = 0; i < 6; i++) g = advanceFullSeason(g);
+    const cupMeetings = g.rivalMeetings.filter((m) => m.competition === 'cup');
+    if (cupMeetings.length === 0) return; // 이 시드에서 컵 맞대결이 없으면 스킵
+    for (const m of cupMeetings) {
+      expect(m.result).not.toBe('draw');
+      if (m.penalties) expect(m.myGoals).toBe(m.oppGoals);
+    }
+    const leagueMeetings = g.rivalMeetings.filter((m) => m.competition === 'league');
+    expect(leagueMeetings.every((m) => m.penalties === undefined)).toBe(true);
   });
 });

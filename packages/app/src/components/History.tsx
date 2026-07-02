@@ -163,13 +163,14 @@ export function History({ game }: { game: GameState }) {
             </span>
           </h3>
           <table className="data-table compact">
-            <thead><tr><th>시즌</th><th>홈/원정</th><th>스코어</th><th>결과</th></tr></thead>
+            <thead><tr><th>시즌</th><th>대회</th><th>홈/원정</th><th>스코어</th><th>결과</th></tr></thead>
             <tbody>
               {[...game.rivalMeetings].reverse().map((m, i) => (
                 <tr key={i}>
                   <td className="muted small">{m.season}</td>
+                  <td className="small muted">{m.competition === 'cup' ? '컵' : '리그'}</td>
                   <td className="small muted">{m.home ? '홈' : '원정'}</td>
-                  <td>{m.myGoals} : {m.oppGoals}</td>
+                  <td>{m.myGoals} : {m.oppGoals}{m.penalties && <span className="muted small"> (PK)</span>}</td>
                   <td className={m.result === 'win' ? 'pos' : m.result === 'loss' ? 'neg' : ''}>
                     {RESULT_LABEL[m.result]}
                   </td>

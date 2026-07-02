@@ -153,6 +153,9 @@ export interface RivalMeeting {
   myGoals: number;
   oppGoals: number;
   result: 'win' | 'draw' | 'loss';
+  competition: 'league' | 'cup';
+  /** 컵 맞대결이 승부차기로 결정됐는지(리그전은 항상 undefined). */
+  penalties?: boolean;
 }
 
 /** 은퇴 스냅샷(RetiredLegend) + 은퇴한 시즌(내 구단 재임 기준). */
@@ -375,7 +378,7 @@ export function finishSeason(state: GameState): GameState {
     if (myGoals > oppGoals) { rivalRecord.wins++; result = 'win'; }
     else if (myGoals < oppGoals) { rivalRecord.losses++; result = 'loss'; }
     else { rivalRecord.draws++; result = 'draw'; }
-    newRivalMeetings.push({ season: state.season, home, myGoals, oppGoals, result });
+    newRivalMeetings.push({ season: state.season, home, myGoals, oppGoals, result, competition: 'league' });
   }
 
   // 2) 상대 부 자동 시뮬 (통계엔 미포함, 순위/정산/승강용)
@@ -407,6 +410,25 @@ export function finishSeason(state: GameState): GameState {
       if (champClub) {
         champClub.finance.balance += CUP_PRIZE;
         champClub.finance.transferBudget += CUP_PRIZE;
+      }
+    }
+    // 컵에서도 라이벌과 맞붙었다면 전적에 포함(승부차기는 항상 승/패 — 무승부 없음).
+    for (const round of finishedCup.rounds) {
+      for (const tie of round.ties) {
+        if (tie.awayId === null) continue;
+        const isDerby =
+          (tie.homeId === state.myClubId && tie.awayId === state.rivalClubId) ||
+          (tie.awayId === state.myClubId && tie.homeId === state.rivalClubId);
+        if (!isDerby) continue;
+        const home = tie.homeId === state.myClubId;
+        const myGoals = home ? tie.homeScore! : tie.awayScore!;
+        const oppGoals = home ? tie.awayScore! : tie.homeScore!;
+        const result: RivalMeeting['result'] = tie.winnerId === state.myClubId ? 'win' : 'loss';
+        if (result === 'win') rivalRecord.wins++; else rivalRecord.losses++;
+        newRivalMeetings.push({
+          season: state.season, home, myGoals, oppGoals, result,
+          competition: 'cup', penalties: tie.penalties,
+        });
       }
     }
   }
