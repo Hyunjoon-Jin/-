@@ -463,6 +463,18 @@ soccer-tycoon/
       기준으로 승/패 처리한다(리그는 이런 경우가 없음). 히스토리의
       라이벌전 전적표에 "대회" 컬럼과 "(PK)" 표기를 추가. RivalMeeting이
       필드를 추가해 세이브 포맷이 바뀌므로 SAVE_VERSION 31로 상향.
+- [x] 유스 아카데미 유망주 소개 연출: runOffseason은 원래 generateAcademyIntake로
+      매 시즌 실제 Player 객체(이름·능력치·잠재력 포함)를 생성해 스쿼드에
+      바로 넣었지만, 반환값은 인원 수(intakeByClub: Map<string, number>)뿐
+      이라 "누가" 들어왔는지는 그 순간 이후 알 방법이 없었다. OffseasonResult에
+      intakePlayersByClub: Map<string, Player[]>를 추가해 그 시즌 배출된
+      선수 객체 자체를 보존한다 — 유스 배출 선수는 항상 16~18세라
+      trimSquad(21세 이상만 정리 대상)에 걸리지 않으므로 스냅샷이 실제
+      스쿼드 상태와 항상 일치한다. game.ts는 이를 잠재력 내림차순으로
+      정렬해 SeasonSummary.youthProspects(이름·포지션·나이·잠재력)로
+      만들어 대시보드에 "🌱 이번 시즌 유스 기대주" 배너로 소개한다.
+      기존 youthPromotions(카운트만)는 그대로 두고 병행 — 하위 호환
+      필드를 없애지 않고 더 상세한 필드를 추가하는 방식. SAVE_VERSION 32.
 
 기획했던 핵심·확장 시스템이 모두 구현됨. 이후는 콘텐츠 확충·디테일 다듬기 영역.
 

@@ -28,7 +28,8 @@ import type { SeasonSummary, SeasonFinanceReport } from '@soccer-tycoon/engine';
 // v29: 감독 이미지 — 인터뷰 톤 누적 카운트(GameState.mediaToneCounts)
 // v30: 감독 계약(GameState.contractSeasonsLeft·ambition)
 // v31: 라이벌전 기록에 컵 맞대결 포함(RivalMeeting.competition·penalties)
-export const SAVE_VERSION = 31;
+// v32: 유스 아카데미 배출 유망주 소개(SeasonSummary.youthProspects)
+export const SAVE_VERSION = 32;
 
 type SerializedSummary = Omit<SeasonSummary, 'finance'> & {
   finance: Record<string, SeasonFinanceReport>;

@@ -3,7 +3,7 @@
  * 한 시즌 = 이적 창 → 리그 경기 → 재정 정산 → 선수 성장/노화 → 은퇴·유스 유입.
  * 게임의 시간축을 닫는 핵심 루프.
  */
-import type { Club, Position } from './types.js';
+import type { Club, Player, Position } from './types.js';
 import { simulateSeason, type TableRow } from './league.js';
 import { settleSeason, type SeasonFinanceReport } from './finance.js';
 import { runTransferWindow, type TransferDeal } from './transfer.js';
@@ -83,6 +83,17 @@ export interface SeasonSummary {
   preseasonRank?: number;
   /** 예상 순위 대비 실제 성적 이변 여부(앱). 예상보다 크게 잘하면 overperform, 크게 못하면 underperform. */
   surprise?: 'overperform' | 'underperform';
+  /** 내 구단 유스 아카데미가 이번 시즌 배출한 유망주(앱). */
+  youthProspects?: YouthProspect[];
+}
+
+/** 유스 아카데미 배출 유망주 소개용 요약 정보. */
+export interface YouthProspect {
+  playerId: string;
+  name: string;
+  position: Position;
+  age: number;
+  potential: number;
 }
 
 /**
@@ -118,6 +129,8 @@ export interface OffseasonResult {
   retirements: number;
   /** clubId → 유스 아카데미 배출 인원. */
   intakeByClub: Map<string, number>;
+  /** clubId → 이번 오프시즌에 새로 배출된 유스 선수(스쿼드 상한 정리 전). */
+  intakePlayersByClub: Map<string, Player[]>;
   /** clubId → 재정 위기 강제 매각 인원. */
   fireSalesByClub: Map<string, number>;
   /** 이번 오프시즌에 은퇴한 선수 스냅샷(전 구단). */
@@ -129,6 +142,7 @@ export interface OffseasonResult {
 export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
   let retirements = 0;
   const intakeByClub = new Map<string, number>();
+  const intakePlayersByClub = new Map<string, Player[]>();
   const fireSalesByClub = new Map<string, number>();
   const retiredPlayers: RetiredLegend[] = [];
   const milestones: CareerMilestone[] = [];
@@ -198,11 +212,12 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
     const intake = generateAcademyIntake(rng, club.finance.reputation, club.staff.youth);
     club.players.push(...intake);
     intakeByClub.set(club.id, intake.length);
+    intakePlayersByClub.set(club.id, intake);
 
     // 스쿼드 상한 정리
     trimSquad(club);
   }
-  return { retirements, intakeByClub, fireSalesByClub, retiredPlayers, milestones };
+  return { retirements, intakeByClub, intakePlayersByClub, fireSalesByClub, retiredPlayers, milestones };
 }
 
 /**

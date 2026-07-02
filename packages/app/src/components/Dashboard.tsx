@@ -158,6 +158,16 @@ export function Dashboard({ game, onSignContract }: { game: GameState; onSignCon
                 ))}
               </div>
             )}
+            {last.youthProspects !== undefined && last.youthProspects.length > 0 && (
+              <div className="youth-banner">
+                <p className="youth-banner-title">🌱 이번 시즌 유스 기대주</p>
+                {last.youthProspects.map((p) => (
+                  <p key={p.playerId}>
+                    <b>{p.name}</b> ({p.position} · {p.age}세) — 잠재력 <b>{p.potential.toFixed(0)}</b>
+                  </p>
+                ))}
+              </div>
+            )}
             {last.surprise && (
               <div className={`surprise-banner ${last.surprise}`}>
                 <p>
