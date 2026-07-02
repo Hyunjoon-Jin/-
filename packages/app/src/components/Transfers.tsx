@@ -27,6 +27,19 @@ const LINE_FILTERS: { key: LineFilter; label: string }[] = [
   { key: 'ATT', label: '공격' },
 ];
 
+type AgeFilter = 'ALL' | 'young' | 'prime' | 'veteran';
+const AGE_FILTERS: { key: AgeFilter; label: string; test: (age: number) => boolean }[] = [
+  { key: 'ALL', label: '전체', test: () => true },
+  { key: 'young', label: '유망주(≤23)', test: (a) => a <= 23 },
+  { key: 'prime', label: '전성기(24~29)', test: (a) => a >= 24 && a <= 29 },
+  { key: 'veteran', label: '베테랑(30+)', test: (a) => a >= 30 },
+];
+
+type MarketSortKey = 'age' | 'ca' | 'potential' | 'value';
+type SortDir = 1 | -1;
+/** 컬럼별 기본 정렬 방향(재클릭 시 이 방향을 뒤집는다). */
+const DEFAULT_DIR: Record<MarketSortKey, SortDir> = { age: 1, ca: -1, potential: -1, value: 1 };
+
 export function Transfers(props: Props) {
   // 시즌 진행 중에는 직접 이적 불가 → 지난 시즌 내역(읽기 전용)
   if (props.game.live) return <TransferHistory game={props.game} />;
@@ -49,25 +62,45 @@ function TransferMarket({ game, onNegotiate, onBuyAt, onOffers, onAcceptSell, on
   const club = myClub(game);
   const [msg, setMsg] = useState<Msg | null>(null);
   const [line, setLine] = useState<LineFilter>('ALL');
+  const [ageFilter, setAgeFilter] = useState<AgeFilter>('ALL');
   const [search, setSearch] = useState('');
   const [affordableOnly, setAffordableOnly] = useState(true);
+  const [sort, setSort] = useState<MarketSortKey>('ca');
+  const [dir, setDir] = useState<SortDir>(-1);
   const [negotiating, setNegotiating] = useState<TransferTarget | null>(null);
   const [selling, setSelling] = useState<Player | null>(null);
 
   const budget = club.finance.transferBudget;
   const scouting = club.staff.scouting;
 
+  function toggleSort(k: MarketSortKey) {
+    if (k === sort) { setDir((d) => (d === 1 ? -1 : 1) as SortDir); return; }
+    setSort(k);
+    setDir(DEFAULT_DIR[k]);
+  }
+
   const targets = useMemo(() => {
     let list = transferTargets(game.clubs, game.myClubId);
     if (line !== 'ALL') list = list.filter((t) => lineOf(t.player.position) === line);
+    const ageTest = AGE_FILTERS.find((f) => f.key === ageFilter)!.test;
+    list = list.filter((t) => ageTest(t.player.age));
     if (affordableOnly) list = list.filter((t) => t.value <= budget);
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       list = list.filter((t) => t.player.name.toLowerCase().includes(q));
     }
-    list.sort((a, b) => currentAbility(b.player) - currentAbility(a.player));
+    list.sort((a, b) => {
+      let cmp: number;
+      switch (sort) {
+        case 'age': cmp = a.player.age - b.player.age; break;
+        case 'potential': cmp = a.player.potential - b.player.potential; break;
+        case 'value': cmp = a.value - b.value; break;
+        default: cmp = currentAbility(a.player) - currentAbility(b.player);
+      }
+      return cmp * dir;
+    });
     return list.slice(0, 40);
-  }, [game.clubs, game.myClubId, line, affordableOnly, search, budget]);
+  }, [game.clubs, game.myClubId, line, ageFilter, affordableOnly, search, sort, dir, budget]);
 
   function act(outcome: ActionOutcome) {
     setMsg({ text: outcome.message, ok: outcome.ok });
@@ -102,13 +135,29 @@ function TransferMarket({ game, onNegotiate, onBuyAt, onOffers, onAcceptSell, on
               예산 내
             </label>
           </div>
+          <div className="filters">
+            {AGE_FILTERS.map((f) => (
+              <button
+                key={f.key}
+                className={ageFilter === f.key ? 'chip active' : 'chip'}
+                onClick={() => setAgeFilter(f.key)}
+              >{f.label}</button>
+            ))}
+          </div>
           <input className="search" placeholder="선수 이름 검색…"
             value={search} onChange={(e) => setSearch(e.target.value)} />
           <table className="data-table compact">
             <thead>
               <tr>
-                <th>선수</th><th>구단</th><th>P</th><th>나이</th><th>CA</th>
-                <th title={`스카우팅 Lv.${scouting}`}>잠재</th><th>가치</th><th></th>
+                <th>선수</th><th>구단</th><th>P</th>
+                <MarketSortHeader label="나이" k="age" sort={sort} dir={dir} onClick={toggleSort} />
+                <MarketSortHeader label="CA" k="ca" sort={sort} dir={dir} onClick={toggleSort} />
+                <MarketSortHeader
+                  label="잠재" k="potential" sort={sort} dir={dir} onClick={toggleSort}
+                  title={`스카우팅 Lv.${scouting}`}
+                />
+                <MarketSortHeader label="가치" k="value" sort={sort} dir={dir} onClick={toggleSort} />
+                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -350,5 +399,18 @@ function TransferHistory({ game }: { game: GameState }) {
         </>
       )}
     </div>
+  );
+}
+
+function MarketSortHeader({
+  label, k, sort, dir, onClick, title,
+}: {
+  label: string; k: MarketSortKey; sort: MarketSortKey; dir: SortDir;
+  onClick: (k: MarketSortKey) => void; title?: string;
+}) {
+  return (
+    <th className={sort === k ? 'sortable active' : 'sortable'} onClick={() => onClick(k)} title={title}>
+      {label} {sort === k ? (dir === 1 ? '▴' : '▾') : ''}
+    </th>
   );
 }
