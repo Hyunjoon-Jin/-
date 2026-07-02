@@ -181,6 +181,7 @@ export function App() {
             myClub={club}
             initialTactic={myTactic(game)}
             preview={watchKind === 'cup' ? cupPreview(game) : matchPreview(game)}
+            rivalClubId={game.rivalClubId}
             onDone={handleWatchDone}
             onCancel={() => setWatching(null)}
           />

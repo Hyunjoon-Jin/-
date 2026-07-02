@@ -1,4 +1,4 @@
-import { myClub, lastSummary, myLastPosition, DIFFICULTIES, DIVISION_LABELS, type GameState } from '../game.js';
+import { myClub, rivalClub, lastSummary, myLastPosition, DIFFICULTIES, DIVISION_LABELS, type GameState } from '../game.js';
 import {
   formatMoney, currentAbility, wageBudget, annualWageBill, inFinancialCrisis,
   boardStatus, DEMAND_LABEL, type BoardStatus,
@@ -10,6 +10,7 @@ const BOARD_LABEL: Record<BoardStatus, string> = {
 
 export function Dashboard({ game }: { game: GameState }) {
   const club = myClub(game);
+  const rival = rivalClub(game);
   const last = lastSummary(game);
   const pos = myLastPosition(game);
 
@@ -57,6 +58,14 @@ export function Dashboard({ game }: { game: GameState }) {
             {' '}— 지난 시즌 {pos}위 ({pos <= game.objective ? '목표 달성 ✓' : '목표 미달'})
           </span>
         )}
+      </div>
+
+      <div className="rival-card">
+        🔥 라이벌: <b>{rival.name}</b>
+        <span className="muted"> ({DIVISION_LABELS[rival.division]})</span>
+        <span className="rival-record">
+          {' '}— 통산 {game.rivalRecord.wins}승 {game.rivalRecord.draws}무 {game.rivalRecord.losses}패
+        </span>
       </div>
 
       <BoardConfidence value={game.boardConfidence} />

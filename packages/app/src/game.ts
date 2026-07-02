@@ -78,11 +78,22 @@ export interface GameState {
   demand?: BoardDemand | null;
   /** 내 구단에서 뛰다 은퇴한 선수 아카이브(레전드). */
   legends: ClubLegend[];
+  /** 라이벌 구단 id. 게임 시작 시 1회 고정(같은 부 내 평판이 가장 가까운 구단). */
+  rivalClubId: string;
+  /** 라이벌 구단전 통산 전적(내 구단 기준). */
+  rivalRecord: RivalRecord;
 }
 
 /** 은퇴 스냅샷(RetiredLegend) + 은퇴한 시즌(내 구단 재임 기준). */
 export interface ClubLegend extends RetiredLegend {
   season: number;
+}
+
+/** 라이벌 구단전 통산 전적. */
+export interface RivalRecord {
+  wins: number;
+  draws: number;
+  losses: number;
 }
 
 /** 컵 우승 상금 (만원). */
@@ -130,6 +141,19 @@ export function divisionClubs(state: GameState, division: number): Club[] {
   return clubsInDivision(state.clubs, division);
 }
 
+/** 라이벌 구단 선정: 같은 부 소속 중 평판이 가장 가까운 구단(제외: 자기 자신). */
+function selectRival(clubs: Club[], mine: Club): string {
+  const sameDiv = clubs.filter((c) => c.id !== mine.id && c.division === mine.division);
+  const pool = sameDiv.length > 0 ? sameDiv : clubs.filter((c) => c.id !== mine.id);
+  let best = pool[0]!;
+  let bestGap = Math.abs(best.finance.reputation - mine.finance.reputation);
+  for (const c of pool) {
+    const gap = Math.abs(c.finance.reputation - mine.finance.reputation);
+    if (gap < bestGap) { best = c; bestGap = gap; }
+  }
+  return best.id;
+}
+
 export function startGame(seed: number, myClubId: string, difficulty: Difficulty = 'normal'): GameState {
   const clubs = createLeague(seed);
   const mine = clubs.find((c) => c.id === myClubId)!;
@@ -152,11 +176,17 @@ export function startGame(seed: number, myClubId: string, difficulty: Difficulty
     boardConfidence: START_CONFIDENCE,
     demand: generateDemand({ overWages: annualWageBill(mine) > wageBudget(mine) }, new Rng(seed + 4242)),
     legends: [],
+    rivalClubId: selectRival(clubs, mine),
+    rivalRecord: { wins: 0, draws: 0, losses: 0 },
   };
 }
 
 export function myClub(state: GameState): Club {
   return state.clubs.find((c) => c.id === state.myClubId)!;
+}
+
+export function rivalClub(state: GameState): Club {
+  return state.clubs.find((c) => c.id === state.rivalClubId)!;
 }
 
 export function myTactic(state: GameState): Tactic {
@@ -248,6 +278,20 @@ export function finishSeason(state: GameState): GameState {
     myTactic(state), myClub(state),
     aggregatePlayerStats(ss.results).filter((s) => s.clubId === state.myClubId),
   );
+
+  // 라이벌전 전적 갱신(같은 부에서 맞붙은 경우만 — 다른 부일 땐 이번 시즌 대결 없음).
+  const rivalRecord = { ...state.rivalRecord };
+  for (const r of ss.results) {
+    const isDerby =
+      (r.homeClubId === state.myClubId && r.awayClubId === state.rivalClubId) ||
+      (r.awayClubId === state.myClubId && r.homeClubId === state.rivalClubId);
+    if (!isDerby) continue;
+    const myGoals = r.homeClubId === state.myClubId ? r.score[0] : r.score[1];
+    const oppGoals = r.homeClubId === state.myClubId ? r.score[1] : r.score[0];
+    if (myGoals > oppGoals) rivalRecord.wins++;
+    else if (myGoals < oppGoals) rivalRecord.losses++;
+    else rivalRecord.draws++;
+  }
 
   // 2) 상대 부 자동 시뮬 (통계엔 미포함, 순위/정산/승강용)
   const otherDiv = myDiv === 0 ? 1 : 0;
@@ -372,6 +416,7 @@ export function finishSeason(state: GameState): GameState {
     sacked,
     demand: nextDemand,
     legends: [...state.legends, ...newLegends],
+    rivalRecord,
     live: null,
     cup: null,
   };

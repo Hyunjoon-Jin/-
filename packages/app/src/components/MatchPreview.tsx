@@ -13,11 +13,13 @@ const METRICS: { key: keyof TeamStrength; label: string }[] = [
 
 const FORM_MARK: Record<FormResult, string> = { W: '승', D: '무', L: '패' };
 
-export function MatchPreview({ preview }: { preview: Preview }) {
+export function MatchPreview({ preview, rivalClubId }: { preview: Preview; rivalClubId?: string }) {
   const { home, away } = preview;
+  const isDerby = rivalClubId !== undefined && (home.clubId === rivalClubId || away.clubId === rivalClubId);
   return (
     <div className="preview">
       <h3>경기 프리뷰</h3>
+      {isDerby && <div className="derby-banner">🔥 라이벌전</div>}
       <div className="pv-teams">
         <TeamHead team={home} align="left" />
         <span className="pv-vs">VS</span>

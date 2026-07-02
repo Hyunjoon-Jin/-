@@ -65,6 +65,7 @@ function InSeason(props: Props) {
             다음 경기: <b>{game.clubs.find((c) => c.id === game.myClubId)!.name}</b>{' '}
             {next.home ? 'vs' : '@'} <b>{next.opponent.name}</b>{' '}
             <span className="muted">({next.home ? '홈' : '원정'})</span>
+            {next.opponent.id === game.rivalClubId && <span className="derby-badge"> 🔥 라이벌전</span>}
           </p>
         )}
       </div>
@@ -144,12 +145,14 @@ function RecentResults({ game }: { game: GameState }) {
             (m.homeClubId === game.myClubId && m.score[0] > m.score[1]) ||
             (m.awayClubId === game.myClubId && m.score[1] > m.score[0]);
           const draw = m.score[0] === m.score[1];
+          const derby = m.homeClubId === game.rivalClubId || m.awayClubId === game.rivalClubId;
           return (
             <li key={i} className={`clickable ${mine ? (draw ? 'mine draw' : win ? 'mine win' : 'mine loss') : ''}`}
               onClick={() => setDetail(m)}>
               <span className="rl-home">{m.homeClubName}</span>
               <span className="rl-score">{m.score[0]} : {m.score[1]}</span>
               <span className="rl-away">{m.awayClubName}</span>
+              {mine && derby && <span className="derby-badge small"> 🔥</span>}
             </li>
           );
         })}

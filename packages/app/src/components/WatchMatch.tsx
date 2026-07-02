@@ -15,6 +15,7 @@ interface Props {
   myClub: Club;
   initialTactic: Tactic;
   preview: MatchPreviewData | null;
+  rivalClubId: string;
   onDone: (result: MatchResult) => void;
   onCancel: () => void;
 }
@@ -33,7 +34,7 @@ interface View {
   goalFlash: 'home' | 'away' | null;
 }
 
-export function WatchMatch({ watch, myClub, initialTactic, preview, onDone, onCancel }: Props) {
+export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId, onDone, onCancel }: Props) {
   const liveRef = useRef<LiveMatch | null>(null);
   if (liveRef.current === null) liveRef.current = new LiveMatch(watch.setup);
   const live = liveRef.current;
@@ -183,7 +184,7 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, onDone, onCa
 
         <div className="watch-side">
           {phase === 'ready' && preview ? (
-            <MatchPreview preview={preview} />
+            <MatchPreview preview={preview} rivalClubId={rivalClubId} />
           ) : phase === 'halftime' ? (
             <>
               <div className="ht-banner">하프타임 — 전술을 조정할 수 있습니다</div>
