@@ -400,9 +400,14 @@ export function finishSeason(state: GameState): GameState {
   }
 
   // 2) 상대 부 자동 시뮬 (통계엔 미포함, 순위/정산/승강용)
+  // 시드는 seasonSeed(state)+5000 이었으나, seasonSeed 자체가 이미 seed+season*1000+2
+  // 형태라 +5000을 더하면 5시즌 뒤 내 부의 seasonSeed(state')(state'.season=season+5)와
+  // 매치 인덱스별로 정확히 동일한 시드가 나오는 문제가 있었다(리그 경기 시뮬 시드가
+  // 미래 시즌과 매 시즌 재현되게 충돌). +654321은 1000으로 나눈 나머지가 323이라
+  // seasonSeed(어떤 시즌)+커서(0~131 실제 범위)의 나머지(2~133)와 절대 겹치지 않는다.
   const otherDiv = myDiv === 0 ? 1 : 0;
   const otherClubs = divisionClubs(state, otherDiv);
-  const otherResult = simulateSeason(otherClubs, seasonSeed(state) + 5000);
+  const otherResult = simulateSeason(otherClubs, seasonSeed(state) + 654_321);
   const otherTable = otherResult.table;
 
   // 3) 정산 (부별 순위 기준)

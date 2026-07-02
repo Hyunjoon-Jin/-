@@ -69,4 +69,25 @@ describe('demands: 이사회 특별 요구', () => {
     }
     expect(noneAtHigh).toBeLessThan(noneAtZero);
   });
+
+  it('ambition이 아무리 커도 보상/벌점이 board.ts의 시즌 성적 변동 폭(±40/38)과 비슷한 규모로 상한이 걸린다', () => {
+    // 장기 계약을 아주 많이 맺어 ambition이 극단적으로 커진 상황을 가정 —
+    // 예전엔 여기 상한이 없어 요구 하나로 신뢰도가 100→0까지 급락할 수 있었다.
+    const extreme = generateDemand({ overWages: false, ambition: 1000 }, new Rng(1));
+    if (extreme) {
+      expect(extreme.reward).toBeLessThanOrEqual(40);
+      expect(extreme.penalty).toBeLessThanOrEqual(40);
+    }
+    const cutWages = generateDemand({ overWages: true, ambition: 1000 }, new Rng(1))!;
+    expect(cutWages.penalty).toBeLessThanOrEqual(40);
+  });
+
+  it('ambition이 상한(10)을 넘으면 스킵 확률이 더 낮아지지 않는다(요구가 매번 나오지는 않음)', () => {
+    let none = 0;
+    const trials = 200;
+    for (let s = 0; s < trials; s++) {
+      if (!generateDemand({ overWages: false, ambition: 1000 }, new Rng(s))) none++;
+    }
+    expect(none).toBeGreaterThan(0); // 스킵 확률 하한(0.15)이 여전히 적용됨
+  });
 });

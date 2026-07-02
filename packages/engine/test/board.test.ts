@@ -31,6 +31,12 @@ describe('board: 이사회 신뢰도', () => {
     expect(best).toBe(38);
   });
 
+  it('promoted와 relegated가 동시에 참이면 호출자 오류로 보고 예외를 던진다', () => {
+    expect(() => confidenceDelta({
+      position: 5, objective: 5, promoted: true, relegated: true, netFinance: 0,
+    })).toThrow();
+  });
+
   it('applyConfidence는 0~100 클램프', () => {
     expect(applyConfidence(5, -20)).toBe(0);
     expect(applyConfidence(95, 20)).toBe(100);

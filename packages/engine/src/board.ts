@@ -27,6 +27,9 @@ export interface SeasonConfidenceInput {
  * 목표보다 잘하면 +, 못하면 −. 승격·강등·재정이 가감된다.
  */
 export function confidenceDelta(inp: SeasonConfidenceInput): number {
+  if (inp.promoted && inp.relegated) {
+    throw new Error('confidenceDelta: promoted와 relegated가 동시에 참일 수 없습니다(호출자 계산 오류).');
+  }
   const posDelta = clamp((inp.objective - inp.position) * 2.5, -28, 25);
   const promoDelta = inp.promoted ? 25 : inp.relegated ? -30 : 0;
   const finDelta = inp.netFinance >= 0 ? 2 : -6;

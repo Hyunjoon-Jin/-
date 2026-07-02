@@ -15,6 +15,55 @@ function makeClubs(n: number, seed = 1): Club[] {
   return clubs;
 }
 
+describe('cup: 시드 격리(리그와의 충돌 회귀 테스트)', () => {
+  it('컵 대진 시드가 같은 시즌의 리그 경기 시드 범위와 절대 겹치지 않는다', () => {
+    // 앱(game.ts)의 실제 공식과 동일하게 리그/컵 베이스 시드를 구성 — 예전엔
+    // cup.baseSeed + round*1000 + i 공식이 season*1000 패턴과 선형 관계로 얽혀,
+    // 특정 라운드·픽스처 조합에서 리그 경기와 정확히 같은 시드가 나왔었다.
+    const clubs = makeClubs(16, 42);
+    const seed = 100;
+    const season = 1;
+    const leagueBaseSeed = seed + season * 1000 + 2; // seasonSeed(state) 공식
+    const cupBaseSeed = seed + season * 1000 + 4;    // 컵 생성 시 game.ts가 넘기는 값
+    // 향후 여러 시즌의 리그 픽스처 시드 범위까지 폭넓게 확인(더블 라운드로빈 최대 픽스처 수 여유 포함).
+    const leagueSeeds = new Set<number>();
+    for (let s = 0; s < 30; s++) {
+      for (let cursor = 0; cursor < 200; cursor++) leagueSeeds.add(seed + s * 1000 + 2 + cursor);
+    }
+
+    let cup = createCup(clubs, cupBaseSeed);
+    for (let round = 0; round < 6 && !isCupOver(cup); round++) {
+      const next = nextCupPairings(cup, clubs);
+      if (!next) break;
+      for (const pr of next.pairings) {
+        expect(leagueSeeds.has(pr.seed)).toBe(false);
+      }
+      cup = playCupRound(cup, clubs);
+    }
+    expect(leagueSeeds.has(leagueBaseSeed)).toBe(true); // 위 Set 구성 자체가 유효한지 자기 점검
+  });
+});
+
+describe('cup: 부전승 공정성(회귀 테스트)', () => {
+  it('최상위 평판 구단이 이미 부전승을 받았다면, 다음 홀수 라운드에서 다시 받지 않는다', () => {
+    // 5개 구단 → 5(홀수, 부전승)→3(홀수, 부전승)→2(결승) 순으로 홀수 라운드가 두 번 온다.
+    const clubs = makeClubs(5, 7);
+    clubs.forEach((c, i) => { c.finance.reputation = 20 - i; }); // c0이 항상 최상위 평판
+    let cup = createCup(clubs, 500);
+
+    const first = nextCupPairings(cup, clubs)!;
+    expect(first.byeId).toBe('c0'); // 첫 홀수 라운드는 예전과 동일하게 최상위가 받는다
+    cup = playCupRound(cup, clubs);
+
+    const survivors2 = cupSurvivors(cup);
+    expect(survivors2).toContain('c0'); // 부전승으로 자동 진출
+    expect(survivors2.length % 2).toBe(1); // 5→3, 여전히 홀수
+
+    const second = nextCupPairings(cup, clubs)!;
+    expect(second.byeId).not.toBe('c0'); // 이미 부전승을 받았으니 이번엔 다른 구단이 받는다
+  });
+});
+
 describe('cup: 녹아웃 토너먼트', () => {
   it('생성 시 전 구단이 참가하고 챔피언은 미정', () => {
     const clubs = makeClubs(12);

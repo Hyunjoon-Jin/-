@@ -41,6 +41,17 @@ export function createCup(clubs: Club[], baseSeed: number): CupState {
   return { participantIds, rounds: [], baseSeed, championId: null };
 }
 
+/**
+ * 라운드별 시드 베이스. 앱 레이어의 cup.baseSeed는 리그 시즌 시드(seasonSeed)와
+ * 같은 seed+season*1000+k 패턴을 공유해서, 예전엔 단순히 +round*1000을 더하는
+ * 선형 공식 탓에 리그 경기 시드와 컵 경기 시드가 특정 라운드·픽스처 조합에서
+ * 정확히 같은 값이 되는 경우가 있었다(두 대회가 같은 난수를 공유). 큰 소수를
+ * 곱해 리그 시드 패턴과의 선형 관계를 끊는다.
+ */
+function cupSeedBase(cup: CupState): number {
+  return cup.baseSeed * 104_729 + cup.rounds.length * 97;
+}
+
 export function isCupOver(cup: CupState): boolean {
   return cup.championId !== null;
 }
@@ -91,11 +102,22 @@ export function nextCupPairings(cup: CupState, clubs: Club[]): NextCupRound | nu
   const sorted = [...survivors].sort(
     (a, b) => byId.get(b)!.finance.reputation - byId.get(a)!.finance.reputation,
   );
-  const seedBase = cup.baseSeed + cup.rounds.length * 1000;
+  const seedBase = cupSeedBase(cup);
 
   let arr = sorted;
   let byeId: string | null = null;
-  if (arr.length % 2 === 1) { byeId = arr[0]!; arr = arr.slice(1); }
+  if (arr.length % 2 === 1) {
+    // 최상위 평판 구단이 매 홀수 라운드마다 부전승을 독점하지 않도록, 이미 부전승을
+    // 받은 적 있는 구단(과거 라운드의 awayId===null 대진에서 확인)은 제외하고
+    // 아직 안 받은 최상위 평판 구단을 우선한다. 전원이 이미 받았다면(극히 드묾)
+    // 최상위 평판 구단으로 폴백.
+    const alreadyHadBye = new Set(
+      cup.rounds.flatMap((r) => r.ties.filter((t) => t.awayId === null).map((t) => t.homeId)),
+    );
+    const byeCandidate = arr.find((id) => !alreadyHadBye.has(id)) ?? arr[0]!;
+    byeId = byeCandidate;
+    arr = arr.filter((id) => id !== byeCandidate);
+  }
 
   const m = arr.length;
   const pairings: CupPairing[] = [];
@@ -120,7 +142,7 @@ export function playCupRound(
 
   const next = nextCupPairings(cup, clubs)!;
   const byId = new Map(clubs.map((c) => [c.id, c]));
-  const seedBase = cup.baseSeed + cup.rounds.length * 1000;
+  const seedBase = cupSeedBase(cup);
   const ties: CupTie[] = [];
 
   if (next.byeId) {

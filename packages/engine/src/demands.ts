@@ -4,6 +4,7 @@
  * 시즌 종료 시 달성 여부로 신뢰도를 가감한다(board.ts와 연동).
  */
 import type { Rng } from './rng.js';
+import { clamp } from './math.js';
 
 export type DemandKind = 'cutWages' | 'winCup' | 'clubTopScorer';
 
@@ -36,10 +37,14 @@ export interface DemandContext {
  * — 장기 프로젝트를 약속한 만큼 이사회도 더 자주, 더 강하게 결과를 요구한다.
  */
 export function generateDemand(ctx: DemandContext, rng: Rng): BoardDemand | null {
-  const ambition = ctx.ambition ?? 0;
+  // ambition 기여분에 상한을 둔다 — board.ts의 confidenceDelta(시즌 성적 변동)가 이미
+  // ±40/38로 명시적으로 클램프돼 있는데, 여기 보상/벌점이 무제한으로 커지면 장기 계약을
+  // 여러 번 맺은 뒤 요구 하나로 신뢰도가 한 시즌 만에 100→0까지 급락할 수 있어
+  // "시즌당 변동폭을 제한한다"는 원래 의도를 무력화한다.
+  const ambition = clamp(ctx.ambition ?? 0, 0, 10);
   if (ctx.overWages) return { kind: 'cutWages', reward: 8, penalty: 10 + ambition * 2 };
   // 임금이 건전하면 일정 확률로 상향 도전 과제, 아니면 요구 없음(ambition이 높을수록 스킵 확률↓).
-  const skipChance = Math.max(0.15, 0.55 - ambition * 0.1);
+  const skipChance = clamp(0.55 - ambition * 0.1, 0.15, 0.9);
   if (rng.next() < skipChance) return null;
   const kind: DemandKind = rng.roll(0.5) ? 'winCup' : 'clubTopScorer';
   return { kind, reward: 12 + ambition * 2, penalty: 4 + ambition * 2 };
