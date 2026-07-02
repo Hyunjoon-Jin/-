@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
 import { myClub, lastSummary, type GameState, type ActionOutcome } from '../game.js';
 import {
-  transferTargets, marketValue, currentAbility, formatMoney, lineOf,
+  transferTargets, marketValue, currentAbility, formatMoney, lineOf, buildScoutingReport,
   type Line, type Player, type OfferEvaluation, type TransferTarget, type SellOffer,
 } from '@soccer-tycoon/engine';
+import { ScoutingSummary } from './PlayerDetail.js';
 
 interface Props {
   game: GameState;
@@ -279,6 +280,7 @@ function NegotiationModal({
           {player.position} · {player.age}세 · CA <b>{currentAbility(player).toFixed(0)}</b>
           {' · '}잠재 {revealPotential(scouting, player.potential)}
         </p>
+        <ScoutingSummary report={buildScoutingReport(player, scouting)} title="🔎 스카우팅 평가" />
         <div className="neg-facts">
           <span>예상 가치 <b>{formatMoney(value)}</b></span>
           <span>이적 예산 <b className="budget">{formatMoney(budget)}</b></span>

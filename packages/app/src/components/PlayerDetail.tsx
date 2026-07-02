@@ -5,7 +5,7 @@ import {
   currentAbility, marketValue, playerDerived, isInjured, isSuspended,
   formatMoney, buildScoutingReport,
   type AttrKey, type Player, type DerivedRatings, type TrainingFocus,
-  type PlayerFormEntry, type OverallTier, type PotentialTier, type AgeProfile,
+  type PlayerFormEntry, type OverallTier, type PotentialTier, type AgeProfile, type ScoutingReport,
 } from '@soccer-tycoon/engine';
 
 function moraleLabel(m: number): { text: string; cls: string } {
@@ -18,26 +18,26 @@ function ratingCls(r: number): string {
   return r >= 7.5 ? 'good' : r >= 6.5 ? 'mid' : 'poor';
 }
 
-const OVERALL_LABEL: Record<OverallTier, string> = {
+export const OVERALL_LABEL: Record<OverallTier, string> = {
   worldClass: '월드클래스', star: '스타급', quality: '준수한 실력자',
   squad: '스쿼드 로테이션 자원', fringe: '주전 경쟁이 필요한 자원',
 };
-const POTENTIAL_LABEL: Record<PotentialTier, string> = {
+export const POTENTIAL_LABEL: Record<PotentialTier, string> = {
   generational: '역대급 잠재력', high: '높은 성장 가능성', moderate: '보통 수준의 성장 가능성',
   limited: '제한적인 성장 여지', unknown: '성장 가능성 미상',
 };
-const AGE_LABEL: Record<AgeProfile, string> = {
+export const AGE_LABEL: Record<AgeProfile, string> = {
   wonderkid: '유망주', prime: '전성기', veteran: '베테랑', declining: '노장',
 };
 
 /** 상세 화면은 항상 정밀 평가(스카우팅 레벨 최대치 가정) — PA도 이미 그대로 노출되므로 일관성 유지. */
 const FULL_SCOUTING = 20;
 
-function ScoutingPanel({ player }: { player: Player }) {
-  const report = buildScoutingReport(player, FULL_SCOUTING);
+/** 스카우팅 리포트 서술 블록(선수 상세·이적 시장 협상 모달에서 공유). */
+export function ScoutingSummary({ report, title }: { report: ScoutingReport; title?: string }) {
   return (
     <div className="pd-scouting">
-      <h3>🔎 스카우팅 리포트</h3>
+      <h3>{title ?? '🔎 스카우팅 리포트'}</h3>
       <p>
         {AGE_LABEL[report.ageProfile]} · <b>{OVERALL_LABEL[report.overallTier]}</b> ·{' '}
         {POTENTIAL_LABEL[report.potentialTier]}
@@ -48,6 +48,11 @@ function ScoutingPanel({ player }: { player: Player }) {
       </p>
     </div>
   );
+}
+
+function ScoutingPanel({ player }: { player: Player }) {
+  const report = buildScoutingReport(player, FULL_SCOUTING);
+  return <ScoutingSummary report={report} />;
 }
 
 export const ATTR_LABELS: Record<AttrKey, string> = {
