@@ -44,6 +44,8 @@ export interface LiveSeason {
   mediaHandledThroughRound: number;
   /** 시즌 시작 시 언론 예상 순위(전술 XI 평균 CA 기준, 킥오프 시점 고정). */
   predictedTable: PredictedClub[];
+  /** 컵 참가 전 구단(24개)의 전력 순위(전술 XI 평균 CA 기준) — 우승 후보 예측용. */
+  cupFavorites: PredictedClub[];
 }
 
 /** 언론 예상 순위 항목. */
@@ -309,13 +311,15 @@ export function startSeason(state: GameState): GameState {
   const cup = createCup(state.clubs, state.seed + state.season * 1000 + 4);
   // 이적 창 마감 직후 스쿼드 기준 언론 예상 순위(시즌 내내 고정).
   const predictedTable = preseasonPrediction(myDivClubs, state.myClubId, repaired);
+  // 컵 우승 후보 예측(전 참가 구단 전력 랭킹, 리그 예상 순위와 같은 방식으로 산정).
+  const cupFavorites = preseasonPrediction(state.clubs, state.myClubId, repaired);
   return {
     ...state,
     tactics: { ...state.tactics, [state.myClubId]: repaired },
     live: {
       fixtures: ss.fixtures, results: ss.results, cursor: ss.cursor, baseSeed: ss.baseSeed,
       transfers, divisionClubIds: myDivClubs.map((c) => c.id), mediaHandledThroughRound: 0,
-      predictedTable,
+      predictedTable, cupFavorites,
     },
     cup,
   };

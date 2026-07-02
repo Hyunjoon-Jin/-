@@ -13,6 +13,9 @@ const ROW_HEIGHT = 68;
 /** 이변 판정 기준: 두 구단 평판 격차가 이 이상이고 평판 낮은 쪽이 이기면 이변. */
 const UPSET_REPUTATION_GAP = 3;
 
+/** 프리시즌 컵 우승 후보로 보여줄 상위 인원 수. */
+const CUP_FAVORITES_SHOWN = 5;
+
 export function Cup({ game, onPlayCupRound, onWatchCup }: Props) {
   const cup = game.cup;
   if (!cup) {
@@ -40,6 +43,12 @@ export function Cup({ game, onPlayCupRound, onWatchCup }: Props) {
   const firstRoundTies = cup.rounds[0]?.ties.length ?? Math.max(1, Math.ceil(cup.participantIds.length / 2));
   const colHeight = firstRoundTies * ROW_HEIGHT;
 
+  const favorites = game.live?.cupFavorites ?? [];
+  const myFavRank = favorites.find((f) => f.clubId === mine)?.predictedPos;
+  const champWasFavorite = over && cup.championId
+    ? favorites.slice(0, CUP_FAVORITES_SHOWN).some((f) => f.clubId === cup.championId)
+    : undefined;
+
   return (
     <div className="cup">
       <div className="cup-head">
@@ -56,6 +65,23 @@ export function Cup({ game, onPlayCupRound, onWatchCup }: Props) {
           </>
         )}
       </div>
+
+      {favorites.length > 0 && (
+        <div className="cup-favorites">
+          <span className="cup-favorites-title">📰 우승 후보</span>
+          {favorites.slice(0, CUP_FAVORITES_SHOWN).map((f) => (
+            <span key={f.clubId} className={f.clubId === mine ? 'cup-fav-chip mine' : 'cup-fav-chip'}>
+              {f.predictedPos}. {f.name}
+            </span>
+          ))}
+          {myFavRank !== undefined && myFavRank > CUP_FAVORITES_SHOWN && (
+            <span className="muted small">— 우리 구단은 {myFavRank}위 예상(후보권 밖)</span>
+          )}
+          {over && champWasFavorite === false && (
+            <span className="upset-badge">🌟 예상 밖의 우승!</span>
+          )}
+        </div>
+      )}
 
       {cup.rounds.length === 0 ? (
         <p className="muted">아직 경기가 없습니다. "컵 다음 라운드"로 시작하세요. (참가 {cup.participantIds.length}개 구단)</p>
