@@ -5,7 +5,7 @@ import {
   playCupRound, negotiate, buyAt, offersFor, acceptSell, release, upgradeStaffAction, setTrainingFocus, renewContract,
   watchSetup, matchPreview, commitWatchedRound,
   watchCupSetup, cupPreview, commitWatchedCupRound,
-  playerForm, respondMedia, dismissMedia, signContract,
+  playerForm, playerTimeline, respondMedia, dismissMedia, signContract,
   type GameState, type ActionOutcome, type WatchSetup, type Difficulty, type MediaEvent,
 } from './game.js';
 import type { Tactic, MatchResult } from '@soccer-tycoon/engine';
@@ -159,6 +159,7 @@ export function App() {
               : undefined
           }
           recentForm={playerForm(game, detailPlayer.id)}
+          timeline={playerTimeline(game, detailPlayer.id)}
         />
       )}
 

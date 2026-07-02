@@ -7,6 +7,7 @@ import {
   type AttrKey, type Player, type DerivedRatings, type TrainingFocus,
   type PlayerFormEntry, type OverallTier, type PotentialTier, type AgeProfile, type ScoutingReport,
 } from '@soccer-tycoon/engine';
+import type { TimelineEntry } from '../game.js';
 
 function moraleLabel(m: number): { text: string; cls: string } {
   if (m >= 0.65) return { text: '😀 만족', cls: 'cond-good' };
@@ -98,9 +99,11 @@ interface Props {
   onRenew?: () => { ok: boolean; message: string };
   /** 진행 중 시즌 최근 폼(평점). live 없거나 미출전이면 빈 배열. */
   recentForm?: PlayerFormEntry[];
+  /** 커리어 타임라인(이적·마일스톤·은퇴). 시즌순. */
+  timeline?: TimelineEntry[];
 }
 
-export function PlayerDetail({ player, onClose, onSetFocus, onRenew, recentForm }: Props) {
+export function PlayerDetail({ player, onClose, onSetFocus, onRenew, recentForm, timeline }: Props) {
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const ca = currentAbility(player);
   const derived = playerDerived(player, player.position);
@@ -184,6 +187,8 @@ export function PlayerDetail({ player, onClose, onSetFocus, onRenew, recentForm 
 
         <GrowthChart history={player.caHistory ?? []} current={Math.round(ca)} />
 
+        {timeline && timeline.length > 0 && <CareerTimeline entries={timeline} />}
+
         <div className="pd-cols">
           <AttrGroup title="기술" attrs={TECHNICAL_ATTRS} player={player} />
           <AttrGroup title="정신" attrs={MENTAL_ATTRS} player={player} />
@@ -249,6 +254,41 @@ function GrowthChart({ history, current }: { history: number[]; current: number 
         <span>최고 {Math.max(...pts)}</span>
         <span>{current}</span>
       </div>
+    </div>
+  );
+}
+
+const MILESTONE_KIND_LABEL: Record<'apps' | 'goals', string> = { apps: '경기 출전', goals: '골' };
+
+/** 이적·통산 마일스톤·은퇴를 시즌 역순(최신 먼저)으로 나열. */
+function CareerTimeline({ entries }: { entries: TimelineEntry[] }) {
+  return (
+    <div className="pd-timeline">
+      <h3>🗓️ 커리어 타임라인</h3>
+      <ul className="timeline-list">
+        {[...entries].reverse().map((e, i) => (
+          <li key={i} className={`timeline-item ${e.kind}`}>
+            <span className="timeline-season">시즌 {e.season}</span>
+            {e.kind === 'transfer' && (
+              <span className="timeline-text">
+                🔄 {e.fromClubName} → <b>{e.toClubName}</b> 이적
+                {e.fee > 0 && <span className="muted small"> ({formatMoney(e.fee)})</span>}
+              </span>
+            )}
+            {e.kind === 'milestone' && (
+              <span className="timeline-text">
+                🎉 통산 <b>{e.value}{MILESTONE_KIND_LABEL[e.milestoneKind]}</b> 달성
+              </span>
+            )}
+            {e.kind === 'retired' && (
+              <span className="timeline-text">
+                🕯️ {e.finalAge}세로 은퇴 — 통산 {e.careerApps}경기 {e.careerGoals}골
+                {e.caps > 0 && <span className="muted small"> · A매치 {e.caps}경</span>}
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

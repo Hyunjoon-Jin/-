@@ -168,6 +168,17 @@ body {
 .growth-ends { display: flex; justify-content: space-between; width: 320px; margin-top: 3px; }
 .pd-caps { color: #6cb6ff; font-weight: 600; }
 
+.pd-timeline { margin: 6px 0 16px; }
+.pd-timeline h3 { margin: 0 0 6px; }
+.timeline-list { list-style: none; padding: 0; margin: 0; max-height: 200px; overflow-y: auto; }
+.timeline-item {
+  display: flex; align-items: baseline; gap: 10px; padding: 6px 10px;
+  border-bottom: 1px solid var(--line); font-size: 13px;
+}
+.timeline-item:last-child { border-bottom: none; }
+.timeline-season { color: var(--muted); min-width: 52px; flex-shrink: 0; }
+.timeline-item.retired .timeline-text { color: #f0be46; }
+
 .career-leaders { margin-top: 22px; }
 .career-leaders h3 { margin-bottom: 10px; }
 

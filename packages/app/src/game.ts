@@ -778,6 +778,42 @@ export function playerForm(state: GameState, playerId: string, n = 5): PlayerFor
   return recentPlayerForm(state.live.results, playerId, n);
 }
 
+/** 선수 개인 커리어 타임라인 항목. */
+export type TimelineEntry =
+  | { season: number; kind: 'transfer'; fromClubName: string; toClubName: string; fee: number }
+  | { season: number; kind: 'milestone'; milestoneKind: 'apps' | 'goals'; value: number }
+  | { season: number; kind: 'retired'; finalAge: number; careerApps: number; careerGoals: number; caps: number };
+
+/**
+ * 한 선수의 커리어 타임라인(이적·통산 마일스톤·은퇴)을 시즌순으로 재구성.
+ * 이미 history/legends에 영구 기록된 데이터만 사용 — 새 상태를 추가하지 않는다.
+ * 이적은 리그 전체 기록이라 어느 선수든 나오지만, 마일스톤·은퇴는 내 구단
+ * 소속이었던 시즌만 기록되므로(app 레이어 필터) 그 범위에서만 정확하다.
+ */
+export function playerTimeline(state: GameState, playerId: string): TimelineEntry[] {
+  const entries: TimelineEntry[] = [];
+  for (const s of state.history) {
+    for (const d of s.transfers) {
+      if (d.playerId === playerId) {
+        entries.push({ season: s.season, kind: 'transfer', fromClubName: d.fromClubName, toClubName: d.toClubName, fee: d.fee });
+      }
+    }
+    for (const m of s.milestones ?? []) {
+      if (m.playerId === playerId) {
+        entries.push({ season: s.season, kind: 'milestone', milestoneKind: m.kind, value: m.value });
+      }
+    }
+  }
+  const legend = state.legends.find((l) => l.playerId === playerId);
+  if (legend) {
+    entries.push({
+      season: legend.season, kind: 'retired',
+      finalAge: legend.finalAge, careerApps: legend.careerApps, careerGoals: legend.careerGoals, caps: legend.caps,
+    });
+  }
+  return entries.sort((a, b) => a.season - b.season);
+}
+
 /** 진행 중 시즌, 내 구단 선수들의 시즌 통계(평점순). */
 export function liveSquadStats(state: GameState): PlayerSeasonStat[] {
   if (!state.live) return [];
