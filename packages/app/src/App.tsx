@@ -5,7 +5,7 @@ import {
   playCupRound, negotiate, buyAt, offersFor, acceptSell, release, upgradeStaffAction, setTrainingFocus, renewContract,
   watchSetup, matchPreview, commitWatchedRound,
   watchCupSetup, cupPreview, commitWatchedCupRound,
-  playerForm, respondMedia, dismissMedia,
+  playerForm, respondMedia, dismissMedia, signContract,
   type GameState, type ActionOutcome, type WatchSetup, type Difficulty, type MediaEvent,
 } from './game.js';
 import type { Tactic, MatchResult } from '@soccer-tycoon/engine';
@@ -189,7 +189,9 @@ export function App() {
           />
         ) : (
           <>
-            {tab === 'dashboard' && <Dashboard game={game} />}
+            {tab === 'dashboard' && (
+              <Dashboard game={game} onSignContract={(years) => update(signContract(game, years))} />
+            )}
             {tab === 'squad' && <Squad club={club} onSelect={setDetailPlayer} />}
             {tab === 'tactics' && (
               <Tactics club={club} tactic={myTactic(game)} onChange={handleTacticChange} />

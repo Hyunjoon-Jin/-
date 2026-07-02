@@ -1,5 +1,5 @@
 import {
-  myClub, rivalClub, lastSummary, myLastPosition, managerPersona,
+  myClub, rivalClub, lastSummary, myLastPosition, managerPersona, contractOptions,
   DIFFICULTIES, DIVISION_LABELS, type GameState,
 } from '../game.js';
 import {
@@ -16,7 +16,7 @@ const PERSONA_LABEL: Record<Exclude<ManagerPersona, 'neutral'>, { label: string;
   humble: { label: '신중한 리더', desc: '겸손하고 책임감 있는 인터뷰로 신뢰를 얻고 있습니다.' },
 };
 
-export function Dashboard({ game }: { game: GameState }) {
+export function Dashboard({ game, onSignContract }: { game: GameState; onSignContract: (years: number) => void }) {
   const club = myClub(game);
   const rival = rivalClub(game);
   const last = lastSummary(game);
@@ -33,6 +33,7 @@ export function Dashboard({ game }: { game: GameState }) {
   const overWages = annualWageBill(club) > wageBudget(club);
   const retiredThisSeason = last ? game.legends.filter((l) => l.season === last.season) : [];
   const persona = managerPersona(game);
+  const contract = contractOptions(game);
 
   return (
     <div className="dashboard">
@@ -67,6 +68,7 @@ export function Dashboard({ game }: { game: GameState }) {
             {' '}— 지난 시즌 {pos}위 ({pos <= game.objective ? '목표 달성 ✓' : '목표 미달'})
           </span>
         )}
+        <span className="muted small"> · 📝 계약 잔여 {Math.max(0, game.contractSeasonsLeft)}시즌</span>
       </div>
 
       <div className="rival-card">
@@ -91,6 +93,24 @@ export function Dashboard({ game }: { game: GameState }) {
         <div className="persona-card">
           🗣️ 언론이 부르는 별명: <b>{PERSONA_LABEL[persona].label}</b>
           <span className="muted"> — {PERSONA_LABEL[persona].desc}</span>
+        </div>
+      )}
+
+      {contract && (
+        <div className="contract-offer">
+          <h3>📝 감독 계약 만료 — 갱신 제안</h3>
+          <p className="muted small">이사회가 재계약을 제안합니다. 계약 기간을 선택하세요.</p>
+          <div className="contract-options">
+            {contract.map((o) => (
+              <button key={o.years} className="contract-opt" onClick={() => onSignContract(o.years)}>
+                <div className="contract-opt-years">{o.years}년 계약</div>
+                <div className="muted small">
+                  신뢰도 +{o.confidenceDelta}
+                  {o.ambitionDelta > 0 && <> · 장기 프로젝트(목표 순위 {o.ambitionDelta}단계 상향)</>}
+                </div>
+              </button>
+            ))}
+          </div>
         </div>
       )}
 

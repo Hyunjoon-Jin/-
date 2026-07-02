@@ -130,7 +130,14 @@ export interface GameState {
   rivalMeetings: RivalMeeting[];
   /** 미디어 인터뷰 톤별 누적 응답 횟수(감독 이미지 형성용). */
   mediaToneCounts: Record<MediaTone, number>;
+  /** 감독 계약 잔여 시즌 수. 0(또는 이하)이 되면 대시보드에 계약 갱신 제안이 뜬다. */
+  contractSeasonsLeft: number;
+  /** 과거 장기 계약 체결 누적치 — 보드진 목표 순위를 영구적으로 더 엄격하게 만든다. */
+  ambition: number;
 }
+
+/** 새 게임 시작 시 감독 계약 기간(시즌). */
+const CONTRACT_INITIAL_YEARS = 3;
 
 /** 모든 톤 0으로 초기화된 카운트 맵. */
 function emptyMediaToneCounts(): Record<MediaTone, number> {
@@ -190,11 +197,14 @@ export function createLeague(seed: number): Club[] {
   return clubs;
 }
 
-/** 부 목표: 2부=승격(상위), 1부=잔류(하위권 회피). 난이도로 조정. */
-function divisionObjective(division: number, difficulty: Difficulty): number {
+/**
+ * 부 목표: 2부=승격(상위), 1부=잔류(하위권 회피). 난이도로 조정.
+ * ambition(장기 계약 누적치)만큼 목표 순위를 더 엄격하게(숫자를 낮게) 만든다.
+ */
+function divisionObjective(division: number, difficulty: Difficulty, ambition = 0): number {
   const off = DIFFICULTIES[difficulty].targetOffset;
   const base = division === 1 ? PROMOTE_COUNT : CLUBS_PER_DIV - PROMOTE_COUNT; // 2부:3위, 1부:9위
-  return Math.max(1, Math.min(CLUBS_PER_DIV, base + off));
+  return Math.max(1, Math.min(CLUBS_PER_DIV, base + off - ambition));
 }
 
 export function myDivision(state: GameState): number {
@@ -244,6 +254,8 @@ export function startGame(seed: number, myClubId: string, difficulty: Difficulty
     rivalRecord: { wins: 0, draws: 0, losses: 0 },
     rivalMeetings: [],
     mediaToneCounts: emptyMediaToneCounts(),
+    contractSeasonsLeft: CONTRACT_INITIAL_YEARS,
+    ambition: 0,
   };
 }
 
@@ -487,14 +499,15 @@ export function finishSeason(state: GameState): GameState {
     season: state.season + 1,
     history: [...state.history, summary],
     tactics: { ...state.tactics, [state.myClubId]: repaired },
-    // 새 부 기준으로 목표 재설정
-    objective: divisionObjective(myClub(state).division, state.difficulty),
+    // 새 부 기준으로 목표 재설정(장기 계약 누적치만큼 더 엄격하게)
+    objective: divisionObjective(myClub(state).division, state.difficulty, state.ambition),
     boardConfidence,
     sacked,
     demand: nextDemand,
     legends: [...state.legends, ...newLegends],
     rivalRecord,
     rivalMeetings: [...state.rivalMeetings, ...newRivalMeetings],
+    contractSeasonsLeft: state.contractSeasonsLeft - 1,
     live: null,
     cup: null,
   };
@@ -714,6 +727,43 @@ export function managerPersona(state: GameState): ManagerPersona {
 /** 인터뷰를 답변 없이 넘김(효과 없음, 재노출만 방지). */
 export function dismissMedia(state: GameState, event: MediaEvent): GameState {
   return { ...state, live: state.live && { ...state.live, mediaHandledThroughRound: event.round } };
+}
+
+// ── 감독 계약 갱신 ──────────────────────────────
+
+export interface ContractOption {
+  years: number;
+  /** 체결 시 이사회 신뢰도 변화. */
+  confidenceDelta: number;
+  /** 체결 시 ambition 누적치 변화(목표 순위를 이만큼 더 엄격하게). */
+  ambitionDelta: number;
+}
+
+const CONTRACT_OPTIONS: ContractOption[] = [
+  { years: 1, confidenceDelta: 3, ambitionDelta: 0 },
+  { years: 3, confidenceDelta: 10, ambitionDelta: 1 },
+];
+
+/** 계약이 만료(잔여 0 이하)됐고 아직 경질되지 않았다면 갱신 선택지를 제공. */
+export function contractOptions(state: GameState): ContractOption[] | null {
+  if (state.sacked) return null;
+  if (state.contractSeasonsLeft > 0) return null;
+  return CONTRACT_OPTIONS;
+}
+
+/** 계약 갱신 체결: 잔여 시즌 재설정 + 신뢰도 보너스 + (장기 계약이면) 장기적 목표 상향. */
+export function signContract(state: GameState, years: number): GameState {
+  const option = CONTRACT_OPTIONS.find((o) => o.years === years);
+  if (!option) return state;
+  const boardConfidence = applyConfidence(state.boardConfidence, option.confidenceDelta);
+  const ambition = state.ambition + option.ambitionDelta;
+  return {
+    ...state,
+    contractSeasonsLeft: option.years,
+    boardConfidence,
+    ambition,
+    objective: divisionObjective(myClub(state).division, state.difficulty, ambition),
+  };
 }
 
 /** 진행 중 시즌의 리그 득점 순위(라이브). */
