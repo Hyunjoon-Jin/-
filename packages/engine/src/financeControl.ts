@@ -48,5 +48,10 @@ export function enforceFinancialFairPlay(club: Club): FireSaleResult {
     raised += cash;
     if (cash <= 0) break; // 가치 0 선수만 남으면 중단
   }
+  // 매각으로도 회복이 안 되면(스쿼드 하한·자산 소진) 남은 선수단 임금을 긴급 삭감해
+  // 다음 시즌부터라도 재정이 개선되도록 한다 — 영구 파산 상태로 남는 것을 막는 최후 수단.
+  if (club.finance.balance < 0) {
+    for (const p of club.players) p.wage = Math.round(p.wage * 0.85);
+  }
   return { sold, raised };
 }

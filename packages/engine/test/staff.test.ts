@@ -81,6 +81,13 @@ describe('staff: 업그레이드', () => {
     club.finance.balance = 10_000_000;
     expect(upgradeStaff(club, 'scouting').ok).toBe(false);
   });
+
+  it('비용 곡선이 문서화된 기준값(5→3천만·10→1.2억·15→2.7억·19→4.3억)과 일치한다', () => {
+    expect(upgradeCost(5)).toBe(3_000);
+    expect(upgradeCost(10)).toBe(12_000);
+    expect(upgradeCost(15)).toBe(27_000);
+    expect(upgradeCost(19)).toBeCloseTo(43_320, -2);
+  });
 });
 
 describe('staff: 유스 아카데미', () => {

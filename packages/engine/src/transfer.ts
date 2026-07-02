@@ -7,6 +7,8 @@ import type { Club, Line, Player } from './types.js';
 import { lineOf } from './teamStrength.js';
 import { currentAbility } from './derived.js';
 import { marketValue, weeklyWage } from './valuation.js';
+import { annualWageBill, wageBudget } from './financeControl.js';
+import { MIN_SQUAD } from './transferActions.js';
 import { Rng } from './rng.js';
 
 export interface TransferDeal {
@@ -77,6 +79,8 @@ export function runTransferWindow(
       if (seller.id === excludeClubId) continue; // 보호 구단은 매도 대상에서 제외
       // 매도 구단은 해당 라인에 최소 인원(3)을 남겨야 판다
       if (playersInLine(seller, need).length <= 3) continue;
+      // 이번 창에서 이미 다른 구매자에게 판 만큼 줄어든 전체 스쿼드도 하한 밑으로 못 내려간다.
+      if (seller.players.length - 1 < MIN_SQUAD) continue;
       for (const player of playersInLine(seller, need)) {
         if (moved.has(player.id)) continue; // 이미 이번 창에 이적함
         const ca = currentAbility(player);
@@ -84,8 +88,12 @@ export function runTransferWindow(
         const value = marketValue(player);
         const fee = Math.round(value * (0.95 + rng.next() * 0.20)); // 협상 변동
         if (fee > budget) continue;
+        if (fee > buyer.finance.balance) continue; // 예산은 있어도 실제 보유 자금이 없으면 불가
         // 매도 구단 수락 조건: 제안가가 시장가의 95% 이상
         if (fee < value * 0.95) continue;
+        // 영입 후 연간 임금 총액이 지속가능한 예산을 넘으면(자멸적 영입) 포기
+        const projectedWageBill = annualWageBill(buyer) + weeklyWage(player) * 52;
+        if (projectedWageBill > wageBudget(buyer)) continue;
         if (!best || ca > currentAbility(best.player)) {
           best = { seller, player, fee };
         }

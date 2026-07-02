@@ -40,4 +40,18 @@ describe('financeControl: 파이낸셜 페어플레이', () => {
     expect(wageBudget(club)).toBeGreaterThan(0);
     expect(annualWageBill(club)).toBeGreaterThan(0);
   });
+
+  it('매각으로도 회복이 안 될 만큼 적자가 크면 남은 선수단 임금을 삭감해 회복 경로를 만든다', () => {
+    const club = generateClub(new Rng(5), 'c', 'C', 14);
+    club.finance.balance = -1_000_000_000; // 어떤 매각으로도 회복 불가능한 대규모 적자
+    const wagesBefore = new Map(club.players.map((p) => [p.id, p.wage]));
+    const r = enforceFinancialFairPlay(club);
+    expect(club.players.length).toBe(MIN_SQUAD); // 하한까지 매각
+    expect(club.finance.balance).toBeLessThan(0); // 그래도 여전히 적자
+    expect(r.sold.length).toBeGreaterThan(0);
+    for (const p of club.players) {
+      const before = wagesBefore.get(p.id)!;
+      if (before > 0) expect(p.wage).toBeLessThan(before);
+    }
+  });
 });

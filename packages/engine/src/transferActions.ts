@@ -2,7 +2,7 @@
  * 사용자 주도 이적 액션 (economy.md 5장 — 플레이어 직접 영입/판매/방출).
  * AI 이적(transfer.ts)과 분리. 프리시즌에 호출되며 구단 객체를 직접 변경한다.
  */
-import type { Club, Player } from './types.js';
+import type { Club, Line, Player } from './types.js';
 import { lineOf } from './teamStrength.js';
 import { currentAbility } from './derived.js';
 import { marketValue, weeklyWage } from './valuation.js';
@@ -13,6 +13,18 @@ export const MIN_SQUAD = 14;
 export const MAX_SQUAD = 30;
 /** 강제 판매 시 시장가 대비 회수율(즉시 매각 할인). */
 const SELL_RATIO = 0.92;
+
+/** 라인별 매각 후 최소 잔존 인원(전체 스쿼드 하한과 별개로 포지션 씨가 마르는 것을 방지).
+ *  골키퍼는 보유 인원 자체가 적으므로 하한을 낮게 둔다. AI 간 이적(transfer.ts)의
+ *  "라인당 3명 초과만 판매" 관행을 유저가 사는 경로에도 동일하게 적용한다. */
+const MIN_LINE_DEPTH: Record<Line, number> = { GK: 1, DEF: 3, MID: 3, ATT: 3 };
+
+/** 이 선수를 매도해도 매도 구단의 해당 포지션 라인이 바닥나지 않는지 확인. */
+function sellerLineDepthOk(seller: Club, player: Player): boolean {
+  const line = lineOf(player.position);
+  const count = seller.players.filter((p) => lineOf(p.position) === line).length;
+  return count - 1 >= MIN_LINE_DEPTH[line];
+}
 
 export interface TransferTarget {
   player: Player;
@@ -90,8 +102,12 @@ export function evaluateOffer(
     return { ok: false, reason: '상대 구단이 최소 스쿼드 인원을 유지하려 합니다.' };
   }
   const player = seller.players.find((p) => p.id === playerId)!;
+  if (!sellerLineDepthOk(seller, player)) {
+    return { ok: false, reason: '상대 구단이 해당 포지션 자원을 유지하려 합니다.' };
+  }
   if (!(offer > 0)) return { ok: false, reason: '제안액을 입력하세요.' };
   if (offer > me.finance.transferBudget) return { ok: false, reason: '이적 예산을 초과했습니다.' };
+  if (offer > me.finance.balance) return { ok: false, reason: '보유 자금이 부족합니다.' };
 
   const asking = askingPrice(seller, player);
   const floor = Math.round(asking * 0.82);
@@ -121,6 +137,9 @@ export function buyPlayerAt(clubs: Club[], myClubId: string, playerId: string, f
     return { ok: false, reason: '상대 구단이 최소 스쿼드 인원을 유지하려 합니다.' };
   }
   const player = seller.players.find((p) => p.id === playerId)!;
+  if (!sellerLineDepthOk(seller, player)) {
+    return { ok: false, reason: '상대 구단이 해당 포지션 자원을 유지하려 합니다.' };
+  }
   if (!(fee > 0)) return { ok: false, reason: '이적료가 올바르지 않습니다.' };
   // evaluateOffer와 동일한 하한(호가의 82%) — 협상 없이 직접 buyPlayerAt을 호출해도
   // 헐값에 선수를 사들이지 못하도록 매도 구단 쪽에서 다시 검증한다.
@@ -130,6 +149,9 @@ export function buyPlayerAt(clubs: Club[], myClubId: string, playerId: string, f
   }
   if (me.finance.transferBudget < fee) {
     return { ok: false, reason: '이적 예산이 부족합니다.' };
+  }
+  if (me.finance.balance < fee) {
+    return { ok: false, reason: '보유 자금이 부족합니다.' };
   }
 
   me.finance.transferBudget -= fee;

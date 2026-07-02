@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  transferTargets, buyPlayer, sellPlayer, releasePlayer, MIN_SQUAD,
+  transferTargets, buyPlayer, buyPlayerAt, sellPlayer, releasePlayer, askingPrice, MIN_SQUAD,
 } from '../src/transferActions.js';
 import { marketValue } from '../src/valuation.js';
 import { generateClub } from '../src/generate.js';
@@ -54,6 +54,34 @@ describe('transferActions: 영입', () => {
     const target = transferTargets(clubs, 'c0')[0]!;
     const r = buyPlayer(clubs, 'c0', target.player.id);
     expect(r.ok).toBe(false);
+  });
+
+  it('상대 구단의 유일한 골키퍼처럼, 해당 라인이 바닥날 매입은 거절된다', () => {
+    const clubs = makeLeague();
+    const me = clubs.find((c) => c.id === 'c0')!;
+    me.finance.transferBudget = 999_999_999;
+    me.finance.balance = 999_999_999;
+    const seller = clubs.find((c) => c.id !== 'c0')!;
+    const gks = seller.players.filter((p) => p.position === 'GK');
+    // 골키퍼를 1명만 남긴다.
+    for (const gk of gks.slice(1)) seller.players = seller.players.filter((p) => p.id !== gk.id);
+    const lastGk = seller.players.find((p) => p.position === 'GK')!;
+
+    const r = buyPlayerAt(clubs, 'c0', lastGk.id, askingPrice(seller, lastGk));
+    expect(r.ok).toBe(false);
+    expect(seller.players.some((p) => p.id === lastGk.id)).toBe(true);
+  });
+
+  it('충분한 뎁스가 있는 라인의 선수는 정상적으로 매입할 수 있다', () => {
+    const clubs = makeLeague();
+    const me = clubs.find((c) => c.id === 'c0')!;
+    me.finance.transferBudget = 999_999_999;
+    me.finance.balance = 999_999_999;
+    const seller = clubs.find((c) => c.id !== 'c0')!;
+    const gks = seller.players.filter((p) => p.position === 'GK');
+    expect(gks.length).toBeGreaterThanOrEqual(2); // 기본 생성 스쿼드는 GK 2명 보유
+    const r = buyPlayerAt(clubs, 'c0', gks[0]!.id, askingPrice(seller, gks[0]!));
+    expect(r.ok).toBe(true);
   });
 });
 

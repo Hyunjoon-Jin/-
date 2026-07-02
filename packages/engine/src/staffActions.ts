@@ -11,7 +11,7 @@ export const STAFF_MAX = 20;
 /** 현재 레벨에서 다음 레벨로 올리는 비용 (만원). */
 export function upgradeCost(currentLevel: number): number {
   // 레벨 제곱 곡선: 5→3천만, 10→1.2억, 15→2.7억, 19→4.3억
-  return (currentLevel + 1) * (currentLevel + 1) * 1_200;
+  return currentLevel * currentLevel * 120;
 }
 
 export interface UpgradeResult { ok: boolean; cost?: number; newLevel?: number; reason?: string }

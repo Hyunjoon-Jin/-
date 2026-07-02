@@ -47,6 +47,13 @@ export function settleSeason(
 
   const net = incomeTotal - expenseTotal;
   club.finance.balance += net;
+  // 이적 예산을 현재 자금 규모에 맞춰 재조정 — 생성 시 최초 공식(잔고의 40%)과 동일한
+  // 비율로, 성공해서 잔고가 불어난 구단은 이적 예산도 함께 커진다. 매각으로 이미
+  // 예산이 이 기준보다 높다면 그대로 유지(줄어들지 않음).
+  club.finance.transferBudget = Math.max(
+    club.finance.transferBudget,
+    Math.round(Math.max(0, club.finance.balance) * 0.4),
+  );
 
   return {
     income: { tv, matchday, sponsor, prize, total: incomeTotal },

@@ -3,6 +3,7 @@ import { ALL_ATTRS, type Attributes, type Club, type Player } from '../src/types
 import { marketValue, weeklyWage } from '../src/valuation.js';
 import { settleSeason, leaguePrize } from '../src/finance.js';
 import { runTransferWindow } from '../src/transfer.js';
+import { wageBudget } from '../src/financeControl.js';
 import { generateClub } from '../src/generate.js';
 import { Rng } from '../src/rng.js';
 import { formatMoney } from '../src/money.js';
@@ -74,6 +75,25 @@ describe('finance: 시즌 정산', () => {
   it('우승 상금이 최하위 상금보다 많다', () => {
     expect(leaguePrize(0, 16)).toBeGreaterThan(leaguePrize(15, 16));
   });
+
+  it('잔고가 크게 불어나면 이적 예산도 함께 커진다(성공한 구단이 계속 쓸 수 있도록)', () => {
+    const rng = new Rng(6);
+    const club = generateClub(rng, 'c', 'C', 12);
+    const budgetBefore = club.finance.transferBudget;
+    club.finance.balance = 1_000_000; // 시즌 성공으로 잔고가 크게 불어난 상황을 가정
+    settleSeason(club, 0, 16);
+    expect(club.finance.transferBudget).toBeGreaterThan(budgetBefore);
+    expect(club.finance.transferBudget).toBeGreaterThanOrEqual(Math.round(club.finance.balance * 0.4) - 1);
+  });
+
+  it('매각으로 이미 이적 예산이 그 기준보다 높다면 정산 후에도 줄어들지 않는다', () => {
+    const rng = new Rng(7);
+    const club = generateClub(rng, 'c', 'C', 12);
+    club.finance.balance = 10_000;
+    club.finance.transferBudget = 900_000; // 매각 등으로 이미 잔고 대비 훨씬 큰 예산 보유
+    settleSeason(club, 10, 16);
+    expect(club.finance.transferBudget).toBeGreaterThanOrEqual(900_000);
+  });
 });
 
 describe('transfer: 이적 창 불변식', () => {
@@ -107,6 +127,25 @@ describe('transfer: 이적 창 불변식', () => {
     const deals = runTransferWindow(clubs, 7);
     for (const d of deals) expect(d.fee).toBeGreaterThan(0);
     for (const c of clubs) expect(c.finance.transferBudget).toBeGreaterThanOrEqual(0);
+  });
+
+  it('이적 후에도 어떤 구단의 보유 자금도 음수가 되지 않는다', () => {
+    const clubs = makeLeague();
+    runTransferWindow(clubs, 7);
+    for (const c of clubs) expect(c.finance.balance).toBeGreaterThanOrEqual(0);
+  });
+
+  it('임금 예산이 이미 한계까지 찬 구단은 이적료를 감당할 수 있어도 AI 영입을 하지 않는다', () => {
+    const clubs = makeLeague();
+    const buyer = clubs.find((c) => c.id === 'c0')!;
+    buyer.finance.transferBudget = 999_999_999;
+    buyer.finance.balance = 999_999_999;
+    // 기존 스쿼드 임금만으로 이미 지속가능 예산을 채운다 — 추가 영입은 어떤 선수든 초과.
+    const perPlayerWage = Math.ceil(wageBudget(buyer) / 52 / buyer.players.length) + 100;
+    for (const p of buyer.players) p.wage = perPlayerWage;
+
+    const deals = runTransferWindow(clubs, 7);
+    expect(deals.some((d) => d.toClubId === buyer.id)).toBe(false);
   });
 });
 
