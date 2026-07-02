@@ -125,6 +125,8 @@ export function PlayerDetail({ player, onClose, onSetFocus, onRenew }: Props) {
           </div>
         )}
 
+        <GrowthChart history={player.caHistory ?? []} current={Math.round(ca)} />
+
         <div className="pd-cols">
           <AttrGroup title="기술" attrs={TECHNICAL_ATTRS} player={player} />
           <AttrGroup title="정신" attrs={MENTAL_ATTRS} player={player} />
@@ -148,6 +150,47 @@ export function PlayerDetail({ player, onClose, onSetFocus, onRenew }: Props) {
             </div>
           ))}
         </div>
+      </div>
+    </div>
+  );
+}
+
+/** 시즌별 CA 스냅샷 + 현재 CA로 성장 곡선 스파크라인을 그린다. */
+function GrowthChart({ history, current }: { history: number[]; current: number }) {
+  const pts = [...history, current];
+  if (pts.length < 2) {
+    return (
+      <div className="pd-growth">
+        <h3>성장 추이 <span className="muted small">(시즌별 CA)</span></h3>
+        <p className="muted small">시즌을 마치면 성장 곡선이 쌓입니다.</p>
+      </div>
+    );
+  }
+  const W = 320, H = 64, pad = 6;
+  const lo = Math.min(...pts) - 2;
+  const hi = Math.max(...pts) + 2;
+  const span = Math.max(1, hi - lo);
+  const x = (i: number) => pad + (i / (pts.length - 1)) * (W - pad * 2);
+  const y = (v: number) => H - pad - ((v - lo) / span) * (H - pad * 2);
+  const line = pts.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+  const rising = current >= pts[0]!;
+  const color = rising ? '#3ddc84' : '#e0a83b';
+
+  return (
+    <div className="pd-growth">
+      <h3>성장 추이 <span className="muted small">(시즌별 CA · 현재 {current})</span></h3>
+      <svg width={W} height={H} className="growth-svg" role="img" aria-label="CA 성장 곡선">
+        <polyline points={line} fill="none" stroke={color} strokeWidth={2}
+          strokeLinejoin="round" strokeLinecap="round" />
+        {pts.map((v, i) => (
+          <circle key={i} cx={x(i)} cy={y(v)} r={i === pts.length - 1 ? 3.5 : 2}
+            fill={i === pts.length - 1 ? color : 'rgba(255,255,255,0.5)'} />
+        ))}
+      </svg>
+      <div className="growth-ends muted small">
+        <span>{pts[0]}</span>
+        <span>최고 {Math.max(...pts)}</span>
+        <span>{current}</span>
       </div>
     </div>
   );

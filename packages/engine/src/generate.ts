@@ -83,6 +83,7 @@ function genPlayer(rng: Rng, position: Position, tier: number, fixedAge?: number
     seasonGoals: 0,
     careerApps: 0,
     careerGoals: 0,
+    caHistory: [],
   };
   player.wage = weeklyWage(player);
   player.traits = rollTraits(player, rng);

@@ -99,6 +99,10 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
       player.morale = clamp(0.4 * player.morale + 0.6 * (target + leaderBonus), 0, 1);
 
       progressPlayer(player, rng, club.staff.coaching);
+      // 성장 곡선: 이번 시즌 종료 시점 CA 스냅샷(최근 20시즌 유지)
+      const hist = player.caHistory ?? (player.caHistory = []);
+      hist.push(Math.round(currentAbility(player)));
+      if (hist.length > 20) hist.shift();
       // 통산 기록 누적 후 시즌 카운터 리셋
       player.careerApps = (player.careerApps ?? 0) + player.seasonApps;
       player.careerGoals = (player.careerGoals ?? 0) + (player.seasonGoals ?? 0);

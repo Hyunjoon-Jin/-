@@ -94,6 +94,8 @@ export interface Player {
   careerApps: number;
   /** 통산 득점(전 시즌 누적). */
   careerGoals: number;
+  /** 시즌별 CA 스냅샷(성장 곡선). 오프시즌마다 1개 추가. */
+  caHistory: number[];
 }
 
 export type TrainingFocus =
