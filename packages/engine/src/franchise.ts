@@ -79,6 +79,10 @@ export interface SeasonSummary {
   squad?: SeasonSquadEntry[];
   /** 내 구단 선수의 이번 시즌 통산 마일스톤 달성(앱). */
   milestones?: CareerMilestone[];
+  /** 시즌 시작 시 언론 예상 순위(전술 XI 평균 CA 기준, 앱). */
+  preseasonRank?: number;
+  /** 예상 순위 대비 실제 성적 이변 여부(앱). 예상보다 크게 잘하면 overperform, 크게 못하면 underperform. */
+  surprise?: 'overperform' | 'underperform';
 }
 
 /**

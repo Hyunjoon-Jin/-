@@ -24,7 +24,7 @@ import {
   computeTeamStrength, currentAbility, recentForm,
   type Club, type Tactic, type MatchResult, type MatchSetup, type SeasonSummary,
   type Fixture, type TableRow, type PlayerSeasonStat, type CupState, type StaffKind,
-  type PlayerFormEntry,
+  type PlayerFormEntry, type Player,
   type TeamStrength, type FormSummary,
 } from '@soccer-tycoon/engine';
 import { makeDefaultTactic, repairTactic } from './tactics.js';
@@ -41,6 +41,45 @@ export interface LiveSeason {
   divisionClubIds: string[];
   /** 미디어 인터뷰를 처리(응답/무시)한 마지막 라운드(중복 노출 방지). */
   mediaHandledThroughRound: number;
+  /** 시즌 시작 시 언론 예상 순위(전술 XI 평균 CA 기준, 킥오프 시점 고정). */
+  predictedTable: PredictedClub[];
+}
+
+/** 언론 예상 순위 항목. */
+export interface PredictedClub {
+  clubId: string;
+  name: string;
+  predictedPos: number;
+}
+
+/** 전술 XI(출전 예정 라인업)의 평균 CA — 언론 예상 순위 산정용. */
+function xiAvgCA(club: Club, tactic: Tactic): number {
+  const byId = new Map(club.players.map((p) => [p.id, p]));
+  const xi = tactic.lineup
+    .map((s) => byId.get(s.playerId))
+    .filter((p): p is Player => p !== undefined);
+  if (xi.length === 0) return 0;
+  return xi.reduce((s, p) => s + currentAbility(p), 0) / xi.length;
+}
+
+/** 프리시즌 언론 예상 순위: 전술 XI 평균 CA로 구단을 정렬(단순 전력 랭킹). */
+function preseasonPrediction(clubs: Club[], myClubId: string, myClubTactic: Tactic): PredictedClub[] {
+  return clubs
+    .map((c) => ({
+      clubId: c.id, name: c.name,
+      rating: xiAvgCA(c, c.id === myClubId ? myClubTactic : defaultTactic(c)),
+    }))
+    .sort((a, b) => b.rating - a.rating)
+    .map((r, i) => ({ clubId: r.clubId, name: r.name, predictedPos: i + 1 }));
+}
+
+/** 이변 판정 기준: 예상보다 이만큼 이상 순위가 차이 나면 이변으로 본다. */
+const SURPRISE_GAP = 4;
+
+function classifySurprise(predictedPos: number, actualPos: number): SeasonSummary['surprise'] {
+  if (predictedPos - actualPos >= SURPRISE_GAP) return 'overperform';
+  if (actualPos - predictedPos >= SURPRISE_GAP) return 'underperform';
+  return undefined;
 }
 
 export const DIVISIONS = 2;
@@ -242,12 +281,15 @@ export function startSeason(state: GameState): GameState {
   const ss = createSeasonState(myDivClubs, seasonSeed(state));
   // 컵은 전 구단 참가
   const cup = createCup(state.clubs, state.seed + state.season * 1000 + 4);
+  // 이적 창 마감 직후 스쿼드 기준 언론 예상 순위(시즌 내내 고정).
+  const predictedTable = preseasonPrediction(myDivClubs, state.myClubId, repaired);
   return {
     ...state,
     tactics: { ...state.tactics, [state.myClubId]: repaired },
     live: {
       fixtures: ss.fixtures, results: ss.results, cursor: ss.cursor, baseSeed: ss.baseSeed,
       transfers, divisionClubIds: myDivClubs.map((c) => c.id), mediaHandledThroughRound: 0,
+      predictedTable,
     },
     cup,
   };
@@ -371,6 +413,8 @@ export function finishSeason(state: GameState): GameState {
 
   // 6.5) 이사회 신뢰도 갱신 (이번 시즌 목표 대비 성적 + 승강 + 재정 + 특별 요구)
   const myPosition = myTable.findIndex((r) => r.clubId === state.myClubId) + 1;
+  const preseasonRank = state.live.predictedTable.find((p) => p.clubId === state.myClubId)?.predictedPos;
+  const surprise = preseasonRank !== undefined ? classifySurprise(preseasonRank, myPosition) : undefined;
   const myNet = finance.get(state.myClubId)?.net ?? 0;
   const delta = confidenceDelta({
     position: myPosition, objective: state.objective, promoted, relegated, netFinance: myNet,
@@ -422,6 +466,8 @@ export function finishSeason(state: GameState): GameState {
     demand: demandResult,
     squad: mySquad,
     milestones: myMilestones,
+    preseasonRank,
+    surprise,
   };
 
   const repaired = repairTactic(myClub(state), myTactic(state));

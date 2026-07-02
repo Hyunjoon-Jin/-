@@ -327,6 +327,14 @@ soccer-tycoon/
 - [x] 라이벌전 개별 맞대결 기록: rivalRecord 집계와 같은 시점(finishSeason)에
       GameState.rivalMeetings(시즌·홈원정·스코어·결과)를 함께 누적. 히스토리에
       전체 맞대결 표로, 대시보드 라이벌 카드에 최근 5경기 폼(승/무/패 점) 표시.
+- [x] 프리시즌 언론 예상 순위: startSeason(이적 마감 직후)에 그 부 소속 구단의
+      전술 XI 평균 CA로 단순 전력 랭킹을 매겨 LiveSeason.predictedTable에 고정
+      (시즌 내내 불변 — "프리시즌 언론 발표" 스냅샷). 경기 탭에 "언론 예상 N위"
+      표시. 시즌 종료 시 SeasonSummary.preseasonRank로 실어 실제 순위와 비교,
+      4계단 이상 차이 나면 surprise('overperform'/'underperform')로 분류해
+      대시보드에 "이변의 시즌"/"실망스러운 시즌" 배너 표시. 예측·판정 로직은
+      모두 game.ts(앱)에 있고, engine의 SeasonSummary에는 squad·milestones와
+      같은 패턴으로 앱 전용 옵셔널 필드(preseasonRank·surprise)만 추가.
 
 기획했던 핵심·확장 시스템이 모두 구현됨. 이후는 콘텐츠 확충·디테일 다듬기 영역.
 

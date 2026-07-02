@@ -59,11 +59,15 @@ function InSeason(props: Props) {
   const next = myNextFixture(game);
   const table = liveTable(game);
   const media = checkMediaEvent(game);
+  const predicted = game.live?.predictedTable.find((p) => p.clubId === game.myClubId)?.predictedPos;
 
   return (
     <div className="match-screen">
       <div className="phase-banner">
         <h2>{DIVISION_LABELS[myClub(game).division]} · 시즌 {game.season} · {prog.round}/{prog.total} 라운드</h2>
+        {predicted !== undefined && (
+          <p className="muted small">📰 언론 예상: <b>{predicted}위</b></p>
+        )}
         {next && (
           <p className="next-fixture">
             다음 경기: <b>{game.clubs.find((c) => c.id === game.myClubId)!.name}</b>{' '}

@@ -122,9 +122,21 @@ export function Dashboard({ game }: { game: GameState }) {
                 ))}
               </div>
             )}
+            {last.surprise && (
+              <div className={`surprise-banner ${last.surprise}`}>
+                <p>
+                  {last.surprise === 'overperform'
+                    ? <>🎉 <b>이변의 시즌!</b> 언론은 {last.preseasonRank}위로 예상했지만 <b>{pos}위</b>로 마쳤습니다.</>
+                    : <>😞 <b>실망스러운 시즌.</b> 언론은 {last.preseasonRank}위를 예상했지만 <b>{pos}위</b>에 그쳤습니다.</>}
+                </p>
+              </div>
+            )}
             <p>
               {last.division !== undefined && <><b>{DIVISION_LABELS[last.division]}</b> · </>}
               최종 순위: <b>{pos}위</b> / {last.table.length}팀
+              {last.preseasonRank !== undefined && (
+                <span className="muted small"> (언론 예상 {last.preseasonRank}위)</span>
+              )}
               {last.promoted && <span className="pos"> ↑ 승격!</span>}
               {last.relegated && <span className="neg"> ↓ 강등</span>}
               &nbsp;·&nbsp; 리그 우승: <b>{last.championName}</b>
