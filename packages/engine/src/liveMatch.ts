@@ -21,6 +21,10 @@ export interface LiveStats {
 export class LiveMatch {
   private ctx: MatchContext;
   private current = 0; // 진행된 분
+  // finalize()는 statMap 평점에 승/패·실점 보정을 "더해서" 반영하므로 비멱등적이다.
+  // result()가 여러 번 호출돼도(예: React 렌더마다) 보정이 중복 적용되지 않도록 최초 1회만
+  // 계산해 캐시한다 — 경기가 끝난 뒤의 결과는 이후 다시 계산해도 달라질 이유가 없다.
+  private cachedResult: MatchResult | null = null;
 
   constructor(setup: MatchSetup) {
     this.ctx = createContext(setup);
@@ -90,6 +94,7 @@ export class LiveMatch {
   }
 
   result(): MatchResult {
-    return finalize(this.ctx);
+    if (!this.cachedResult) this.cachedResult = finalize(this.ctx);
+    return this.cachedResult;
   }
 }

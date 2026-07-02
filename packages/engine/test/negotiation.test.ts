@@ -74,6 +74,32 @@ describe('negotiation: 이적 협상', () => {
     expect(ev.ok).toBe(false);
   });
 
+  it('buyPlayerAt: 호가의 82% 미만 헐값 제시는 거절되고 소유권이 이동하지 않는다', () => {
+    const { clubs, myId } = twoClubs(8);
+    const t = aTarget(clubs, myId);
+    const seller = clubs.find((c) => c.id !== myId)!;
+    const beforeMe = clubs.find((c) => c.id === myId)!.players.length;
+    const beforeSeller = seller.players.length;
+
+    const r = buyPlayerAt(clubs, myId, t.player.id, 1);
+    expect(r.ok).toBe(false);
+    expect(clubs.find((c) => c.id === myId)!.players.length).toBe(beforeMe);
+    expect(seller.players.length).toBe(beforeSeller);
+  });
+
+  it('askingPrice/marketValue 비율이 잔여 계약 기간과 무관하다(이중 할인 없음)', () => {
+    const { clubs } = twoClubs(9);
+    const seller = clubs.find((c) => c.id !== 'me')!;
+    const player = seller.players[0]!;
+
+    player.contractYears = 4;
+    const ratioLong = askingPrice(seller, player) / marketValue(player);
+    player.contractYears = 1; // 만료 임박 — marketValue 자체는 낮아지지만 importance 배율(비율)은 그대로여야 함
+    const ratioShort = askingPrice(seller, player) / marketValue(player);
+
+    expect(ratioShort).toBeCloseTo(ratioLong, 5);
+  });
+
   it('buyPlayerAt: 합의액으로 영입, 양 구단 예산·스쿼드 이동', () => {
     const { clubs, myId } = twoClubs(7);
     const t = aTarget(clubs, myId);

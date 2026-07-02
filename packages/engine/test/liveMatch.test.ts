@@ -71,6 +71,21 @@ describe('LiveMatch', () => {
     expect(end.shotsOnTarget[1]).toBeGreaterThanOrEqual(r.score[1]);
   });
 
+  it('result()를 여러 번 호출해도 평점이 중복 적용되지 않는다(멱등성)', () => {
+    const live = new LiveMatch(setup(42));
+    live.runToEnd();
+    const first = live.result();
+    const second = live.result();
+    const third = live.result();
+    expect(second).toBe(first); // 캐시된 동일 객체
+    for (const st of first.playerStats.home) {
+      const s2 = second.playerStats.home.find((s) => s.playerId === st.playerId)!;
+      const s3 = third.playerStats.home.find((s) => s.playerId === st.playerId)!;
+      expect(s2.rating).toBe(st.rating);
+      expect(s3.rating).toBe(st.rating);
+    }
+  });
+
   it('하프타임 전술 변경은 결과를 바꾼다(공격적으로 전환 시 다른 전개)', () => {
     const base = setup(2024);
     // 기준: 변경 없음

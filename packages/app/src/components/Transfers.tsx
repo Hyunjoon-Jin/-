@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { myClub, lastSummary, type GameState, type ActionOutcome } from '../game.js';
+import { myClub, lastSummary, revealPotential, type GameState, type ActionOutcome } from '../game.js';
 import {
   transferTargets, marketValue, currentAbility, formatMoney, lineOf, buildScoutingReport,
   type Line, type Player, type OfferEvaluation, type TransferTarget, type SellOffer,
@@ -47,18 +47,6 @@ export function Transfers(props: Props) {
   // 시즌 진행 중에는 직접 이적 불가 → 지난 시즌 내역(읽기 전용)
   if (props.game.live) return <TransferHistory game={props.game} />;
   return <TransferMarket {...props} />;
-}
-
-/** 스카우팅 레벨에 따라 매물 잠재력 공개 정도가 달라진다. */
-function revealPotential(scouting: number, potential: number): string {
-  if (scouting >= 15) return potential.toFixed(0);
-  if (scouting >= 8) {
-    const band = 12 - Math.round((scouting - 8) * 1.2); // 8→12, 14→5 폭
-    const lo = Math.max(0, Math.round(potential - band));
-    const hi = Math.round(potential + band);
-    return `${lo}~${hi}`;
-  }
-  return '?';
 }
 
 function TransferMarket({ game, onNegotiate, onBuyAt, onOffers, onAcceptSell, onRelease, onSelect }: Props) {

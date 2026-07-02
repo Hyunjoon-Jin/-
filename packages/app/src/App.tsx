@@ -22,7 +22,7 @@ import { Cup } from './components/Cup.js';
 import { Staff } from './components/Staff.js';
 import { History } from './components/History.js';
 import { Help } from './components/Help.js';
-import { PlayerDetail } from './components/PlayerDetail.js';
+import { PlayerDetail, FULL_SCOUTING } from './components/PlayerDetail.js';
 import { WatchMatch } from './components/WatchMatch.js';
 import type { Player } from '@soccer-tycoon/engine';
 
@@ -62,9 +62,19 @@ export function App() {
     if (slotId) setSavedAt(store.save(slotId, next).savedAt);
   }
 
+  /** 다른 세션(새 게임/불러오기/메뉴 복귀)으로 전환 시 이전 세션에 속한 오버레이 상태를
+   *  반드시 함께 초기화한다 — 그러지 않으면 관전 화면이나 선수 상세 모달이 새 게임의
+   *  club 데이터와 뒤섞인 채로 눌러붙어 대시보드로 돌아갈 수 없게 된다. */
+  function resetOverlays() {
+    setWatching(null);
+    setDetailPlayer(null);
+    setShowHelp(false);
+  }
+
   function handleStart(seed: number, clubId: string, difficulty: Difficulty) {
     const state = startGame(seed, clubId, difficulty);
     const id = newSlotId();
+    resetOverlays();
     setGame(state);
     setSlotId(id);
     setSavedAt(store.save(id, state).savedAt);
@@ -72,6 +82,7 @@ export function App() {
   }
 
   function handleLoad(id: string, state: GameState) {
+    resetOverlays();
     setGame(state);
     setSlotId(id);
     setSavedAt(null);
@@ -79,6 +90,7 @@ export function App() {
   }
 
   function quitToMenu() {
+    resetOverlays();
     setGame(null);
     setSlotId(null);
     setSavedAt(null);
@@ -144,25 +156,25 @@ export function App() {
       </header>
 
       {showHelp && <Help onClose={() => setShowHelp(false)} />}
-      {detailPlayer && (
-        <PlayerDetail
-          player={detailPlayer}
-          onClose={() => setDetailPlayer(null)}
-          onSetFocus={
-            club.players.some((p) => p.id === detailPlayer.id)
-              ? (focus) => update(setTrainingFocus(game, detailPlayer.id, focus))
-              : undefined
-          }
-          onRenew={
-            club.players.some((p) => p.id === detailPlayer.id)
-              ? () => { const o = renewContract(game, detailPlayer.id); if (o.ok) update(o.state); return o; }
-              : undefined
-          }
-          recentForm={playerForm(game, detailPlayer.id)}
-          timeline={playerTimeline(game, detailPlayer.id)}
-          ratingHistory={playerRatingHistory(game, detailPlayer.id)}
-        />
-      )}
+      {detailPlayer && (() => {
+        const isMine = club.players.some((p) => p.id === detailPlayer.id);
+        return (
+          <PlayerDetail
+            player={detailPlayer}
+            onClose={() => setDetailPlayer(null)}
+            onSetFocus={isMine ? (focus) => update(setTrainingFocus(game, detailPlayer.id, focus)) : undefined}
+            onRenew={
+              isMine
+                ? () => { const o = renewContract(game, detailPlayer.id); if (o.ok) update(o.state); return o; }
+                : undefined
+            }
+            recentForm={playerForm(game, detailPlayer.id)}
+            timeline={playerTimeline(game, detailPlayer.id)}
+            ratingHistory={playerRatingHistory(game, detailPlayer.id)}
+            scouting={isMine ? FULL_SCOUTING : club.staff.scouting}
+          />
+        );
+      })()}
 
       {!watching && (
         <nav className="tabs">

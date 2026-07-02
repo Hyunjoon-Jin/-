@@ -922,6 +922,23 @@ export function formStability(history: SeasonRatingEntry[]): 'steady' | 'volatil
   return Math.sqrt(variance) < FORM_STABILITY_STDDEV ? 'steady' : 'volatile';
 }
 
+/**
+ * 스카우팅 레벨에 따라 선수 잠재력(PA) 공개 정도를 결정.
+ * 이적 시장(협상 모달)뿐 아니라 선수 상세 화면에서도 공유해서 써야
+ * "이름 클릭 한 번으로 스카우팅 안개를 우회"하는 일이 없다 — 내 구단 소속
+ * 선수는 항상 안개가 없으므로 호출부에서 scouting=20(만개)을 넘긴다.
+ */
+export function revealPotential(scouting: number, potential: number): string {
+  if (scouting >= 15) return potential.toFixed(0);
+  if (scouting >= 8) {
+    const band = 12 - Math.round((scouting - 8) * 1.2); // 8→12, 14→5 폭
+    const lo = Math.max(0, Math.round(potential - band));
+    const hi = Math.round(potential + band);
+    return `${lo}~${hi}`;
+  }
+  return '?';
+}
+
 /** 진행 중 시즌, 내 구단 선수들의 시즌 통계(평점순). */
 export function liveSquadStats(state: GameState): PlayerSeasonStat[] {
   if (!state.live) return [];

@@ -37,8 +37,10 @@ export interface BuyResult { ok: boolean; fee?: number; playerName?: string; rea
 
 /**
  * 매도 구단의 호가(asking price).
- * 시장가에 선수 중요도(포지션 내 서열)와 잔여 계약을 반영한다.
- * 핵심 선수는 프리미엄, 계약 만료 임박·스쿼드 잉여는 할인.
+ * 시장가(marketValue — 이미 잔여 계약 할인이 반영됨)에 선수 중요도(포지션 내 서열)만
+ * 추가로 반영한다. 계약 할인을 여기서 다시 곱하면 marketValue의 contractFactor와
+ * 이중으로 적용돼 만료 임박 선수가 실제 가치의 절반 이하로 거래되므로 주의.
+ * 핵심 선수는 프리미엄, 뎁스 여유가 있으면 소폭 할인.
  */
 export function askingPrice(seller: Club, player: Player): number {
   const line = lineOf(player.position);
@@ -53,10 +55,7 @@ export function askingPrice(seller: Club, player: Player): number {
   else if (rank === 1) importance = 1.15; // 준주전
   if (depth >= 4 && rank >= 2) importance *= 0.9; // 뎁스 여유 → 할인
 
-  const years = player.contractYears;
-  const contractMul = years <= 1 ? 0.75 : years === 2 ? 0.9 : 1.0;
-
-  return Math.round(marketValue(player) * importance * contractMul);
+  return Math.round(marketValue(player) * importance);
 }
 
 export type OfferOutcome = 'accepted' | 'countered' | 'rejected';
@@ -123,6 +122,12 @@ export function buyPlayerAt(clubs: Club[], myClubId: string, playerId: string, f
   }
   const player = seller.players.find((p) => p.id === playerId)!;
   if (!(fee > 0)) return { ok: false, reason: '이적료가 올바르지 않습니다.' };
+  // evaluateOffer와 동일한 하한(호가의 82%) — 협상 없이 직접 buyPlayerAt을 호출해도
+  // 헐값에 선수를 사들이지 못하도록 매도 구단 쪽에서 다시 검증한다.
+  const floor = Math.round(askingPrice(seller, player) * 0.82);
+  if (fee < floor) {
+    return { ok: false, reason: '제안액이 너무 낮아 거절당했습니다.' };
+  }
   if (me.finance.transferBudget < fee) {
     return { ok: false, reason: '이적 예산이 부족합니다.' };
   }

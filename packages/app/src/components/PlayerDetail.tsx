@@ -7,7 +7,7 @@ import {
   type AttrKey, type Player, type DerivedRatings, type TrainingFocus,
   type PlayerFormEntry, type OverallTier, type PotentialTier, type AgeProfile, type ScoutingReport,
 } from '@soccer-tycoon/engine';
-import { formStability, type TimelineEntry, type SeasonRatingEntry } from '../game.js';
+import { formStability, revealPotential, type TimelineEntry, type SeasonRatingEntry } from '../game.js';
 
 function moraleLabel(m: number): { text: string; cls: string } {
   if (m >= 0.65) return { text: '😀 만족', cls: 'cond-good' };
@@ -31,8 +31,8 @@ export const AGE_LABEL: Record<AgeProfile, string> = {
   wonderkid: '유망주', prime: '전성기', veteran: '베테랑', declining: '노장',
 };
 
-/** 상세 화면은 항상 정밀 평가(스카우팅 레벨 최대치 가정) — PA도 이미 그대로 노출되므로 일관성 유지. */
-const FULL_SCOUTING = 20;
+/** 내 구단 소속 선수는 스카우팅 안개가 없으므로, 호출부(App.tsx)가 이 값을 scouting으로 넘긴다. */
+export const FULL_SCOUTING = 20;
 
 /** 스카우팅 리포트 서술 블록(선수 상세·이적 시장 협상 모달에서 공유). */
 export function ScoutingSummary({ report, title }: { report: ScoutingReport; title?: string }) {
@@ -51,8 +51,8 @@ export function ScoutingSummary({ report, title }: { report: ScoutingReport; tit
   );
 }
 
-function ScoutingPanel({ player }: { player: Player }) {
-  const report = buildScoutingReport(player, FULL_SCOUTING);
+function ScoutingPanel({ player, scouting }: { player: Player; scouting: number }) {
+  const report = buildScoutingReport(player, scouting);
   return <ScoutingSummary report={report} />;
 }
 
@@ -103,9 +103,14 @@ interface Props {
   timeline?: TimelineEntry[];
   /** 내 구단 소속으로 출전한 시즌의 평균 평점 이력. 시즌순. */
   ratingHistory?: SeasonRatingEntry[];
+  /** 이 선수에 대한 스카우팅 레벨(PA 공개 정도·강점/약점 리포트에 반영).
+   *  내 구단 선수면 FULL_SCOUTING, 아니면 club.staff.scouting을 넘긴다. */
+  scouting: number;
 }
 
-export function PlayerDetail({ player, onClose, onSetFocus, onRenew, recentForm, timeline, ratingHistory }: Props) {
+export function PlayerDetail({
+  player, onClose, onSetFocus, onRenew, recentForm, timeline, ratingHistory, scouting,
+}: Props) {
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const ca = currentAbility(player);
   const derived = playerDerived(player, player.position);
@@ -130,7 +135,7 @@ export function PlayerDetail({ player, onClose, onSetFocus, onRenew, recentForm,
 
         <div className="pd-meta">
           <span>CA <b>{ca.toFixed(0)}</b></span>
-          <span>PA <b>{player.potential.toFixed(0)}</b></span>
+          <span>PA <b>{revealPotential(scouting, player.potential)}</b></span>
           <span>가치 <b>{formatMoney(marketValue(player))}</b></span>
           <span>주급 <b>{formatMoney(player.wage)}</b></span>
           <span className={status.cls}>{status.text}</span>
@@ -173,7 +178,7 @@ export function PlayerDetail({ player, onClose, onSetFocus, onRenew, recentForm,
             ))}
           </div>
         )}
-        <ScoutingPanel player={player} />
+        <ScoutingPanel player={player} scouting={scouting} />
         <div className="pd-fam muted">가능 포지션: {fam.join(', ') || player.position}</div>
 
         {onSetFocus && (
