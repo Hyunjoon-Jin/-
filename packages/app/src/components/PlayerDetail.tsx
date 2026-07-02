@@ -8,6 +8,7 @@ import {
   type PlayerFormEntry, type OverallTier, type PotentialTier, type AgeProfile, type ScoutingReport,
 } from '@soccer-tycoon/engine';
 import { formStability, revealPotential, type TimelineEntry, type SeasonRatingEntry } from '../game.js';
+import { useModalA11y } from './useModalA11y.js';
 
 function moraleLabel(m: number): { text: string; cls: string } {
   if (m >= 0.65) return { text: '😀 만족', cls: 'cond-good' };
@@ -119,10 +120,19 @@ export function PlayerDetail({
     .filter(([, v]) => (v ?? 0) >= 0.5)
     .map(([pos]) => pos);
   const stability = formStability(ratingHistory ?? []);
+  const ref = useModalA11y<HTMLDivElement>(onClose);
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal player-detail" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="modal player-detail"
+        role="dialog"
+        aria-modal="true"
+        aria-label={`${player.name} 선수 상세`}
+        tabIndex={-1}
+        ref={ref}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="modal-head">
           <div>
             <h2>{player.name}</h2>

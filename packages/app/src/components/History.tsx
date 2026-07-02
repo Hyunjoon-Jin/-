@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { myClub, rivalClub, DIVISION_LABELS, type GameState } from '../game.js';
 import { careerScorers, type SeasonSquadEntry } from '@soccer-tycoon/engine';
+import { useModalA11y } from './useModalA11y.js';
 
 const RESULT_LABEL: Record<'win' | 'draw' | 'loss', string> = { win: '승', draw: '무', loss: '패' };
 
@@ -222,9 +223,18 @@ function TitleSquadModal({
 }) {
   const squad: SeasonSquadEntry[] = season.squad ?? [];
   const trophies = [leagueWon && '리그', cupWon && '컵'].filter(Boolean).join(' + ');
+  const ref = useModalA11y<HTMLDivElement>(onClose);
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label={`시즌 ${season.season} 우승 스쿼드 — ${clubName}`}
+        tabIndex={-1}
+        ref={ref}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="modal-head">
           <h2>🏆 시즌 {season.season} 우승 스쿼드 — {clubName}</h2>
           <button className="btn-ghost" onClick={onClose}>닫기 ✕</button>

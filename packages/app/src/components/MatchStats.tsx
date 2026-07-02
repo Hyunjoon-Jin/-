@@ -1,4 +1,5 @@
 import type { MatchResult, PlayerMatchStat } from '@soccer-tycoon/engine';
+import { useModalA11y } from './useModalA11y.js';
 
 /** 경기 상세 통계 본문 (점유율·슈팅·선수 평점). */
 export function MatchStats({ result, myClubId }: { result: MatchResult; myClubId?: string }) {
@@ -70,9 +71,18 @@ function ratingCls(r: number): string {
 export function MatchDetailModal({
   result, myClubId, onClose,
 }: { result: MatchResult; myClubId?: string; onClose: () => void }) {
+  const ref = useModalA11y<HTMLDivElement>(onClose);
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal match-detail" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="modal match-detail"
+        role="dialog"
+        aria-modal="true"
+        aria-label={`${result.homeClubName} ${result.score[0]} : ${result.score[1]} ${result.awayClubName} 경기 상세`}
+        tabIndex={-1}
+        ref={ref}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="modal-head">
           <h2>
             {result.homeClubName} <b>{result.score[0]} : {result.score[1]}</b> {result.awayClubName}

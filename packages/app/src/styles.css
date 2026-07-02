@@ -90,6 +90,7 @@ body {
 }
 .btn-ghost:hover { color: var(--text); border-color: var(--accent-2); }
 .saved-badge { color: var(--accent); font-size: 12px; }
+.saved-badge.save-error { color: #e0544a; font-weight: 700; }
 .help-btn { padding: 4px 10px; font-weight: 700; }
 
 /* ── Difficulty (start) ── */

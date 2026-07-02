@@ -9,6 +9,7 @@ import { Tactics } from './Tactics.js';
 import { MatchPitch, type PitchState } from './MatchPitch.js';
 import { MatchStats } from './MatchStats.js';
 import { MatchPreview } from './MatchPreview.js';
+import { useModalA11y } from './useModalA11y.js';
 
 interface Props {
   watch: WatchSetup;
@@ -311,9 +312,18 @@ function InjurySubModal({
     .filter((p) => p.id !== injury.playerId && isAvailable(p) && !tactic.lineup.some((s) => s.playerId === p.id))
     .sort((a, b) => currentAbility(b) - currentAbility(a));
 
+  const ref = useModalA11y<HTMLDivElement>(onDismiss);
   return (
     <div className="modal-backdrop" onClick={onDismiss}>
-      <div className="modal injury-modal" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="modal injury-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="부상 발생"
+        tabIndex={-1}
+        ref={ref}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="modal-head">
           <h2>🚑 부상 발생</h2>
         </div>

@@ -54,12 +54,29 @@ export function App() {
   const [watchKind, setWatchKind] = useState<'league' | 'cup'>('league');
   const [showHelp, setShowHelp] = useState(false);
   const [detailPlayer, setDetailPlayer] = useState<Player | null>(null);
+  const [saveError, setSaveError] = useState(false);
 
-  /** 상태 갱신 + 자동 저장. 경질로 새로 전환되면 커리어 아카이브에 재임 기록을 남긴다. */
+  /** 상태 갱신 + 자동 저장. 경질로 새로 전환되면 커리어 아카이브에 재임 기록을 남긴다.
+   *  게임 상태 반영(setGame)을 항상 먼저 수행 — 커리어 기록·저장은 부수 효과이므로
+   *  그 쪽에서 예외(저장 공간 부족 등)가 나더라도 경질 전이 자체가 막히면 안 된다. */
   function update(next: GameState) {
-    if (next.sacked && !game?.sacked) recordSackedStint(next);
     setGame(next);
-    if (slotId) setSavedAt(store.save(slotId, next).savedAt);
+    if (next.sacked && !game?.sacked) {
+      try {
+        recordSackedStint(next);
+      } catch (err) {
+        console.error('커리어 기록 저장 실패:', err);
+      }
+    }
+    if (slotId) {
+      try {
+        setSavedAt(store.save(slotId, next).savedAt);
+        setSaveError(false);
+      } catch (err) {
+        console.error('자동 저장 실패:', err);
+        setSaveError(true);
+      }
+    }
   }
 
   /** 다른 세션(새 게임/불러오기/메뉴 복귀)으로 전환 시 이전 세션에 속한 오버레이 상태를
@@ -69,6 +86,7 @@ export function App() {
     setWatching(null);
     setDetailPlayer(null);
     setShowHelp(false);
+    setSaveError(false);
   }
 
   function handleStart(seed: number, clubId: string, difficulty: Difficulty) {
@@ -77,7 +95,12 @@ export function App() {
     resetOverlays();
     setGame(state);
     setSlotId(id);
-    setSavedAt(store.save(id, state).savedAt);
+    try {
+      setSavedAt(store.save(id, state).savedAt);
+    } catch (err) {
+      console.error('자동 저장 실패:', err);
+      setSaveError(true);
+    }
     setTab('dashboard');
   }
 
@@ -148,7 +171,9 @@ export function App() {
         <div className="brand">⚽ Soccer Tycoon</div>
         <button className="btn-ghost" onClick={quitToMenu} title="메뉴로 (자동 저장됨)">← 메뉴</button>
         <div className="club-info">
-          {savedLabel && <span className="saved-badge">{savedLabel}</span>}
+          {saveError
+            ? <span className="saved-badge save-error" title="저장 공간이 부족하거나 접근할 수 없습니다.">저장 실패</span>
+            : (savedLabel && <span className="saved-badge">{savedLabel}</span>)}
           <span className="club-name">{club.name}</span>
           <span className="season-badge">시즌 {game.season}{game.live ? ' 진행중' : ' 프리시즌'}</span>
           <button className="btn-ghost help-btn" onClick={() => setShowHelp(true)} title="도움말">?</button>

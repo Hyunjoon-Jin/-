@@ -18,17 +18,39 @@ export function StartScreen({ store, onStart, onLoad }: Props) {
   const clubs = useMemo(() => createLeague(seed), [seed]);
   const [selected, setSelected] = useState<string | null>(null);
   const [difficulty, setDifficulty] = useState<Difficulty>('normal');
-  const [saves, setSaves] = useState<SaveSlotMeta[]>(() => store.list());
-  const career = useMemo<CareerStint[]>(() => loadCareer(), []);
+  const [saves, setSaves] = useState<SaveSlotMeta[]>(() => {
+    try {
+      return store.list();
+    } catch (err) {
+      console.error('세이브 목록을 불러오지 못했습니다:', err);
+      return [];
+    }
+  });
+  const career = useMemo<CareerStint[]>(() => {
+    try {
+      return loadCareer();
+    } catch (err) {
+      console.error('커리어 기록을 불러오지 못했습니다:', err);
+      return [];
+    }
+  }, []);
 
   function loadSlot(id: string) {
-    const state = store.load(id);
-    if (state) onLoad(id, state);
+    try {
+      const state = store.load(id);
+      if (state) onLoad(id, state);
+    } catch (err) {
+      console.error('세이브를 불러오지 못했습니다:', err);
+    }
   }
 
   function deleteSlot(id: string) {
-    store.remove(id);
-    setSaves(store.list());
+    try {
+      store.remove(id);
+      setSaves(store.list());
+    } catch (err) {
+      console.error('세이브 삭제에 실패했습니다:', err);
+    }
   }
 
   return (

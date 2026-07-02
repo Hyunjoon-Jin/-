@@ -1,3 +1,5 @@
+import { useModalA11y } from './useModalA11y.js';
+
 interface Props { onClose: () => void }
 
 const ITEMS: { tab: string; text: string }[] = [
@@ -13,9 +15,18 @@ const ITEMS: { tab: string; text: string }[] = [
 ];
 
 export function Help({ onClose }: Props) {
+  const ref = useModalA11y<HTMLDivElement>(onClose);
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="도움말 — 화면 안내"
+        tabIndex={-1}
+        ref={ref}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="modal-head">
           <h2>도움말 — 화면 안내</h2>
           <button className="btn-ghost" onClick={onClose}>닫기 ✕</button>

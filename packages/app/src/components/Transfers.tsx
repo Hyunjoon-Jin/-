@@ -5,6 +5,7 @@ import {
   type Line, type Player, type OfferEvaluation, type TransferTarget, type SellOffer,
 } from '@soccer-tycoon/engine';
 import { ScoutingSummary } from './PlayerDetail.js';
+import { useModalA11y } from './useModalA11y.js';
 
 interface Props {
   game: GameState;
@@ -269,9 +270,18 @@ function SellModal({
     onResult({ text: r.message, ok: r.ok });
   };
   const value = marketValue(player);
+  const ref = useModalA11y<HTMLDivElement>(onClose);
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal negotiate" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="modal negotiate"
+        role="dialog"
+        aria-modal="true"
+        aria-label={`판매 — ${player.name}`}
+        tabIndex={-1}
+        ref={ref}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="modal-head">
           <h2>판매 — {player.name}</h2>
           <button className="btn-ghost" onClick={onClose}>닫기 ✕</button>
@@ -340,9 +350,18 @@ function NegotiationModal({
     { label: '가치의 110%', pct: 1.1 },
   ];
 
+  const ref = useModalA11y<HTMLDivElement>(onClose);
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal negotiate" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="modal negotiate"
+        role="dialog"
+        aria-modal="true"
+        aria-label={`협상 — ${player.name}`}
+        tabIndex={-1}
+        ref={ref}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="modal-head">
           <h2>협상 — {player.name}</h2>
           <button className="btn-ghost" onClick={onClose}>닫기 ✕</button>

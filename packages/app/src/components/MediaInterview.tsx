@@ -1,5 +1,6 @@
 import type { MediaEvent } from '../game.js';
 import { MEDIA_TONE_STYLE, type MediaTone, type ManagerPersona } from '@soccer-tycoon/engine';
+import { useModalA11y } from './useModalA11y.js';
 
 const PERSONA_LABEL: Record<Exclude<ManagerPersona, 'neutral'>, string> = {
   bold: '거침없는 승부사', humble: '신중한 리더',
@@ -34,9 +35,17 @@ export function MediaInterview({
 }) {
   const homeScore = event.home ? event.score[0] : event.score[1];
   const awayScore = event.home ? event.score[1] : event.score[0];
+  const ref = useModalA11y<HTMLDivElement>(onDismiss);
   return (
     <div className="modal-backdrop">
-      <div className="modal media-modal">
+      <div
+        className="modal media-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="경기 후 인터뷰"
+        tabIndex={-1}
+        ref={ref}
+      >
         <div className="modal-head">
           <h2>📰 경기 후 인터뷰</h2>
         </div>
