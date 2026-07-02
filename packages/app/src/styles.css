@@ -269,6 +269,7 @@ body {
 .rival-record { color: var(--muted); }
 .derby-badge { color: #e0574b; font-weight: 700; }
 .derby-badge.small { font-size: 12px; }
+.final-badge { color: #f0be46; font-weight: 700; }
 .derby-banner {
   background: linear-gradient(135deg, rgba(224, 87, 75, 0.18), rgba(224, 87, 75, 0.05));
   border: 1px solid rgba(224, 87, 75, 0.4); border-radius: 8px;
@@ -664,6 +665,10 @@ h3 { font-size: 14px; margin: 0 0 10px; color: var(--muted); text-transform: upp
 .derby-result.win { color: #3ddc84; }
 .derby-result.draw { color: var(--muted); }
 .derby-result.loss { color: #e0574b; }
+.final-result { font-size: 16px; font-weight: 700; margin: 0 0 4px; }
+.final-result.win { color: #f0be46; }
+.final-result.draw { color: var(--muted); }
+.final-result.loss { color: #e0574b; }
 /* 하프타임 전술 편집은 좁은 칼럼이므로 1열로 */
 .watch-side .tactics { grid-template-columns: 1fr; }
 

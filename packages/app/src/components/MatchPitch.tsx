@@ -16,6 +16,8 @@ export interface PitchState {
   awayFormation: Position[];
   /** 라이벌전이면 스코어보드를 강조 표시. */
   isDerby?: boolean;
+  /** 컵 결승이면 스코어보드를 금색으로 강조 표시(라이벌전보다 우선). */
+  isFinal?: boolean;
 }
 
 const W = 760;
@@ -157,12 +159,13 @@ function draw(ctx: CanvasRenderingContext2D, s: PitchState) {
     ctx.fillText('⚽ GOAL!', gx > W / 2 ? W / 2 + 120 : W / 2 - 120, H / 2);
   }
 
-  // 상단 스코어/시계 바 (라이벌전이면 색상 강조 + 불꽃 아이콘)
+  // 상단 스코어/시계 바 (컵 결승이면 금색, 라이벌전이면 적색으로 강조 — 결승이 우선)
+  const highlight = s.isFinal ? 'final' : s.isDerby ? 'derby' : null;
   const barW = 300;
-  ctx.fillStyle = s.isDerby ? 'rgba(90,20,15,0.8)' : 'rgba(0,0,0,0.55)';
+  ctx.fillStyle = highlight === 'final' ? 'rgba(110,88,10,0.85)' : highlight === 'derby' ? 'rgba(90,20,15,0.8)' : 'rgba(0,0,0,0.55)';
   ctx.fillRect(W / 2 - barW / 2, 4, barW, 26);
-  if (s.isDerby) {
-    ctx.strokeStyle = '#ff6b4a';
+  if (highlight) {
+    ctx.strokeStyle = highlight === 'final' ? '#f0be46' : '#ff6b4a';
     ctx.lineWidth = 2;
     ctx.strokeRect(W / 2 - barW / 2, 4, barW, 26);
   }
@@ -172,10 +175,11 @@ function draw(ctx: CanvasRenderingContext2D, s: PitchState) {
   const homeMark = s.userIsHome ? '●' : '';
   const awayMark = !s.userIsHome ? '●' : '';
   ctx.fillText(`${homeMark}${s.homeName} ${s.score[0]} : ${s.score[1]} ${s.awayName}${awayMark}`, W / 2, 22);
-  if (s.isDerby) {
+  if (highlight) {
     ctx.font = '16px sans-serif';
-    ctx.fillText('🔥', W / 2 - barW / 2 - 14, 22);
-    ctx.fillText('🔥', W / 2 + barW / 2 + 14, 22);
+    const icon = highlight === 'final' ? '🏆' : '🔥';
+    ctx.fillText(icon, W / 2 - barW / 2 - 14, 22);
+    ctx.fillText(icon, W / 2 + barW / 2 + 14, 22);
   }
   // 시계
   ctx.fillStyle = 'rgba(0,0,0,0.55)';

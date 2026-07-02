@@ -921,6 +921,8 @@ export interface WatchSetup {
   setup: MatchSetup;
   userIsHome: boolean;
   opponent: Club;
+  /** 컵 경기일 때 이번 라운드 이름("결승" 등). 리그 경기는 undefined. */
+  cupRoundName?: string;
 }
 
 /** 현재 라운드 내 사용자 경기를 라이브로 관전하기 위한 셋업. */
@@ -1068,7 +1070,9 @@ export function watchCupSetup(state: GameState): WatchSetup | null {
     away: { club: awayClub, tactic: userIsHome ? defaultTactic(awayClub) : userTactic },
     seed: pr.seed,
   };
-  return { setup, userIsHome, opponent: userIsHome ? awayClub : homeClub };
+  return {
+    setup, userIsHome, opponent: userIsHome ? awayClub : homeClub, cupRoundName: next.roundName,
+  };
 }
 
 /** 관전 예정 컵 경기의 프리뷰. 폼·순위는 진행 중 리그 기준(타 부 상대는 미표시). */
