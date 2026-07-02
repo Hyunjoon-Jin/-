@@ -167,6 +167,7 @@ body {
 .growth-svg { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; display: block; }
 .growth-ends { display: flex; justify-content: space-between; width: 320px; margin-top: 3px; }
 .pd-caps { color: #6cb6ff; font-weight: 600; }
+.pd-form-stability { margin: -8px 0 16px; }
 
 .pd-timeline { margin: 6px 0 16px; }
 .pd-timeline h3 { margin: 0 0 6px; }

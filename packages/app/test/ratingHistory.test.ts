@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  startGame, advanceFullSeason, playerRatingHistory, myClub,
+  startGame, advanceFullSeason, playerRatingHistory, formStability, myClub,
 } from '../src/game.js';
 
 describe('선수 시즌별 평균 평점 이력', () => {
@@ -36,5 +36,29 @@ describe('선수 시즌별 평균 평점 이력', () => {
       const hist = playerRatingHistory(g, p.id);
       expect(hist.length).toBeLessThanOrEqual(20);
     }
+  });
+});
+
+describe('폼 안정성(formStability) 판정', () => {
+  it('3시즌 미만이면 판단을 보류(null)한다', () => {
+    expect(formStability([])).toBeNull();
+    expect(formStability([{ season: 1, avgRating: 6.0 }])).toBeNull();
+    expect(formStability([{ season: 1, avgRating: 6.0 }, { season: 2, avgRating: 6.1 }])).toBeNull();
+  });
+
+  it('평점 변동이 작으면 steady로 판정한다', () => {
+    const hist = [
+      { season: 1, avgRating: 6.0 }, { season: 2, avgRating: 6.05 },
+      { season: 3, avgRating: 5.95 }, { season: 4, avgRating: 6.02 },
+    ];
+    expect(formStability(hist)).toBe('steady');
+  });
+
+  it('평점 변동이 크면 volatile로 판정한다', () => {
+    const hist = [
+      { season: 1, avgRating: 5.0 }, { season: 2, avgRating: 7.0 },
+      { season: 3, avgRating: 5.2 }, { season: 4, avgRating: 6.9 },
+    ];
+    expect(formStability(hist)).toBe('volatile');
   });
 });

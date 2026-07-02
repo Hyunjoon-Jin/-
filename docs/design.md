@@ -551,6 +551,18 @@ soccer-tycoon/
       무승부면 "승부차기로 우승팀이 가려집니다"). 라이벌전과 컵 결승이
       겹치면 두 배지·배너가 함께 표시된다. WatchSetup은 GameState에
       영속되지 않는 매 렌더 계산값이라 SAVE_VERSION 변경 없음.
+- [x] 스카우팅 리포트에 시즌 평점 추이 반영(폼 안정성 서술): ratingHistory가
+      바로 직전에 추가돼 있었으므로, 그 시즌별 avgRating의 표준편차만
+      계산하는 순수 함수 formStability(history)를 game.ts에 추가했다
+      (3시즌 미만이면 판단 보류로 null). 실제 여러 시드로 시뮬레이션해
+      표준편차 분포(대략 0.03~0.28, 중앙값 0.16)를 확인한 뒤 임계값
+      0.15로 캘리브레이션 — steady/volatile이 실제로 반반 정도 나뉘도록.
+      buildScoutingReport(엔진)는 건드리지 않았다 — ratingHistory는
+      GameState 레벨 데이터라 이적 시장의 상대 club 선수에겐 의미가
+      없고(내가 소유했던 적 없으면 이력이 없음), PlayerDetail의 시즌
+      평점 그래프 바로 아래에만 "📊 폼 안정성: ..." 한 줄을 추가하는
+      선에서 범위를 좁혔다. 새 상태·SAVE_VERSION 변경 없음(이미 있는
+      ratingHistory를 계산만 함).
 
 기획했던 핵심·확장 시스템이 모두 구현됨. 이후는 콘텐츠 확충·디테일 다듬기 영역.
 

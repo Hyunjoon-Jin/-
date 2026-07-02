@@ -907,6 +907,21 @@ export function playerRatingHistory(state: GameState, playerId: string): SeasonR
   return state.ratingHistory[playerId] ?? [];
 }
 
+/** 시즌 평점 표준편차 기준. 이 미만이면 꾸준함(steady), 이상이면 기복(volatile)으로 본다. */
+const FORM_STABILITY_STDDEV = 0.15;
+
+/**
+ * 시즌별 평점 이력의 변동성으로 폼 안정성을 평가. 최소 3시즌 데이터가 있어야
+ * 의미 있는 판단이 가능하므로, 그 미만이면 null(판단 보류).
+ */
+export function formStability(history: SeasonRatingEntry[]): 'steady' | 'volatile' | null {
+  if (history.length < 3) return null;
+  const ratings = history.map((h) => h.avgRating);
+  const mean = ratings.reduce((a, b) => a + b, 0) / ratings.length;
+  const variance = ratings.reduce((a, b) => a + (b - mean) ** 2, 0) / ratings.length;
+  return Math.sqrt(variance) < FORM_STABILITY_STDDEV ? 'steady' : 'volatile';
+}
+
 /** 진행 중 시즌, 내 구단 선수들의 시즌 통계(평점순). */
 export function liveSquadStats(state: GameState): PlayerSeasonStat[] {
   if (!state.live) return [];

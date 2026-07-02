@@ -7,7 +7,7 @@ import {
   type AttrKey, type Player, type DerivedRatings, type TrainingFocus,
   type PlayerFormEntry, type OverallTier, type PotentialTier, type AgeProfile, type ScoutingReport,
 } from '@soccer-tycoon/engine';
-import type { TimelineEntry, SeasonRatingEntry } from '../game.js';
+import { formStability, type TimelineEntry, type SeasonRatingEntry } from '../game.js';
 
 function moraleLabel(m: number): { text: string; cls: string } {
   if (m >= 0.65) return { text: '😀 만족', cls: 'cond-good' };
@@ -113,6 +113,7 @@ export function PlayerDetail({ player, onClose, onSetFocus, onRenew, recentForm,
   const fam = Object.entries(player.familiarity)
     .filter(([, v]) => (v ?? 0) >= 0.5)
     .map(([pos]) => pos);
+  const stability = formStability(ratingHistory ?? []);
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -190,6 +191,13 @@ export function PlayerDetail({ player, onClose, onSetFocus, onRenew, recentForm,
         <GrowthChart history={player.caHistory ?? []} current={Math.round(ca)} />
 
         {ratingHistory && ratingHistory.length >= 2 && <RatingChart history={ratingHistory} />}
+        {stability && (
+          <p className="muted small pd-form-stability">
+            {stability === 'steady'
+              ? '📊 폼 안정성: 시즌마다 꾸준한 경기력을 보였습니다.'
+              : '📊 폼 안정성: 시즌별 기복이 있는 편입니다.'}
+          </p>
+        )}
 
         {timeline && timeline.length > 0 && <CareerTimeline entries={timeline} />}
 
