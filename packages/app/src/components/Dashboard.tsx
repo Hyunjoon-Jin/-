@@ -22,6 +22,7 @@ export function Dashboard({ game }: { game: GameState }) {
 
   const crisis = inFinancialCrisis(club);
   const overWages = annualWageBill(club) > wageBudget(club);
+  const retiredThisSeason = last ? game.legends.filter((l) => l.season === last.season) : [];
 
   return (
     <div className="dashboard">
@@ -80,6 +81,19 @@ export function Dashboard({ game }: { game: GameState }) {
         <h2>지난 시즌</h2>
         {last ? (
           <div className="last-season">
+            {retiredThisSeason.length > 0 && (
+              <div className="retirement-banner">
+                {retiredThisSeason.map((l) => (
+                  <p key={l.playerId}>
+                    🕯️ <b>{l.name}</b>({l.position})이(가) {l.finalAge}세로 은퇴했습니다 — 통산{' '}
+                    <b>{l.careerApps}경기</b>
+                    {l.careerGoals > 0 && <> <b>{l.careerGoals}골</b></>}
+                    {l.caps > 0 && <span className="muted"> · A매치 {l.caps}경</span>}.
+                    그동안 수고했습니다.
+                  </p>
+                ))}
+              </div>
+            )}
             <p>
               {last.division !== undefined && <><b>{DIVISION_LABELS[last.division]}</b> · </>}
               최종 순위: <b>{pos}위</b> / {last.table.length}팀
