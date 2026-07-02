@@ -284,12 +284,14 @@ export function finishSeason(state: GameState): GameState {
 
   // 5) 오프시즌 (전 구단)
   const {
-    retirements, intakeByClub, fireSalesByClub, retiredPlayers,
+    retirements, intakeByClub, fireSalesByClub, retiredPlayers, milestones,
   } = runOffseason(state.clubs, new Rng(offseasonSeed(state)));
   // 내 구단에서 은퇴한 선수는 레전드 아카이브에 영구 보존
   const newLegends: ClubLegend[] = retiredPlayers
     .filter((r) => r.clubId === state.myClubId)
     .map((r) => ({ ...r, season: state.season }));
+  // 내 구단 선수의 이번 시즌 통산 마일스톤(시즌 요약에 첨부)
+  const myMilestones = milestones.filter((m) => m.clubId === state.myClubId);
 
   // 5.5) 국가대표 차출 (오프시즌 리셋 이후 — 피로/부상이 새 시즌에 반영)
   const intl = runInternationalBreak(state.clubs, new Rng(offseasonSeed(state) + 777));
@@ -355,6 +357,7 @@ export function finishSeason(state: GameState): GameState {
     nationalInjuries: myIntlInjuries,
     demand: demandResult,
     squad: mySquad,
+    milestones: myMilestones,
   };
 
   const repaired = repairTactic(myClub(state), myTactic(state));

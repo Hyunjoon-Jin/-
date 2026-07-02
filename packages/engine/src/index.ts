@@ -34,6 +34,7 @@ export {
 export {
   advanceSeason, runFranchise, runOffseason,
   type SeasonSummary, type OffseasonResult, type RetiredLegend,
+  type CareerMilestone, type MilestoneKind,
 } from './franchise.js';
 export { TUNING } from './tuning.js';
 export { DERIVED_WEIGHTS, type DerivedKey } from './roleWeights.js';

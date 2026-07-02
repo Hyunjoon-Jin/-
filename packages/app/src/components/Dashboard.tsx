@@ -94,6 +94,15 @@ export function Dashboard({ game }: { game: GameState }) {
                 ))}
               </div>
             )}
+            {last.milestones !== undefined && last.milestones.length > 0 && (
+              <div className="milestone-banner">
+                {last.milestones.map((m, i) => (
+                  <p key={i}>
+                    🎉 <b>{m.name}</b>, 통산 <b>{m.value}{m.kind === 'apps' ? '경기 출전' : '골'}</b> 달성!
+                  </p>
+                ))}
+              </div>
+            )}
             <p>
               {last.division !== undefined && <><b>{DIVISION_LABELS[last.division]}</b> · </>}
               최종 순위: <b>{pos}위</b> / {last.table.length}팀

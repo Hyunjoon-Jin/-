@@ -25,6 +25,28 @@ const SOFT_CAP = 26;
 /** 이 나이 이상이면 시즌 후 은퇴. */
 const RETIRE_AGE = 37;
 
+/** 통산 마일스톤 임계값(출전/득점). 이 값을 이번 시즌에 처음 넘으면 기록. */
+const MILESTONE_APPS = [50, 100, 150, 200, 250, 300];
+const MILESTONE_GOALS = [10, 25, 50, 100, 150, 200];
+
+export type MilestoneKind = 'apps' | 'goals';
+
+/** 통산 마일스톤 달성(이번 시즌에 처음 임계값을 넘은 경우). */
+export interface CareerMilestone {
+  playerId: string;
+  name: string;
+  clubId: string;
+  clubName: string;
+  kind: MilestoneKind;
+  /** 달성한 임계값(예: 100). */
+  value: number;
+}
+
+/** before < t ≤ after 인 임계값들(이번 시즌에 새로 넘은 것만). */
+function crossedThresholds(before: number, after: number, thresholds: number[]): number[] {
+  return thresholds.filter((t) => before < t && after >= t);
+}
+
 export interface SeasonSummary {
   season: number;
   table: TableRow[];
@@ -55,6 +77,8 @@ export interface SeasonSummary {
   demand?: { label: string; met: boolean };
   /** 내 구단 시즌 스쿼드 스냅샷(트로피 캐비닛용, 앱). */
   squad?: SeasonSquadEntry[];
+  /** 내 구단 선수의 이번 시즌 통산 마일스톤 달성(앱). */
+  milestones?: CareerMilestone[];
 }
 
 /**
@@ -94,6 +118,8 @@ export interface OffseasonResult {
   fireSalesByClub: Map<string, number>;
   /** 이번 오프시즌에 은퇴한 선수 스냅샷(전 구단). */
   retiredPlayers: RetiredLegend[];
+  /** 이번 오프시즌에 처음 임계값을 넘은 통산 마일스톤(전 구단). */
+  milestones: CareerMilestone[];
 }
 
 export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
@@ -101,6 +127,7 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
   const intakeByClub = new Map<string, number>();
   const fireSalesByClub = new Map<string, number>();
   const retiredPlayers: RetiredLegend[] = [];
+  const milestones: CareerMilestone[] = [];
   const expectedMatches = 2 * (clubs.length - 1); // 리그 기준 기대 출전
   for (const club of clubs) {
     // 스쿼드 중간 능력(주전 기대치 판단용)
@@ -124,9 +151,17 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
       const hist = player.caHistory ?? (player.caHistory = []);
       hist.push(Math.round(currentAbility(player)));
       if (hist.length > 20) hist.shift();
-      // 통산 기록 누적 후 시즌 카운터 리셋
-      player.careerApps = (player.careerApps ?? 0) + player.seasonApps;
-      player.careerGoals = (player.careerGoals ?? 0) + (player.seasonGoals ?? 0);
+      // 통산 기록 누적(이번 시즌에 처음 임계값을 넘으면 마일스톤 기록) 후 시즌 카운터 리셋
+      const beforeApps = player.careerApps ?? 0;
+      const beforeGoals = player.careerGoals ?? 0;
+      player.careerApps = beforeApps + player.seasonApps;
+      player.careerGoals = beforeGoals + (player.seasonGoals ?? 0);
+      for (const value of crossedThresholds(beforeApps, player.careerApps, MILESTONE_APPS)) {
+        milestones.push({ playerId: player.id, name: player.name, clubId: club.id, clubName: club.name, kind: 'apps', value });
+      }
+      for (const value of crossedThresholds(beforeGoals, player.careerGoals, MILESTONE_GOALS)) {
+        milestones.push({ playerId: player.id, name: player.name, clubId: club.id, clubName: club.name, kind: 'goals', value });
+      }
       // 새 시즌은 풀 컨디션·부상/징계 리셋으로 시작
       player.condition = 1;
       player.injuryMatches = 0;
@@ -163,7 +198,7 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
     // 스쿼드 상한 정리
     trimSquad(club);
   }
-  return { retirements, intakeByClub, fireSalesByClub, retiredPlayers };
+  return { retirements, intakeByClub, fireSalesByClub, retiredPlayers, milestones };
 }
 
 /**
