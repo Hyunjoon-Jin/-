@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   liveTable, liveProgress, myNextFixture, lastSummary, myLastPosition,
-  myClub, checkMediaEvent, paceCheckpoint, DIVISION_LABELS, type GameState, type MediaEvent,
+  myClub, checkMediaEvent, managerPersona, paceCheckpoint, DIVISION_LABELS, type GameState, type MediaEvent,
 } from '../game.js';
 import type { MatchResult, MediaTone } from '@soccer-tycoon/engine';
 import { MatchDetailModal } from './MatchStats.js';
@@ -65,6 +65,7 @@ function InSeason(props: Props) {
   const next = myNextFixture(game);
   const table = liveTable(game);
   const media = checkMediaEvent(game);
+  const persona = managerPersona(game);
   const predicted = game.live?.predictedTable.find((p) => p.clubId === game.myClubId)?.predictedPos;
   const checkpoint = paceCheckpoint(game);
 
@@ -113,6 +114,7 @@ function InSeason(props: Props) {
       {media && (
         <MediaInterview
           event={media}
+          persona={persona}
           onRespond={(tone) => onMediaRespond(media, tone)}
           onDismiss={() => onMediaDismiss(media)}
         />

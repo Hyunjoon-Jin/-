@@ -138,9 +138,12 @@ body {
 
 .media-modal { max-width: 480px; }
 .media-question { font-size: 16px; font-style: italic; margin: 14px 0; }
+.media-persona-hint { margin: -6px 0 10px; }
 .media-options { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
 .media-opt { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; width: 100%; padding: 10px 14px; }
+.media-opt.on-brand { border-color: rgba(240, 190, 70, 0.5); background: rgba(240, 190, 70, 0.08); }
 .media-opt-text { font-size: 14px; }
+.media-opt-star { color: #f0be46; margin-right: 4px; }
 .media-skip { width: 100%; }
 
 /* ── Clickable rows / links ── */
