@@ -3,8 +3,9 @@ import {
   TECHNICAL_ATTRS, MENTAL_ATTRS, PHYSICAL_ATTRS, GOALKEEPING_ATTRS,
   TRAINING_FOCUSES, TRAINING_LABELS, TRAIT_LABELS, TRAIT_DESC,
   currentAbility, marketValue, playerDerived, isInjured, isSuspended,
-  formatMoney, type AttrKey, type Player, type DerivedRatings, type TrainingFocus,
-  type PlayerFormEntry,
+  formatMoney, buildScoutingReport,
+  type AttrKey, type Player, type DerivedRatings, type TrainingFocus,
+  type PlayerFormEntry, type OverallTier, type PotentialTier, type AgeProfile,
 } from '@soccer-tycoon/engine';
 
 function moraleLabel(m: number): { text: string; cls: string } {
@@ -17,7 +18,39 @@ function ratingCls(r: number): string {
   return r >= 7.5 ? 'good' : r >= 6.5 ? 'mid' : 'poor';
 }
 
-const ATTR_LABELS: Record<AttrKey, string> = {
+const OVERALL_LABEL: Record<OverallTier, string> = {
+  worldClass: '월드클래스', star: '스타급', quality: '준수한 실력자',
+  squad: '스쿼드 로테이션 자원', fringe: '주전 경쟁이 필요한 자원',
+};
+const POTENTIAL_LABEL: Record<PotentialTier, string> = {
+  generational: '역대급 잠재력', high: '높은 성장 가능성', moderate: '보통 수준의 성장 가능성',
+  limited: '제한적인 성장 여지', unknown: '성장 가능성 미상',
+};
+const AGE_LABEL: Record<AgeProfile, string> = {
+  wonderkid: '유망주', prime: '전성기', veteran: '베테랑', declining: '노장',
+};
+
+/** 상세 화면은 항상 정밀 평가(스카우팅 레벨 최대치 가정) — PA도 이미 그대로 노출되므로 일관성 유지. */
+const FULL_SCOUTING = 20;
+
+function ScoutingPanel({ player }: { player: Player }) {
+  const report = buildScoutingReport(player, FULL_SCOUTING);
+  return (
+    <div className="pd-scouting">
+      <h3>🔎 스카우팅 리포트</h3>
+      <p>
+        {AGE_LABEL[report.ageProfile]} · <b>{OVERALL_LABEL[report.overallTier]}</b> ·{' '}
+        {POTENTIAL_LABEL[report.potentialTier]}
+      </p>
+      <p className="muted small">
+        강점: {report.strengths.map((k) => ATTR_LABELS[k]).join(', ')}
+        {' · '}약점: {report.weaknesses.map((k) => ATTR_LABELS[k]).join(', ')}
+      </p>
+    </div>
+  );
+}
+
+export const ATTR_LABELS: Record<AttrKey, string> = {
   finishing: '결정력', shooting: '슈팅력', passing: '패스', crossing: '크로스',
   dribbling: '드리블', firstTouch: '퍼스트터치', technique: '기술', tackling: '태클',
   marking: '마크', heading: '헤딩', setPiece: '세트피스',
@@ -129,6 +162,7 @@ export function PlayerDetail({ player, onClose, onSetFocus, onRenew, recentForm 
             ))}
           </div>
         )}
+        <ScoutingPanel player={player} />
         <div className="pd-fam muted">가능 포지션: {fam.join(', ') || player.position}</div>
 
         {onSetFocus && (

@@ -78,3 +78,7 @@ export {
   enforceFinancialFairPlay, inFinancialCrisis, wageBudget, annualWageBill,
   type FireSaleResult,
 } from './financeControl.js';
+export {
+  buildScoutingReport,
+  type ScoutingReport, type OverallTier, type PotentialTier, type AgeProfile,
+} from './scouting.js';

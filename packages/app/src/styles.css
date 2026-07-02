@@ -194,6 +194,13 @@ body {
   border-radius: 999px; padding: 3px 10px; font-size: 12px; font-weight: 600;
   cursor: help;
 }
+.pd-scouting {
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px;
+  padding: 10px 14px; margin-bottom: 14px;
+}
+.pd-scouting h3 { margin: 0 0 6px; font-size: 14px; }
+.pd-scouting p { margin: 0 0 4px; font-size: 14px; }
+.pd-scouting p:last-child { margin-bottom: 0; }
 .pd-training { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; font-size: 14px; }
 .pd-training select {
   background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
