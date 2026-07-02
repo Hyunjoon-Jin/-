@@ -14,6 +14,8 @@ export interface PitchState {
   /** 홈/원정 선발 포메이션(슬롯 포지션 순서). 선수 점 배치에 사용. */
   homeFormation: Position[];
   awayFormation: Position[];
+  /** 라이벌전이면 스코어보드를 강조 표시. */
+  isDerby?: boolean;
 }
 
 const W = 760;
@@ -155,15 +157,26 @@ function draw(ctx: CanvasRenderingContext2D, s: PitchState) {
     ctx.fillText('⚽ GOAL!', gx > W / 2 ? W / 2 + 120 : W / 2 - 120, H / 2);
   }
 
-  // 상단 스코어/시계 바
-  ctx.fillStyle = 'rgba(0,0,0,0.55)';
-  ctx.fillRect(W / 2 - 150, 4, 300, 26);
+  // 상단 스코어/시계 바 (라이벌전이면 색상 강조 + 불꽃 아이콘)
+  const barW = 300;
+  ctx.fillStyle = s.isDerby ? 'rgba(90,20,15,0.8)' : 'rgba(0,0,0,0.55)';
+  ctx.fillRect(W / 2 - barW / 2, 4, barW, 26);
+  if (s.isDerby) {
+    ctx.strokeStyle = '#ff6b4a';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(W / 2 - barW / 2, 4, barW, 26);
+  }
   ctx.fillStyle = '#fff';
   ctx.font = 'bold 15px sans-serif';
   ctx.textAlign = 'center';
   const homeMark = s.userIsHome ? '●' : '';
   const awayMark = !s.userIsHome ? '●' : '';
   ctx.fillText(`${homeMark}${s.homeName} ${s.score[0]} : ${s.score[1]} ${s.awayName}${awayMark}`, W / 2, 22);
+  if (s.isDerby) {
+    ctx.font = '16px sans-serif';
+    ctx.fillText('🔥', W / 2 - barW / 2 - 14, 22);
+    ctx.fillText('🔥', W / 2 + barW / 2 + 14, 22);
+  }
   // 시계
   ctx.fillStyle = 'rgba(0,0,0,0.55)';
   ctx.fillRect(W / 2 - 26, H - 30, 52, 24);

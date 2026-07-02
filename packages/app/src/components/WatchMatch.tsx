@@ -43,6 +43,7 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
   const homeName = watch.setup.home.club.name;
   const awayName = watch.setup.away.club.name;
   const userSide: 'home' | 'away' = watch.userIsHome ? 'home' : 'away';
+  const isDerby = watch.opponent.id === rivalClubId;
 
   const [phase, setPhase] = useState<Phase>('ready');
   const [view, setView] = useState<View>({ minute: 0, score: [0, 0], ball: { x: 0.5, y: 0.5 }, goalFlash: null });
@@ -150,6 +151,7 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
     ball: view.ball, goalFlash: view.goalFlash, userIsHome: watch.userIsHome,
     homeFormation: homeTactic.lineup.map((s) => s.position),
     awayFormation: awayTactic.lineup.map((s) => s.position),
+    isDerby,
   };
 
   return (
@@ -157,6 +159,7 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
       <div className="watch-topbar">
         <button className="btn-ghost" onClick={onCancel}>← 취소</button>
         <span className="muted">상대: <b>{watch.opponent.name}</b> (평균 CA {avgCA(watch.opponent)})</span>
+        {isDerby && <span className="derby-badge">🔥 라이벌전</span>}
       </div>
 
       <div className="watch-2col">
@@ -187,12 +190,18 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
             <MatchPreview preview={preview} rivalClubId={rivalClubId} />
           ) : phase === 'halftime' ? (
             <>
-              <div className="ht-banner">하프타임 — 전술을 조정할 수 있습니다</div>
+              <div className="ht-banner">
+                {isDerby ? '🔥 라이벌전 하프타임 — 전술을 조정할 수 있습니다' : '하프타임 — 전술을 조정할 수 있습니다'}
+              </div>
               <LiveStatsPanel stats={stats} homeName={homeName} awayName={awayName} userSide={userSide} />
               <Tactics club={myClub} tactic={tactic} onChange={setTactic} />
             </>
           ) : phase === 'fulltime' ? (
-            <FullTime result={live.result()} homeName={homeName} awayName={awayName} score={view.score} myClubId={myClub.id} />
+            <FullTime
+              result={live.result()} homeName={homeName} awayName={awayName} score={view.score}
+              myClubId={myClub.id} isDerby={isDerby} userIsHome={watch.userIsHome}
+            />
+
           ) : (
             <div className="commentary">
               <LiveStatsPanel stats={stats} homeName={homeName} awayName={awayName} userSide={userSide} />
@@ -329,11 +338,24 @@ function InjurySubModal({
 }
 
 function FullTime({
-  result, homeName, awayName, score, myClubId,
-}: { result: MatchResult; homeName: string; awayName: string; score: [number, number]; myClubId: string }) {
+  result, homeName, awayName, score, myClubId, isDerby, userIsHome,
+}: {
+  result: MatchResult; homeName: string; awayName: string; score: [number, number]; myClubId: string;
+  isDerby: boolean; userIsHome: boolean;
+}) {
+  const myGoals = userIsHome ? score[0] : score[1];
+  const oppGoals = userIsHome ? score[1] : score[0];
+  const derbyOutcome = myGoals > oppGoals ? 'win' : myGoals < oppGoals ? 'loss' : 'draw';
   return (
     <div className="ft-panel">
       <h3>경기 종료</h3>
+      {isDerby && (
+        <p className={`derby-result ${derbyOutcome}`}>
+          {derbyOutcome === 'win' && '🔥 라이벌전 승리!'}
+          {derbyOutcome === 'draw' && '🔥 라이벌전 무승부'}
+          {derbyOutcome === 'loss' && '🔥 라이벌전 패배…'}
+        </p>
+      )}
       <p className="ft-score">{homeName} {score[0]} : {score[1]} {awayName}</p>
       {result.cards.length > 0 && (
         <ul className="card-list">
