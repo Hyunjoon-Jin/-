@@ -27,6 +27,41 @@ function mean(nums: number[], fallback = 0): number {
   return nums.reduce((a, b) => a + b, 0) / nums.length;
 }
 
+/** 부상·정지로 라인 전체가 결장한 경우의 붕괴 페널티값 — 중립 폴백(25~30)과 달리
+ *  "가용 인원 0"이라는 재앙적 상황을 시뮬레이션에 실제로 반영한다. */
+const LINE_WIPED_PENALTY = 5;
+
+/**
+ * 특정 라인의 평균 능력치. 그 라인에 배정된 슬롯 자체가 없으면(포메이션에 없는 라인)
+ * 중립 폴백값을, 슬롯은 있으나 전원 결장이면 붕괴 페널티를 반환한다.
+ */
+function lineMean(
+  evald: SlotEval[], line: Line, slotCounts: Record<Line, number>,
+  key: keyof DerivedRatings, neutralFallback: number,
+): number {
+  const nums = evald.filter((s) => s.line === line).map((s) => s.d[key]);
+  if (nums.length > 0) return mean(nums);
+  return slotCounts[line] > 0 ? LINE_WIPED_PENALTY : neutralFallback;
+}
+
+function lineSlotCounts(tactic: Tactic): Record<Line, number> {
+  const counts: Record<Line, number> = { GK: 0, DEF: 0, MID: 0, ATT: 0 };
+  for (const slot of tactic.lineup) counts[lineOf(slot.position)]++;
+  return counts;
+}
+
+/** 여러 라인을 합쳐 평균(physical/aerial 등 전 라인 공통 지표용). 관련 라인 전체가
+ *  결장이면(슬롯은 있었으나 가용 인원 0) 붕괴 페널티, 애초에 슬롯이 없으면 중립 폴백. */
+function combinedLineMean(
+  evald: SlotEval[], lines: Line[], slotCounts: Record<Line, number>,
+  key: keyof DerivedRatings, neutralFallback: number,
+): number {
+  const nums = evald.filter((s) => lines.includes(s.line)).map((s) => s.d[key]);
+  if (nums.length > 0) return mean(nums);
+  const expectedSlots = lines.reduce((sum, l) => sum + slotCounts[l], 0);
+  return expectedSlots > 0 ? LINE_WIPED_PENALTY : neutralFallback;
+}
+
 /**
  * 라인업의 각 슬롯을 평가.
  * 결번(선수 없음)인 슬롯은 약한 대체값으로 메운다.
@@ -48,11 +83,9 @@ function evalLineup(club: Club, tactic: Tactic): SlotEval[] {
  */
 export function computeTeamStrength(club: Club, tactic: Tactic): TeamStrength {
   const slots = evalLineup(club, tactic);
+  const slotCounts = lineSlotCounts(tactic);
 
   const gkSlot = slots.find((s) => s.line === 'GK');
-  const def = slots.filter((s) => s.line === 'DEF');
-  const mid = slots.filter((s) => s.line === 'MID');
-  const att = slots.filter((s) => s.line === 'ATT');
 
   // mentality 0~1 → 공격/수비 가중 (0.85~1.15 범위)
   const attBias = 0.85 + 0.30 * tactic.mentality;
@@ -64,36 +97,38 @@ export function computeTeamStrength(club: Club, tactic: Tactic): TeamStrength {
 
   // 공격: 전방 선수의 attack + 중원의 일부 기여
   const attack = clamp(
-    (mean(att.map((s) => s.d.attack), 30) * 0.75 +
-      mean(mid.map((s) => s.d.attack), 25) * 0.25) * attBias,
+    (lineMean(slots, 'ATT', slotCounts, 'attack', 30) * 0.75 +
+      lineMean(slots, 'MID', slotCounts, 'attack', 25) * 0.25) * attBias,
     0, 110,
   );
 
   // 창출: 전방·중원의 creation (높은 압박으로 탈취한 공을 빠르게 전환)
   const creation = clamp(
-    (mean(att.map((s) => s.d.creation), 30) * 0.55 +
-      mean(mid.map((s) => s.d.creation), 30) * 0.45) * attBias * pressCreationBias,
+    (lineMean(slots, 'ATT', slotCounts, 'creation', 30) * 0.55 +
+      lineMean(slots, 'MID', slotCounts, 'creation', 30) * 0.45) * attBias * pressCreationBias,
     0, 110,
   );
 
   // 중원 장악: 미드 라인 + 수비형 가담
   const midfield = clamp(
-    mean(mid.map((s) => s.d.midfield), 30) * 0.8 +
-      mean(def.map((s) => s.d.midfield), 25) * 0.2,
+    lineMean(slots, 'MID', slotCounts, 'midfield', 30) * 0.8 +
+      lineMean(slots, 'DEF', slotCounts, 'midfield', 25) * 0.2,
     0, 110,
   );
 
   // 수비: 수비 라인 + 중원 수비 가담 (높은 압박은 상대 전개를 방해해 수비력에 가산)
   const defense = clamp(
-    (mean(def.map((s) => s.d.defense), 30) * 0.7 +
-      mean(mid.map((s) => s.d.defense), 25) * 0.3) * defBias * pressDefBias,
+    (lineMean(slots, 'DEF', slotCounts, 'defense', 30) * 0.7 +
+      lineMean(slots, 'MID', slotCounts, 'defense', 25) * 0.3) * defBias * pressDefBias,
     0, 110,
   );
 
-  const all = [...def, ...mid, ...att];
-  const physical = mean(all.map((s) => s.d.physical), 30);
-  const aerial = mean(all.map((s) => s.d.aerial), 30);
-  const gk = gkSlot ? gkSlot.d.gk : 25;
+  const outfieldLines: Line[] = ['DEF', 'MID', 'ATT'];
+  const physical = combinedLineMean(slots, outfieldLines, slotCounts, 'physical', 30);
+  const aerial = combinedLineMean(slots, outfieldLines, slotCounts, 'aerial', 30);
+  // 골키퍼가 아예 없으면(부상·정지로 전원 결장) 중립 폴백(25) 대신 붕괴 페널티 —
+  // 사실상 빈 골문인데 실점 확률이 소폭만 증가하던 문제를 막는다.
+  const gk = gkSlot ? gkSlot.d.gk : (slotCounts.GK > 0 ? LINE_WIPED_PENALTY : 25);
 
   return { attack, creation, midfield, defense, physical, aerial, gk };
 }

@@ -3,6 +3,7 @@ import {
   transferTargets, buyPlayer, buyPlayerAt, sellPlayer, releasePlayer, askingPrice, MIN_SQUAD,
 } from '../src/transferActions.js';
 import { marketValue } from '../src/valuation.js';
+import { currentAbility } from '../src/derived.js';
 import { generateClub } from '../src/generate.js';
 import { Rng } from '../src/rng.js';
 import type { Club } from '../src/types.js';
@@ -82,6 +83,23 @@ describe('transferActions: 영입', () => {
     expect(gks.length).toBeGreaterThanOrEqual(2); // 기본 생성 스쿼드는 GK 2명 보유
     const r = buyPlayerAt(clubs, 'c0', gks[0]!.id, askingPrice(seller, gks[0]!));
     expect(r.ok).toBe(true);
+  });
+
+  it('buyPlayer(시장가 즉시 영입)는 라인 내 핵심 선수(rank 0)라도 항상 성사된다', () => {
+    // buyPlayerAt에 호가의 82% 하한이 생긴 뒤로, marketValue만 내면 importance
+    // 프리미엄이 붙는 핵심 선수(rank 0, ×1.4)는 하한 미달로 거절될 수 있었다.
+    // buyPlayer는 반드시 askingPrice(시장가 아님) 기준으로 값을 치러야 한다.
+    const clubs = makeLeague();
+    const me = clubs.find((c) => c.id === 'c0')!;
+    me.finance.transferBudget = 999_999_999;
+    me.finance.balance = 999_999_999;
+    const seller = clubs.find((c) => c.id !== 'c0')!;
+    const core = [...seller.players].sort((a, b) => currentAbility(b) - currentAbility(a))[0]!;
+    const before = seller.players.length;
+    const r = buyPlayer(clubs, 'c0', core.id);
+    expect(r.ok).toBe(true);
+    expect(seller.players.length).toBe(before - 1);
+    expect(me.players.some((p) => p.id === core.id)).toBe(true);
   });
 });
 

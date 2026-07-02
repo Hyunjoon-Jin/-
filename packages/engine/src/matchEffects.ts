@@ -32,8 +32,8 @@ type Outcome = 'W' | 'D' | 'L';
 function applySide(club: Club, tactic: Tactic, outcome: Outcome, injuries: InjuryEvent[]): void {
   const starters = new Set(tactic.lineup.map((s) => s.playerId));
   const dMorale = outcome === 'W' ? TUNING.moraleWin : outcome === 'L' ? -TUNING.moraleLoss : 0;
-  // 의료 레벨이 높을수록 회복 보너스 (0.9~1.15배)
-  const recoveryBonus = clamp(0.9 + (club.staff.medical / 20) * 0.5, 0.9, 1.15);
+  // 의료 레벨이 높을수록 회복 보너스 (0.9~1.15배, 의료 20에서만 상한 도달)
+  const recoveryBonus = clamp(0.9 + (club.staff.medical / 20) * 0.25, 0.9, 1.15);
   const injuryByPlayer = new Map(injuries.map((e) => [e.playerId, e]));
 
   for (const p of club.players) {
@@ -48,8 +48,8 @@ function applySide(club: Club, tactic: Tactic, outcome: Outcome, injuries: Injur
       p.seasonApps++; // 선발 출전 기록(사기·재계약 판단)
       // 특성: 철강왕(피로↓).
       const fatMul = hasTrait(p, 'ironMan') ? 0.6 : 1;
-      // 선발: 피로 누적 (스태미너 높을수록 덜 지침)
-      const fatigue = TUNING.fatigueBase * (1 - p.attributes.stamina / 40) * fatMul;
+      // 선발: 피로 누적 (스태미너 높을수록 덜 지침, 회복 공식과 동일한 분모)
+      const fatigue = TUNING.fatigueBase * (1 - p.attributes.stamina / 20) * fatMul;
       p.condition = Math.max(TUNING.minCondition, p.condition - fatigue);
       // 부상 반영 (판정은 simulateMatch.generateInjuries가 이미 확정)
       const inj = injuryByPlayer.get(p.id);

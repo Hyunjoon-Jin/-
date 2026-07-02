@@ -166,12 +166,14 @@ export function buyPlayerAt(clubs: Club[], myClubId: string, playerId: string, f
   return { ok: true, fee, playerName: player.name };
 }
 
-/** 타 구단 선수 영입 (시장가로 즉시 — AI/구버전 경로). */
+/** 타 구단 선수 영입 (호가로 즉시 — AI/구버전 경로).
+ *  marketValue만 내면 라인 내 핵심 선수(rank 0, importance 1.4배)는 buyPlayerAt의
+ *  하한(호가의 82%)에 못 미쳐 항상 거절되므로, 반드시 askingPrice를 기준으로 낸다. */
 export function buyPlayer(clubs: Club[], myClubId: string, playerId: string): BuyResult {
   const seller = clubs.find((c) => c.id !== myClubId && c.players.some((p) => p.id === playerId));
   if (!seller) return { ok: false, reason: '해당 선수를 찾을 수 없습니다.' };
   const player = seller.players.find((p) => p.id === playerId)!;
-  return buyPlayerAt(clubs, myClubId, playerId, marketValue(player));
+  return buyPlayerAt(clubs, myClubId, playerId, askingPrice(seller, player));
 }
 
 export interface SellResult { ok: boolean; fee?: number; buyerName?: string; playerName?: string; reason?: string }

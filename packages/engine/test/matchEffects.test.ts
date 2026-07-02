@@ -65,6 +65,31 @@ describe('matchEffects: 피로·회복·사기', () => {
     expect(after.defense).toBeLessThan(before.defense);
   });
 
+  it('스태미너가 최대(20)인 선발은 피로가 전혀 쌓이지 않는다(회복 공식과 동일한 분모)', () => {
+    const { home, away, ht, at } = setup();
+    const starterId = ht.lineup[0]!.playerId;
+    const starter = home.players.find((p) => p.id === starterId)!;
+    starter.attributes.stamina = 20;
+    starter.traits = [];
+    starter.condition = 0.5;
+    applyMatchEffects(home, ht, away, at, fakeResult(home, away, 0, 0), new Rng(1));
+    expect(starter.condition).toBeCloseTo(0.5, 9);
+  });
+
+  it('의료 레벨 20의 벤치 회복 보너스가 의료 10보다 크다(예전엔 10에서 이미 상한 도달)', () => {
+    const a = setup();
+    const b = setup();
+    a.home.staff.medical = 10;
+    b.home.staff.medical = 20;
+    const benchId = a.ht.lineup[0] ? a.home.players.find((p) => !new Set(a.ht.lineup.map((s) => s.playerId)).has(p.id))!.id : '';
+    const benchA = a.home.players.find((p) => p.id === benchId)!;
+    const benchB = b.home.players.find((p) => p.id === benchId)!;
+    benchA.condition = 0.5; benchB.condition = 0.5;
+    applyMatchEffects(a.home, a.ht, a.away, a.at, fakeResult(a.home, a.away, 0, 0), new Rng(3));
+    applyMatchEffects(b.home, b.ht, b.away, b.at, fakeResult(b.home, b.away, 0, 0), new Rng(3));
+    expect(benchB.condition).toBeGreaterThan(benchA.condition);
+  });
+
   it('동일 시드면 동일한 상태 변화 (재현성)', () => {
     const a = setup();
     const b = setup();

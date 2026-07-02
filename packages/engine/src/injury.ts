@@ -30,9 +30,15 @@ const RANGE: Record<InjurySeverity, [number, number]> = {
   minor: [1, 2], moderate: [3, 6], serious: [7, 14],
 };
 
+/** 의료 레벨(1~20)에 따른 원시 배율 편향(10=1.0, 20≈0.7, 1≈1.27) — 회복 기간·
+ *  부상 발생 확률 계수가 공유하는 베이스 공식. 호출부마다 다른 범위로 clamp한다. */
+export function medicalBias(medical: number): number {
+  return 1 - (medical - 10) * 0.03;
+}
+
 /** 의료 레벨(1~20) → 회복 기간 배율(10=1.0x, 20≈0.7x, 1≈1.27x). */
 function durationFactor(medical: number): number {
-  return clamp(1 - (medical - 10) * 0.03, 0.6, 1.3);
+  return clamp(medicalBias(medical), 0.6, 1.3);
 }
 
 /**

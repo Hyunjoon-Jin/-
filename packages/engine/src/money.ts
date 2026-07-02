@@ -7,8 +7,11 @@ export const EOK = 10_000; // 1억 = 10,000만원
 
 /** 만원 단위 금액을 한국식 '억/만원' 문자열로. */
 export function formatMoney(manwon: number): string {
-  const sign = manwon < 0 ? '-' : '';
-  const abs = Math.abs(Math.round(manwon));
+  // 반올림 전 값으로 부호를 정하면 -0.3처럼 반올림 후 0이 되는 소수 입력에서
+  // "-0만원"이 나올 수 있다 — 반올림 후 값으로 부호를 판정한다.
+  const rounded = Math.round(manwon);
+  const sign = rounded < 0 ? '-' : '';
+  const abs = Math.abs(rounded);
   const eok = Math.floor(abs / EOK);
   const man = abs % EOK;
   if (eok > 0 && man > 0) return `${sign}${eok}억 ${man.toLocaleString()}만원`;

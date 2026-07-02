@@ -32,7 +32,13 @@ export interface SeasonState {
   baseSeed: number;
 }
 
+/** 리그가 성립하려면 최소 2개 구단이 있어야 한다(1개면 경기 없이 조용히 "완료" 처리됨). */
+const MIN_LEAGUE_CLUBS = 2;
+
 export function createSeasonState(clubs: Club[], baseSeed: number): SeasonState {
+  if (clubs.length < MIN_LEAGUE_CLUBS) {
+    throw new Error(`createSeasonState: 리그에는 최소 ${MIN_LEAGUE_CLUBS}개 구단이 필요합니다(받은 수: ${clubs.length}).`);
+  }
   return {
     clubs,
     fixtures: doubleRoundRobin(clubs.map((c) => c.id)),
@@ -56,6 +62,18 @@ export function currentRound(s: SeasonState): number {
   return s.fixtures[s.cursor]!.round;
 }
 
+// s.clubs는 시즌 내내 배열 자체(참조)는 바뀌지 않으므로, 매 경기 새로 Map을 만들지
+// 않고 배열 참조 기준으로 캐시해 재사용한다(WeakMap이라 GC를 막지 않음).
+const clubMapCache = new WeakMap<Club[], Map<string, Club>>();
+function clubsById(clubs: Club[]): Map<string, Club> {
+  let m = clubMapCache.get(clubs);
+  if (!m) {
+    m = new Map(clubs.map((c) => [c.id, c]));
+    clubMapCache.set(clubs, m);
+  }
+  return m;
+}
+
 type TacticMap = Map<string, Tactic> | undefined;
 
 function tacticFor(club: Club, tactics: TacticMap): Tactic {
@@ -65,7 +83,7 @@ function tacticFor(club: Club, tactics: TacticMap): Tactic {
 /** 다음 한 경기 진행. clubs/결과가 변경되고, 선수 상태(피로·부상·사기)가 반영된다. */
 export function playNext(s: SeasonState, tactics?: TacticMap): MatchResult {
   const fx = s.fixtures[s.cursor]!;
-  const byId = new Map(s.clubs.map((c) => [c.id, c]));
+  const byId = clubsById(s.clubs);
   const home = byId.get(fx.homeId)!;
   const away = byId.get(fx.awayId)!;
   const homeTactic = tacticFor(home, tactics);
@@ -116,13 +134,37 @@ function emptyRow(club: Club): TableRow {
   };
 }
 
-/** 지금까지의 결과로 순위표 산출. */
+/** 두 구단 간 상대전적(승점차·득실차) — 승점·득실차·득점까지 같을 때의 동률 기준. */
+function headToHead(results: MatchResult[], aId: string, bId: string): { points: number; gd: number } {
+  let aPts = 0; let bPts = 0; let aGd = 0; let bGd = 0;
+  for (const r of results) {
+    const isAvB = r.homeClubId === aId && r.awayClubId === bId;
+    const isBvA = r.homeClubId === bId && r.awayClubId === aId;
+    if (!isAvB && !isBvA) continue;
+    const [hg, ag] = r.score;
+    const [aGoals, bGoals] = isAvB ? [hg, ag] : [ag, hg];
+    aGd += aGoals - bGoals; bGd += bGoals - aGoals;
+    if (aGoals > bGoals) aPts += 3;
+    else if (aGoals < bGoals) bPts += 3;
+    else { aPts += 1; bPts += 1; }
+  }
+  return { points: aPts - bPts, gd: aGd - bGd };
+}
+
+/** 지금까지의 결과로 순위표 산출.
+ *  승점·득실차·득점이 모두 같으면 배열 삽입 순서(구단 생성 순서)로 조용히 정해지던 것을
+ *  방지하기 위해, 상대전적(승점→득실차)을 먼저 확인하고 그래도 갈리지 않으면 구단 id로
+ *  결정론적으로 확정한다. */
 export function computeTable(s: SeasonState): TableRow[] {
   const rows = new Map(s.clubs.map((c) => [c.id, emptyRow(c)]));
   for (const r of s.results) {
     const hr = rows.get(r.homeClubId);
     const ar = rows.get(r.awayClubId);
-    if (!hr || !ar) continue;
+    if (!hr || !ar) {
+      // 순위표에 없는 구단을 참조하는 결과 — 잘못된/오래된 MatchResult가 주입됐다는
+      // 뜻이므로 조용히 버리지 않고 호출자 오류로 즉시 드러낸다.
+      throw new Error(`computeTable: 알 수 없는 클럽을 참조하는 결과(${r.homeClubId} vs ${r.awayClubId})`);
+    }
     const [hg, ag] = r.score;
     hr.played++; ar.played++;
     hr.gf += hg; hr.ga += ag;
@@ -131,7 +173,16 @@ export function computeTable(s: SeasonState): TableRow[] {
     else if (hg < ag) { ar.won++; ar.points += 3; hr.lost++; }
     else { hr.drawn++; ar.drawn++; hr.points++; ar.points++; }
   }
-  return [...rows.values()].sort(
-    (a, b) => b.points - a.points || (b.gf - b.ga) - (a.gf - a.ga) || b.gf - a.gf,
-  );
+  return [...rows.values()].sort((a, b) => {
+    const byPoints = b.points - a.points;
+    if (byPoints !== 0) return byPoints;
+    const byGd = (b.gf - b.ga) - (a.gf - a.ga);
+    if (byGd !== 0) return byGd;
+    const byGf = b.gf - a.gf;
+    if (byGf !== 0) return byGf;
+    const h2h = headToHead(s.results, a.clubId, b.clubId);
+    if (h2h.points !== 0) return -h2h.points;
+    if (h2h.gd !== 0) return -h2h.gd;
+    return a.clubId.localeCompare(b.clubId);
+  });
 }

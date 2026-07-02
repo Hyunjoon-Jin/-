@@ -17,7 +17,7 @@ import { Rng } from './rng.js';
 import { clamp, logistic } from './math.js';
 import { TUNING } from './tuning.js';
 import { hasTrait } from './traits.js';
-import { rollInjury } from './injury.js';
+import { rollInjury, medicalBias } from './injury.js';
 
 export interface MatchSetup {
   home: { club: Club; tactic: Tactic };
@@ -113,8 +113,10 @@ export interface MatchContext {
 }
 
 function recomputePossession(ctx: MatchContext): void {
-  ctx.pPossHome =
-    ctx.home.strength.midfield / (ctx.home.strength.midfield + ctx.away.strength.midfield || 1);
+  const sum = ctx.home.strength.midfield + ctx.away.strength.midfield;
+  // 양팀 중원 전력이 정확히 0이면(극단적 붕괴 데이터) 50%로 폴백 — sum이 0일 때
+  // 분자(0)/1로 계산하면 홈이 전 경기 동안 공을 한 번도 못 만지는 것으로 잘못 계산된다.
+  ctx.pPossHome = sum > 0 ? ctx.home.strength.midfield / sum : 0.5;
 }
 
 export function createContext(setup: MatchSetup): MatchContext {
@@ -275,7 +277,7 @@ function generateCards(ctx: MatchContext): CardEvent[] {
 
 /** 의료 레벨(1~20) → 부상 발생 확률 배율. 10=1.0x, 20=0.7x, 1≈1.3x. */
 function injuryMedicalFactor(medical: number): number {
-  return clamp(1 - (medical - 10) * 0.03, 0.4, 1.3);
+  return clamp(medicalBias(medical), 0.4, 1.3);
 }
 
 /**

@@ -86,7 +86,10 @@ export function runTransferWindow(
         const ca = currentAbility(player);
         if (ca <= buyerLevel + 3) continue; // 의미 있는 보강만
         const value = marketValue(player);
-        const fee = Math.round(value * (0.95 + rng.next() * 0.20)); // 협상 변동
+        // 협상 변동폭 — 0.95배 하한으로 생성하면 그 아래는 반올림 경계에서만 나올 수 있어
+        // 바로 아래의 "시장가 95% 미만 거절" 검사가 사실상 죽은 코드가 된다. 실제로
+        // 거절이 발생할 수 있도록 하한을 낮춰 폭을 넓힌다.
+        const fee = Math.round(value * (0.85 + rng.next() * 0.30));
         if (fee > budget) continue;
         if (fee > buyer.finance.balance) continue; // 예산은 있어도 실제 보유 자금이 없으면 불가
         // 매도 구단 수락 조건: 제안가가 시장가의 95% 이상

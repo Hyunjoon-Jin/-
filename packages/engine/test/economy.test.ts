@@ -155,4 +155,10 @@ describe('money 포맷', () => {
     expect(formatMoney(15_000)).toBe('1억 5,000만원');
     expect(formatMoney(3_000)).toBe('3,000만원');
   });
+
+  it('반올림 후 0이 되는 소수 음수 입력은 "-0만원"이 아니라 "0만원"을 표시한다', () => {
+    expect(formatMoney(-0.3)).toBe('0만원');
+    expect(formatMoney(-0)).toBe('0만원');
+    expect(formatMoney(-1)).toBe('-1만원'); // 반올림 후에도 음수면 부호 유지
+  });
 });
