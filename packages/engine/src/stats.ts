@@ -126,3 +126,26 @@ export function careerScorers(clubs: Club[], n = 15): CareerStat[] {
   out.sort((a, b) => b.goals - a.goals || b.apps - a.apps);
   return out.slice(0, n);
 }
+
+export interface PlayerFormEntry {
+  rating: number;
+  goals: number;
+  /** 상대 구단명. */
+  opponentName: string;
+  home: boolean;
+}
+
+/**
+ * 특정 선수의 최근 n경기 평점 이력(과거→최신 순).
+ * 출전하지 않은 경기는 건너뛴다.
+ */
+export function recentPlayerForm(results: MatchResult[], playerId: string, n = 5): PlayerFormEntry[] {
+  const out: PlayerFormEntry[] = [];
+  for (const r of results) {
+    const home = r.playerStats.home.find((s) => s.playerId === playerId);
+    const away = r.playerStats.away.find((s) => s.playerId === playerId);
+    if (home) out.push({ rating: home.rating, goals: home.goals, opponentName: r.awayClubName, home: true });
+    else if (away) out.push({ rating: away.rating, goals: away.goals, opponentName: r.homeClubName, home: false });
+  }
+  return out.slice(-n);
+}

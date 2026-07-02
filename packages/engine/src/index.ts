@@ -14,8 +14,8 @@ export {
 } from './injury.js';
 export {
   aggregatePlayerStats, topScorers, playerOfSeason, seasonAwards, summarizeStats,
-  careerScorers,
-  type PlayerSeasonStat, type SeasonAwards, type CareerStat,
+  careerScorers, recentPlayerForm,
+  type PlayerSeasonStat, type SeasonAwards, type CareerStat, type PlayerFormEntry,
 } from './stats.js';
 export { generateClub, generateYouthPlayer, defaultTactic, FORMATION_433 } from './generate.js';
 export { simulateSeason, type SeasonResult } from './league.js';

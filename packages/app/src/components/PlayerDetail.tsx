@@ -4,12 +4,17 @@ import {
   TRAINING_FOCUSES, TRAINING_LABELS, TRAIT_LABELS, TRAIT_DESC,
   currentAbility, marketValue, playerDerived, isInjured, isSuspended,
   formatMoney, type AttrKey, type Player, type DerivedRatings, type TrainingFocus,
+  type PlayerFormEntry,
 } from '@soccer-tycoon/engine';
 
 function moraleLabel(m: number): { text: string; cls: string } {
   if (m >= 0.65) return { text: '😀 만족', cls: 'cond-good' };
   if (m >= 0.4) return { text: '😐 보통', cls: '' };
   return { text: '😠 불만', cls: 'injury' };
+}
+
+function ratingCls(r: number): string {
+  return r >= 7.5 ? 'good' : r >= 6.5 ? 'mid' : 'poor';
 }
 
 const ATTR_LABELS: Record<AttrKey, string> = {
@@ -53,9 +58,11 @@ interface Props {
   onSetFocus?: (focus: TrainingFocus) => void;
   /** 내 선수면 재계약 가능. */
   onRenew?: () => { ok: boolean; message: string };
+  /** 진행 중 시즌 최근 폼(평점). live 없거나 미출전이면 빈 배열. */
+  recentForm?: PlayerFormEntry[];
 }
 
-export function PlayerDetail({ player, onClose, onSetFocus, onRenew }: Props) {
+export function PlayerDetail({ player, onClose, onSetFocus, onRenew, recentForm }: Props) {
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const ca = currentAbility(player);
   const derived = playerDerived(player, player.position);
@@ -90,6 +97,17 @@ export function PlayerDetail({ player, onClose, onSetFocus, onRenew }: Props) {
           )}
           {(player.caps ?? 0) > 0 && <span className="pd-caps" title="국가대표 A매치 출전 캡">🎽 A매치 {player.caps}경</span>}
         </div>
+
+        {recentForm && recentForm.length > 0 && (
+          <div className="pd-form">
+            <span className="muted small">최근 폼</span>
+            {recentForm.map((f, i) => (
+              <span key={i} className={`form-rating ${ratingCls(f.rating)}`} title={`vs ${f.opponentName} (${f.home ? '홈' : '원정'})`}>
+                {f.rating.toFixed(1)}{f.goals > 0 ? ` ⚽${f.goals}` : ''}
+              </span>
+            ))}
+          </div>
+        )}
 
         {onRenew && (
           <div className="pd-renew">

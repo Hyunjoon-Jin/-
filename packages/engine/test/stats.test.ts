@@ -1,9 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { aggregatePlayerStats, topScorers, seasonAwards, summarizeStats, careerScorers } from '../src/stats.js';
+import {
+  aggregatePlayerStats, topScorers, seasonAwards, summarizeStats, careerScorers, recentPlayerForm,
+} from '../src/stats.js';
 import { simulateSeason } from '../src/league.js';
-import { generateClub } from '../src/generate.js';
+import { generateClub, defaultTactic } from '../src/generate.js';
 import { Rng } from '../src/rng.js';
-import type { Club } from '../src/types.js';
+import type { Club, MatchResult } from '../src/types.js';
 
 function season(seed = 1) {
   const rng = new Rng(seed);
@@ -80,5 +82,44 @@ describe('stats: 통산 득점 순위', () => {
     const clubs = [generateClub(rng, 'a', 'A', 12)];
     for (const p of clubs[0]!.players) { p.careerGoals = 0; p.seasonGoals = 0; p.careerApps = 0; p.seasonApps = 0; }
     expect(careerScorers(clubs)).toHaveLength(0);
+  });
+});
+
+describe('stats: 최근 폼(선수)', () => {
+  it('출전한 경기만 순서대로 최근 n개를 반환한다', () => {
+    const { matches } = season(21);
+    // 다수 경기에 출전한 선수 하나를 찾는다
+    const stats = aggregatePlayerStats(matches);
+    const frequent = stats.sort((a, b) => b.apps - a.apps)[0]!;
+    const form = recentPlayerForm(matches, frequent.playerId, 5);
+    expect(form.length).toBeGreaterThan(0);
+    expect(form.length).toBeLessThanOrEqual(5);
+    for (const f of form) {
+      expect(f.rating).toBeGreaterThan(0);
+      expect(f.opponentName.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('출전하지 않은 선수는 빈 배열', () => {
+    const { matches } = season(22);
+    expect(recentPlayerForm(matches, 'no-such-player', 5)).toEqual([]);
+  });
+
+  it('n으로 최근 개수를 제한한다(오래된 것 제외)', () => {
+    const rng = new Rng(30);
+    const home = generateClub(rng, 'h', 'H', 12);
+    const away = generateClub(rng, 'a', 'A', 12);
+    const ht = defaultTactic(home);
+    const scorer = home.players.find((p) => ht.lineup.some((s) => s.playerId === p.id))!;
+    const mkResult = (i: number): MatchResult => ({
+      homeClubId: home.id, awayClubId: away.id, homeClubName: home.name, awayClubName: `Away${i}`,
+      score: [1, 0], possession: [50, 50], shots: [1, 0], events: [], cards: [],
+      playerStats: { home: [{ playerId: scorer.id, name: scorer.name, rating: 6 + i * 0.1, shots: 1, goals: 1 }], away: [] },
+      seed: i,
+    });
+    const results = Array.from({ length: 8 }, (_, i) => mkResult(i));
+    const form = recentPlayerForm(results, scorer.id, 3);
+    expect(form).toHaveLength(3);
+    expect(form.map((f) => f.opponentName)).toEqual(['Away5', 'Away6', 'Away7']);
   });
 });

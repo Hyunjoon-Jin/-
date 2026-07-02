@@ -10,7 +10,7 @@ import {
   buyPlayer, buyPlayerAt, evaluateOffer, sellPlayer, releasePlayer,
   sellOffers, acceptSellOffer,
   type OfferEvaluation, type SellOffer,
-  summarizeStats, aggregatePlayerStats, topScorers as engineTopScorers,
+  summarizeStats, aggregatePlayerStats, topScorers as engineTopScorers, recentPlayerForm,
   createCup, playCupRound as enginePlayCupRound, playCupToEnd, isCupOver, nextCupPairings,
   applyPromotionRelegation, clubsInDivision, runInternationalBreak,
   confidenceDelta, applyConfidence, isSacked, START_CONFIDENCE,
@@ -21,6 +21,7 @@ import {
   computeTeamStrength, currentAbility, recentForm,
   type Club, type Tactic, type MatchResult, type MatchSetup, type SeasonSummary,
   type Fixture, type TableRow, type PlayerSeasonStat, type CupState, type StaffKind,
+  type PlayerFormEntry,
   type TeamStrength, type FormSummary,
 } from '@soccer-tycoon/engine';
 import { makeDefaultTactic, repairTactic } from './tactics.js';
@@ -494,6 +495,12 @@ export function myNextFixture(state: GameState): { fx: Fixture; opponent: Club; 
 export function liveTopScorers(state: GameState, n = 10): PlayerSeasonStat[] {
   if (!state.live) return [];
   return engineTopScorers(aggregatePlayerStats(state.live.results), n);
+}
+
+/** 특정 선수의 진행 중 시즌 최근 n경기 평점(라이브). live 없으면 빈 배열. */
+export function playerForm(state: GameState, playerId: string, n = 5): PlayerFormEntry[] {
+  if (!state.live) return [];
+  return recentPlayerForm(state.live.results, playerId, n);
 }
 
 /** 진행 중 시즌, 내 구단 선수들의 시즌 통계(평점순). */

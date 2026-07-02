@@ -144,6 +144,14 @@ body {
 .pd-meta { display: flex; flex-wrap: wrap; gap: 16px; margin: 8px 0; font-size: 14px; }
 .pd-meta b { font-size: 15px; }
 .pd-fam { font-size: 13px; margin-bottom: 10px; }
+.pd-form { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.form-rating {
+  font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 6px;
+  background: var(--panel-2); border: 1px solid var(--line); color: var(--muted);
+}
+.form-rating.good { color: #3ddc84; border-color: rgba(61,220,132,0.4); }
+.form-rating.mid { color: #e0be46; border-color: rgba(224,190,70,0.4); }
+.form-rating.poor { color: #e0574b; border-color: rgba(224,87,75,0.4); }
 .pd-growth { margin: 6px 0 16px; }
 .pd-growth h3 { margin: 0 0 6px; }
 .growth-svg { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; display: block; }

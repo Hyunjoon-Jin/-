@@ -5,6 +5,7 @@ import {
   playCupRound, negotiate, buyAt, offersFor, acceptSell, release, upgradeStaffAction, setTrainingFocus, renewContract,
   watchSetup, matchPreview, commitWatchedRound,
   watchCupSetup, cupPreview, commitWatchedCupRound,
+  playerForm,
   type GameState, type ActionOutcome, type WatchSetup, type Difficulty,
 } from './game.js';
 import type { Tactic, MatchResult } from '@soccer-tycoon/engine';
@@ -155,6 +156,7 @@ export function App() {
               ? () => { const o = renewContract(game, detailPlayer.id); if (o.ok) update(o.state); return o; }
               : undefined
           }
+          recentForm={playerForm(game, detailPlayer.id)}
         />
       )}
 
