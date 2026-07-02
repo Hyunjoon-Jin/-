@@ -25,6 +25,8 @@ export function History({ game }: { game: GameState }) {
   const cupTitles = seasons.filter((s) => s.cupChampionId === myId).length;
   const positions = seasons.map(posOf).filter((p): p is number => p !== undefined);
   const bestFinish = positions.length ? Math.min(...positions) : undefined;
+  const demandSeasons = seasons.filter((s) => s.demand);
+  const demandsMet = demandSeasons.filter((s) => s.demand!.met).length;
 
   // 리그 우승 순위 (구단별)
   const titleCount = new Map<string, { name: string; count: number }>();
@@ -50,6 +52,9 @@ export function History({ game }: { game: GameState }) {
           <HonorCard title="컵 우승" value={`${cupTitles}회`} />
           <HonorCard title="최고 순위" value={bestFinish ? `${bestFinish}위` : '-'} />
           <HonorCard title="치른 시즌" value={`${seasons.length}시즌`} />
+          {demandSeasons.length > 0 && (
+            <HonorCard title="이사회 요구 달성" value={`${demandsMet}/${demandSeasons.length}`} />
+          )}
         </div>
       </div>
 
@@ -58,7 +63,7 @@ export function History({ game }: { game: GameState }) {
           <h3>역대 시즌</h3>
           <table className="data-table compact">
             <thead>
-              <tr><th>시즌</th><th>부</th><th>리그 우승</th><th>컵 우승</th><th>득점왕</th><th>내 순위</th><th></th></tr>
+              <tr><th>시즌</th><th>부</th><th>리그 우승</th><th>컵 우승</th><th>득점왕</th><th>내 순위</th><th>이사회 요구</th><th></th></tr>
             </thead>
             <tbody>
               {[...seasons].reverse().map((s) => {
@@ -77,6 +82,13 @@ export function History({ game }: { game: GameState }) {
                       {pos ? `${pos}위` : '-'}
                       {s.promoted && <span className="pos"> ↑</span>}
                       {s.relegated && <span className="neg"> ↓</span>}
+                    </td>
+                    <td className="small">
+                      {s.demand ? (
+                        <span className={s.demand.met ? 'pos' : 'neg'} title={s.demand.label}>
+                          {s.demand.met ? '달성 ✓' : '실패 ✕'}
+                        </span>
+                      ) : <span className="muted">-</span>}
                     </td>
                     <td>
                       {hasSquad && (
