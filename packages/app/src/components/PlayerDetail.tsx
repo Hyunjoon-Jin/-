@@ -41,7 +41,7 @@ function attrClass(v: number): string {
 }
 
 function statusBadge(p: Player): { text: string; cls: string } {
-  if (isInjured(p)) return { text: `🤕 부상 ${p.injuryMatches}경기`, cls: 'injury' };
+  if (isInjured(p)) return { text: `🤕 ${p.injuryName ?? '부상'} ${p.injuryMatches}경기`, cls: 'injury' };
   if (isSuspended(p)) return { text: `🟥 출전정지 ${p.suspensionMatches}경기`, cls: 'suspended' };
   return { text: `컨디션 ${Math.round(p.condition * 100)}%`, cls: 'cond-good' };
 }

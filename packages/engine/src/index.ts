@@ -10,6 +10,9 @@ export {
 } from './derived.js';
 export { applyMatchEffects } from './matchEffects.js';
 export {
+  rollInjury, SEVERITY_LABEL, type Injury, type InjurySeverity,
+} from './injury.js';
+export {
   aggregatePlayerStats, topScorers, playerOfSeason, seasonAwards, summarizeStats,
   careerScorers,
   type PlayerSeasonStat, type SeasonAwards, type CareerStat,

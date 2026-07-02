@@ -16,7 +16,8 @@ import type { SeasonSummary, SeasonFinanceReport } from '@soccer-tycoon/engine';
 // v17: 선수 통산/시즌 득점(seasonGoals·careerApps·careerGoals)
 // v18: 이사회 특별 요구(demand)
 // v19: 선수 CA 성장 곡선(caHistory)
-export const SAVE_VERSION = 19;
+// v20: 부상 등급/명칭(injuryName)
+export const SAVE_VERSION = 20;
 
 type SerializedSummary = Omit<SeasonSummary, 'finance'> & {
   finance: Record<string, SeasonFinanceReport>;

@@ -68,6 +68,7 @@ export function runInternationalBreak(clubs: Club[], rng: Rng): InternationalRes
     const injP = clamp(0.08 - (p.attributes.naturalFitness - 10) * 0.004, 0.02, 0.12);
     if (rng.roll(injP)) {
       p.injuryMatches = rng.int(1, 3);
+      p.injuryName = '대표팀 차출 중 부상';
       p.condition = 0.6;
       injuries++;
     }

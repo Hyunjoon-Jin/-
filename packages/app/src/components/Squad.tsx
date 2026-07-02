@@ -6,7 +6,7 @@ type SortKey = 'ca' | 'age' | 'value' | 'wage' | 'condition';
 /** 컨디션(0~1)을 색상 점 + %로. 부상은 🤕 N, 정지는 🟥 N. */
 function ConditionCell({ player }: { player: Player }) {
   if (isInjured(player)) {
-    return <span className="injury">🤕 {player.injuryMatches}</span>;
+    return <span className="injury" title={player.injuryName}>🤕 {player.injuryMatches}</span>;
   }
   if (isSuspended(player)) {
     return <span className="suspended">🟥 {player.suspensionMatches}</span>;

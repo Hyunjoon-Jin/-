@@ -109,6 +109,7 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
       // 새 시즌은 풀 컨디션·부상/징계 리셋으로 시작
       player.condition = 1;
       player.injuryMatches = 0;
+      player.injuryName = undefined;
       player.yellowCards = 0;
       player.suspensionMatches = 0;
       player.seasonApps = 0;

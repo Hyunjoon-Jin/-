@@ -7,6 +7,7 @@ import type { Club, MatchResult, Tactic } from './types.js';
 import { Rng } from './rng.js';
 import { clamp } from './math.js';
 import { hasTrait } from './traits.js';
+import { rollInjury } from './injury.js';
 
 const TUNING = {
   /** 선발 출전 시 기본 컨디션 하락(스태미너로 경감). */
@@ -46,7 +47,10 @@ function applySide(club: Club, tactic: Tactic, outcome: Outcome, rng: Rng): void
     if (p.injuryMatches > 0) {
       // 부상 회복 카운트다운 (출전/피로 없음)
       p.injuryMatches--;
-      if (p.injuryMatches === 0) p.condition = Math.max(p.condition, TUNING.returnCondition);
+      if (p.injuryMatches === 0) {
+        p.condition = Math.max(p.condition, TUNING.returnCondition);
+        p.injuryName = undefined; // 복귀
+      }
     } else if (starters.has(p.id)) {
       p.seasonApps++; // 선발 출전 기록(사기·재계약 판단)
       // 특성: 철강왕(부상↓·피로↓) / 유리몸(부상↑).
@@ -55,10 +59,12 @@ function applySide(club: Club, tactic: Tactic, outcome: Outcome, rng: Rng): void
       // 선발: 피로 누적 (스태미너 높을수록 덜 지침)
       const fatigue = TUNING.fatigueBase * (1 - p.attributes.stamina / 40) * fatMul;
       p.condition = Math.max(TUNING.minCondition, p.condition - fatigue);
-      // 부상 판정 (의료가 좋을수록 확률↓, 기간↓)
+      // 부상 판정 (의료가 좋을수록 확률↓, 등급·기간↓)
       if (rng.roll(TUNING.injuryChance * medFactor * injMul)) {
-        p.injuryMatches = Math.max(1, Math.round(rng.int(2, 8) * medFactor));
-        p.condition = 0.3;
+        const inj = rollInjury(rng, club.staff.medical);
+        p.injuryMatches = inj.matches;
+        p.injuryName = inj.name;
+        p.condition = inj.severity === 'serious' ? 0.25 : 0.3;
       }
     } else {
       // 벤치/정지/로테이션: 회복 + 출전정지 카운트다운(미출전으로 1경기 소화)

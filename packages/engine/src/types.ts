@@ -74,6 +74,8 @@ export interface Player {
   seasonApps: number;
   /** 남은 부상 경기 수. 0 = 정상. >0 이면 출전 불가. */
   injuryMatches: number;
+  /** 현재 부상 명칭(부상 중일 때만). 회복 시 해제. */
+  injuryName?: string;
   /** 시즌 누적 경고. 일정 수마다 출전 정지. */
   yellowCards: number;
   /** 남은 출전 정지 경기 수. 0 = 정상. >0 이면 출전 불가. */
