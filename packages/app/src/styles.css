@@ -413,21 +413,40 @@ body {
 .cup-status.out { background: #3a2020; color: #ff8080; }
 .cup-champ { font-size: 16px; }
 .cup-head .btn-advance { margin-left: auto; }
-.cup-rounds { display: flex; gap: 16px; align-items: flex-start; overflow-x: auto; }
-.cup-round { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; min-width: 240px; }
-.cup-round h3 { margin: 0 0 10px; }
-.cup-ties { list-style: none; padding: 0; margin: 0; }
-.cup-ties .tie {
+
+/* 브래킷: 라운드별 컬럼 높이를 1라운드 대진 수 기준으로 맞춰 그 안에서
+   space-around로 카드를 배치 — 손계산 없이도 자연스러운 토너먼트 모양이 된다. */
+.bracket-scroll { overflow-x: auto; padding-bottom: 8px; }
+.bracket { display: flex; align-items: stretch; gap: 36px; width: max-content; }
+.bracket-col { display: flex; flex-direction: column; min-width: 210px; }
+.bracket-col-title { font-size: 13px; color: var(--muted); text-align: center; margin-bottom: 8px; }
+.bracket-col-body { flex: 1; display: flex; flex-direction: column; justify-content: space-around; }
+
+.tie-card {
+  position: relative;
   display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 6px;
-  padding: 7px 8px; border-bottom: 1px solid var(--line); font-size: 13px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+  padding: 8px 10px; font-size: 13px;
 }
-.tie-side { text-align: right; color: var(--muted); }
+.tie-card.connector::after {
+  content: ''; position: absolute; top: 50%; right: -36px; width: 36px; height: 1px;
+  background: var(--line);
+}
+.tie-side { text-align: right; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tie-side.away { text-align: left; }
 .tie-side.won { color: var(--text); font-weight: 700; }
-.tie-score { background: var(--panel-2); border-radius: 4px; padding: 1px 7px; font-weight: 700; font-size: 12px; }
-.tie-bye { grid-column: 1 / -1; text-align: center; color: var(--muted); }
-.cup-ties .tie.mine.win { background: #1f3a26; border-radius: 6px; }
-.cup-ties .tie.mine.loss { background: #3a2020; border-radius: 6px; }
+.tie-score { background: var(--panel-2); border-radius: 4px; padding: 1px 7px; font-weight: 700; font-size: 12px; white-space: nowrap; }
+.tie-card.bye { grid-template-columns: 1fr auto; }
+.tie-card.mine.win { background: #1f3a26; border-color: #2fa84f; }
+.tie-card.mine.loss { background: #3a2020; border-color: #d0463b; }
+.tie-card.pending { border-style: dashed; opacity: 0.85; }
+.tie-card.pending.mine { border-color: var(--accent); }
+.tie-card.champion {
+  justify-content: center; text-align: center; font-size: 16px;
+  background: linear-gradient(135deg, rgba(240, 190, 70, 0.16), rgba(240, 190, 70, 0.04));
+  border-color: rgba(240, 190, 70, 0.5);
+}
+.bracket-col.champion-col { min-width: 160px; justify-content: center; }
 
 /* ── Staff ── */
 .staff-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }

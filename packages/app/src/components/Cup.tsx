@@ -1,4 +1,4 @@
-import { isCupOver, cupSurvivors } from '@soccer-tycoon/engine';
+import { isCupOver, cupSurvivors, nextCupPairings, type CupTie } from '@soccer-tycoon/engine';
 import { watchCupSetup, type GameState } from '../game.js';
 
 interface Props {
@@ -6,6 +6,9 @@ interface Props {
   onPlayCupRound: () => void;
   onWatchCup: () => void;
 }
+
+/** 대진 카드 한 줄 높이(간격 포함, px) — 라운드별 컬럼 높이를 맞춰 브래킷 모양을 만든다. */
+const ROW_HEIGHT = 68;
 
 export function Cup({ game, onPlayCupRound, onWatchCup }: Props) {
   const cup = game.cup;
@@ -20,6 +23,10 @@ export function Cup({ game, onPlayCupRound, onWatchCup }: Props) {
   const survivors = cupSurvivors(cup);
   const myAlive = survivors.includes(mine) || cup.championId === mine;
   const canWatch = watchCupSetup(game) !== null;
+  const upcoming = !over ? nextCupPairings(cup, game.clubs) : null;
+
+  const firstRoundTies = cup.rounds[0]?.ties.length ?? Math.max(1, Math.ceil(cup.participantIds.length / 2));
+  const colHeight = firstRoundTies * ROW_HEIGHT;
 
   return (
     <div className="cup">
@@ -38,41 +45,87 @@ export function Cup({ game, onPlayCupRound, onWatchCup }: Props) {
         )}
       </div>
 
-      <div className="cup-rounds">
-        {cup.rounds.length === 0 && (
-          <p className="muted">아직 경기가 없습니다. "컵 다음 라운드"로 시작하세요. (참가 {cup.participantIds.length}개 구단)</p>
-        )}
-        {cup.rounds.map((round, ri) => (
-          <div className="cup-round" key={ri}>
-            <h3>{round.name}</h3>
-            <ul className="cup-ties">
-              {round.ties.map((tie, ti) => {
-                const involvesMe = tie.homeId === mine || tie.awayId === mine;
-                const myWin = involvesMe && tie.winnerId === mine;
-                return (
-                  <li key={ti} className={involvesMe ? (myWin ? 'tie mine win' : 'tie mine loss') : 'tie'}>
-                    {tie.awayId === null ? (
-                      <span className="tie-bye"><b>{nameOf(tie.homeId)}</b> 부전승</span>
-                    ) : (
-                      <>
-                        <span className={`tie-side ${tie.winnerId === tie.homeId ? 'won' : ''}`}>
-                          {nameOf(tie.homeId)}
-                        </span>
-                        <span className="tie-score">
-                          {tie.homeScore} : {tie.awayScore}{tie.penalties ? ' (승부차기)' : ''}
-                        </span>
-                        <span className={`tie-side away ${tie.winnerId === tie.awayId ? 'won' : ''}`}>
-                          {nameOf(tie.awayId)}
-                        </span>
-                      </>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
+      {cup.rounds.length === 0 ? (
+        <p className="muted">아직 경기가 없습니다. "컵 다음 라운드"로 시작하세요. (참가 {cup.participantIds.length}개 구단)</p>
+      ) : (
+        <div className="bracket-scroll">
+          <div className="bracket">
+            {cup.rounds.map((round, ri) => (
+              <div className="bracket-col" key={ri} style={{ height: colHeight }}>
+                <div className="bracket-col-title">{round.name}</div>
+                <div className="bracket-col-body">
+                  {round.ties.map((tie, ti) => (
+                    <TieCard key={ti} tie={tie} mine={mine} nameOf={nameOf} connector={ri < cup.rounds.length - 1 || upcoming !== null} />
+                  ))}
+                </div>
+              </div>
+            ))}
+
+            {upcoming && (
+              <div className="bracket-col" style={{ height: colHeight }}>
+                <div className="bracket-col-title">{upcoming.roundName} <span className="muted small">(예정)</span></div>
+                <div className="bracket-col-body">
+                  {upcoming.byeId && (
+                    <div className="tie-card pending bye">
+                      <span className="tie-side">{nameOf(upcoming.byeId)}</span>
+                      <span className="tie-score muted small">부전승</span>
+                    </div>
+                  )}
+                  {upcoming.pairings.map((pr, pi) => {
+                    const involvesMe = pr.homeId === mine || pr.awayId === mine;
+                    return (
+                      <div key={pi} className={`tie-card pending ${involvesMe ? 'mine' : ''}`}>
+                        <span className="tie-side">{nameOf(pr.homeId)}</span>
+                        <span className="tie-score muted small">vs</span>
+                        <span className="tie-side away">{nameOf(pr.awayId)}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {over && (
+              <div className="bracket-col champion-col" style={{ height: colHeight }}>
+                <div className="bracket-col-title">우승</div>
+                <div className="bracket-col-body">
+                  <div className="tie-card champion">🏆 <b>{nameOf(cup.championId)}</b></div>
+                </div>
+              </div>
+            )}
           </div>
-        ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TieCard({
+  tie, mine, nameOf, connector,
+}: {
+  tie: CupTie;
+  mine: string;
+  nameOf: (id: string | null) => string;
+  connector: boolean;
+}) {
+  const involvesMe = tie.homeId === mine || tie.awayId === mine;
+  const myWin = involvesMe && tie.winnerId === mine;
+  const cls = `tie-card ${connector ? 'connector' : ''} ${involvesMe ? (myWin ? 'mine win' : 'mine loss') : ''}`;
+  if (tie.awayId === null) {
+    return (
+      <div className={`${cls} bye`}>
+        <span className="tie-side"><b>{nameOf(tie.homeId)}</b></span>
+        <span className="tie-score muted small">부전승</span>
       </div>
+    );
+  }
+  return (
+    <div className={cls}>
+      <span className={`tie-side ${tie.winnerId === tie.homeId ? 'won' : ''}`}>{nameOf(tie.homeId)}</span>
+      <span className="tie-score">
+        {tie.homeScore} : {tie.awayScore}{tie.penalties ? ' (PK)' : ''}
+      </span>
+      <span className={`tie-side away ${tie.winnerId === tie.awayId ? 'won' : ''}`}>{nameOf(tie.awayId)}</span>
     </div>
   );
 }
