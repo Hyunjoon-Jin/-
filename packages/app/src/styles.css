@@ -229,6 +229,20 @@ body {
   border: 1px solid rgba(208, 70, 59, 0.4);
 }
 
+.pace-checkpoint { border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 14px; }
+.pace-checkpoint.ahead {
+  background: linear-gradient(135deg, rgba(61, 220, 132, 0.14), rgba(61, 220, 132, 0.04));
+  border: 1px solid rgba(61, 220, 132, 0.4);
+}
+.pace-checkpoint.onTrack {
+  background: linear-gradient(135deg, rgba(224, 190, 70, 0.14), rgba(224, 190, 70, 0.04));
+  border: 1px solid rgba(224, 190, 70, 0.4);
+}
+.pace-checkpoint.behind {
+  background: linear-gradient(135deg, rgba(208, 70, 59, 0.14), rgba(208, 70, 59, 0.04));
+  border: 1px solid rgba(208, 70, 59, 0.4);
+}
+
 .rival-card {
   background: linear-gradient(135deg, rgba(224, 87, 75, 0.12), rgba(224, 87, 75, 0.03));
   border: 1px solid rgba(224, 87, 75, 0.35); border-radius: 8px;

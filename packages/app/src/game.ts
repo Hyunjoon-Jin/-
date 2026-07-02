@@ -636,6 +636,36 @@ export function liveProgress(state: GameState): { round: number; total: number; 
   return { round: over ? total : currentRound(ss), total, over };
 }
 
+/** 시즌 중간 페이스 체크포인트(대략 1/3, 2/3 지점)에서만 등장. */
+const PACE_CHECKPOINT_FRACTIONS = [1 / 3, 2 / 3];
+
+export interface PaceCheckpoint {
+  round: number;
+  totalRounds: number;
+  position: number;
+  objective: number;
+  /** 목표 대비 페이스. ahead=여유, onTrack=근접, behind=미달 위험. */
+  status: 'ahead' | 'onTrack' | 'behind';
+}
+
+/**
+ * 정확히 체크포인트 라운드에 도달했을 때만 순위 페이스 정보를 반환(그 외엔 null).
+ * "남은 경기 시뮬"처럼 여러 라운드를 건너뛰면 자연스럽게 지나칠 수 있다(라운드 단위 관전 흐름 전용).
+ */
+export function paceCheckpoint(state: GameState): PaceCheckpoint | null {
+  if (!state.live) return null;
+  const prog = liveProgress(state);
+  if (prog.over || prog.round <= 0) return null;
+  const checkpointRounds = PACE_CHECKPOINT_FRACTIONS.map((f) => Math.round(prog.total * f));
+  if (!checkpointRounds.includes(prog.round)) return null;
+  const table = liveTable(state);
+  const position = table.findIndex((r) => r.clubId === state.myClubId) + 1;
+  if (position <= 0) return null;
+  const gap = state.objective - position; // 양수=목표보다 여유, 음수=목표 미달
+  const status: PaceCheckpoint['status'] = gap >= 2 ? 'ahead' : gap >= -1 ? 'onTrack' : 'behind';
+  return { round: prog.round, totalRounds: prog.total, position, objective: state.objective, status };
+}
+
 /** 내 구단의 다음 라운드 경기. */
 export function myNextFixture(state: GameState): { fx: Fixture; opponent: Club; home: boolean } | null {
   if (!state.live) return null;

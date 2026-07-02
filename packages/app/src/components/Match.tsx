@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   liveTable, liveProgress, myNextFixture, lastSummary, myLastPosition,
-  myClub, checkMediaEvent, DIVISION_LABELS, type GameState, type MediaEvent,
+  myClub, checkMediaEvent, paceCheckpoint, DIVISION_LABELS, type GameState, type MediaEvent,
 } from '../game.js';
 import type { MatchResult, MediaTone } from '@soccer-tycoon/engine';
 import { MatchDetailModal } from './MatchStats.js';
@@ -53,6 +53,12 @@ function Preseason({ game, onStartSeason, onAdvanceFull }: Props) {
   );
 }
 
+const PACE_TEXT: Record<'ahead' | 'onTrack' | 'behind', { icon: string; label: string }> = {
+  ahead: { icon: '📈', label: '순항 중' },
+  onTrack: { icon: '📊', label: '페이스 유지 중' },
+  behind: { icon: '📉', label: '페이스 이탈' },
+};
+
 function InSeason(props: Props) {
   const { game, onPlayRound, onPlayRest, onWatch, onMediaRespond, onMediaDismiss } = props;
   const prog = liveProgress(game);
@@ -60,6 +66,7 @@ function InSeason(props: Props) {
   const table = liveTable(game);
   const media = checkMediaEvent(game);
   const predicted = game.live?.predictedTable.find((p) => p.clubId === game.myClubId)?.predictedPos;
+  const checkpoint = paceCheckpoint(game);
 
   return (
     <div className="match-screen">
@@ -77,6 +84,12 @@ function InSeason(props: Props) {
           </p>
         )}
       </div>
+      {checkpoint && (
+        <div className={`pace-checkpoint ${checkpoint.status}`}>
+          {PACE_TEXT[checkpoint.status].icon} <b>{PACE_TEXT[checkpoint.status].label}</b> — {checkpoint.round}/{checkpoint.totalRounds}라운드 기준 <b>{checkpoint.position}위</b>
+          <span className="muted small"> (목표 {checkpoint.objective}위 이내)</span>
+        </div>
+      )}
       <div className="phase-actions">
         {next && <button className="btn-advance" onClick={onWatch}>내 경기 관전 ▶</button>}
         <button className="btn-ghost" onClick={onPlayRound}>다음 라운드 진행</button>
