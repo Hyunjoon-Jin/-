@@ -40,6 +40,9 @@ type SortDir = 1 | -1;
 /** 컬럼별 기본 정렬 방향(재클릭 시 이 방향을 뒤집는다). */
 const DEFAULT_DIR: Record<MarketSortKey, SortDir> = { age: 1, ca: -1, potential: -1, value: 1 };
 
+/** 내 스쿼드(판매/방출) 목록 정렬 기본 방향(영입 시장과 컬럼 구성이 같아 MarketSortKey를 공유). */
+const SQUAD_DEFAULT_DIR: Record<MarketSortKey, SortDir> = { age: 1, ca: -1, potential: -1, value: -1 };
+
 export function Transfers(props: Props) {
   // 시즌 진행 중에는 직접 이적 불가 → 지난 시즌 내역(읽기 전용)
   if (props.game.live) return <TransferHistory game={props.game} />;
@@ -67,11 +70,19 @@ function TransferMarket({ game, onNegotiate, onBuyAt, onOffers, onAcceptSell, on
   const [affordableOnly, setAffordableOnly] = useState(true);
   const [sort, setSort] = useState<MarketSortKey>('ca');
   const [dir, setDir] = useState<SortDir>(-1);
+  const [squadSort, setSquadSort] = useState<MarketSortKey>('ca');
+  const [squadDir, setSquadDir] = useState<SortDir>(-1);
   const [negotiating, setNegotiating] = useState<TransferTarget | null>(null);
   const [selling, setSelling] = useState<Player | null>(null);
 
   const budget = club.finance.transferBudget;
   const scouting = club.staff.scouting;
+
+  function toggleSquadSort(k: MarketSortKey) {
+    if (k === squadSort) { setSquadDir((d) => (d === 1 ? -1 : 1) as SortDir); return; }
+    setSquadSort(k);
+    setSquadDir(SQUAD_DEFAULT_DIR[k]);
+  }
 
   function toggleSort(k: MarketSortKey) {
     if (k === sort) { setDir((d) => (d === 1 ? -1 : 1) as SortDir); return; }
@@ -101,6 +112,21 @@ function TransferMarket({ game, onNegotiate, onBuyAt, onOffers, onAcceptSell, on
     });
     return list.slice(0, 40);
   }, [game.clubs, game.myClubId, line, ageFilter, affordableOnly, search, sort, dir, budget]);
+
+  const mySquad = useMemo(() => {
+    const list = [...club.players];
+    list.sort((a, b) => {
+      let cmp: number;
+      switch (squadSort) {
+        case 'age': cmp = a.age - b.age; break;
+        case 'potential': cmp = a.potential - b.potential; break;
+        case 'value': cmp = marketValue(a) - marketValue(b); break;
+        default: cmp = currentAbility(a) - currentAbility(b);
+      }
+      return cmp * squadDir;
+    });
+    return list;
+  }, [club.players, squadSort, squadDir]);
 
   function act(outcome: ActionOutcome) {
     setMsg({ text: outcome.message, ok: outcome.ok });
@@ -188,15 +214,23 @@ function TransferMarket({ game, onNegotiate, onBuyAt, onOffers, onAcceptSell, on
           <h3>내 스쿼드 ({club.players.length})</h3>
           <table className="data-table compact">
             <thead>
-              <tr><th>선수</th><th>P</th><th>나이</th><th>CA</th><th>가치</th><th></th></tr>
+              <tr>
+                <th>선수</th><th>P</th>
+                <MarketSortHeader label="나이" k="age" sort={squadSort} dir={squadDir} onClick={toggleSquadSort} />
+                <MarketSortHeader label="CA" k="ca" sort={squadSort} dir={squadDir} onClick={toggleSquadSort} />
+                <MarketSortHeader label="잠재" k="potential" sort={squadSort} dir={squadDir} onClick={toggleSquadSort} />
+                <MarketSortHeader label="가치" k="value" sort={squadSort} dir={squadDir} onClick={toggleSquadSort} />
+                <th></th>
+              </tr>
             </thead>
             <tbody>
-              {[...club.players].sort((a, b) => currentAbility(b) - currentAbility(a)).map((p: Player) => (
+              {mySquad.map((p: Player) => (
                 <tr key={p.id}>
                   <td className="name link" onClick={() => onSelect(p)}>{p.name}</td>
                   <td>{p.position}</td>
                   <td>{p.age}</td>
                   <td><b>{currentAbility(p).toFixed(0)}</b></td>
+                  <td className="muted">{p.potential.toFixed(0)}</td>
                   <td>{formatMoney(marketValue(p))}</td>
                   <td className="sell-actions">
                     <button className="btn-small" onClick={() => { setMsg(null); setSelling(p); }}>판매</button>
