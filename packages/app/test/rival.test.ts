@@ -34,4 +34,20 @@ describe('라이벌 구단', () => {
     g = advanceFullSeason(g);
     expect(g.rivalClubId).toBe(rivalId);
   });
+
+  it('개별 맞대결 기록(rivalMeetings)이 rivalRecord 합계와 정확히 일치한다', () => {
+    let g = startGame(2026, 'c5');
+    g = advanceFullSeason(g);
+    g = advanceFullSeason(g);
+    const wins = g.rivalMeetings.filter((m) => m.result === 'win').length;
+    const draws = g.rivalMeetings.filter((m) => m.result === 'draw').length;
+    const losses = g.rivalMeetings.filter((m) => m.result === 'loss').length;
+    expect({ wins, draws, losses }).toEqual(g.rivalRecord);
+    // 각 기록의 결과가 스코어와 일치한다
+    for (const m of g.rivalMeetings) {
+      if (m.myGoals > m.oppGoals) expect(m.result).toBe('win');
+      else if (m.myGoals < m.oppGoals) expect(m.result).toBe('loss');
+      else expect(m.result).toBe('draw');
+    }
+  });
 });

@@ -324,6 +324,9 @@ soccer-tycoon/
       사기(applyMediaTone)와 이사회 신뢰도(applyConfidence)가 즉시 반영되고, "노코멘트"로
       넘기면 효과 없이 재노출만 막는다. 같은 라운드에 중복 노출되지 않도록
       LiveSeason.mediaHandledThroughRound로 처리 완료 라운드를 추적.
+- [x] 라이벌전 개별 맞대결 기록: rivalRecord 집계와 같은 시점(finishSeason)에
+      GameState.rivalMeetings(시즌·홈원정·스코어·결과)를 함께 누적. 히스토리에
+      전체 맞대결 표로, 대시보드 라이벌 카드에 최근 5경기 폼(승/무/패 점) 표시.
 
 기획했던 핵심·확장 시스템이 모두 구현됨. 이후는 콘텐츠 확충·디테일 다듬기 영역.
 

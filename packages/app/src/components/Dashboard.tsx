@@ -66,6 +66,16 @@ export function Dashboard({ game }: { game: GameState }) {
         <span className="rival-record">
           {' '}— 통산 {game.rivalRecord.wins}승 {game.rivalRecord.draws}무 {game.rivalRecord.losses}패
         </span>
+        {game.rivalMeetings.length > 0 && (
+          <span className="rival-form">
+            {' '}
+            {game.rivalMeetings.slice(-5).map((m, i) => (
+              <span key={i} className={`form-dot ${m.result === 'win' ? 'W' : m.result === 'loss' ? 'L' : 'D'}`}>
+                {m.result === 'win' ? '승' : m.result === 'loss' ? '패' : '무'}
+              </span>
+            ))}
+          </span>
+        )}
       </div>
 
       <BoardConfidence value={game.boardConfidence} />

@@ -86,6 +86,17 @@ export interface GameState {
   rivalClubId: string;
   /** 라이벌 구단전 통산 전적(내 구단 기준). */
   rivalRecord: RivalRecord;
+  /** 라이벌 구단전 개별 맞대결 기록(시즌순). */
+  rivalMeetings: RivalMeeting[];
+}
+
+/** 라이벌 구단전 개별 맞대결 기록. */
+export interface RivalMeeting {
+  season: number;
+  home: boolean;
+  myGoals: number;
+  oppGoals: number;
+  result: 'win' | 'draw' | 'loss';
 }
 
 /** 은퇴 스냅샷(RetiredLegend) + 은퇴한 시즌(내 구단 재임 기준). */
@@ -182,6 +193,7 @@ export function startGame(seed: number, myClubId: string, difficulty: Difficulty
     legends: [],
     rivalClubId: selectRival(clubs, mine),
     rivalRecord: { wins: 0, draws: 0, losses: 0 },
+    rivalMeetings: [],
   };
 }
 
@@ -285,16 +297,20 @@ export function finishSeason(state: GameState): GameState {
 
   // 라이벌전 전적 갱신(같은 부에서 맞붙은 경우만 — 다른 부일 땐 이번 시즌 대결 없음).
   const rivalRecord = { ...state.rivalRecord };
+  const newRivalMeetings: RivalMeeting[] = [];
   for (const r of ss.results) {
     const isDerby =
       (r.homeClubId === state.myClubId && r.awayClubId === state.rivalClubId) ||
       (r.awayClubId === state.myClubId && r.homeClubId === state.rivalClubId);
     if (!isDerby) continue;
-    const myGoals = r.homeClubId === state.myClubId ? r.score[0] : r.score[1];
-    const oppGoals = r.homeClubId === state.myClubId ? r.score[1] : r.score[0];
-    if (myGoals > oppGoals) rivalRecord.wins++;
-    else if (myGoals < oppGoals) rivalRecord.losses++;
-    else rivalRecord.draws++;
+    const home = r.homeClubId === state.myClubId;
+    const myGoals = home ? r.score[0] : r.score[1];
+    const oppGoals = home ? r.score[1] : r.score[0];
+    let result: RivalMeeting['result'];
+    if (myGoals > oppGoals) { rivalRecord.wins++; result = 'win'; }
+    else if (myGoals < oppGoals) { rivalRecord.losses++; result = 'loss'; }
+    else { rivalRecord.draws++; result = 'draw'; }
+    newRivalMeetings.push({ season: state.season, home, myGoals, oppGoals, result });
   }
 
   // 2) 상대 부 자동 시뮬 (통계엔 미포함, 순위/정산/승강용)
@@ -421,6 +437,7 @@ export function finishSeason(state: GameState): GameState {
     demand: nextDemand,
     legends: [...state.legends, ...newLegends],
     rivalRecord,
+    rivalMeetings: [...state.rivalMeetings, ...newRivalMeetings],
     live: null,
     cup: null,
   };

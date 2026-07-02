@@ -1,6 +1,8 @@
 import { useState } from 'react';
-import { myClub, DIVISION_LABELS, type GameState } from '../game.js';
+import { myClub, rivalClub, DIVISION_LABELS, type GameState } from '../game.js';
 import { careerScorers, type SeasonSquadEntry } from '@soccer-tycoon/engine';
+
+const RESULT_LABEL: Record<'win' | 'draw' | 'loss', string> = { win: '승', draw: '무', loss: '패' };
 
 type HistorySeason = GameState['history'][number];
 
@@ -146,6 +148,31 @@ export function History({ game }: { game: GameState }) {
                   <td className="muted">{l.careerApps}</td>
                   <td><b>{l.careerGoals}</b></td>
                   <td className="muted">{l.caps > 0 ? `${l.caps}경` : '-'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {game.rivalMeetings.length > 0 && (
+        <div className="rival-history">
+          <h3>
+            🔥 라이벌전 전적 <span className="muted small">
+              ({rivalClub(game).name} · 통산 {game.rivalRecord.wins}승 {game.rivalRecord.draws}무 {game.rivalRecord.losses}패)
+            </span>
+          </h3>
+          <table className="data-table compact">
+            <thead><tr><th>시즌</th><th>홈/원정</th><th>스코어</th><th>결과</th></tr></thead>
+            <tbody>
+              {[...game.rivalMeetings].reverse().map((m, i) => (
+                <tr key={i}>
+                  <td className="muted small">{m.season}</td>
+                  <td className="small muted">{m.home ? '홈' : '원정'}</td>
+                  <td>{m.myGoals} : {m.oppGoals}</td>
+                  <td className={m.result === 'win' ? 'pos' : m.result === 'loss' ? 'neg' : ''}>
+                    {RESULT_LABEL[m.result]}
+                  </td>
                 </tr>
               ))}
             </tbody>
