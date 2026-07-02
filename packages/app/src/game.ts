@@ -136,6 +136,14 @@ export interface GameState {
   contractSeasonsLeft: number;
   /** 과거 장기 계약 체결 누적치 — 보드진 목표 순위를 영구적으로 더 엄격하게 만든다. */
   ambition: number;
+  /** playerId → 내 구단 소속으로 뛴 시즌의 평균 평점 이력(최근 20시즌). 출전이 없던 시즌은 기록되지 않는다. */
+  ratingHistory: Record<string, SeasonRatingEntry[]>;
+}
+
+/** 선수의 한 시즌 평균 평점 스냅샷. */
+export interface SeasonRatingEntry {
+  season: number;
+  avgRating: number;
 }
 
 /** 새 게임 시작 시 감독 계약 기간(시즌). */
@@ -261,6 +269,7 @@ export function startGame(seed: number, myClubId: string, difficulty: Difficulty
     mediaToneCounts: emptyMediaToneCounts(),
     contractSeasonsLeft: CONTRACT_INITIAL_YEARS,
     ambition: 0,
+    ratingHistory: {},
   };
 }
 
@@ -362,10 +371,15 @@ export function finishSeason(state: GameState): GameState {
   const myTable = computeTable(ss);
   const { topScorers, awards } = summarizeStats(ss.results, totalRounds(ss));
   // 스쿼드 스냅샷: 오프시즌(나이 증가·은퇴) 전에 캡처해야 "그 시즌 당시" 기록이 된다.
-  const mySquad = seasonSquadSnapshot(
-    myTactic(state), myClub(state),
-    aggregatePlayerStats(ss.results).filter((s) => s.clubId === state.myClubId),
-  );
+  const myPlayerStats = aggregatePlayerStats(ss.results).filter((s) => s.clubId === state.myClubId);
+  const mySquad = seasonSquadSnapshot(myTactic(state), myClub(state), myPlayerStats);
+  // 출전 기록(apps>0)이 있는 선수만 그 시즌 평균 평점을 이력에 누적(최근 20시즌 유지).
+  const ratingHistory: Record<string, SeasonRatingEntry[]> = { ...state.ratingHistory };
+  for (const st of myPlayerStats) {
+    if (st.apps === 0) continue;
+    const hist = [...(ratingHistory[st.playerId] ?? []), { season: state.season, avgRating: st.avgRating }];
+    ratingHistory[st.playerId] = hist.length > 20 ? hist.slice(-20) : hist;
+  }
 
   // 라이벌전 전적 갱신(같은 부에서 맞붙은 경우만 — 다른 부일 땐 이번 시즌 대결 없음).
   const rivalRecord = { ...state.rivalRecord };
@@ -547,6 +561,7 @@ export function finishSeason(state: GameState): GameState {
     rivalRecord,
     rivalMeetings: [...state.rivalMeetings, ...newRivalMeetings],
     contractSeasonsLeft: state.contractSeasonsLeft - 1,
+    ratingHistory,
     live: null,
     cup: null,
   };
@@ -885,6 +900,11 @@ export function playerTimeline(state: GameState, playerId: string): TimelineEntr
     });
   }
   return entries.sort((a, b) => a.season - b.season);
+}
+
+/** 선수의 시즌별 평균 평점 이력(내 구단 소속으로 출전한 시즌만, 시즌순). */
+export function playerRatingHistory(state: GameState, playerId: string): SeasonRatingEntry[] {
+  return state.ratingHistory[playerId] ?? [];
 }
 
 /** 진행 중 시즌, 내 구단 선수들의 시즌 통계(평점순). */

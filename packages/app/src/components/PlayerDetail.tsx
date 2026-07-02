@@ -7,7 +7,7 @@ import {
   type AttrKey, type Player, type DerivedRatings, type TrainingFocus,
   type PlayerFormEntry, type OverallTier, type PotentialTier, type AgeProfile, type ScoutingReport,
 } from '@soccer-tycoon/engine';
-import type { TimelineEntry } from '../game.js';
+import type { TimelineEntry, SeasonRatingEntry } from '../game.js';
 
 function moraleLabel(m: number): { text: string; cls: string } {
   if (m >= 0.65) return { text: '😀 만족', cls: 'cond-good' };
@@ -101,9 +101,11 @@ interface Props {
   recentForm?: PlayerFormEntry[];
   /** 커리어 타임라인(이적·마일스톤·은퇴). 시즌순. */
   timeline?: TimelineEntry[];
+  /** 내 구단 소속으로 출전한 시즌의 평균 평점 이력. 시즌순. */
+  ratingHistory?: SeasonRatingEntry[];
 }
 
-export function PlayerDetail({ player, onClose, onSetFocus, onRenew, recentForm, timeline }: Props) {
+export function PlayerDetail({ player, onClose, onSetFocus, onRenew, recentForm, timeline, ratingHistory }: Props) {
   const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const ca = currentAbility(player);
   const derived = playerDerived(player, player.position);
@@ -187,6 +189,8 @@ export function PlayerDetail({ player, onClose, onSetFocus, onRenew, recentForm,
 
         <GrowthChart history={player.caHistory ?? []} current={Math.round(ca)} />
 
+        {ratingHistory && ratingHistory.length >= 2 && <RatingChart history={ratingHistory} />}
+
         {timeline && timeline.length > 0 && <CareerTimeline entries={timeline} />}
 
         <div className="pd-cols">
@@ -253,6 +257,39 @@ function GrowthChart({ history, current }: { history: number[]; current: number 
         <span>{pts[0]}</span>
         <span>최고 {Math.max(...pts)}</span>
         <span>{current}</span>
+      </div>
+    </div>
+  );
+}
+
+/** 시즌별 평균 평점 추이(내 구단 소속 출전 시즌만) — 성장 곡선과 같은 스파크라인 형식. */
+function RatingChart({ history }: { history: SeasonRatingEntry[] }) {
+  const pts = history.map((h) => h.avgRating);
+  const W = 320, H = 64, pad = 6;
+  const lo = Math.min(...pts) - 0.3;
+  const hi = Math.max(...pts) + 0.3;
+  const span = Math.max(0.1, hi - lo);
+  const x = (i: number) => pad + (i / (pts.length - 1)) * (W - pad * 2);
+  const y = (v: number) => H - pad - ((v - lo) / span) * (H - pad * 2);
+  const line = pts.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+  const rising = pts[pts.length - 1]! >= pts[0]!;
+  const color = rising ? '#3ddc84' : '#e0a83b';
+
+  return (
+    <div className="pd-growth">
+      <h3>시즌 평점 추이 <span className="muted small">(내 구단 소속 · 최근 {pts[pts.length - 1]!.toFixed(1)})</span></h3>
+      <svg width={W} height={H} className="growth-svg" role="img" aria-label="시즌 평점 추이">
+        <polyline points={line} fill="none" stroke={color} strokeWidth={2}
+          strokeLinejoin="round" strokeLinecap="round" />
+        {pts.map((v, i) => (
+          <circle key={i} cx={x(i)} cy={y(v)} r={i === pts.length - 1 ? 3.5 : 2}
+            fill={i === pts.length - 1 ? color : 'rgba(255,255,255,0.5)'} />
+        ))}
+      </svg>
+      <div className="growth-ends muted small">
+        <span>시즌 {history[0]!.season}</span>
+        <span>최고 {Math.max(...pts).toFixed(1)}</span>
+        <span>시즌 {history[history.length - 1]!.season}</span>
       </div>
     </div>
   );

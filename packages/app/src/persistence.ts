@@ -31,7 +31,8 @@ import type { SeasonSummary, SeasonFinanceReport } from '@soccer-tycoon/engine';
 // v32: 유스 아카데미 배출 유망주 소개(SeasonSummary.youthProspects)
 // v33: 유스 기대주 후속 소식 — 데뷔/첫 골(SeasonSummary.prospectUpdates)
 // v34: 컵 우승 후보 예측(LiveSeason.cupFavorites)
-export const SAVE_VERSION = 34;
+// v35: 선수 시즌별 평균 평점 이력(GameState.ratingHistory)
+export const SAVE_VERSION = 35;
 
 type SerializedSummary = Omit<SeasonSummary, 'finance'> & {
   finance: Record<string, SeasonFinanceReport>;

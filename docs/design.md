@@ -524,6 +524,22 @@ soccer-tycoon/
       history에 기록된 데이터를 렌더링만 하는 기능이라 엔진 변경도,
       새 상태·SAVE_VERSION 변경도 전혀 없음 — playerTimeline·라이벌
       전적표와 같은 "기록 재구성" 패턴.
+- [x] 선수 상세에 시즌별 평점 그래프 추가: finishSeason은 이미
+      aggregatePlayerStats(ss.results)로 내 구단 소속 전 선수의 그 시즌
+      avgRating을 계산해 seasonSquadSnapshot(우승 스쿼드용, XI 11명만)에
+      넘기고 있었다 — 그 필터링 전 원본 배열(모든 출전 선수, apps>0)을
+      myPlayerStats로 이름 붙여 재사용하면서, GameState에 새 필드
+      ratingHistory: Record<playerId, {season, avgRating}[]>를 추가해
+      시즌마다 append(최근 20개 유지, caHistory와 동일한 트림 방식).
+      caHistory는 Player 객체 위에 엔진이 직접 쌓지만, avgRating은
+      애초에 엔진 Player 타입에 없는 값이라 GameState 레벨에 별도
+      맵으로 보관 — mediaToneCounts와 같은 패턴. 새 함수
+      playerRatingHistory(state, playerId)로 조회하고, PlayerDetail의
+      성장 곡선(GrowthChart) 바로 아래에 동일한 스파크라인 포맷의
+      RatingChart를 추가했다. 출전 없던 시즌은 애초에 기록되지 않으므로
+      "성장 곡선"과 달리 2개 미만이면 섹션 자체를 숨긴다(플레이스홀더
+      없음 — 벤치 자원·신규 영입은 원래 데이터가 없는 게 자연스럽다).
+      GameState 필드 추가로 SAVE_VERSION 35.
 
 기획했던 핵심·확장 시스템이 모두 구현됨. 이후는 콘텐츠 확충·디테일 다듬기 영역.
 
