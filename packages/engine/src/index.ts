@@ -84,3 +84,7 @@ export {
   buildScoutingReport,
   type ScoutingReport, type OverallTier, type PotentialTier, type AgeProfile,
 } from './scouting.js';
+export {
+  matchOutcomeKind, mediaToneOptions, shouldTriggerMediaEvent, applyMediaTone,
+  type MediaEventKind, type MediaTone, type MediaToneOption,
+} from './media.js';

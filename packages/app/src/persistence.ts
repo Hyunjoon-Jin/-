@@ -22,7 +22,8 @@ import type { SeasonSummary, SeasonFinanceReport } from '@soccer-tycoon/engine';
 // v23: 은퇴 선수 레전드 아카이브(GameState.legends)
 // v24: 통산 마일스톤(SeasonSummary.milestones)
 // v25: 라이벌 구단(GameState.rivalClubId·rivalRecord)
-export const SAVE_VERSION = 25;
+// v26: 미디어 인터뷰 처리 라운드 추적(LiveSeason.mediaHandledThroughRound)
+export const SAVE_VERSION = 26;
 
 type SerializedSummary = Omit<SeasonSummary, 'finance'> & {
   finance: Record<string, SeasonFinanceReport>;

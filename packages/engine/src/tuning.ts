@@ -32,4 +32,7 @@ export const TUNING = {
 
   /** 부상 발생 기본 확률(선발 1명당 경기당). matchEffects.medicalFactor·특성으로 가감. */
   injuryTriggerChance: 0.008,
+
+  /** 내 경기 후 미디어 인터뷰(감독 질의응답)가 열릴 확률. */
+  mediaEventChance: 0.35,
 } as const;

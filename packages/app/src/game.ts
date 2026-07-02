@@ -17,7 +17,9 @@ import {
   confidenceDelta, applyConfidence, isSacked, START_CONFIDENCE,
   generateDemand, evaluateDemand, demandConfidence, DEMAND_LABEL,
   annualWageBill, wageBudget,
+  matchOutcomeKind, mediaToneOptions, shouldTriggerMediaEvent, applyMediaTone,
   type BoardDemand, type RetiredLegend,
+  type MediaEventKind, type MediaTone, type MediaToneOption,
   upgradeStaff as engineUpgradeStaff, formatMoney,
   computeTeamStrength, currentAbility, recentForm,
   type Club, type Tactic, type MatchResult, type MatchSetup, type SeasonSummary,
@@ -37,6 +39,8 @@ export interface LiveSeason {
   transfers: SeasonSummary['transfers'];
   /** 이 시즌 내 구단이 속한 부의 구단 id들(순서 고정). */
   divisionClubIds: string[];
+  /** 미디어 인터뷰를 처리(응답/무시)한 마지막 라운드(중복 노출 방지). */
+  mediaHandledThroughRound: number;
 }
 
 export const DIVISIONS = 2;
@@ -231,7 +235,7 @@ export function startSeason(state: GameState): GameState {
     tactics: { ...state.tactics, [state.myClubId]: repaired },
     live: {
       fixtures: ss.fixtures, results: ss.results, cursor: ss.cursor, baseSeed: ss.baseSeed,
-      transfers, divisionClubIds: myDivClubs.map((c) => c.id),
+      transfers, divisionClubIds: myDivClubs.map((c) => c.id), mediaHandledThroughRound: 0,
     },
     cup,
   };
@@ -559,6 +563,69 @@ export function myNextFixture(state: GameState): { fx: Fixture; opponent: Club; 
   const home = fx.homeId === state.myClubId;
   const opponent = state.clubs.find((c) => c.id === (home ? fx.awayId : fx.homeId))!;
   return { fx, opponent, home };
+}
+
+/** 대기 중인 미디어 인터뷰(경기 후 기자 질의응답). */
+export interface MediaEvent {
+  kind: MediaEventKind;
+  round: number;
+  myClubName: string;
+  oppName: string;
+  score: [number, number];
+  home: boolean;
+  options: MediaToneOption[];
+}
+
+/**
+ * 마지막으로 끝난 라운드에 내 경기가 있었고 아직 처리하지 않았다면,
+ * 라운드 시드 고정 난수로 인터뷰 개최 여부를 판정한다(재현 가능).
+ */
+export function checkMediaEvent(state: GameState): MediaEvent | null {
+  if (!state.live) return null;
+  const live = state.live;
+  if (live.cursor === 0) return null;
+  const lastRound = live.fixtures[live.cursor - 1]!.round;
+  if (lastRound <= live.mediaHandledThroughRound) return null;
+  const myResult = live.results.find(
+    (r, i) => live.fixtures[i]?.round === lastRound &&
+      (r.homeClubId === state.myClubId || r.awayClubId === state.myClubId),
+  );
+  if (!myResult) return null;
+  const rng = new Rng(state.seed + state.season * 1000 + lastRound * 7 + 5555);
+  if (!shouldTriggerMediaEvent(rng)) return null;
+  const home = myResult.homeClubId === state.myClubId;
+  const myGoals = home ? myResult.score[0] : myResult.score[1];
+  const oppGoals = home ? myResult.score[1] : myResult.score[0];
+  const kind = matchOutcomeKind(myGoals, oppGoals);
+  return {
+    kind,
+    round: lastRound,
+    myClubName: home ? myResult.homeClubName : myResult.awayClubName,
+    oppName: home ? myResult.awayClubName : myResult.homeClubName,
+    score: myResult.score,
+    home,
+    options: mediaToneOptions(kind),
+  };
+}
+
+/** 인터뷰 답변 적용: 스쿼드 사기(전원) + 이사회 신뢰도, 해당 라운드를 처리 완료로 표시. */
+export function respondMedia(state: GameState, event: MediaEvent, tone: MediaTone): GameState {
+  const option = event.options.find((o) => o.tone === tone);
+  if (option) {
+    applyMediaTone(myClub(state), option);
+  }
+  const boardConfidence = applyConfidence(state.boardConfidence, option?.confidenceDelta ?? 0);
+  return {
+    ...state,
+    boardConfidence,
+    sacked: isSacked(boardConfidence),
+    live: state.live && { ...state.live, mediaHandledThroughRound: event.round },
+  };
+}
+
+/** 인터뷰를 답변 없이 넘김(효과 없음, 재노출만 방지). */
+export function dismissMedia(state: GameState, event: MediaEvent): GameState {
+  return { ...state, live: state.live && { ...state.live, mediaHandledThroughRound: event.round } };
 }
 
 /** 진행 중 시즌의 리그 득점 순위(라이브). */

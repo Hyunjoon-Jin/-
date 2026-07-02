@@ -5,8 +5,8 @@ import {
   playCupRound, negotiate, buyAt, offersFor, acceptSell, release, upgradeStaffAction, setTrainingFocus, renewContract,
   watchSetup, matchPreview, commitWatchedRound,
   watchCupSetup, cupPreview, commitWatchedCupRound,
-  playerForm,
-  type GameState, type ActionOutcome, type WatchSetup, type Difficulty,
+  playerForm, respondMedia, dismissMedia,
+  type GameState, type ActionOutcome, type WatchSetup, type Difficulty, type MediaEvent,
 } from './game.js';
 import type { Tactic, MatchResult } from '@soccer-tycoon/engine';
 import { createSaveStore } from './storage.js';
@@ -201,6 +201,8 @@ export function App() {
                 onFinish={() => update(finishSeason(game))}
                 onAdvanceFull={() => update(advanceFullSeason(game))}
                 onWatch={handleWatch}
+                onMediaRespond={(event, tone) => update(respondMedia(game, event, tone))}
+                onMediaDismiss={(event) => update(dismissMedia(game, event))}
               />
             )}
             {tab === 'cup' && (

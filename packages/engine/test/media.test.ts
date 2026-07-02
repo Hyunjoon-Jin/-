@@ -1,0 +1,43 @@
+import { describe, it, expect } from 'vitest';
+import {
+  matchOutcomeKind, mediaToneOptions, shouldTriggerMediaEvent, applyMediaTone,
+} from '../src/media.js';
+import { generateClub } from '../src/generate.js';
+import { Rng } from '../src/rng.js';
+
+describe('media: 감독 인터뷰', () => {
+  it('경기 결과를 승/무/패로 정확히 분류한다', () => {
+    expect(matchOutcomeKind(2, 1)).toBe('win');
+    expect(matchOutcomeKind(1, 2)).toBe('loss');
+    expect(matchOutcomeKind(1, 1)).toBe('draw');
+  });
+
+  it('결과 유형별 답변 톤 선택지가 2개 이상 있고, trade-off가 존재한다', () => {
+    for (const kind of ['win', 'draw', 'loss'] as const) {
+      const opts = mediaToneOptions(kind);
+      expect(opts.length).toBeGreaterThanOrEqual(2);
+      // 모든 선택지가 동일한 방향이 아니라, 사기·신뢰도 사이에 최소한의 상충이 있다.
+      const moraleVaries = new Set(opts.map((o) => o.moraleDelta)).size > 1;
+      const confVaries = new Set(opts.map((o) => o.confidenceDelta)).size > 1;
+      expect(moraleVaries || confVaries).toBe(true);
+    }
+  });
+
+  it('트리거 확률은 여러 시드에 걸쳐 true/false가 모두 나온다', () => {
+    const results = new Set<boolean>();
+    for (let s = 0; s < 60; s++) results.add(shouldTriggerMediaEvent(new Rng(s)));
+    expect(results.has(true)).toBe(true);
+    expect(results.has(false)).toBe(true);
+  });
+
+  it('applyMediaTone은 스쿼드 전원 사기를 델타만큼 변화시키고 0~1로 clamp한다', () => {
+    const club = generateClub(new Rng(7), 'c1', 'Test FC', 12);
+    club.players.forEach((p) => { p.morale = 0.5; });
+    applyMediaTone(club, { tone: 'confident', moraleDelta: 0.08, confidenceDelta: 1 });
+    club.players.forEach((p) => expect(p.morale).toBeCloseTo(0.58, 5));
+
+    club.players.forEach((p) => { p.morale = 0.99; });
+    applyMediaTone(club, { tone: 'confident', moraleDelta: 0.08, confidenceDelta: 1 });
+    club.players.forEach((p) => expect(p.morale).toBeLessThanOrEqual(1));
+  });
+});

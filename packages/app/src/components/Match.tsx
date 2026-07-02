@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import {
   liveTable, liveProgress, myNextFixture, lastSummary, myLastPosition,
-  myClub, DIVISION_LABELS, type GameState,
+  myClub, checkMediaEvent, DIVISION_LABELS, type GameState, type MediaEvent,
 } from '../game.js';
-import type { MatchResult } from '@soccer-tycoon/engine';
+import type { MatchResult, MediaTone } from '@soccer-tycoon/engine';
 import { MatchDetailModal } from './MatchStats.js';
+import { MediaInterview } from './MediaInterview.js';
 
 interface Props {
   game: GameState;
@@ -14,6 +15,8 @@ interface Props {
   onFinish: () => void;
   onAdvanceFull: () => void;
   onWatch: () => void;
+  onMediaRespond: (event: MediaEvent, tone: MediaTone) => void;
+  onMediaDismiss: (event: MediaEvent) => void;
 }
 
 export function Match(props: Props) {
@@ -51,10 +54,11 @@ function Preseason({ game, onStartSeason, onAdvanceFull }: Props) {
 }
 
 function InSeason(props: Props) {
-  const { game, onPlayRound, onPlayRest, onWatch } = props;
+  const { game, onPlayRound, onPlayRest, onWatch, onMediaRespond, onMediaDismiss } = props;
   const prog = liveProgress(game);
   const next = myNextFixture(game);
   const table = liveTable(game);
+  const media = checkMediaEvent(game);
 
   return (
     <div className="match-screen">
@@ -79,6 +83,13 @@ function InSeason(props: Props) {
         <Standings game={game} table={table} />
         <RecentResults game={game} />
       </div>
+      {media && (
+        <MediaInterview
+          event={media}
+          onRespond={(tone) => onMediaRespond(media, tone)}
+          onDismiss={() => onMediaDismiss(media)}
+        />
+      )}
     </div>
   );
 }
