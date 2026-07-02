@@ -56,6 +56,10 @@ export {
   type SeasonConfidenceInput, type BoardStatus,
 } from './board.js';
 export {
+  DEMAND_LABEL, generateDemand, evaluateDemand, demandConfidence,
+  type DemandKind, type BoardDemand, type DemandContext, type DemandResult,
+} from './demands.js';
+export {
   transferTargets, buyPlayer, buyPlayerAt, sellPlayer, releasePlayer,
   askingPrice, evaluateOffer, sellOffers, acceptSellOffer,
   MIN_SQUAD, MAX_SQUAD,

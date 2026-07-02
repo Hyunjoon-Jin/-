@@ -1,7 +1,7 @@
 import { myClub, lastSummary, myLastPosition, DIFFICULTIES, DIVISION_LABELS, type GameState } from '../game.js';
 import {
   formatMoney, currentAbility, wageBudget, annualWageBill, inFinancialCrisis,
-  boardStatus, type BoardStatus,
+  boardStatus, DEMAND_LABEL, type BoardStatus,
 } from '@soccer-tycoon/engine';
 
 const BOARD_LABEL: Record<BoardStatus, string> = {
@@ -60,6 +60,13 @@ export function Dashboard({ game }: { game: GameState }) {
 
       <BoardConfidence value={game.boardConfidence} />
 
+      {game.demand && (
+        <div className="board-demand">
+          📋 이사회 특별 요구: <b>{DEMAND_LABEL[game.demand.kind]}</b>
+          <span className="muted small"> (달성 시 신뢰도 +{game.demand.reward} · 실패 시 −{game.demand.penalty})</span>
+        </div>
+      )}
+
       <div className="cards">
         <Card title="평판" value={`${club.finance.reputation} / 20`} />
         <Card title="보유 자금" value={formatMoney(club.finance.balance)} />
@@ -93,6 +100,11 @@ export function Dashboard({ game }: { game: GameState }) {
                   {last.nationalInjuries !== undefined && last.nationalInjuries > 0 && (
                     <span className="neg"> (부상 {last.nationalInjuries})</span>
                   )}
+                </>
+              )}
+              {last.demand && (
+                <> &nbsp;·&nbsp; 📋 요구 <span className={last.demand.met ? 'pos' : 'neg'}>{last.demand.met ? '달성 ✓' : '실패 ✕'}</span>
+                  <span className="muted small"> ({last.demand.label})</span>
                 </>
               )}
             </p>

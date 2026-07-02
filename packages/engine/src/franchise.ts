@@ -49,6 +49,8 @@ export interface SeasonSummary {
   nationalCallUps?: number;
   /** 국가대표 차출 중 부상 인원(내 구단 기준, 앱). */
   nationalInjuries?: number;
+  /** 이사회 특별 요구 결과(앱). */
+  demand?: { label: string; met: boolean };
 }
 
 /**

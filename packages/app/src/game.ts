@@ -14,6 +14,9 @@ import {
   createCup, playCupRound as enginePlayCupRound, playCupToEnd, isCupOver, nextCupPairings,
   applyPromotionRelegation, clubsInDivision, runInternationalBreak,
   confidenceDelta, applyConfidence, isSacked, START_CONFIDENCE,
+  generateDemand, evaluateDemand, demandConfidence, DEMAND_LABEL,
+  annualWageBill, wageBudget,
+  type BoardDemand,
   upgradeStaff as engineUpgradeStaff, formatMoney,
   computeTeamStrength, currentAbility, recentForm,
   type Club, type Tactic, type MatchResult, type MatchSetup, type SeasonSummary,
@@ -69,6 +72,8 @@ export interface GameState {
   boardConfidence: number;
   /** 경질 여부(게임 오버). 신뢰도가 하한 미만이 되면 설정. */
   sacked?: boolean;
+  /** 이번 시즌 이사회 특별 요구(없을 수 있음). */
+  demand?: BoardDemand | null;
 }
 
 /** 컵 우승 상금 (만원). */
@@ -136,6 +141,7 @@ export function startGame(seed: number, myClubId: string, difficulty: Difficulty
     difficulty,
     objective,
     boardConfidence: START_CONFIDENCE,
+    demand: generateDemand({ overWages: annualWageBill(mine) > wageBudget(mine) }, new Rng(seed + 4242)),
   };
 }
 
@@ -219,6 +225,9 @@ export function finishSeason(state: GameState): GameState {
   if (!state.live) return state;
   const myDiv = myDivision(state);
 
+  // 요구 평가용: 오프시즌 이전(사용자가 운영한 스쿼드)의 임금 건전성 캡처
+  const wageUnderBudget = annualWageBill(myClub(state)) <= wageBudget(myClub(state));
+
   // 1) 내 부 완주
   const ss = toSeasonState(state);
   playToEnd(ss, tacticMap(state));
@@ -273,14 +282,35 @@ export function finishSeason(state: GameState): GameState {
   const promoted = promRel.promoted.includes(state.myClubId);
   const relegated = promRel.relegated.includes(state.myClubId);
 
-  // 6.5) 이사회 신뢰도 갱신 (이번 시즌 목표 대비 성적 + 승강 + 재정)
+  // 6.5) 이사회 신뢰도 갱신 (이번 시즌 목표 대비 성적 + 승강 + 재정 + 특별 요구)
   const myPosition = myTable.findIndex((r) => r.clubId === state.myClubId) + 1;
   const myNet = finance.get(state.myClubId)?.net ?? 0;
   const delta = confidenceDelta({
     position: myPosition, objective: state.objective, promoted, relegated, netFinance: myNet,
   });
-  const boardConfidence = applyConfidence(state.boardConfidence, delta);
+
+  // 이사회 특별 요구 평가
+  const myName = myClub(state).name;
+  let demandResult: { label: string; met: boolean } | undefined;
+  let demandDelta = 0;
+  if (state.demand) {
+    const met = evaluateDemand(state.demand, {
+      wageUnderBudget,
+      cupWon: cupChampionId === state.myClubId,
+      clubTopScorer: awards.topScorer?.clubName === myName,
+    });
+    demandDelta = demandConfidence(state.demand, met);
+    demandResult = { label: DEMAND_LABEL[state.demand.kind], met };
+  }
+
+  const boardConfidence = applyConfidence(state.boardConfidence, delta + demandDelta);
   const sacked = isSacked(boardConfidence);
+
+  // 다음 시즌 요구 생성(오프시즌 이후 임금 기준)
+  const nextDemand = generateDemand(
+    { overWages: annualWageBill(myClub(state)) > wageBudget(myClub(state)) },
+    new Rng(offseasonSeed(state) + 909),
+  );
 
   const champ = myTable[0]!;
   const summary: SeasonSummary = {
@@ -302,6 +332,7 @@ export function finishSeason(state: GameState): GameState {
     relegated,
     nationalCallUps: myCallUps,
     nationalInjuries: myIntlInjuries,
+    demand: demandResult,
   };
 
   const repaired = repairTactic(myClub(state), myTactic(state));
@@ -314,6 +345,7 @@ export function finishSeason(state: GameState): GameState {
     objective: divisionObjective(myClub(state).division, state.difficulty),
     boardConfidence,
     sacked,
+    demand: nextDemand,
     live: null,
     cup: null,
   };
