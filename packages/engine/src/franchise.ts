@@ -3,7 +3,7 @@
  * 한 시즌 = 이적 창 → 리그 경기 → 재정 정산 → 선수 성장/노화 → 은퇴·유스 유입.
  * 게임의 시간축을 닫는 핵심 루프.
  */
-import type { Club } from './types.js';
+import type { Club, Position } from './types.js';
 import { simulateSeason, type TableRow } from './league.js';
 import { settleSeason, type SeasonFinanceReport } from './finance.js';
 import { runTransferWindow, type TransferDeal } from './transfer.js';
@@ -72,18 +72,35 @@ function trimSquad(club: Club): void {
   }
 }
 
+/** 은퇴 시점 스냅샷(레전드 아카이브용). 은퇴로 선수 객체 자체는 사라지므로 여기 보존. */
+export interface RetiredLegend {
+  playerId: string;
+  name: string;
+  position: Position;
+  clubId: string;
+  clubName: string;
+  /** 은퇴 시즌 나이. */
+  finalAge: number;
+  careerApps: number;
+  careerGoals: number;
+  caps: number;
+}
+
 export interface OffseasonResult {
   retirements: number;
   /** clubId → 유스 아카데미 배출 인원. */
   intakeByClub: Map<string, number>;
   /** clubId → 재정 위기 강제 매각 인원. */
   fireSalesByClub: Map<string, number>;
+  /** 이번 오프시즌에 은퇴한 선수 스냅샷(전 구단). */
+  retiredPlayers: RetiredLegend[];
 }
 
 export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
   let retirements = 0;
   const intakeByClub = new Map<string, number>();
   const fireSalesByClub = new Map<string, number>();
+  const retiredPlayers: RetiredLegend[] = [];
   const expectedMatches = 2 * (clubs.length - 1); // 리그 기준 기대 출전
   for (const club of clubs) {
     // 스쿼드 중간 능력(주전 기대치 판단용)
@@ -120,9 +137,17 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
       player.seasonGoals = 0;
     }
 
-    // 은퇴
+    // 은퇴 (스냅샷 보존 후 제거 — 통산 기록은 은퇴와 함께 사라지므로 여기서 캡처)
     club.players = club.players.filter((p) => {
-      if (p.age >= RETIRE_AGE) { retirements++; return false; }
+      if (p.age >= RETIRE_AGE) {
+        retirements++;
+        retiredPlayers.push({
+          playerId: p.id, name: p.name, position: p.position,
+          clubId: club.id, clubName: club.name, finalAge: p.age,
+          careerApps: p.careerApps ?? 0, careerGoals: p.careerGoals ?? 0, caps: p.caps ?? 0,
+        });
+        return false;
+      }
       return true;
     });
 
@@ -138,7 +163,7 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
     // 스쿼드 상한 정리
     trimSquad(club);
   }
-  return { retirements, intakeByClub, fireSalesByClub };
+  return { retirements, intakeByClub, fireSalesByClub, retiredPlayers };
 }
 
 /**

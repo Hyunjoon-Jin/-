@@ -17,7 +17,7 @@ import {
   confidenceDelta, applyConfidence, isSacked, START_CONFIDENCE,
   generateDemand, evaluateDemand, demandConfidence, DEMAND_LABEL,
   annualWageBill, wageBudget,
-  type BoardDemand,
+  type BoardDemand, type RetiredLegend,
   upgradeStaff as engineUpgradeStaff, formatMoney,
   computeTeamStrength, currentAbility, recentForm,
   type Club, type Tactic, type MatchResult, type MatchSetup, type SeasonSummary,
@@ -76,6 +76,13 @@ export interface GameState {
   sacked?: boolean;
   /** 이번 시즌 이사회 특별 요구(없을 수 있음). */
   demand?: BoardDemand | null;
+  /** 내 구단에서 뛰다 은퇴한 선수 아카이브(레전드). */
+  legends: ClubLegend[];
+}
+
+/** 은퇴 스냅샷(RetiredLegend) + 은퇴한 시즌(내 구단 재임 기준). */
+export interface ClubLegend extends RetiredLegend {
+  season: number;
 }
 
 /** 컵 우승 상금 (만원). */
@@ -144,6 +151,7 @@ export function startGame(seed: number, myClubId: string, difficulty: Difficulty
     objective,
     boardConfidence: START_CONFIDENCE,
     demand: generateDemand({ overWages: annualWageBill(mine) > wageBudget(mine) }, new Rng(seed + 4242)),
+    legends: [],
   };
 }
 
@@ -275,7 +283,13 @@ export function finishSeason(state: GameState): GameState {
   }
 
   // 5) 오프시즌 (전 구단)
-  const { retirements, intakeByClub, fireSalesByClub } = runOffseason(state.clubs, new Rng(offseasonSeed(state)));
+  const {
+    retirements, intakeByClub, fireSalesByClub, retiredPlayers,
+  } = runOffseason(state.clubs, new Rng(offseasonSeed(state)));
+  // 내 구단에서 은퇴한 선수는 레전드 아카이브에 영구 보존
+  const newLegends: ClubLegend[] = retiredPlayers
+    .filter((r) => r.clubId === state.myClubId)
+    .map((r) => ({ ...r, season: state.season }));
 
   // 5.5) 국가대표 차출 (오프시즌 리셋 이후 — 피로/부상이 새 시즌에 반영)
   const intl = runInternationalBreak(state.clubs, new Rng(offseasonSeed(state) + 777));
@@ -354,6 +368,7 @@ export function finishSeason(state: GameState): GameState {
     boardConfidence,
     sacked,
     demand: nextDemand,
+    legends: [...state.legends, ...newLegends],
     live: null,
     cup: null,
   };

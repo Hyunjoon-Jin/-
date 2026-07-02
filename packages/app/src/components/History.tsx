@@ -129,6 +129,30 @@ export function History({ game }: { game: GameState }) {
         </div>
       )}
 
+      {game.legends.length > 0 && (
+        <div className="legends">
+          <h3>🕯️ 레전드 명예의 전당 <span className="muted small">(은퇴 선수 · {club.name})</span></h3>
+          <table className="data-table compact">
+            <thead>
+              <tr><th>은퇴 시즌</th><th>선수</th><th>P</th><th>은퇴 나이</th><th>통산 출전</th><th>통산 득점</th><th>A매치</th></tr>
+            </thead>
+            <tbody>
+              {[...game.legends].reverse().map((l) => (
+                <tr key={l.playerId}>
+                  <td className="muted small">{l.season}</td>
+                  <td className="name">{l.name}</td>
+                  <td>{l.position}</td>
+                  <td>{l.finalAge}</td>
+                  <td className="muted">{l.careerApps}</td>
+                  <td><b>{l.careerGoals}</b></td>
+                  <td className="muted">{l.caps > 0 ? `${l.caps}경` : '-'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       {squadSeason && (
         <TitleSquadModal
           season={squadSeason.s}

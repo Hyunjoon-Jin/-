@@ -32,7 +32,8 @@ export {
   ALL_TRAITS, TRAIT_LABELS, TRAIT_DESC, hasTrait, rollTraits,
 } from './traits.js';
 export {
-  advanceSeason, runFranchise, runOffseason, type SeasonSummary,
+  advanceSeason, runFranchise, runOffseason,
+  type SeasonSummary, type OffseasonResult, type RetiredLegend,
 } from './franchise.js';
 export { TUNING } from './tuning.js';
 export { DERIVED_WEIGHTS, type DerivedKey } from './roleWeights.js';
