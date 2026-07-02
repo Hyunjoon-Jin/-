@@ -475,6 +475,19 @@ soccer-tycoon/
       만들어 대시보드에 "🌱 이번 시즌 유스 기대주" 배너로 소개한다.
       기존 youthPromotions(카운트만)는 그대로 두고 병행 — 하위 호환
       필드를 없애지 않고 더 상세한 필드를 추가하는 방식. SAVE_VERSION 32.
+- [x] 유스 기대주 후속 스토리(데뷔·첫 골): runOffseason의 선수별 루프는
+      이미 통산 마일스톤 판정을 위해 beforeApps/beforeGoals(이번 시즌
+      리셋 전 통산 값)를 계산해두고 있었다 — beforeApps === 0 &&
+      player.seasonApps > 0 이면 "이번 시즌 첫 출전(통산 데뷔)", beforeGoals
+      === 0 && seasonGoals > 0 이면 "첫 골"이라는 뜻이므로, 새 계산 없이
+      조건 두 줄만 추가해 DebutEvent[](kind: 'debut'|'firstGoal')로 기록했다
+      (OffseasonResult.debutEvents). game.ts는 이걸 내 구단으로 필터링한
+      뒤, 과거 모든 시즌의 SeasonSummary.youthProspects에 등장했던
+      playerId 집합과 교차해 "예전에 유스 기대주로 소개했던 선수"만
+      SeasonSummary.prospectUpdates로 남긴다 — playerTimeline과 동일하게
+      이미 history에 영구 기록된 데이터만 스캔하고 새 추적 상태는 없다.
+      대시보드에 "📣 유스 기대주 소식" 배너로 "데뷔!"/"첫 골 기록!" 문구를
+      표시. prospectUpdates 필드 추가로 SAVE_VERSION 33.
 
 기획했던 핵심·확장 시스템이 모두 구현됨. 이후는 콘텐츠 확충·디테일 다듬기 영역.
 

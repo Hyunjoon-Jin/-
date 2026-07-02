@@ -47,6 +47,17 @@ function crossedThresholds(before: number, after: number, thresholds: number[]):
   return thresholds.filter((t) => before < t && after >= t);
 }
 
+export type DebutEventKind = 'debut' | 'firstGoal';
+
+/** 선수의 첫 출전/첫 골(통산 기록이 이번 시즌에 0→양수로 처음 전환된 경우). */
+export interface DebutEvent {
+  playerId: string;
+  name: string;
+  clubId: string;
+  clubName: string;
+  kind: DebutEventKind;
+}
+
 export interface SeasonSummary {
   season: number;
   table: TableRow[];
@@ -85,6 +96,15 @@ export interface SeasonSummary {
   surprise?: 'overperform' | 'underperform';
   /** 내 구단 유스 아카데미가 이번 시즌 배출한 유망주(앱). */
   youthProspects?: YouthProspect[];
+  /** 과거 시즌 유스 기대주로 소개됐던 선수의 이번 시즌 데뷔/첫 골 소식(앱). */
+  prospectUpdates?: YouthProspectUpdate[];
+}
+
+/** 과거 유스 기대주 소개 이후의 후속 소식(데뷔/첫 골). */
+export interface YouthProspectUpdate {
+  playerId: string;
+  name: string;
+  kind: DebutEventKind;
 }
 
 /** 유스 아카데미 배출 유망주 소개용 요약 정보. */
@@ -137,6 +157,8 @@ export interface OffseasonResult {
   retiredPlayers: RetiredLegend[];
   /** 이번 오프시즌에 처음 임계값을 넘은 통산 마일스톤(전 구단). */
   milestones: CareerMilestone[];
+  /** 이번 오프시즌에 처음 데뷔(첫 출전)하거나 첫 골을 기록한 선수(전 구단). */
+  debutEvents: DebutEvent[];
 }
 
 export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
@@ -146,6 +168,7 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
   const fireSalesByClub = new Map<string, number>();
   const retiredPlayers: RetiredLegend[] = [];
   const milestones: CareerMilestone[] = [];
+  const debutEvents: DebutEvent[] = [];
   const expectedMatches = 2 * (clubs.length - 1); // 리그 기준 기대 출전
   for (const club of clubs) {
     // 스쿼드 중간 능력(주전 기대치 판단용)
@@ -179,6 +202,13 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
       }
       for (const value of crossedThresholds(beforeGoals, player.careerGoals, MILESTONE_GOALS)) {
         milestones.push({ playerId: player.id, name: player.name, clubId: club.id, clubName: club.name, kind: 'goals', value });
+      }
+      // 데뷔/첫 골(통산 기록이 이번 시즌에 처음 0에서 넘어간 경우만 — 재시즌 반복 방지)
+      if (beforeApps === 0 && player.seasonApps > 0) {
+        debutEvents.push({ playerId: player.id, name: player.name, clubId: club.id, clubName: club.name, kind: 'debut' });
+      }
+      if (beforeGoals === 0 && (player.seasonGoals ?? 0) > 0) {
+        debutEvents.push({ playerId: player.id, name: player.name, clubId: club.id, clubName: club.name, kind: 'firstGoal' });
       }
       // 새 시즌은 풀 컨디션·부상/징계 리셋으로 시작
       player.condition = 1;
@@ -217,7 +247,7 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
     // 스쿼드 상한 정리
     trimSquad(club);
   }
-  return { retirements, intakeByClub, intakePlayersByClub, fireSalesByClub, retiredPlayers, milestones };
+  return { retirements, intakeByClub, intakePlayersByClub, fireSalesByClub, retiredPlayers, milestones, debutEvents };
 }
 
 /**

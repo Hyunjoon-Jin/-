@@ -29,7 +29,8 @@ import type { SeasonSummary, SeasonFinanceReport } from '@soccer-tycoon/engine';
 // v30: 감독 계약(GameState.contractSeasonsLeft·ambition)
 // v31: 라이벌전 기록에 컵 맞대결 포함(RivalMeeting.competition·penalties)
 // v32: 유스 아카데미 배출 유망주 소개(SeasonSummary.youthProspects)
-export const SAVE_VERSION = 32;
+// v33: 유스 기대주 후속 소식 — 데뷔/첫 골(SeasonSummary.prospectUpdates)
+export const SAVE_VERSION = 33;
 
 type SerializedSummary = Omit<SeasonSummary, 'finance'> & {
   finance: Record<string, SeasonFinanceReport>;

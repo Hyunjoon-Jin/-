@@ -227,6 +227,15 @@ body {
 .youth-banner p + p { margin-top: 6px; }
 .youth-banner-title { font-weight: 700; }
 
+.prospect-update-banner {
+  background: linear-gradient(135deg, rgba(170, 120, 250, 0.12), rgba(170, 120, 250, 0.04));
+  border: 1px solid rgba(170, 120, 250, 0.35); border-radius: 8px;
+  padding: 10px 14px; margin-bottom: 14px;
+}
+.prospect-update-banner p { margin: 0; font-size: 14px; }
+.prospect-update-banner p + p { margin-top: 6px; }
+.prospect-update-banner-title { font-weight: 700; }
+
 .surprise-banner { border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; }
 .surprise-banner p { margin: 0; font-size: 14px; }
 .surprise-banner.overperform {

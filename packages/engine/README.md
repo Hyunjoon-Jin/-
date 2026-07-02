@@ -35,7 +35,7 @@
 | `progression.ts` | 시즌 경계 성장·노화 (잠재력 수렴 / 노장 하락, 훈련 포커스 반영) |
 | `training.ts` | 훈련 포커스 → 성장 강조 능력 매핑 |
 | `traits.ts` | 선수 고유 특성 8종 (부여 규칙 + 파생·부상·성장·카드·사기 보정) |
-| `franchise.ts` | 멀티시즌 루프 (이적→경기→정산→성장→은퇴·유스→국대 차출). 은퇴 시 통산 기록 스냅샷(RetiredLegend), 통산 마일스톤 돌파(CareerMilestone), 유스 배출 선수 목록(intakePlayersByClub) 반환 |
+| `franchise.ts` | 멀티시즌 루프 (이적→경기→정산→성장→은퇴·유스→국대 차출). 은퇴 시 통산 기록 스냅샷(RetiredLegend), 통산 마일스톤 돌파(CareerMilestone), 유스 배출 선수 목록(intakePlayersByClub), 통산 기록 0→양수 최초 전환(데뷔·첫 골, DebutEvent) 반환 |
 | `international.ts` | 국가대표 차출 (국적별 상위 선수 A매치 캡·피로·부상 리스크) |
 | `board.ts` | 이사회 신뢰도 (시즌 성적→신뢰도 변동·경질 판정) |
 | `demands.ts` | 이사회 특별 요구 (임금 감축·컵 우승·득점왕 생성·평가·신뢰도 연동) |

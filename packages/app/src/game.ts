@@ -25,7 +25,7 @@ import {
   computeTeamStrength, currentAbility, recentForm,
   type Club, type Tactic, type MatchResult, type MatchSetup, type SeasonSummary,
   type Fixture, type TableRow, type PlayerSeasonStat, type CupState, type StaffKind,
-  type PlayerFormEntry, type Player, type YouthProspect,
+  type PlayerFormEntry, type Player, type YouthProspect, type YouthProspectUpdate,
   type TeamStrength, type FormSummary,
 } from '@soccer-tycoon/engine';
 import { makeDefaultTactic, repairTactic } from './tactics.js';
@@ -435,7 +435,7 @@ export function finishSeason(state: GameState): GameState {
 
   // 5) 오프시즌 (전 구단)
   const {
-    retirements, intakeByClub, intakePlayersByClub, fireSalesByClub, retiredPlayers, milestones,
+    retirements, intakeByClub, intakePlayersByClub, fireSalesByClub, retiredPlayers, milestones, debutEvents,
   } = runOffseason(state.clubs, new Rng(offseasonSeed(state)));
   // 내 구단에서 은퇴한 선수는 레전드 아카이브에 영구 보존
   const newLegends: ClubLegend[] = retiredPlayers
@@ -447,6 +447,13 @@ export function finishSeason(state: GameState): GameState {
   const myYouthProspects: YouthProspect[] = (intakePlayersByClub.get(state.myClubId) ?? [])
     .map((p) => ({ playerId: p.id, name: p.name, position: p.position, age: p.age, potential: p.potential }))
     .sort((a, b) => b.potential - a.potential);
+  // 과거에 유스 기대주로 소개됐던 선수가 이번 시즌 데뷔/첫 골을 기록하면 후속 소식으로 연결
+  const introducedProspectIds = new Set(
+    state.history.flatMap((s) => (s.youthProspects ?? []).map((p) => p.playerId)),
+  );
+  const myProspectUpdates: YouthProspectUpdate[] = debutEvents
+    .filter((e) => e.clubId === state.myClubId && introducedProspectIds.has(e.playerId))
+    .map((e) => ({ playerId: e.playerId, name: e.name, kind: e.kind }));
 
   // 5.5) 국가대표 차출 (오프시즌 리셋 이후 — 피로/부상이 새 시즌에 반영)
   const intl = runInternationalBreak(state.clubs, new Rng(offseasonSeed(state) + 777));
@@ -518,6 +525,7 @@ export function finishSeason(state: GameState): GameState {
     preseasonRank,
     surprise,
     youthProspects: myYouthProspects,
+    prospectUpdates: myProspectUpdates,
   };
 
   const repaired = repairTactic(myClub(state), myTactic(state));

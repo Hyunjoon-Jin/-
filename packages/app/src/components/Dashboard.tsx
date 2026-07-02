@@ -168,6 +168,18 @@ export function Dashboard({ game, onSignContract }: { game: GameState; onSignCon
                 ))}
               </div>
             )}
+            {last.prospectUpdates !== undefined && last.prospectUpdates.length > 0 && (
+              <div className="prospect-update-banner">
+                <p className="prospect-update-banner-title">📣 유스 기대주 소식</p>
+                {last.prospectUpdates.map((u, i) => (
+                  <p key={i}>
+                    {u.kind === 'debut'
+                      ? <>유스 기대주 출신 <b>{u.name}</b>, 1군 <b>데뷔</b>에 성공했습니다!</>
+                      : <>유스 기대주 출신 <b>{u.name}</b>, 커리어 <b>첫 골</b>을 기록했습니다!</>}
+                  </p>
+                ))}
+              </div>
+            )}
             {last.surprise && (
               <div className={`surprise-banner ${last.surprise}`}>
                 <p>
