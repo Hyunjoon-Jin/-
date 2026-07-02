@@ -1,11 +1,19 @@
-import { myClub, rivalClub, lastSummary, myLastPosition, DIFFICULTIES, DIVISION_LABELS, type GameState } from '../game.js';
+import {
+  myClub, rivalClub, lastSummary, myLastPosition, managerPersona,
+  DIFFICULTIES, DIVISION_LABELS, type GameState,
+} from '../game.js';
 import {
   formatMoney, currentAbility, wageBudget, annualWageBill, inFinancialCrisis,
-  boardStatus, DEMAND_LABEL, type BoardStatus,
+  boardStatus, DEMAND_LABEL, type BoardStatus, type ManagerPersona,
 } from '@soccer-tycoon/engine';
 
 const BOARD_LABEL: Record<BoardStatus, string> = {
   secure: '신뢰 두터움', stable: '안정적', shaky: '불안', critical: '경질 위기',
+};
+
+const PERSONA_LABEL: Record<Exclude<ManagerPersona, 'neutral'>, { label: string; desc: string }> = {
+  bold: { label: '거침없는 승부사', desc: '자신감 있고 직설적인 인터뷰로 유명합니다.' },
+  humble: { label: '신중한 리더', desc: '겸손하고 책임감 있는 인터뷰로 신뢰를 얻고 있습니다.' },
 };
 
 export function Dashboard({ game }: { game: GameState }) {
@@ -24,6 +32,7 @@ export function Dashboard({ game }: { game: GameState }) {
   const crisis = inFinancialCrisis(club);
   const overWages = annualWageBill(club) > wageBudget(club);
   const retiredThisSeason = last ? game.legends.filter((l) => l.season === last.season) : [];
+  const persona = managerPersona(game);
 
   return (
     <div className="dashboard">
@@ -77,6 +86,13 @@ export function Dashboard({ game }: { game: GameState }) {
           </span>
         )}
       </div>
+
+      {persona !== 'neutral' && (
+        <div className="persona-card">
+          🗣️ 언론이 부르는 별명: <b>{PERSONA_LABEL[persona].label}</b>
+          <span className="muted"> — {PERSONA_LABEL[persona].desc}</span>
+        </div>
+      )}
 
       <BoardConfidence value={game.boardConfidence} />
 

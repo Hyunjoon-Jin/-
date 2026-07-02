@@ -335,6 +335,14 @@ soccer-tycoon/
       대시보드에 "이변의 시즌"/"실망스러운 시즌" 배너 표시. 예측·판정 로직은
       모두 game.ts(앱)에 있고, engine의 SeasonSummary에는 squad·milestones와
       같은 패턴으로 앱 전용 옵셔널 필드(preseasonRank·surprise)만 추가.
+- [x] 감독 이미지(언론 페르소나): media.ts의 각 톤(MediaTone)에 고정 성향
+      MEDIA_TONE_STYLE(bold=자신감/책임회피형, humble=겸손/책임인정형)을
+      매겨두고, GameState.mediaToneCounts에 답변할 때마다 해당 톤 카운트를
+      누적. classifyPersona(boldCount, humbleCount)가 표본 3회 미만이거나
+      격차가 3 미만이면 neutral, 한쪽이 확실히 우세하면 그 성향으로 판정 —
+      이미지가 쉽게 뒤집히지 않도록 최소 표본과 격차 기준을 둔 것. 대시보드에
+      "거침없는 승부사"/"신중한 리더" 별명 카드로 표시(neutral일 땐 미표시).
+      순수 추적·연출 기능 — 이미지 자체가 다른 수치에 영향을 주진 않는다.
 
 기획했던 핵심·확장 시스템이 모두 구현됨. 이후는 콘텐츠 확충·디테일 다듬기 영역.
 

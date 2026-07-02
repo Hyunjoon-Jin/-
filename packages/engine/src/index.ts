@@ -86,5 +86,6 @@ export {
 } from './scouting.js';
 export {
   matchOutcomeKind, mediaToneOptions, shouldTriggerMediaEvent, applyMediaTone,
-  type MediaEventKind, type MediaTone, type MediaToneOption,
+  MEDIA_TONE_STYLE, classifyPersona,
+  type MediaEventKind, type MediaTone, type MediaToneOption, type MediaStyle, type ManagerPersona,
 } from './media.js';

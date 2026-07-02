@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   startGame, startSeason, playRound, checkMediaEvent, respondMedia, dismissMedia, myClub,
+  managerPersona,
 } from '../src/game.js';
 
 /** 내 경기가 있었던 라운드까지 진행한다(최대 round 12까지 탐색). */
@@ -54,5 +55,33 @@ describe('media: 감독 인터뷰(앱 레이어)', () => {
     const moraleAfter = myClub(g).players.map((p) => p.morale);
     expect(moraleAfter).toEqual(moraleBefore);
     expect(checkMediaEvent(g)).toBeNull();
+  });
+
+  it('응답한 톤이 mediaToneCounts에 누적된다', () => {
+    let g = advanceUntilMyMatchPlayed(startSeason(startGame(2026, 'c5')));
+    const event = checkMediaEvent(g);
+    if (!event) return;
+    const tone = event.options[0]!.tone;
+    expect(g.mediaToneCounts[tone]).toBe(0);
+    g = respondMedia(g, event, tone);
+    expect(g.mediaToneCounts[tone]).toBe(1);
+    const otherTotal = Object.entries(g.mediaToneCounts)
+      .filter(([t]) => t !== tone)
+      .reduce((s, [, c]) => s + c, 0);
+    expect(otherTotal).toBe(0);
+  });
+
+  it('managerPersona: 표본이 적으면 neutral, bold/humble 톤이 확실히 우세하면 그 이미지로 굳어진다', () => {
+    const base = startGame(2026, 'c5');
+    expect(managerPersona(base)).toBe('neutral');
+
+    const bold = { ...base, mediaToneCounts: { ...base.mediaToneCounts, confident: 4, blameRef: 1 } };
+    expect(managerPersona(bold)).toBe('bold');
+
+    const humble = { ...base, mediaToneCounts: { ...base.mediaToneCounts, humble: 4, accountable: 1 } };
+    expect(managerPersona(humble)).toBe('humble');
+
+    const tied = { ...base, mediaToneCounts: { ...base.mediaToneCounts, confident: 3, humble: 3 } };
+    expect(managerPersona(tied)).toBe('neutral');
   });
 });

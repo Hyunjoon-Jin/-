@@ -25,7 +25,8 @@ import type { SeasonSummary, SeasonFinanceReport } from '@soccer-tycoon/engine';
 // v26: 미디어 인터뷰 처리 라운드 추적(LiveSeason.mediaHandledThroughRound)
 // v27: 라이벌전 개별 맞대결 기록(GameState.rivalMeetings)
 // v28: 프리시즌 언론 예상 순위(LiveSeason.predictedTable, SeasonSummary.preseasonRank·surprise)
-export const SAVE_VERSION = 28;
+// v29: 감독 이미지 — 인터뷰 톤 누적 카운트(GameState.mediaToneCounts)
+export const SAVE_VERSION = 29;
 
 type SerializedSummary = Omit<SeasonSummary, 'finance'> & {
   finance: Record<string, SeasonFinanceReport>;

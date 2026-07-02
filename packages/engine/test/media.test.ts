@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   matchOutcomeKind, mediaToneOptions, shouldTriggerMediaEvent, applyMediaTone,
+  MEDIA_TONE_STYLE, classifyPersona, type MediaTone,
 } from '../src/media.js';
 import { generateClub } from '../src/generate.js';
 import { Rng } from '../src/rng.js';
@@ -33,11 +34,33 @@ describe('media: 감독 인터뷰', () => {
   it('applyMediaTone은 스쿼드 전원 사기를 델타만큼 변화시키고 0~1로 clamp한다', () => {
     const club = generateClub(new Rng(7), 'c1', 'Test FC', 12);
     club.players.forEach((p) => { p.morale = 0.5; });
-    applyMediaTone(club, { tone: 'confident', moraleDelta: 0.08, confidenceDelta: 1 });
+    applyMediaTone(club, { tone: 'confident', style: 'bold', moraleDelta: 0.08, confidenceDelta: 1 });
     club.players.forEach((p) => expect(p.morale).toBeCloseTo(0.58, 5));
 
     club.players.forEach((p) => { p.morale = 0.99; });
-    applyMediaTone(club, { tone: 'confident', moraleDelta: 0.08, confidenceDelta: 1 });
+    applyMediaTone(club, { tone: 'confident', style: 'bold', moraleDelta: 0.08, confidenceDelta: 1 });
     club.players.forEach((p) => expect(p.morale).toBeLessThanOrEqual(1));
+  });
+
+  it('모든 톤 선택지에 성향(style)이 매겨져 있고, mediaToneOptions가 반환하는 값과 일치한다', () => {
+    const allTones: MediaTone[] = [
+      'confident', 'humble', 'accountable', 'blamePlayers', 'blameRef', 'satisfied', 'frustrated',
+    ];
+    for (const tone of allTones) {
+      expect(['bold', 'humble']).toContain(MEDIA_TONE_STYLE[tone]);
+    }
+    for (const kind of ['win', 'draw', 'loss'] as const) {
+      for (const opt of mediaToneOptions(kind)) {
+        expect(opt.style).toBe(MEDIA_TONE_STYLE[opt.tone]);
+      }
+    }
+  });
+
+  it('classifyPersona: 표본이 적거나 팽팽하면 neutral, 한쪽이 확실히 우세하면 그 성향', () => {
+    expect(classifyPersona(0, 0)).toBe('neutral');
+    expect(classifyPersona(2, 0)).toBe('neutral'); // 표본 부족
+    expect(classifyPersona(2, 2)).toBe('neutral'); // 팽팽
+    expect(classifyPersona(4, 1)).toBe('bold');
+    expect(classifyPersona(1, 4)).toBe('humble');
   });
 });

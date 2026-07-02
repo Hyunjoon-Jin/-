@@ -18,8 +18,9 @@ import {
   generateDemand, evaluateDemand, demandConfidence, DEMAND_LABEL,
   annualWageBill, wageBudget,
   matchOutcomeKind, mediaToneOptions, shouldTriggerMediaEvent, applyMediaTone,
+  MEDIA_TONE_STYLE, classifyPersona,
   type BoardDemand, type RetiredLegend,
-  type MediaEventKind, type MediaTone, type MediaToneOption,
+  type MediaEventKind, type MediaTone, type MediaToneOption, type ManagerPersona,
   upgradeStaff as engineUpgradeStaff, formatMoney,
   computeTeamStrength, currentAbility, recentForm,
   type Club, type Tactic, type MatchResult, type MatchSetup, type SeasonSummary,
@@ -127,6 +128,15 @@ export interface GameState {
   rivalRecord: RivalRecord;
   /** 라이벌 구단전 개별 맞대결 기록(시즌순). */
   rivalMeetings: RivalMeeting[];
+  /** 미디어 인터뷰 톤별 누적 응답 횟수(감독 이미지 형성용). */
+  mediaToneCounts: Record<MediaTone, number>;
+}
+
+/** 모든 톤 0으로 초기화된 카운트 맵. */
+function emptyMediaToneCounts(): Record<MediaTone, number> {
+  return {
+    confident: 0, humble: 0, accountable: 0, blamePlayers: 0, blameRef: 0, satisfied: 0, frustrated: 0,
+  };
 }
 
 /** 라이벌 구단전 개별 맞대결 기록. */
@@ -233,6 +243,7 @@ export function startGame(seed: number, myClubId: string, difficulty: Difficulty
     rivalClubId: selectRival(clubs, mine),
     rivalRecord: { wins: 0, draws: 0, losses: 0 },
     rivalMeetings: [],
+    mediaToneCounts: emptyMediaToneCounts(),
   };
 }
 
@@ -683,7 +694,21 @@ export function respondMedia(state: GameState, event: MediaEvent, tone: MediaTon
     boardConfidence,
     sacked: isSacked(boardConfidence),
     live: state.live && { ...state.live, mediaHandledThroughRound: event.round },
+    mediaToneCounts: option
+      ? { ...state.mediaToneCounts, [tone]: (state.mediaToneCounts[tone] ?? 0) + 1 }
+      : state.mediaToneCounts,
   };
+}
+
+/** 누적 인터뷰 답변 성향으로 형성된 감독 이미지("아직 형성 안 됨" = neutral). */
+export function managerPersona(state: GameState): ManagerPersona {
+  let bold = 0;
+  let humble = 0;
+  for (const [tone, count] of Object.entries(state.mediaToneCounts) as [MediaTone, number][]) {
+    if (MEDIA_TONE_STYLE[tone] === 'bold') bold += count;
+    else humble += count;
+  }
+  return classifyPersona(bold, humble);
 }
 
 /** 인터뷰를 답변 없이 넘김(효과 없음, 재노출만 방지). */
