@@ -10,6 +10,9 @@ interface Props {
 /** 대진 카드 한 줄 높이(간격 포함, px) — 라운드별 컬럼 높이를 맞춰 브래킷 모양을 만든다. */
 const ROW_HEIGHT = 68;
 
+/** 이변 판정 기준: 두 구단 평판 격차가 이 이상이고 평판 낮은 쪽이 이기면 이변. */
+const UPSET_REPUTATION_GAP = 3;
+
 export function Cup({ game, onPlayCupRound, onWatchCup }: Props) {
   const cup = game.cup;
   if (!cup) {
@@ -18,6 +21,15 @@ export function Cup({ game, onPlayCupRound, onWatchCup }: Props) {
 
   const nameOf = (id: string | null) =>
     id ? (game.clubs.find((c) => c.id === id)?.name ?? id) : '부전승';
+  const reputationOf = (id: string) => game.clubs.find((c) => c.id === id)?.finance.reputation ?? 0;
+  /** 평판이 확실히 낮은 쪽이 이기면 이변으로 본다(부전승 제외). */
+  const isUpset = (tie: CupTie): boolean => {
+    if (tie.awayId === null) return false;
+    const homeRep = reputationOf(tie.homeId);
+    const awayRep = reputationOf(tie.awayId);
+    const underdogId = homeRep <= awayRep ? tie.homeId : tie.awayId;
+    return tie.winnerId === underdogId && Math.abs(homeRep - awayRep) >= UPSET_REPUTATION_GAP;
+  };
   const mine = game.myClubId;
   const over = isCupOver(cup);
   const survivors = cupSurvivors(cup);
@@ -55,7 +67,11 @@ export function Cup({ game, onPlayCupRound, onWatchCup }: Props) {
                 <div className="bracket-col-title">{round.name}</div>
                 <div className="bracket-col-body">
                   {round.ties.map((tie, ti) => (
-                    <TieCard key={ti} tie={tie} mine={mine} nameOf={nameOf} connector={ri < cup.rounds.length - 1 || upcoming !== null} />
+                    <TieCard
+                      key={ti} tie={tie} mine={mine} nameOf={nameOf}
+                      connector={ri < cup.rounds.length - 1 || upcoming !== null}
+                      upset={isUpset(tie)}
+                    />
                   ))}
                 </div>
               </div>
@@ -101,16 +117,17 @@ export function Cup({ game, onPlayCupRound, onWatchCup }: Props) {
 }
 
 function TieCard({
-  tie, mine, nameOf, connector,
+  tie, mine, nameOf, connector, upset,
 }: {
   tie: CupTie;
   mine: string;
   nameOf: (id: string | null) => string;
   connector: boolean;
+  upset: boolean;
 }) {
   const involvesMe = tie.homeId === mine || tie.awayId === mine;
   const myWin = involvesMe && tie.winnerId === mine;
-  const cls = `tie-card ${connector ? 'connector' : ''} ${involvesMe ? (myWin ? 'mine win' : 'mine loss') : ''}`;
+  const cls = `tie-card ${connector ? 'connector' : ''} ${involvesMe ? (myWin ? 'mine win' : 'mine loss') : ''} ${upset ? 'upset' : ''}`;
   if (tie.awayId === null) {
     return (
       <div className={`${cls} bye`}>
@@ -120,7 +137,8 @@ function TieCard({
     );
   }
   return (
-    <div className={cls}>
+    <div className={cls} title={upset ? '🌟 이변! 평판이 낮은 쪽이 승리했습니다.' : undefined}>
+      {upset && <span className="upset-badge">🌟 이변</span>}
       <span className={`tie-side ${tie.winnerId === tie.homeId ? 'won' : ''}`}>{nameOf(tie.homeId)}</span>
       <span className="tie-score">
         {tie.homeScore} : {tie.awayScore}{tie.penalties ? ' (PK)' : ''}
