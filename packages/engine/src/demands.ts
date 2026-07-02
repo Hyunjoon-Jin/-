@@ -25,18 +25,24 @@ export const DEMAND_LABEL: Record<DemandKind, string> = {
 export interface DemandContext {
   /** 현재 임금 총액이 예산을 초과 중인가. */
   overWages: boolean;
+  /** 감독 계약 누적치(장기 계약을 맺을수록 증가). 이사회 기대치를 함께 높인다. */
+  ambition?: number;
 }
 
 /**
  * 시즌 요구 생성. 임금 초과 시 감축을 강하게 요구(실패 벌점 큼),
  * 아니면 일정 확률로 도전 과제(성공 보상 큼) 또는 요구 없음.
+ * ambition(장기 계약 누적치)이 높을수록 요구가 나올 확률과 보상/벌점 폭이 함께 커진다
+ * — 장기 프로젝트를 약속한 만큼 이사회도 더 자주, 더 강하게 결과를 요구한다.
  */
 export function generateDemand(ctx: DemandContext, rng: Rng): BoardDemand | null {
-  if (ctx.overWages) return { kind: 'cutWages', reward: 8, penalty: 10 };
-  // 임금이 건전하면 45% 확률로 상향 도전 과제, 아니면 요구 없음.
-  if (rng.next() < 0.55) return null;
+  const ambition = ctx.ambition ?? 0;
+  if (ctx.overWages) return { kind: 'cutWages', reward: 8, penalty: 10 + ambition * 2 };
+  // 임금이 건전하면 일정 확률로 상향 도전 과제, 아니면 요구 없음(ambition이 높을수록 스킵 확률↓).
+  const skipChance = Math.max(0.15, 0.55 - ambition * 0.1);
+  if (rng.next() < skipChance) return null;
   const kind: DemandKind = rng.roll(0.5) ? 'winCup' : 'clubTopScorer';
-  return { kind, reward: 12, penalty: 4 };
+  return { kind, reward: 12 + ambition * 2, penalty: 4 + ambition * 2 };
 }
 
 /** 요구 평가 입력(시즌 결과). */

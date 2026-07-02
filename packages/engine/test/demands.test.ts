@@ -40,4 +40,33 @@ describe('demands: 이사회 특별 요구', () => {
     expect(demandConfidence(d, true)).toBe(12);
     expect(demandConfidence(d, false)).toBe(-4);
   });
+
+  it('감독 계약 ambition이 높을수록 임금 초과 요구의 벌점이 커진다', () => {
+    const base = generateDemand({ overWages: true }, new Rng(1))!;
+    const ambitious = generateDemand({ overWages: true, ambition: 3 }, new Rng(1))!;
+    expect(ambitious.kind).toBe('cutWages');
+    expect(ambitious.penalty).toBeGreaterThan(base.penalty);
+  });
+
+  it('ambition이 높을수록 도전 과제의 보상·벌점이 함께 커진다', () => {
+    for (let s = 0; s < 20; s++) {
+      const base = generateDemand({ overWages: false }, new Rng(s));
+      const ambitious = generateDemand({ overWages: false, ambition: 2 }, new Rng(s));
+      if (base && ambitious) {
+        expect(ambitious.reward).toBeGreaterThan(base.reward);
+        expect(ambitious.penalty).toBeGreaterThan(base.penalty);
+      }
+    }
+  });
+
+  it('ambition이 높을수록 요구가 발생하지 않을(null) 확률이 낮아진다', () => {
+    let noneAtZero = 0;
+    let noneAtHigh = 0;
+    const trials = 200;
+    for (let s = 0; s < trials; s++) {
+      if (!generateDemand({ overWages: false, ambition: 0 }, new Rng(s))) noneAtZero++;
+      if (!generateDemand({ overWages: false, ambition: 3 }, new Rng(s))) noneAtHigh++;
+    }
+    expect(noneAtHigh).toBeLessThan(noneAtZero);
+  });
 });

@@ -488,6 +488,21 @@ soccer-tycoon/
       이미 history에 영구 기록된 데이터만 스캔하고 새 추적 상태는 없다.
       대시보드에 "📣 유스 기대주 소식" 배너로 "데뷔!"/"첫 골 기록!" 문구를
       표시. prospectUpdates 필드 추가로 SAVE_VERSION 33.
+- [x] 감독 계약과 이사회 특별 요구 연계: 지금까지 ambition(장기 계약
+      누적치)은 divisionObjective(목표 순위)만 엄격하게 만들었고, 매
+      시즌 별도로 굴러가는 이사회 특별 요구(demands.ts)는 전혀 영향을
+      받지 않아 "장기 프로젝트"의 부담이 목표 순위 하나에만 쏠려 있었다.
+      DemandContext에 선택적 ambition 필드를 추가해 generateDemand에서
+      함께 반영: 임금 초과 시 감축 요구의 벌점이 10+ambition×2, 임금이
+      건전할 때 요구가 아예 안 나올 스킵 확률이 0.55−ambition×0.1(최저
+      0.15)로 낮아져 더 자주 발생하고, 발생한 도전 과제의 보상·벌점도
+      12/4에서 +ambition×2씩 함께 커진다. game.ts는 nextDemand 생성
+      시점에 state.ambition을 함께 넘기기만 하면 되고, 이미 UI가
+      game.demand.reward/penalty를 그대로 렌더링하고 있어 대시보드
+      쪽 변경은 전혀 없었다(숫자가 자동으로 커져 보임). ambition은
+      state에 이미 있는 값을 재사용하므로 새 상태·SAVE_VERSION 변경
+      없음 — 장기 계약을 택할수록 "이후 모든 시즌"의 요구가 누적적으로
+      더 잦고 가혹해지는 진짜 전략적 트레이드오프가 생긴다.
 
 기획했던 핵심·확장 시스템이 모두 구현됨. 이후는 콘텐츠 확충·디테일 다듬기 영역.
 

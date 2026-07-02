@@ -493,9 +493,9 @@ export function finishSeason(state: GameState): GameState {
   const boardConfidence = applyConfidence(state.boardConfidence, delta + demandDelta);
   const sacked = isSacked(boardConfidence);
 
-  // 다음 시즌 요구 생성(오프시즌 이후 임금 기준)
+  // 다음 시즌 요구 생성(오프시즌 이후 임금 기준 + 장기 계약 누적치만큼 이사회 기대치 상향)
   const nextDemand = generateDemand(
-    { overWages: annualWageBill(myClub(state)) > wageBudget(myClub(state)) },
+    { overWages: annualWageBill(myClub(state)) > wageBudget(myClub(state)), ambition: state.ambition },
     new Rng(offseasonSeed(state) + 909),
   );
 
