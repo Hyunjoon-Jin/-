@@ -91,4 +91,18 @@ describe('scouting: 강점·약점', () => {
       expect(technicalOnly.has(k)).toBe(false);
     }
   });
+
+  it('공격수의 강점/약점 풀에는 태클링·마크 같은 무관한 수비 능력치가 나오지 않는다', () => {
+    // 수비 능력치를 일부러 낮게, 공격 능력치를 일부러 높게 채운 스트라이커 —
+    // 예전엔 필드 플레이어 전체가 같은 통짜 풀을 써서 "약점"에 태클링이 흔히 등장했다.
+    const player = makePlayer({ position: 'ST', attrVal: 15 });
+    player.attributes.tackling = 1;
+    player.attributes.marking = 1;
+    player.attributes.finishing = 20;
+    const report = buildScoutingReport(player, 20);
+    const defensiveOnly = new Set(['tackling', 'marking']);
+    for (const k of [...report.strengths, ...report.weaknesses]) {
+      expect(defensiveOnly.has(k)).toBe(false);
+    }
+  });
 });

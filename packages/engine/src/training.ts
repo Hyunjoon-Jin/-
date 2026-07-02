@@ -24,5 +24,5 @@ export const TRAINING_FOCUS_ATTRS: Record<TrainingFocus, AttrKey[]> = {
   playmaking: ['passing', 'vision', 'dribbling', 'crossing', 'decisions'],
   defending: ['tackling', 'marking', 'positioning', 'anticipation', 'concentration'],
   physical: ['pace', 'acceleration', 'stamina', 'strength', 'agility'],
-  goalkeeping: ['reflexes', 'handling', 'oneOnOne', 'aerialReach', 'positioning'],
+  goalkeeping: ['reflexes', 'handling', 'oneOnOne', 'aerialReach', 'goalkicks'],
 };

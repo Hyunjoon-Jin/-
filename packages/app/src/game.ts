@@ -370,9 +370,12 @@ export function finishSeason(state: GameState): GameState {
   playToEnd(ss, tacticMap(state));
   const myTable = computeTable(ss);
   const { topScorers, awards } = summarizeStats(ss.results, totalRounds(ss));
-  // 스쿼드 스냅샷: 오프시즌(나이 증가·은퇴) 전에 캡처해야 "그 시즌 당시" 기록이 된다.
+  // 스쿼드 스냅샷: 오프시즌(나이 증가·은퇴) 전에 나이를 캡처해야 "그 시즌 당시" 기록이 된다 —
+  // seasonSquadSnapshot이 club.players에서 나이를 직접 읽지 않고 이 맵을 요구하도록
+  // 시그니처에서 강제한다.
   const myPlayerStats = aggregatePlayerStats(ss.results).filter((s) => s.clubId === state.myClubId);
-  const mySquad = seasonSquadSnapshot(myTactic(state), myClub(state), myPlayerStats);
+  const agesAtSeasonEnd = new Map(myClub(state).players.map((p) => [p.id, p.age]));
+  const mySquad = seasonSquadSnapshot(myTactic(state), myClub(state), myPlayerStats, agesAtSeasonEnd);
   // 출전 기록(apps>0)이 있는 선수만 그 시즌 평균 평점을 이력에 누적(최근 20시즌 유지).
   const ratingHistory: Record<string, SeasonRatingEntry[]> = { ...state.ratingHistory };
   for (const st of myPlayerStats) {

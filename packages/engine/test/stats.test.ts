@@ -135,7 +135,8 @@ describe('stats: 시즌 스쿼드 스냅샷', () => {
     const { matches } = simulateSeason(clubs, 41);
     const stats = aggregatePlayerStats(matches).filter((s) => s.clubId === club.id);
 
-    const squad = seasonSquadSnapshot(tactic, club, stats);
+    const ages = new Map(club.players.map((p) => [p.id, p.age]));
+    const squad = seasonSquadSnapshot(tactic, club, stats, ages);
     expect(squad).toHaveLength(tactic.lineup.length);
     squad.forEach((entry, i) => {
       expect(entry.position).toBe(tactic.lineup[i]!.position);
@@ -149,10 +150,24 @@ describe('stats: 시즌 스쿼드 스냅샷', () => {
     const rng = new Rng(42);
     const club = generateClub(rng, 'c', 'C', 12);
     const tactic = defaultTactic(club);
-    const squad = seasonSquadSnapshot(tactic, club, []); // 통계 없음
+    const ages = new Map(club.players.map((p) => [p.id, p.age]));
+    const squad = seasonSquadSnapshot(tactic, club, [], ages); // 통계 없음
     for (const entry of squad) {
       expect(entry.avgRating).toBe(0);
       expect(entry.goals).toBe(0);
+    }
+  });
+
+  it('오프시즌으로 club.players의 나이가 바뀌어도 캡처해둔 시즌 당시 나이가 기록된다', () => {
+    const rng = new Rng(43);
+    const club = generateClub(rng, 'c', 'C', 12);
+    const tactic = defaultTactic(club);
+    const ages = new Map(club.players.map((p) => [p.id, p.age])); // 오프시즌 전 캡처
+    for (const p of club.players) p.age += 1; // 오프시즌 나이 증가를 흉내
+    const squad = seasonSquadSnapshot(tactic, club, [], ages);
+    for (const entry of squad) {
+      expect(entry.age).toBe(ages.get(entry.playerId));
+      expect(entry.age).not.toBe(club.players.find((p) => p.id === entry.playerId)!.age);
     }
   });
 });

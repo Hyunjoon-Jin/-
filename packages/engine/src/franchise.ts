@@ -8,7 +8,7 @@ import { simulateSeason, type TableRow } from './league.js';
 import { settleSeason, type SeasonFinanceReport } from './finance.js';
 import { runTransferWindow, type TransferDeal } from './transfer.js';
 import { progressPlayer } from './progression.js';
-import { generateAcademyIntake } from './generate.js';
+import { generateAcademyIntake, generateYouthPlayer } from './generate.js';
 import { enforceFinancialFairPlay } from './financeControl.js';
 import { runInternationalBreak } from './international.js';
 import { currentAbility } from './derived.js';
@@ -121,12 +121,14 @@ export interface YouthProspect {
  * 헤드리스 루프와 앱(경기 단위 진행)이 시즌 종료 시 공통으로 호출한다.
  * @returns 은퇴(=유스 충원) 인원.
  */
-/** 스쿼드를 상한까지 정리: 21세 이상 중 가장 약한 선수부터 방출(유스 보호). */
+/** 스쿼드를 상한까지 정리: 21세 이상 중 가장 약한 선수부터 방출(유스 보호).
+ *  전원 21세 미만인 극단적 리빌드 상황이면 유스 보호가 무력화되지 않도록
+ *  이번 시즌 정리를 건너뛴다(다음 시즌에 성숙한 선수가 생기면 재개). */
 function trimSquad(club: Club): void {
   while (club.players.length > SOFT_CAP) {
     const established = club.players.filter((p) => p.age >= 21);
-    const pool = established.length > 0 ? established : club.players;
-    const weakest = pool.reduce((a, b) => (currentAbility(a) < currentAbility(b) ? a : b));
+    if (established.length === 0) break;
+    const weakest = established.reduce((a, b) => (currentAbility(a) < currentAbility(b) ? a : b));
     club.players = club.players.filter((p) => p.id !== weakest.id);
   }
 }
@@ -243,6 +245,12 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
     club.players.push(...intake);
     intakeByClub.set(club.id, intake.length);
     intakePlayersByClub.set(club.id, intake);
+
+    // 은퇴·유입 후에도 골키퍼가 한 명도 없으면(극단적으로 보유 GK 전원이 같은
+    // 시즌에 은퇴) 전문 GK 없이 시즌을 운영하게 되므로 응급 유스 GK로 보강한다.
+    if (!club.players.some((p) => p.position === 'GK')) {
+      club.players.push(generateYouthPlayer(rng, 'GK', club.finance.reputation));
+    }
 
     // 스쿼드 상한 정리
     trimSquad(club);

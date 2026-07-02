@@ -161,11 +161,14 @@ export interface SeasonSquadEntry {
 
 /**
  * 시즌 스쿼드 스냅샷(트로피 캐비닛용). 전술 라인업 순서대로 선수 정보 +
- * 그 시즌 통계(평균 평점·득점)를 묶는다. 오프시즌(나이 증가·은퇴) 전에 호출해야
- * "그 시즌 당시" 나이가 기록된다.
+ * 그 시즌 통계(평균 평점·득점)를 묶는다.
+ * @param agesAtSeasonEnd 오프시즌(나이 증가·은퇴) 처리 전에 캡처한 playerId→나이 맵.
+ *   문서로만 "오프시즌 전에 호출" 주의를 남기고 club.players에서 나이를 직접 읽으면,
+ *   호출 순서가 바뀌었을 때 컴파일 에러 없이 조용히 나이가 1살 많게 기록된다 —
+ *   호출자가 캡처 시점을 명시적으로 넘기도록 강제해 그 실수 자체를 차단한다.
  */
 export function seasonSquadSnapshot(
-  tactic: Tactic, club: Club, stats: PlayerSeasonStat[],
+  tactic: Tactic, club: Club, stats: PlayerSeasonStat[], agesAtSeasonEnd: Map<string, number>,
 ): SeasonSquadEntry[] {
   const statById = new Map(stats.map((s) => [s.playerId, s]));
   const playerById = new Map(club.players.map((p) => [p.id, p]));
@@ -176,7 +179,7 @@ export function seasonSquadSnapshot(
       position: slot.position,
       playerId: slot.playerId,
       name: player?.name ?? st?.name ?? '알 수 없음',
-      age: player?.age ?? 0,
+      age: agesAtSeasonEnd.get(slot.playerId) ?? player?.age ?? 0,
       avgRating: st?.avgRating ?? 0,
       goals: st?.goals ?? 0,
     };

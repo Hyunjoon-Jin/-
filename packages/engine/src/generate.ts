@@ -32,6 +32,15 @@ function genName(rng: Rng): string {
   return `${rng.pick(FIRST)} ${rng.pick(LAST)}`;
 }
 
+/** 나이별 잠재력 보너스 범위 — 22→23세 경계에서 근거 없이 뚝 떨어지지 않도록
+ *  나이에 따라 매끈하게 보간(17세 근방이 가장 높고, 30대에 가까울수록 낮아짐). */
+export function potentialBonusRange(age: number): [number, number] {
+  const hi = Math.round(clamp(40 - (age - 17) * 2.2, 5, 40));
+  const lo = Math.round(clamp(20 - (age - 17) * 1.2, 0, 20));
+  return [Math.min(lo, hi), hi];
+}
+
+
 /**
  * 능력치 생성: 팀 평균치 tier(1~20)를 중심으로 정규분포.
  * GK 포지션은 골키핑 능력을, 필드 선수는 그 외를 더 높게.
@@ -58,7 +67,8 @@ function genPlayer(rng: Rng, position: Position, tier: number, fixedAge?: number
   const mean =
     ALL_ATTRS.reduce((s, k) => s + attributes[k], 0) / ALL_ATTRS.length;
   const ca = mean * 10;
-  const potential = clamp(ca + (age < 23 ? rng.int(10, 40) : rng.int(0, 10)), 0, 200);
+  const [bonusLo, bonusHi] = potentialBonusRange(age);
+  const potential = clamp(ca + rng.int(bonusLo, bonusHi), 0, 200);
   const player: Player = {
     id: `p_${rng.int(100000, 999999)}_${position}`,
     name: genName(rng),
@@ -79,7 +89,8 @@ function genPlayer(rng: Rng, position: Position, tier: number, fixedAge?: number
     trainingFocus: 'balanced',
     traits: [],
     // 실력 있는 선수는 시작부터 A매치 경력 보유(결정론적, ca 기반).
-    caps: ca >= 155 ? Math.min(90, Math.round((ca - 150) / 3.5)) : 0,
+    // ca는 최대 200이라 (ca-150)*1.8이 상한(90)에 실제로 도달할 수 있는 계수.
+    caps: ca >= 155 ? Math.min(90, Math.round((ca - 150) * 1.8)) : 0,
     seasonGoals: 0,
     careerApps: 0,
     careerGoals: 0,
@@ -158,10 +169,15 @@ function slotScore(p: Player, pos: Position): number {
 export function defaultTactic(club: Club): Tactic {
   const used = new Set<string>();
   const lineup = FORMATION_433.map((position) => {
-    const pick = club.players
-      .filter((p) => !used.has(p.id))
-      .sort((a, b) => slotScore(b, position) - slotScore(a, position))[0]
-      ?? club.players[0]!;
+    const pool = club.players.filter((p) => !used.has(p.id));
+    if (pool.length === 0) {
+      // 미사용 선수가 없으면 club.players[0]로 조용히 폴백하던 것은 이미 라인업에
+      // 들어간 선수를 중복 배정하는 것과 같다(스쿼드가 포메이션 인원수 미만일 때만
+      // 발생 — MIN_SQUAD=14 > 11로 현재는 도달 불가). 조용히 오염된 라인업을
+      // 만드는 대신 명확한 에러로 드러낸다.
+      throw new Error(`defaultTactic: 스쿼드 인원(${club.players.length}명)이 포메이션 인원수보다 적습니다.`);
+    }
+    const pick = pool.sort((a, b) => slotScore(b, position) - slotScore(a, position))[0]!;
     used.add(pick.id);
     return { position, playerId: pick.id };
   });

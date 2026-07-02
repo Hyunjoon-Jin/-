@@ -3,7 +3,8 @@ import { ALL_ATTRS, type Attributes, type Club, type Player } from '../src/types
 import { progressPlayer } from '../src/progression.js';
 import { currentAbility } from '../src/derived.js';
 import { generateClub } from '../src/generate.js';
-import { advanceSeason, runFranchise } from '../src/franchise.js';
+import { advanceSeason, runFranchise, runOffseason } from '../src/franchise.js';
+import { generateYouthPlayer } from '../src/generate.js';
 import { Rng } from '../src/rng.js';
 
 function makePlayer(opts: {
@@ -130,6 +131,31 @@ describe('franchise: 멀티시즌 루프', () => {
     const b = runFranchise(makeLeague(44), 4, 1234).map((s) => s.championId);
     expect(a).toEqual(b);
   });
+
+  it('골키퍼가 전원 없어지면 오프시즌 후 응급 유스 GK로 보강된다', () => {
+    const rng = new Rng(5);
+    const club = generateClub(rng, 'c', 'C', 12);
+    club.players = club.players.filter((p) => p.position !== 'GK');
+    expect(club.players.some((p) => p.position === 'GK')).toBe(false);
+    runOffseason([club], new Rng(99));
+    expect(club.players.some((p) => p.position === 'GK')).toBe(true);
+  });
+
+  it('전원 21세 미만이면 스쿼드가 상한을 넘어도 이번 시즌은 유스 보호를 위해 정리를 건너뛴다', () => {
+    const rng = new Rng(6);
+    const club = generateClub(rng, 'c', 'C', 12);
+    for (const p of club.players) p.age = 17;
+    let n = 0;
+    while (club.players.length < 30) {
+      club.players.push(generateYouthPlayer(new Rng(club.players.length + 100 + n++), 'MC', 12));
+    }
+    const before = club.players.length;
+    expect(before).toBeGreaterThan(26); // SOFT_CAP
+    runOffseason([club], new Rng(77));
+    // established(21세 이상) 풀이 비어 있었으므로 은퇴도 정리도 없었어야 한다 —
+    // 유스 유입만큼만 늘어나고(줄지 않고) 남아있어야 한다.
+    expect(club.players.length).toBeGreaterThanOrEqual(before);
+  });
 });
 
 describe('training: 훈련 포커스', () => {
@@ -154,5 +180,22 @@ describe('training: 훈련 포커스', () => {
       p.attributes.tackling + p.attributes.marking + p.attributes.positioning + p.attributes.anticipation;
     expect(finGroup(fin)).toBeGreaterThan(finGroup(def));
     expect(defGroup(def)).toBeGreaterThan(defGroup(fin));
+  });
+
+  it('골키핑 포커스는 goalkicks를 강조한다(예전엔 positioning을 복붙해 배급 능력이 전혀 강조되지 않았음)', () => {
+    function grow(focus: 'goalkeeping' | 'balanced') {
+      const rng = new Rng(2);
+      const club = generateClub(rng, 'c', 'C', 12);
+      const gk = club.players.find((p) => p.position === 'GK')!;
+      gk.age = 19; gk.potential = 145;
+      for (const k in gk.attributes) (gk.attributes as Record<string, number>)[k] = 12;
+      gk.trainingFocus = focus;
+      const growRng = new Rng(88);
+      for (let i = 0; i < 4; i++) { gk.age = 19 + i; progressPlayer(gk, growRng, 12); }
+      return gk;
+    }
+    const focused = grow('goalkeeping');
+    const balanced = grow('balanced');
+    expect(focused.attributes.goalkicks).toBeGreaterThan(balanced.attributes.goalkicks);
   });
 });

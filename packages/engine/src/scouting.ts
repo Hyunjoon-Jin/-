@@ -3,9 +3,11 @@
  * 선수의 원시 수치를 등급·프로필로 분류해 서술형 평가의 재료를 만든다.
  * 실제 한국어 문구 조립은 UI(app)에서 담당 — 여기서는 분류만 결정론적으로 산출한다.
  */
-import type { AttrKey, Player, Position } from './types.js';
-import { TECHNICAL_ATTRS, MENTAL_ATTRS, PHYSICAL_ATTRS, GOALKEEPING_ATTRS } from './types.js';
+import type { AttrKey, Line, Player, Position } from './types.js';
+import { MENTAL_ATTRS, GOALKEEPING_ATTRS } from './types.js';
 import { currentAbility } from './derived.js';
+import { lineOf } from './teamStrength.js';
+import { DERIVED_WEIGHTS } from './roleWeights.js';
 
 export type OverallTier = 'worldClass' | 'star' | 'quality' | 'squad' | 'fringe';
 export type PotentialTier = 'generational' | 'high' | 'moderate' | 'limited' | 'unknown';
@@ -51,10 +53,30 @@ function potentialTierOf(gap: number, age: number, scoutingLevel: number): Poten
   return 'limited';
 }
 
-/** 포지션과 관련 있는 능력 풀(성장 대상 풀과 동일 기준 — engine.md 1.4). */
+function attrKeysOf(weights: Partial<Record<AttrKey, number>>): AttrKey[] {
+  return Object.keys(weights) as AttrKey[];
+}
+
+const LINE_ATTR_POOL: Record<Exclude<Line, 'GK'>, AttrKey[]> = {
+  ATT: [...new Set([
+    ...attrKeysOf(DERIVED_WEIGHTS.attack), ...attrKeysOf(DERIVED_WEIGHTS.creation),
+    ...attrKeysOf(DERIVED_WEIGHTS.physical),
+  ])],
+  MID: [...new Set([
+    ...attrKeysOf(DERIVED_WEIGHTS.midfield), ...attrKeysOf(DERIVED_WEIGHTS.creation),
+  ])],
+  DEF: [...new Set([
+    ...attrKeysOf(DERIVED_WEIGHTS.defense), ...attrKeysOf(DERIVED_WEIGHTS.physical),
+    ...attrKeysOf(DERIVED_WEIGHTS.aerial),
+  ])],
+};
+
+/** 포지션과 관련 있는 능력 풀 — 라인(공격/미드/수비)별 세부 부분집합으로 제한한다.
+ *  예전엔 필드 플레이어 전원이 같은 통짜 풀(TECHNICAL+MENTAL+PHYSICAL 전체)을 써서,
+ *  스트라이커의 "약점"에 태클링·마크 같은 무관한 수비 능력치가 흔히 등장했다. */
 function relevantAttrs(position: Position): readonly AttrKey[] {
   if (position === 'GK') return [...GOALKEEPING_ATTRS, ...MENTAL_ATTRS];
-  return [...TECHNICAL_ATTRS, ...MENTAL_ATTRS, ...PHYSICAL_ATTRS];
+  return LINE_ATTR_POOL[lineOf(position) as Exclude<Line, 'GK'>];
 }
 
 /** 선수 평가 리포트 산출(결정론적, 순수 함수). */

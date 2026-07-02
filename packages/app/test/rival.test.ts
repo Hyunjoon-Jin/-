@@ -22,9 +22,10 @@ describe('라이벌 구단', () => {
     g = advanceFullSeason(g);
     const total = g.rivalRecord.wins + g.rivalRecord.draws + g.rivalRecord.losses;
     const beforeTotal = before.wins + before.draws + before.losses;
-    // 같은 부에 남아 있었다면 라운드로빈 2경기(홈/원정)만큼 전적이 늘어난다.
+    // 같은 부에 남아 있었다면 라운드로빈 2경기(홈/원정)만큼 늘어나고, 컵에서도
+    // 같은 시즌에 맞붙었다면(토너먼트 특성상 최대 1회) +1이 더 늘어날 수 있다.
     expect(total).toBeGreaterThanOrEqual(beforeTotal);
-    expect(total).toBeLessThanOrEqual(beforeTotal + 2);
+    expect(total).toBeLessThanOrEqual(beforeTotal + 3);
   });
 
   it('라이벌은 시즌이 지나도(승강 발생 시에도) 동일 구단으로 유지된다', () => {
