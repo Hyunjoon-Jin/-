@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   aggregatePlayerStats, topScorers, seasonAwards, summarizeStats, careerScorers, recentPlayerForm,
+  seasonSquadSnapshot,
 } from '../src/stats.js';
 import { simulateSeason } from '../src/league.js';
 import { generateClub, defaultTactic } from '../src/generate.js';
@@ -121,5 +122,37 @@ describe('stats: 최근 폼(선수)', () => {
     const form = recentPlayerForm(results, scorer.id, 3);
     expect(form).toHaveLength(3);
     expect(form.map((f) => f.opponentName)).toEqual(['Away5', 'Away6', 'Away7']);
+  });
+});
+
+describe('stats: 시즌 스쿼드 스냅샷', () => {
+  it('전술 라인업 순서대로, 각 슬롯에 선수 정보+통계가 채워진다', () => {
+    const rng = new Rng(40);
+    const clubs: Club[] = [];
+    for (let i = 0; i < 8; i++) clubs.push(generateClub(rng, `c${i}`, `C${i}`, 8 + i));
+    const club = clubs[0]!;
+    const tactic = defaultTactic(club);
+    const { matches } = simulateSeason(clubs, 41);
+    const stats = aggregatePlayerStats(matches).filter((s) => s.clubId === club.id);
+
+    const squad = seasonSquadSnapshot(tactic, club, stats);
+    expect(squad).toHaveLength(tactic.lineup.length);
+    squad.forEach((entry, i) => {
+      expect(entry.position).toBe(tactic.lineup[i]!.position);
+      expect(entry.playerId).toBe(tactic.lineup[i]!.playerId);
+      expect(entry.name.length).toBeGreaterThan(0);
+      expect(entry.age).toBeGreaterThan(0);
+    });
+  });
+
+  it('통계가 없는 선수(미출전)는 평점 0으로 채워진다', () => {
+    const rng = new Rng(42);
+    const club = generateClub(rng, 'c', 'C', 12);
+    const tactic = defaultTactic(club);
+    const squad = seasonSquadSnapshot(tactic, club, []); // 통계 없음
+    for (const entry of squad) {
+      expect(entry.avgRating).toBe(0);
+      expect(entry.goals).toBe(0);
+    }
   });
 });

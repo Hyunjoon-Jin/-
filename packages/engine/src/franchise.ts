@@ -14,7 +14,9 @@ import { runInternationalBreak } from './international.js';
 import { currentAbility } from './derived.js';
 import { hasTrait } from './traits.js';
 import { clamp } from './math.js';
-import { summarizeStats, type PlayerSeasonStat, type SeasonAwards } from './stats.js';
+import {
+  summarizeStats, type PlayerSeasonStat, type SeasonAwards, type SeasonSquadEntry,
+} from './stats.js';
 import { Rng } from './rng.js';
 
 /** 스쿼드 상한(오프시즌 정리 목표). MAX_SQUAD보다 낮게 유지. */
@@ -51,6 +53,8 @@ export interface SeasonSummary {
   nationalInjuries?: number;
   /** 이사회 특별 요구 결과(앱). */
   demand?: { label: string; met: boolean };
+  /** 내 구단 시즌 스쿼드 스냅샷(트로피 캐비닛용, 앱). */
+  squad?: SeasonSquadEntry[];
 }
 
 /**

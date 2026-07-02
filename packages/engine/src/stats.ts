@@ -3,7 +3,7 @@
  * 경기 결과(MatchResult.playerStats)를 모아 출전·득점·평균 평점을 산출하고,
  * 득점왕·시즌 베스트 플레이어를 뽑는다.
  */
-import type { Club, MatchResult } from './types.js';
+import type { Club, MatchResult, Position, Tactic } from './types.js';
 
 export interface PlayerSeasonStat {
   playerId: string;
@@ -148,4 +148,37 @@ export function recentPlayerForm(results: MatchResult[], playerId: string, n = 5
     else if (away) out.push({ rating: away.rating, goals: away.goals, opponentName: r.homeClubName, home: false });
   }
   return out.slice(-n);
+}
+
+export interface SeasonSquadEntry {
+  position: Position;
+  playerId: string;
+  name: string;
+  age: number;
+  avgRating: number;
+  goals: number;
+}
+
+/**
+ * 시즌 스쿼드 스냅샷(트로피 캐비닛용). 전술 라인업 순서대로 선수 정보 +
+ * 그 시즌 통계(평균 평점·득점)를 묶는다. 오프시즌(나이 증가·은퇴) 전에 호출해야
+ * "그 시즌 당시" 나이가 기록된다.
+ */
+export function seasonSquadSnapshot(
+  tactic: Tactic, club: Club, stats: PlayerSeasonStat[],
+): SeasonSquadEntry[] {
+  const statById = new Map(stats.map((s) => [s.playerId, s]));
+  const playerById = new Map(club.players.map((p) => [p.id, p]));
+  return tactic.lineup.map((slot) => {
+    const player = playerById.get(slot.playerId);
+    const st = statById.get(slot.playerId);
+    return {
+      position: slot.position,
+      playerId: slot.playerId,
+      name: player?.name ?? st?.name ?? '알 수 없음',
+      age: player?.age ?? 0,
+      avgRating: st?.avgRating ?? 0,
+      goals: st?.goals ?? 0,
+    };
+  });
 }

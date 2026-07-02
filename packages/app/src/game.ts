@@ -11,6 +11,7 @@ import {
   sellOffers, acceptSellOffer,
   type OfferEvaluation, type SellOffer,
   summarizeStats, aggregatePlayerStats, topScorers as engineTopScorers, recentPlayerForm,
+  seasonSquadSnapshot,
   createCup, playCupRound as enginePlayCupRound, playCupToEnd, isCupOver, nextCupPairings,
   applyPromotionRelegation, clubsInDivision, runInternationalBreak,
   confidenceDelta, applyConfidence, isSacked, START_CONFIDENCE,
@@ -234,6 +235,11 @@ export function finishSeason(state: GameState): GameState {
   playToEnd(ss, tacticMap(state));
   const myTable = computeTable(ss);
   const { topScorers, awards } = summarizeStats(ss.results, totalRounds(ss));
+  // 스쿼드 스냅샷: 오프시즌(나이 증가·은퇴) 전에 캡처해야 "그 시즌 당시" 기록이 된다.
+  const mySquad = seasonSquadSnapshot(
+    myTactic(state), myClub(state),
+    aggregatePlayerStats(ss.results).filter((s) => s.clubId === state.myClubId),
+  );
 
   // 2) 상대 부 자동 시뮬 (통계엔 미포함, 순위/정산/승강용)
   const otherDiv = myDiv === 0 ? 1 : 0;
@@ -334,6 +340,7 @@ export function finishSeason(state: GameState): GameState {
     nationalCallUps: myCallUps,
     nationalInjuries: myIntlInjuries,
     demand: demandResult,
+    squad: mySquad,
   };
 
   const repaired = repairTactic(myClub(state), myTactic(state));

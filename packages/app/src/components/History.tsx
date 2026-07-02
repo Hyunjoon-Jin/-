@@ -1,5 +1,8 @@
+import { useState } from 'react';
 import { myClub, DIVISION_LABELS, type GameState } from '../game.js';
-import { careerScorers } from '@soccer-tycoon/engine';
+import { careerScorers, type SeasonSquadEntry } from '@soccer-tycoon/engine';
+
+type HistorySeason = GameState['history'][number];
 
 export function History({ game }: { game: GameState }) {
   const club = myClub(game);
@@ -32,6 +35,10 @@ export function History({ game }: { game: GameState }) {
 
   const leaders = careerScorers(game.clubs, 15);
 
+  const [squadSeason, setSquadSeason] = useState<
+    { s: HistorySeason; leagueWon: boolean; cupWon: boolean } | null
+  >(null);
+
   return (
     <div className="history">
       <div className="honors">
@@ -49,11 +56,14 @@ export function History({ game }: { game: GameState }) {
           <h3>역대 시즌</h3>
           <table className="data-table compact">
             <thead>
-              <tr><th>시즌</th><th>부</th><th>리그 우승</th><th>컵 우승</th><th>득점왕</th><th>내 순위</th></tr>
+              <tr><th>시즌</th><th>부</th><th>리그 우승</th><th>컵 우승</th><th>득점왕</th><th>내 순위</th><th></th></tr>
             </thead>
             <tbody>
               {[...seasons].reverse().map((s) => {
                 const pos = posOf(s);
+                const leagueWon = s.championId === myId;
+                const cupWon = s.cupChampionId === myId;
+                const hasSquad = (leagueWon || cupWon) && (s.squad?.length ?? 0) > 0;
                 return (
                   <tr key={s.season}>
                     <td>{s.season}</td>
@@ -65,6 +75,11 @@ export function History({ game }: { game: GameState }) {
                       {pos ? `${pos}위` : '-'}
                       {s.promoted && <span className="pos"> ↑</span>}
                       {s.relegated && <span className="neg"> ↓</span>}
+                    </td>
+                    <td>
+                      {hasSquad && (
+                        <button className="btn-small" onClick={() => setSquadSeason({ s, leagueWon, cupWon })}>🏆 스쿼드</button>
+                      )}
                     </td>
                   </tr>
                 );
@@ -113,6 +128,16 @@ export function History({ game }: { game: GameState }) {
           </table>
         </div>
       )}
+
+      {squadSeason && (
+        <TitleSquadModal
+          season={squadSeason.s}
+          leagueWon={squadSeason.leagueWon}
+          cupWon={squadSeason.cupWon}
+          clubName={club.name}
+          onClose={() => setSquadSeason(null)}
+        />
+      )}
     </div>
   );
 }
@@ -122,6 +147,40 @@ function HonorCard({ title, value }: { title: string; value: string }) {
     <div className="stat-card">
       <div className="stat-title">{title}</div>
       <div className="stat-value">{value}</div>
+    </div>
+  );
+}
+
+function TitleSquadModal({
+  season, leagueWon, cupWon, clubName, onClose,
+}: {
+  season: HistorySeason; leagueWon: boolean; cupWon: boolean; clubName: string; onClose: () => void;
+}) {
+  const squad: SeasonSquadEntry[] = season.squad ?? [];
+  const trophies = [leagueWon && '리그', cupWon && '컵'].filter(Boolean).join(' + ');
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <h2>🏆 시즌 {season.season} 우승 스쿼드 — {clubName}</h2>
+          <button className="btn-ghost" onClick={onClose}>닫기 ✕</button>
+        </div>
+        <p className="muted small">{trophies} 우승 당시 선발 라인업(전술 기준).</p>
+        <table className="data-table compact">
+          <thead><tr><th>포지션</th><th>선수</th><th>나이</th><th>평균 평점</th><th>득점</th></tr></thead>
+          <tbody>
+            {squad.map((e) => (
+              <tr key={e.playerId}>
+                <td className="small muted">{e.position}</td>
+                <td className="name">{e.name}</td>
+                <td>{e.age}</td>
+                <td>{e.avgRating > 0 ? e.avgRating.toFixed(1) : '-'}</td>
+                <td>{e.goals}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
