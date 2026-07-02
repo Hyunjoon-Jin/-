@@ -92,3 +92,37 @@ export function summarizeStats(results: MatchResult[], totalRounds: number): {
   const minApps = Math.max(1, Math.floor(totalRounds / 2));
   return { topScorers: topScorers(stats, 10), awards: seasonAwards(stats, minApps) };
 }
+
+export interface CareerStat {
+  playerId: string;
+  name: string;
+  clubId: string;
+  clubName: string;
+  position: string;
+  age: number;
+  /** 통산+이번 시즌 득점. */
+  goals: number;
+  /** 통산+이번 시즌 선발 출전. */
+  apps: number;
+}
+
+/**
+ * 현역 선수 통산 득점 순위(전 구단).
+ * Player의 누적 기록(careerGoals/Apps) + 이번 시즌(seasonGoals/Apps)을 합산한다.
+ */
+export function careerScorers(clubs: Club[], n = 15): CareerStat[] {
+  const out: CareerStat[] = [];
+  for (const club of clubs) {
+    for (const p of club.players) {
+      const goals = (p.careerGoals ?? 0) + (p.seasonGoals ?? 0);
+      const apps = (p.careerApps ?? 0) + p.seasonApps;
+      if (goals === 0 && apps === 0) continue;
+      out.push({
+        playerId: p.id, name: p.name, clubId: club.id, clubName: club.name,
+        position: p.position, age: p.age, goals, apps,
+      });
+    }
+  }
+  out.sort((a, b) => b.goals - a.goals || b.apps - a.apps);
+  return out.slice(0, n);
+}

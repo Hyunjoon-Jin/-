@@ -274,6 +274,7 @@ soccer-tycoon/
       프리뷰(cupPreview)까지 리그와 동일하게 제공(타 부 상대는 순위·폼 미표시).
 - [x] 선수 통산 기록: 경기 득점을 matchEffects에서 seasonGoals로 누적(리그+컵), 오프시즌에
       careerApps/careerGoals로 이월·시즌 카운터 리셋. 선수 상세에 시즌/통산 득점 표시.
+      히스토리에 현역 통산 득점 순위(careerScorers, 전 구단) 명예의 전당 추가.
 
 기획했던 핵심·확장 시스템이 모두 구현됨. 이후는 콘텐츠 확충·디테일 다듬기 영역.
 

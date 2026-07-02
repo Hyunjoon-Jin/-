@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { aggregatePlayerStats, topScorers, seasonAwards, summarizeStats } from '../src/stats.js';
+import { aggregatePlayerStats, topScorers, seasonAwards, summarizeStats, careerScorers } from '../src/stats.js';
 import { simulateSeason } from '../src/league.js';
 import { generateClub } from '../src/generate.js';
 import { Rng } from '../src/rng.js';
@@ -55,5 +55,30 @@ describe('stats: 시즌 통계 집계', () => {
     const { topScorers: ts, awards } = summarizeStats(matches, 14);
     expect(ts.length).toBeLessThanOrEqual(10);
     expect(awards).toBeDefined();
+  });
+});
+
+describe('stats: 통산 득점 순위', () => {
+  it('통산+시즌 득점을 합산해 내림차순 정렬, n 제한', () => {
+    const rng = new Rng(3);
+    const clubs = [generateClub(rng, 'a', 'A', 14), generateClub(rng, 'b', 'B', 12)];
+    const [p1, p2, p3] = [clubs[0]!.players[0]!, clubs[0]!.players[1]!, clubs[1]!.players[0]!];
+    p1.careerGoals = 40; p1.seasonGoals = 5;   // 45
+    p2.careerGoals = 10; p2.seasonGoals = 2;   // 12
+    p3.careerGoals = 20; p3.seasonGoals = 0;   // 20
+
+    const leaders = careerScorers(clubs, 2);
+    expect(leaders).toHaveLength(2);
+    expect(leaders[0]!.playerId).toBe(p1.id);
+    expect(leaders[0]!.goals).toBe(45);
+    expect(leaders[1]!.playerId).toBe(p3.id);
+    expect(leaders[1]!.goals).toBe(20);
+  });
+
+  it('기록이 전혀 없는 선수는 제외', () => {
+    const rng = new Rng(4);
+    const clubs = [generateClub(rng, 'a', 'A', 12)];
+    for (const p of clubs[0]!.players) { p.careerGoals = 0; p.seasonGoals = 0; p.careerApps = 0; p.seasonApps = 0; }
+    expect(careerScorers(clubs)).toHaveLength(0);
   });
 });

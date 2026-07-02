@@ -1,4 +1,5 @@
 import { myClub, DIVISION_LABELS, type GameState } from '../game.js';
+import { careerScorers } from '@soccer-tycoon/engine';
 
 export function History({ game }: { game: GameState }) {
   const club = myClub(game);
@@ -28,6 +29,8 @@ export function History({ game }: { game: GameState }) {
     titleCount.set(s.championId, cur);
   }
   const titleTable = [...titleCount.values()].sort((a, b) => b.count - a.count);
+
+  const leaders = careerScorers(game.clubs, 15);
 
   return (
     <div className="history">
@@ -86,6 +89,30 @@ export function History({ game }: { game: GameState }) {
           </table>
         </div>
       </div>
+
+      {leaders.length > 0 && (
+        <div className="career-leaders">
+          <h3>🥇 현역 통산 득점 순위 <span className="muted small">(전 구단 · 리그+컵)</span></h3>
+          <table className="data-table compact">
+            <thead>
+              <tr><th>#</th><th>선수</th><th>구단</th><th>P</th><th>나이</th><th>출전</th><th>득점</th></tr>
+            </thead>
+            <tbody>
+              {leaders.map((l, i) => (
+                <tr key={l.playerId} className={l.clubId === myId ? 'mine' : ''}>
+                  <td>{i + 1}</td>
+                  <td className="name">{l.name}</td>
+                  <td className="small muted">{l.clubName}</td>
+                  <td>{l.position}</td>
+                  <td>{l.age}</td>
+                  <td className="muted">{l.apps}</td>
+                  <td><b>{l.goals}</b></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
