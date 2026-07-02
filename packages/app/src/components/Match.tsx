@@ -88,6 +88,16 @@ function InSeason(props: Props) {
         <div className={`pace-checkpoint ${checkpoint.status}`}>
           {PACE_TEXT[checkpoint.status].icon} <b>{PACE_TEXT[checkpoint.status].label}</b> — {checkpoint.round}/{checkpoint.totalRounds}라운드 기준 <b>{checkpoint.position}위</b>
           <span className="muted small"> (목표 {checkpoint.objective}위 이내)</span>
+          {checkpoint.rival && (
+            <span className="muted small">
+              {' · 🔥 '}{checkpoint.rival.name}
+              {checkpoint.rival.position === checkpoint.position
+                ? '와(과) 동일 순위'
+                : checkpoint.rival.position > checkpoint.position
+                  ? `보다 ${checkpoint.rival.position - checkpoint.position}계단 위`
+                  : `보다 ${checkpoint.position - checkpoint.rival.position}계단 아래`}
+            </span>
+          )}
         </div>
       )}
       <div className="phase-actions">

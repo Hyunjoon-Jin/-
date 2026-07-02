@@ -646,6 +646,8 @@ export interface PaceCheckpoint {
   objective: number;
   /** 목표 대비 페이스. ahead=여유, onTrack=근접, behind=미달 위험. */
   status: 'ahead' | 'onTrack' | 'behind';
+  /** 라이벌이 이번 시즌 같은 부에 있을 때만(승강으로 갈리면 없음). */
+  rival?: { name: string; position: number };
 }
 
 /**
@@ -663,7 +665,9 @@ export function paceCheckpoint(state: GameState): PaceCheckpoint | null {
   if (position <= 0) return null;
   const gap = state.objective - position; // 양수=목표보다 여유, 음수=목표 미달
   const status: PaceCheckpoint['status'] = gap >= 2 ? 'ahead' : gap >= -1 ? 'onTrack' : 'behind';
-  return { round: prog.round, totalRounds: prog.total, position, objective: state.objective, status };
+  const rivalIdx = table.findIndex((r) => r.clubId === state.rivalClubId);
+  const rival = rivalIdx >= 0 ? { name: table[rivalIdx]!.name, position: rivalIdx + 1 } : undefined;
+  return { round: prog.round, totalRounds: prog.total, position, objective: state.objective, status, rival };
 }
 
 /** 내 구단의 다음 라운드 경기. */

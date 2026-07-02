@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  startGame, startSeason, playRound, paceCheckpoint, liveProgress,
+  startGame, startSeason, playRound, paceCheckpoint, liveProgress, liveTable,
 } from '../src/game.js';
 
 describe('시즌 중간 페이스 체크포인트', () => {
@@ -50,5 +50,22 @@ describe('시즌 중간 페이스 체크포인트', () => {
     for (let i = 0; i < total; i++) g = playRound(g);
     expect(liveProgress(g).over).toBe(true);
     expect(paceCheckpoint(g)).toBeNull();
+  });
+
+  it('라이벌이 같은 부에 있으면 체크포인트에 라이벌 순위가 함께 실린다', () => {
+    let g = startSeason(startGame(2026, 'c0'));
+    const total = liveProgress(g).total;
+    let cp = paceCheckpoint(g);
+    for (let i = 0; i < total && !cp; i++) {
+      g = playRound(g);
+      cp = paceCheckpoint(g);
+    }
+    expect(cp).not.toBeNull();
+    const table = liveTable(g);
+    const rivalRow = table.find((r) => r.clubId === g.rivalClubId);
+    if (!rivalRow) { expect(cp!.rival).toBeUndefined(); return; }
+    expect(cp!.rival).toBeDefined();
+    expect(cp!.rival!.name).toBe(rivalRow.name);
+    expect(cp!.rival!.position).toBe(table.findIndex((r) => r.clubId === g.rivalClubId) + 1);
   });
 });
