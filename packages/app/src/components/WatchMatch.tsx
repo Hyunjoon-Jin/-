@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  LiveMatch, HALF_TIME, MATCH_LENGTH, currentAbility,
-  type Club, type Tactic, type MatchEvent, type MatchResult, type LiveStats,
+  LiveMatch, HALF_TIME, MATCH_LENGTH, currentAbility, isAvailable, SEVERITY_LABEL,
+  type Club, type Tactic, type MatchEvent, type MatchResult, type LiveStats, type InjuryEvent,
 } from '@soccer-tycoon/engine';
 import type { WatchSetup, MatchPreview as MatchPreviewData } from '../game.js';
+import { swapPlayer } from '../tactics.js';
 import { Tactics } from './Tactics.js';
 import { MatchPitch, type PitchState } from './MatchPitch.js';
 import { MatchStats } from './MatchStats.js';
@@ -47,6 +48,41 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, onDone, onCa
   const [feed, setFeed] = useState<MatchEvent[]>([]);
   const [tactic, setTactic] = useState<Tactic>(initialTactic);
   const [stats, setStats] = useState<LiveStats>({ possession: [50, 50], shots: [0, 0], shotsOnTarget: [0, 0] });
+  const [injuryFeed, setInjuryFeed] = useState<InjuryEvent[]>([]);
+  const [activeInjury, setActiveInjury] = useState<InjuryEvent | null>(null);
+
+  // 부상 스케줄은 킥오프 시점에 확정(재현성) — 관전 중 분이 지날 때마다 하나씩 노출.
+  const injuryScheduleRef = useRef<InjuryEvent[] | null>(null);
+  if (injuryScheduleRef.current === null) injuryScheduleRef.current = live.injuries();
+  const revealedIdxRef = useRef(0);
+  const pendingMineRef = useRef<InjuryEvent[]>([]);
+
+  /**
+   * target분까지 지난 부상 이벤트를 피드에 공개.
+   * interactive=true(기본)면 내 선수(현재 라인업 소속) 부상은 교체 대기열에 추가해
+   * 경기를 잠시 멈추고 묻는다 — "빠르게" 스킵 중에는 방해하지 않도록 false로 끈다.
+   */
+  function revealInjuriesUpTo(target: number, currentTactic: Tactic, interactive = true) {
+    const schedule = injuryScheduleRef.current!;
+    const newlyMine: InjuryEvent[] = [];
+    const newlyShown: InjuryEvent[] = [];
+    while (revealedIdxRef.current < schedule.length && schedule[revealedIdxRef.current]!.minute <= target) {
+      const e = schedule[revealedIdxRef.current]!;
+      revealedIdxRef.current++;
+      newlyShown.push(e);
+      const stillOnPitch = currentTactic.lineup.some((s) => s.playerId === e.playerId);
+      if (interactive && e.side === userSide && stillOnPitch) newlyMine.push(e);
+    }
+    if (newlyShown.length) setInjuryFeed((f) => [...newlyShown.reverse(), ...f]);
+    if (newlyMine.length) pendingMineRef.current.push(...newlyMine);
+  }
+
+  // 대기 중인 내 부상 이벤트가 있고, 아직 프롬프트가 없으면 하나 꺼내 표시(경기 일시 정지).
+  useEffect(() => {
+    if (!activeInjury && pendingMineRef.current.length > 0) {
+      setActiveInjury(pendingMineRef.current.shift()!);
+    }
+  });
 
   function applyMinute(target: number, evs: MatchEvent[]) {
     const last = evs[evs.length - 1];
@@ -60,19 +96,21 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, onDone, onCa
     if (notable.length) setFeed((f) => [...notable.reverse(), ...f]);
   }
 
-  // 분 단위 진행 타이머 (phase가 진행 중일 때만)
+  // 분 단위 진행 타이머 (phase가 진행 중이고, 교체 결정 대기 중이 아닐 때만)
   useEffect(() => {
     if (phase !== 'playing' && phase !== 'playing2') return;
+    if (activeInjury) return; // 부상 교체 프롬프트 응답 전에는 진행 정지
     const id = setInterval(() => {
       const target = Math.min(minuteRef.current + 1, MATCH_LENGTH);
       if (target === minuteRef.current) return;
       const evs = live.runUntil(target);
       minuteRef.current = target;
       applyMinute(target, evs);
+      revealInjuriesUpTo(target, tactic);
     }, TICK_MS);
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase]);
+  }, [phase, activeInjury, tactic]);
 
   // 경계(하프타임·풀타임) 전환
   useEffect(() => {
@@ -85,6 +123,17 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, onDone, onCa
     const evs = live.runUntil(boundary);
     minuteRef.current = boundary;
     applyMinute(boundary, evs);
+    revealInjuriesUpTo(boundary, tactic, false);
+  }
+
+  /** 부상 교체 확정: 라인업을 즉시 교체하고(경기 재개), 하프타임 UI에도 반영. */
+  function confirmSubstitution(outPlayerId: string, inPlayerId: string) {
+    const slotIndex = tactic.lineup.findIndex((s) => s.playerId === outPlayerId);
+    if (slotIndex < 0) { setActiveInjury(null); return; }
+    const next = swapPlayer(tactic, slotIndex, inPlayerId);
+    setTactic(next);
+    live.setTactic(userSide, next);
+    setActiveInjury(null);
   }
 
   function startSecondHalf() {
@@ -147,11 +196,21 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, onDone, onCa
             <div className="commentary">
               <LiveStatsPanel stats={stats} homeName={homeName} awayName={awayName} userSide={userSide} />
               <h3>중계</h3>
-              <Feed events={feed} userSide={userSide} />
+              <Feed events={feed} injuries={injuryFeed} userSide={userSide} />
             </div>
           )}
         </div>
       </div>
+
+      {activeInjury && (
+        <InjurySubModal
+          injury={activeInjury}
+          club={myClub}
+          tactic={tactic}
+          onConfirm={confirmSubstitution}
+          onDismiss={() => setActiveInjury(null)}
+        />
+      )}
     </div>
   );
 }
@@ -189,17 +248,82 @@ function LiveStatsPanel({
   );
 }
 
-function Feed({ events, userSide }: { events: MatchEvent[]; userSide: 'home' | 'away' }) {
-  if (events.length === 0) return <p className="muted small">아직 주요 장면이 없습니다.</p>;
+type FeedItem =
+  | { kind: 'match'; minute: number; ev: MatchEvent }
+  | { kind: 'injury'; minute: number; ev: InjuryEvent };
+
+function Feed({
+  events, injuries, userSide,
+}: { events: MatchEvent[]; injuries: InjuryEvent[]; userSide: 'home' | 'away' }) {
+  const items: FeedItem[] = [
+    ...events.map((ev): FeedItem => ({ kind: 'match', minute: ev.minute, ev })),
+    ...injuries.map((ev): FeedItem => ({ kind: 'injury', minute: ev.minute, ev })),
+  ];
+  // 각 목록은 이미 최신순으로 쌓이므로, 삽입 순서를 보존하며 안정적으로 합친다.
+  items.sort((a, b) => b.minute - a.minute);
+  if (items.length === 0) return <p className="muted small">아직 주요 장면이 없습니다.</p>;
   return (
     <ul className="feed">
-      {events.map((e, i) => (
-        <li key={i} className={e.outcome === 'GOAL' ? (e.side === userSide ? 'goal mine' : 'goal') : ''}>
-          <span className="feed-min">{e.minute}'</span>
-          <span className="feed-text">{e.playerName} — {OUTCOME[e.outcome]}</span>
+      {items.map((it, i) => it.kind === 'match' ? (
+        <li key={i} className={it.ev.outcome === 'GOAL' ? (it.ev.side === userSide ? 'goal mine' : 'goal') : ''}>
+          <span className="feed-min">{it.ev.minute}'</span>
+          <span className="feed-text">{it.ev.playerName} — {OUTCOME[it.ev.outcome]}</span>
+        </li>
+      ) : (
+        <li key={i} className="injury-feed">
+          <span className="feed-min">{it.ev.minute}'</span>
+          <span className="feed-text">
+            🚑 {it.ev.playerName} {SEVERITY_LABEL[it.ev.severity]} 부상 ({it.ev.name})
+            {it.ev.side === userSide && <span className="muted small"> — 예상 결장 {it.ev.matches}경기</span>}
+          </span>
         </li>
       ))}
     </ul>
+  );
+}
+
+function InjurySubModal({
+  injury, club, tactic, onConfirm, onDismiss,
+}: {
+  injury: InjuryEvent; club: Club; tactic: Tactic;
+  onConfirm: (outPlayerId: string, inPlayerId: string) => void;
+  onDismiss: () => void;
+}) {
+  const slot = tactic.lineup.find((s) => s.playerId === injury.playerId);
+  const bench = club.players
+    .filter((p) => p.id !== injury.playerId && isAvailable(p) && !tactic.lineup.some((s) => s.playerId === p.id))
+    .sort((a, b) => currentAbility(b) - currentAbility(a));
+
+  return (
+    <div className="modal-backdrop" onClick={onDismiss}>
+      <div className="modal injury-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-head">
+          <h2>🚑 부상 발생</h2>
+        </div>
+        <p>
+          {injury.minute}' <b>{injury.playerName}</b>
+          {slot && <span className="muted"> ({slot.position})</span>}
+          이(가) <b>{SEVERITY_LABEL[injury.severity]}</b> 부상({injury.name})을 당했습니다.
+          예상 결장 <b>{injury.matches}경기</b>.
+        </p>
+        {bench.length === 0 ? (
+          <p className="muted small">교체 가능한 벤치 선수가 없습니다.</p>
+        ) : (
+          <>
+            <p className="muted small">지금 교체하거나, 계속 뛰게 둘 수 있습니다.</p>
+            <ul className="sub-list">
+              {bench.slice(0, 8).map((p) => (
+                <li key={p.id}>
+                  <span>{p.name} ({p.position} · {currentAbility(p).toFixed(0)})</span>
+                  <button className="btn-small" onClick={() => onConfirm(injury.playerId, p.id)}>교체</button>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+        <button className="btn-ghost" onClick={onDismiss}>계속 진행 (교체 안 함)</button>
+      </div>
+    </div>
   );
 }
 

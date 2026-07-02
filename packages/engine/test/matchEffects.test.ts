@@ -10,7 +10,7 @@ function fakeResult(home: Club, away: Club, hg: number, ag: number): MatchResult
     homeClubId: home.id, awayClubId: away.id,
     homeClubName: home.name, awayClubName: away.name,
     score: [hg, ag], possession: [50, 50], shots: [0, 0],
-    events: [], cards: [], playerStats: { home: [], away: [] }, seed: 1,
+    events: [], cards: [], injuries: [], playerStats: { home: [], away: [] }, seed: 1,
   };
 }
 

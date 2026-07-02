@@ -8,7 +8,7 @@
  * 동일한 로직을 공유한다.
  */
 import type {
-  CardEvent, ChanceType, Club, MatchEvent, MatchResult, Player,
+  CardEvent, ChanceType, Club, InjuryEvent, MatchEvent, MatchResult, Player,
   PlayerMatchStat, ShotOutcome, Tactic, TeamStrength,
 } from './types.js';
 import { computeTeamStrength, lineOf } from './teamStrength.js';
@@ -16,6 +16,7 @@ import { Rng } from './rng.js';
 import { clamp, logistic } from './math.js';
 import { TUNING } from './tuning.js';
 import { hasTrait } from './traits.js';
+import { rollInjury } from './injury.js';
 
 export interface MatchSetup {
   home: { club: Club; tactic: Tactic };
@@ -83,6 +84,9 @@ export interface MatchContext {
   statMap: Map<string, PlayerMatchStat>;
   pPossHome: number;
   seed: number;
+  /** 부상 판정(킥오프 시점 라인업 기준, 고정). 하프타임/긴급 교체로도 바뀌지 않는다 —
+   *  라이브 관전 중 노출한 예정 스케줄과 최종 결과가 항상 일치해야 하기 때문. */
+  injuries: InjuryEvent[];
 }
 
 function recomputePossession(ctx: MatchContext): void {
@@ -99,7 +103,9 @@ export function createContext(setup: MatchSetup): MatchContext {
     statMap: new Map(),
     pPossHome: 0.5,
     seed: setup.seed,
+    injuries: [],
   };
+  ctx.injuries = generateInjuries(ctx);
   recomputePossession(ctx);
   return ctx;
 }
@@ -227,10 +233,44 @@ function generateCards(ctx: MatchContext): CardEvent[] {
   return cards.sort((a, b) => a.minute - b.minute);
 }
 
+/** 의료 레벨(1~20) → 부상 발생 확률 배율. 10=1.0x, 20=0.7x, 1≈1.3x. */
+function injuryMedicalFactor(medical: number): number {
+  return clamp(1 - (medical - 10) * 0.03, 0.4, 1.3);
+}
+
+/**
+ * 부상 판정 (콘텐츠 심화). 경기 rng·카드 rng와 독립된 시드로 결정론적 생성 —
+ * 라인업·의료·특성만의 함수라 경기 진행 상태와 무관하게 언제든 계산 가능
+ * (관전 중 실시간 노출 목적). 이미 부상·정지 중인 선수는 제외.
+ */
+export function generateInjuries(ctx: MatchContext): InjuryEvent[] {
+  const injuries: InjuryEvent[] = [];
+  const rng = new Rng(ctx.seed * 11 + 24680);
+  const roll = (side: Side, sideKey: 'home' | 'away') => {
+    const byId = new Map(side.club.players.map((p) => [p.id, p]));
+    const medFactor = injuryMedicalFactor(side.club.staff.medical);
+    for (const slot of side.tactic.lineup) {
+      const p = byId.get(slot.playerId);
+      if (!p || p.injuryMatches > 0 || p.suspensionMatches > 0) continue;
+      const injMul = hasTrait(p, 'ironMan') ? 0.5 : hasTrait(p, 'injuryProne') ? 1.7 : 1;
+      if (!rng.roll(TUNING.injuryTriggerChance * medFactor * injMul)) continue;
+      const inj = rollInjury(rng, side.club.staff.medical);
+      injuries.push({
+        minute: rng.int(1, 90), side: sideKey, playerId: p.id, playerName: p.name,
+        severity: inj.severity, name: inj.name, matches: inj.matches,
+      });
+    }
+  };
+  roll(ctx.home, 'home');
+  roll(ctx.away, 'away');
+  return injuries.sort((a, b) => a.minute - b.minute);
+}
+
 export function finalize(ctx: MatchContext): MatchResult {
   finalizeRatings(ctx);
   const { home, away } = ctx;
   const cards = generateCards(ctx);
+  const injuries = ctx.injuries; // 킥오프 시점에 확정(생성 시점 무관하게 항상 동일)
   const totalTicks = home.possessionTicks + away.possessionTicks || 1;
   const possession: [number, number] = [
     Math.round((home.possessionTicks / totalTicks) * 100),
@@ -251,6 +291,7 @@ export function finalize(ctx: MatchContext): MatchResult {
     shots: [home.shots, away.shots],
     events: ctx.events,
     cards,
+    injuries,
     playerStats: { home: splitStats(home.club), away: splitStats(away.club) },
     seed: ctx.seed,
   };

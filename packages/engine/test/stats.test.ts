@@ -114,7 +114,7 @@ describe('stats: 최근 폼(선수)', () => {
     const scorer = home.players.find((p) => ht.lineup.some((s) => s.playerId === p.id))!;
     const mkResult = (i: number): MatchResult => ({
       homeClubId: home.id, awayClubId: away.id, homeClubName: home.name, awayClubName: `Away${i}`,
-      score: [1, 0], possession: [50, 50], shots: [1, 0], events: [], cards: [],
+      score: [1, 0], possession: [50, 50], shots: [1, 0], events: [], cards: [], injuries: [],
       playerStats: { home: [{ playerId: scorer.id, name: scorer.name, rating: 6 + i * 0.1, shots: 1, goals: 1 }], away: [] },
       seed: i,
     });

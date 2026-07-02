@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { upgradeStaff, upgradeCost, STAFF_MAX } from '../src/staffActions.js';
 import { progressPlayer } from '../src/progression.js';
-import { applyMatchEffects } from '../src/matchEffects.js';
+import { simulateMatch } from '../src/simulateMatch.js';
 import { generateClub, defaultTactic, generateAcademyIntake } from '../src/generate.js';
 import { currentAbility } from '../src/derived.js';
 import { Rng } from '../src/rng.js';
-import type { Club, MatchResult, Player } from '../src/types.js';
+import type { Player } from '../src/types.js';
 
 function youngPlayer(): Player {
   const rng = new Rng(1);
@@ -29,17 +29,10 @@ describe('staff: 코칭 → 성장', () => {
   });
 });
 
-function fakeResult(home: Club, away: Club): MatchResult {
-  return {
-    homeClubId: home.id, awayClubId: away.id, homeClubName: home.name, awayClubName: away.name,
-    score: [1, 0], possession: [50, 50], shots: [0, 0], events: [], cards: [],
-    playerStats: { home: [], away: [] }, seed: 1,
-  };
-}
-
 describe('staff: 의료 → 부상', () => {
-  it('의료 레벨이 높으면 시즌 누적 부상이 더 적다', () => {
-    // 같은 선수단, 의료만 다른 두 구단에서 다수 경기 반복 → 부상 카운트 비교
+  it('의료 레벨이 높으면 부상 판정(경기 중 생성)이 더 적다', () => {
+    // 같은 선수단, 의료만 다른 두 구단에서 다수 경기 반복 → 부상 이벤트 수 비교.
+    // 부상은 simulateMatch가 판정(result.injuries)하므로 시드를 바꿔가며 직접 집계.
     function injuriesWith(medical: number): number {
       const rng = new Rng(3);
       const club = generateClub(rng, 'c', 'C', 12);
@@ -48,9 +41,8 @@ describe('staff: 의료 → 부상', () => {
       const t = defaultTactic(club); const ot = defaultTactic(opp);
       let injuries = 0;
       for (let i = 0; i < 200; i++) {
-        for (const p of club.players) p.injuryMatches = 0; // 매 반복 리셋(신규 부상만 카운트)
-        applyMatchEffects(club, t, opp, ot, fakeResult(club, opp), new Rng(1000 + i));
-        injuries += club.players.filter((p) => p.injuryMatches > 0).length;
+        const result = simulateMatch({ home: { club, tactic: t }, away: { club: opp, tactic: ot }, seed: 1000 + i });
+        injuries += result.injuries.filter((e) => e.side === 'home').length;
       }
       return injuries;
     }

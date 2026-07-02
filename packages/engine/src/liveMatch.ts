@@ -7,7 +7,7 @@ import {
   createContext, stepMinute, finalize, applyTactic, MATCH_LENGTH,
   type MatchContext, type MatchSetup,
 } from './simulateMatch.js';
-import type { MatchEvent, MatchResult, Tactic } from './types.js';
+import type { InjuryEvent, MatchEvent, MatchResult, Tactic } from './types.js';
 
 export const HALF_TIME = Math.floor(MATCH_LENGTH / 2); // 45분
 
@@ -79,6 +79,14 @@ export class LiveMatch {
   /** 하프타임 등에서 한 팀 전술 교체(누적 스코어는 유지). */
   setTactic(side: 'home' | 'away', tactic: Tactic): void {
     applyTactic(this.ctx, side, tactic);
+  }
+
+  /**
+   * 이번 경기 부상 판정 스케줄(킥오프 시점 확정, 언제 호출해도 동일).
+   * 라이브 관전 중 분이 지날 때마다 노출해 실시간 알림·긴급 교체에 사용한다.
+   */
+  injuries(): InjuryEvent[] {
+    return this.ctx.injuries;
   }
 
   result(): MatchResult {

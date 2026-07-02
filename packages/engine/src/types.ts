@@ -2,6 +2,7 @@
  * 도메인 타입 정의.
  * engine.md 1장(능력치 36종) / 2장(포지션) 사양을 코드로 옮긴 것.
  */
+import type { InjurySeverity } from './injury.js';
 
 // ── 능력치 키 ──────────────────────────────────────────────
 
@@ -200,6 +201,18 @@ export interface PlayerMatchStat {
   goals: number;
 }
 
+export interface InjuryEvent {
+  minute: number;
+  side: 'home' | 'away';
+  playerId: string;
+  playerName: string;
+  severity: InjurySeverity;
+  /** 부위/부상 명칭. */
+  name: string;
+  /** 결장 경기 수. */
+  matches: number;
+}
+
 export interface MatchResult {
   homeClubId: string;
   awayClubId: string;
@@ -210,6 +223,8 @@ export interface MatchResult {
   shots: [number, number];
   events: MatchEvent[];
   cards: CardEvent[];
+  /** 경기 중 부상 판정(전술 라인업 기준, 시드 고정 → 재현 가능). 관전 중 실시간 노출용. */
+  injuries: InjuryEvent[];
   playerStats: { home: PlayerMatchStat[]; away: PlayerMatchStat[] };
   seed: number;
 }

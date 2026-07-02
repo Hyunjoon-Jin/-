@@ -14,7 +14,7 @@ function fakeResult(home: Club, away: Club, hg: number, ag: number): MatchResult
     homeClubId: home.id, awayClubId: away.id,
     homeClubName: home.name, awayClubName: away.name,
     score: [hg, ag], possession: [50, 50], shots: [0, 0],
-    events: [], cards: [], playerStats: { home: [], away: [] }, seed: 1,
+    events: [], cards: [], injuries: [], playerStats: { home: [], away: [] }, seed: 1,
   };
 }
 
@@ -71,7 +71,8 @@ describe('traits: 파생 전력 보정', () => {
 });
 
 describe('traits: 부상·피로 보정', () => {
-  function injuryCount(trait: PlayerTrait | null, runs: number): number {
+  // 부상은 simulateMatch가 판정(result.injuries)하므로 시드를 바꿔가며 이벤트 수를 집계.
+  function injuryEventCount(trait: PlayerTrait | null, runs: number): number {
     const rng = new Rng(5);
     const home = generateClub(rng, 'h', 'H', 13);
     const away = generateClub(rng, 'a', 'A', 13);
@@ -80,16 +81,15 @@ describe('traits: 부상·피로 보정', () => {
     const at = defaultTactic(away);
     let count = 0;
     for (let i = 0; i < runs; i++) {
-      for (const p of home.players) p.injuryMatches = 0;
-      applyMatchEffects(home, ht, away, at, fakeResult(home, away, 1, 0), new Rng(2000 + i));
-      count += home.players.filter((p) => p.injuryMatches > 0).length;
+      const result = simulateMatch({ home: { club: home, tactic: ht }, away: { club: away, tactic: at }, seed: 2000 + i });
+      count += result.injuries.filter((e) => e.side === 'home').length;
     }
     return count;
   }
 
-  it('유리몸은 철강왕보다 부상을 더 자주 당한다', () => {
-    const prone = injuryCount('injuryProne', 2500);
-    const iron = injuryCount('ironMan', 2500);
+  it('유리몸은 철강왕보다 부상 이벤트가 더 잦다', () => {
+    const prone = injuryEventCount('injuryProne', 1000);
+    const iron = injuryEventCount('ironMan', 1000);
     expect(prone).toBeGreaterThan(iron);
   });
 

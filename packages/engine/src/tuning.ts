@@ -29,4 +29,7 @@ export const TUNING = {
 
   /** 슛이 골이 아닐 때 결과 분포 (선방/빗나감/막힘). */
   nonGoalSplit: { save: 0.45, offTarget: 0.40, blocked: 0.15 } as const,
+
+  /** 부상 발생 기본 확률(선발 1명당 경기당). matchEffects.medicalFactor·특성으로 가감. */
+  injuryTriggerChance: 0.008,
 } as const;

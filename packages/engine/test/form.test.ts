@@ -6,7 +6,7 @@ function m(home: string, away: string, hg: number, ag: number): MatchResult {
   return {
     homeClubId: home, awayClubId: away, homeClubName: home, awayClubName: away,
     score: [hg, ag], possession: [50, 50], shots: [0, 0],
-    events: [], cards: [], playerStats: { home: [], away: [] }, seed: 1,
+    events: [], cards: [], injuries: [], playerStats: { home: [], away: [] }, seed: 1,
   };
 }
 

@@ -17,7 +17,7 @@ function matchup(seed = 1) {
 function cardResult(home: Club, away: Club, cards: MatchResult['cards']): MatchResult {
   return {
     homeClubId: home.id, awayClubId: away.id, homeClubName: home.name, awayClubName: away.name,
-    score: [0, 0], possession: [50, 50], shots: [0, 0], events: [], cards,
+    score: [0, 0], possession: [50, 50], shots: [0, 0], events: [], cards, injuries: [],
     playerStats: { home: [], away: [] }, seed: 1,
   };
 }

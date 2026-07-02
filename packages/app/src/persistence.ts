@@ -18,7 +18,8 @@ import type { SeasonSummary, SeasonFinanceReport } from '@soccer-tycoon/engine';
 // v19: 선수 CA 성장 곡선(caHistory)
 // v20: 부상 등급/명칭(injuryName)
 // v21: 시즌 스쿼드 스냅샷(SeasonSummary.squad)
-export const SAVE_VERSION = 21;
+// v22: 경기 중 부상 판정(MatchResult.injuries) — 진행 중 시즌의 live.results에 포함
+export const SAVE_VERSION = 22;
 
 type SerializedSummary = Omit<SeasonSummary, 'finance'> & {
   finance: Record<string, SeasonFinanceReport>;

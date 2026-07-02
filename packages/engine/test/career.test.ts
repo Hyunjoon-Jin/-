@@ -10,7 +10,7 @@ function fakeResult(home: Club, away: Club, hg: number, ag: number, scorerId?: s
     homeClubId: home.id, awayClubId: away.id,
     homeClubName: home.name, awayClubName: away.name,
     score: [hg, ag], possession: [50, 50], shots: [hg, ag],
-    events: [], cards: [],
+    events: [], cards: [], injuries: [],
     playerStats: {
       home: scorerId ? [{ playerId: scorerId, name: 'S', rating: 8, shots: hg, goals: hg }] : [],
       away: [],

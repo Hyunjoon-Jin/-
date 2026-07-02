@@ -1,13 +1,13 @@
 /**
  * 경기 후 선수 상태 변화 (콘텐츠 심화: 피로·부상·사기).
- * 경기를 뛴 선수는 피로가 쌓이고, 벤치는 회복한다. 일정 확률로 부상.
+ * 경기를 뛴 선수는 피로가 쌓이고, 벤치는 회복한다. 부상은 simulateMatch에서
+ * 이미 판정(result.injuries)돼 여기서는 그 결과를 적용만 한다.
  * 승패는 사기에 반영된다. 모두 시드 기반 → 재현성 유지.
  */
-import type { Club, MatchResult, Tactic } from './types.js';
-import { Rng } from './rng.js';
+import type { Club, InjuryEvent, MatchResult, Tactic } from './types.js';
+import type { Rng } from './rng.js';
 import { clamp } from './math.js';
 import { hasTrait } from './traits.js';
-import { rollInjury } from './injury.js';
 
 const TUNING = {
   /** 선발 출전 시 기본 컨디션 하락(스태미너로 경감). */
@@ -16,8 +16,6 @@ const TUNING = {
   recoveryBase: 0.22,
   /** 컨디션 하한. */
   minCondition: 0.35,
-  /** 선발당 경기당 부상 확률. */
-  injuryChance: 0.008,
   /** 부상 복귀 시 컨디션. */
   returnCondition: 0.65,
   /** 승/패 사기 변동. */
@@ -31,17 +29,12 @@ const TUNING = {
 
 type Outcome = 'W' | 'D' | 'L';
 
-/** 의료 레벨(1~20) → 부상 확률/기간 배율. 10=1.0x, 20=0.7x, 1≈1.27x. */
-function medicalFactor(medical: number): number {
-  return clamp(1 - (medical - 10) * 0.03, 0.4, 1.3);
-}
-
-function applySide(club: Club, tactic: Tactic, outcome: Outcome, rng: Rng): void {
+function applySide(club: Club, tactic: Tactic, outcome: Outcome, injuries: InjuryEvent[]): void {
   const starters = new Set(tactic.lineup.map((s) => s.playerId));
   const dMorale = outcome === 'W' ? TUNING.moraleWin : outcome === 'L' ? -TUNING.moraleLoss : 0;
-  const medFactor = medicalFactor(club.staff.medical);
   // 의료 레벨이 높을수록 회복 보너스 (0.9~1.15배)
   const recoveryBonus = clamp(0.9 + (club.staff.medical / 20) * 0.5, 0.9, 1.15);
+  const injuryByPlayer = new Map(injuries.map((e) => [e.playerId, e]));
 
   for (const p of club.players) {
     if (p.injuryMatches > 0) {
@@ -53,15 +46,14 @@ function applySide(club: Club, tactic: Tactic, outcome: Outcome, rng: Rng): void
       }
     } else if (starters.has(p.id)) {
       p.seasonApps++; // 선발 출전 기록(사기·재계약 판단)
-      // 특성: 철강왕(부상↓·피로↓) / 유리몸(부상↑).
+      // 특성: 철강왕(피로↓).
       const fatMul = hasTrait(p, 'ironMan') ? 0.6 : 1;
-      const injMul = hasTrait(p, 'ironMan') ? 0.5 : hasTrait(p, 'injuryProne') ? 1.7 : 1;
       // 선발: 피로 누적 (스태미너 높을수록 덜 지침)
       const fatigue = TUNING.fatigueBase * (1 - p.attributes.stamina / 40) * fatMul;
       p.condition = Math.max(TUNING.minCondition, p.condition - fatigue);
-      // 부상 판정 (의료가 좋을수록 확률↓, 등급·기간↓)
-      if (rng.roll(TUNING.injuryChance * medFactor * injMul)) {
-        const inj = rollInjury(rng, club.staff.medical);
+      // 부상 반영 (판정은 simulateMatch.generateInjuries가 이미 확정)
+      const inj = injuryByPlayer.get(p.id);
+      if (inj) {
         p.injuryMatches = inj.matches;
         p.injuryName = inj.name;
         p.condition = inj.severity === 'serious' ? 0.25 : 0.3;
@@ -102,18 +94,21 @@ function processDiscipline(home: Club, away: Club, cards: MatchResult['cards']):
 
 /**
  * 경기 결과를 양 구단 선수 상태에 반영.
- * @param rng 시드 고정 난수(경기마다 별도 스트림).
+ * @param _rng 과거 부상 판정용 시드(현재는 result.injuries로 대체돼 미사용).
+ *   호출부 시그니처 안정성을 위해 유지.
  */
 export function applyMatchEffects(
   home: Club, homeTactic: Tactic,
   away: Club, awayTactic: Tactic,
-  result: MatchResult, rng: Rng,
+  result: MatchResult, _rng: Rng,
 ): void {
   const [hg, ag] = result.score;
   const homeOutcome: Outcome = hg > ag ? 'W' : hg < ag ? 'L' : 'D';
   const awayOutcome: Outcome = ag > hg ? 'W' : ag < hg ? 'L' : 'D';
-  applySide(home, homeTactic, homeOutcome, rng);
-  applySide(away, awayTactic, awayOutcome, rng);
+  const homeInjuries = result.injuries.filter((e) => e.side === 'home');
+  const awayInjuries = result.injuries.filter((e) => e.side === 'away');
+  applySide(home, homeTactic, homeOutcome, homeInjuries);
+  applySide(away, awayTactic, awayOutcome, awayInjuries);
   accumulateGoals(home, result.playerStats.home);
   accumulateGoals(away, result.playerStats.away);
   processDiscipline(home, away, result.cards);
