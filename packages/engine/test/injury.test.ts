@@ -42,4 +42,24 @@ describe('injury: 부상 등급·기간', () => {
     const b = rollInjury(new Rng(42), 12);
     expect(a).toEqual(b);
   });
+
+  it('의료 레벨이 최고여도 중상(serious) 등급이 여전히 나올 수 있다(확률이 0이 되지 않음)', () => {
+    let sawSerious = false;
+    for (let s = 0; s < 2000 && !sawSerious; s++) {
+      if (rollInjury(new Rng(s + 9000), 20).severity === 'serious') sawSerious = true;
+    }
+    expect(sawSerious).toBe(true);
+  });
+
+  it('의료 레벨이 높을수록 중상 비중은 낮아지되 0이 되지는 않는다', () => {
+    const seriousRate = (medical: number) => {
+      let serious = 0;
+      for (let s = 0; s < 1000; s++) if (rollInjury(new Rng(s + 3000), medical).severity === 'serious') serious++;
+      return serious / 1000;
+    };
+    const lo = seriousRate(20);
+    const hi = seriousRate(1);
+    expect(lo).toBeGreaterThan(0);
+    expect(hi).toBeGreaterThan(lo);
+  });
 });

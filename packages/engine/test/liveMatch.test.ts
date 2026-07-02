@@ -71,6 +71,30 @@ describe('LiveMatch', () => {
     expect(end.shotsOnTarget[1]).toBeGreaterThanOrEqual(r.score[1]);
   });
 
+  it('하프타임에 교체된(0슈팅) 수비수도 최종 평점 집계에 포함된다(최종 라인업이 아닌 실제 출전 전원 기준)', () => {
+    const s = setup(321);
+    const live = new LiveMatch(s);
+    live.runFirstHalf();
+
+    const tactic = s.home.tactic;
+    const defSlot = tactic.lineup.find((sl) => sl.position === 'DC' || sl.position === 'DL' || sl.position === 'DR')!;
+    const benchPlayer = s.home.club.players.find(
+      (p) => !tactic.lineup.some((sl) => sl.playerId === p.id),
+    )!;
+    const newLineup = tactic.lineup.map((sl) => (sl.playerId === defSlot.playerId
+      ? { ...sl, playerId: benchPlayer.id }
+      : sl));
+    live.setTactic('home', { ...tactic, lineup: newLineup });
+    live.runToEnd();
+
+    const result = live.result();
+    const ids = result.playerStats.home.map((st) => st.playerId);
+    // 교체돼 나간 수비수(슈팅을 거의 하지 않는 라인)도 평점 집계 대상에 포함돼야 한다.
+    expect(ids).toContain(defSlot.playerId);
+    // 교체돼 들어온 선수도 포함돼야 한다.
+    expect(ids).toContain(benchPlayer.id);
+  });
+
   it('result()를 여러 번 호출해도 평점이 중복 적용되지 않는다(멱등성)', () => {
     const live = new LiveMatch(setup(42));
     live.runToEnd();

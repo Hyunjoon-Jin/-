@@ -57,6 +57,10 @@ export function computeTeamStrength(club: Club, tactic: Tactic): TeamStrength {
   // mentality 0~1 → 공격/수비 가중 (0.85~1.15 범위)
   const attBias = 0.85 + 0.30 * tactic.mentality;
   const defBias = 1.15 - 0.30 * tactic.mentality;
+  // pressing 0~1 → 높은 압박은 볼 탈취(수비)와 탈취 후 전환(창출)을 함께 끌어올린다
+  // (0.5가 중립). mentality처럼 소폭 가중치라 극단적으로 결과를 뒤집진 않는다.
+  const pressDefBias = 1 + (tactic.pressing - 0.5) * 0.24;
+  const pressCreationBias = 1 + (tactic.pressing - 0.5) * 0.12;
 
   // 공격: 전방 선수의 attack + 중원의 일부 기여
   const attack = clamp(
@@ -65,10 +69,10 @@ export function computeTeamStrength(club: Club, tactic: Tactic): TeamStrength {
     0, 110,
   );
 
-  // 창출: 전방·중원의 creation
+  // 창출: 전방·중원의 creation (높은 압박으로 탈취한 공을 빠르게 전환)
   const creation = clamp(
     (mean(att.map((s) => s.d.creation), 30) * 0.55 +
-      mean(mid.map((s) => s.d.creation), 30) * 0.45) * attBias,
+      mean(mid.map((s) => s.d.creation), 30) * 0.45) * attBias * pressCreationBias,
     0, 110,
   );
 
@@ -79,10 +83,10 @@ export function computeTeamStrength(club: Club, tactic: Tactic): TeamStrength {
     0, 110,
   );
 
-  // 수비: 수비 라인 + 중원 수비 가담
+  // 수비: 수비 라인 + 중원 수비 가담 (높은 압박은 상대 전개를 방해해 수비력에 가산)
   const defense = clamp(
     (mean(def.map((s) => s.d.defense), 30) * 0.7 +
-      mean(mid.map((s) => s.d.defense), 25) * 0.3) * defBias,
+      mean(mid.map((s) => s.d.defense), 25) * 0.3) * defBias * pressDefBias,
     0, 110,
   );
 

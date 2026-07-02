@@ -41,8 +41,12 @@ function durationFactor(medical: number): number {
  */
 export function rollInjury(rng: Rng, medical: number): Injury {
   const medAdj = clamp((medical - 10) * 0.02, -0.2, 0.2); // 의료↑ → 경미 확률↑
-  const pMinor = clamp(0.55 + medAdj, 0.4, 0.8);
-  const pModerate = 0.32;
+  const pMinor = clamp(0.55 + medAdj, 0.35, 0.8);
+  // 의료가 좋을수록 중상 비중도 함께 낮아지되, 완전히 사라지지는 않는다(최소 3%).
+  // pMinor+pModerate가 1을 넘어 중상 확률이 마이너스(=사실상 0%)가 되던 문제를 막기
+  // 위해 세 등급의 확률을 항상 합이 1이 되도록 정규화한다.
+  const pSerious = clamp(0.13 - medAdj * 0.5, 0.03, 0.18);
+  const pModerate = 1 - pMinor - pSerious;
 
   const r = rng.next();
   const severity: InjurySeverity =

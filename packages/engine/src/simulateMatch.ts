@@ -8,10 +8,11 @@
  * 동일한 로직을 공유한다.
  */
 import type {
-  CardEvent, ChanceType, Club, InjuryEvent, MatchEvent, MatchResult, Player,
+  CardEvent, ChanceType, Club, InjuryEvent, MatchEvent, MatchResult, Player, Position,
   PlayerMatchStat, ShotOutcome, Tactic, TeamStrength,
 } from './types.js';
 import { computeTeamStrength, lineOf } from './teamStrength.js';
+import { isAvailable } from './derived.js';
 import { Rng } from './rng.js';
 import { clamp, logistic } from './math.js';
 import { TUNING } from './tuning.js';
@@ -38,19 +39,23 @@ interface Side {
 function buildSide(club: Club, tactic: Tactic, isHome: boolean): Side {
   const strength = computeTeamStrength(club, tactic);
   if (isHome) {
-    strength.attack *= TUNING.homeAdvantage;
-    strength.creation *= TUNING.homeAdvantage;
+    // computeTeamStrength가 이미 [0,110]으로 클램프하므로, 이후 배율을 적용한 뒤
+    // 다시 클램프해 문서화된 상한을 실제로 넘지 않도록 한다.
+    strength.attack = clamp(strength.attack * TUNING.homeAdvantage, 0, 110);
+    strength.creation = clamp(strength.creation * TUNING.homeAdvantage, 0, 110);
   }
   const byId = new Map(club.players.map((p) => [p.id, p]));
   const attackers = tactic.lineup
     .filter((s) => lineOf(s.position) === 'ATT' || lineOf(s.position) === 'MID')
     .map((s) => byId.get(s.playerId))
-    .filter((p): p is Player => Boolean(p));
+    .filter((p): p is Player => p !== undefined && isAvailable(p));
   return { club, tactic, strength, isHome, goals: 0, shots: 0, possessionTicks: 0, attackers };
 }
 
-function pickShooter(side: Side, rng: Rng): Player {
-  const pool = side.attackers.length > 0 ? side.attackers : side.club.players;
+function pickShooter(side: Side, rng: Rng): Player | null {
+  const available = side.club.players.filter(isAvailable);
+  const pool = side.attackers.length > 0 ? side.attackers : available;
+  if (pool.length === 0) return null;
   return pool[rng.int(0, pool.length - 1)]!;
 }
 
@@ -61,9 +66,19 @@ function pickChanceType(tactic: Tactic, rng: Rng): ChanceType {
   return 'open';
 }
 
-function resolveShot(attack: number, gk: number, chance: ChanceType, rng: Rng): ShotOutcome {
+/**
+ * @param setPieceSkill 슈터의 세트피스 능력치(1~20). chance가 'setpiece'일 때만 반영 —
+ *   평균치(10) 대비 마무리 배율을 소폭 보정해, 세트피스 전문가를 모으면 실제로
+ *   코너·프리킥 득점력이 오르도록 한다(이전엔 이 능력치가 시뮬에 전혀 반영되지 않았음).
+ */
+function resolveShot(
+  attack: number, gk: number, chance: ChanceType, rng: Rng, setPieceSkill?: number,
+): ShotOutcome {
   const base = TUNING.baseXg[chance];
-  const finishMul = 1 + (attack - 50) * TUNING.finishK;
+  let finishMul = 1 + (attack - 50) * TUNING.finishK;
+  if (chance === 'setpiece' && setPieceSkill !== undefined) {
+    finishMul *= 1 + (setPieceSkill - 10) * 0.025;
+  }
   const gkMul = 1 + (gk - 50) * TUNING.gkK;
   const goalP = clamp((base * finishMul) / gkMul, 0.02, 0.75);
   if (rng.roll(goalP)) return 'GOAL';
@@ -76,6 +91,9 @@ function resolveShot(attack: number, gk: number, chance: ChanceType, rng: Rng): 
 
 // ── 공유 컨텍스트 ──────────────────────────────────────────
 
+/** 한 슬롯(포지션-선수) 매핑. */
+type LineupSlot = { position: Position; playerId: string };
+
 export interface MatchContext {
   rng: Rng;
   home: Side;
@@ -87,6 +105,11 @@ export interface MatchContext {
   /** 부상 판정(킥오프 시점 라인업 기준, 고정). 하프타임/긴급 교체로도 바뀌지 않는다 —
    *  라이브 관전 중 노출한 예정 스케줄과 최종 결과가 항상 일치해야 하기 때문. */
   injuries: InjuryEvent[];
+  /** 이번 경기 동안 실제로 라인업에 있었던 전원(킥오프 + 하프타임 교체로 들어온 선수 누적,
+   *  선수 id 기준 중복 제거). 카드·최종 평점은 "최종 라인업"이 아니라 이 목록 기준으로
+   *  집계해야, 전반에 뛰다 하프타임에 교체된 선수도 정당하게 카드·평점 대상이 되고
+   *  교체 투입 선수가 풀타임을 다 뛴 것처럼 이중 보정받지 않는다. */
+  playedLineups: { home: LineupSlot[]; away: LineupSlot[] };
 }
 
 function recomputePossession(ctx: MatchContext): void {
@@ -104,6 +127,7 @@ export function createContext(setup: MatchSetup): MatchContext {
     pPossHome: 0.5,
     seed: setup.seed,
     injuries: [],
+    playedLineups: { home: [...setup.home.tactic.lineup], away: [...setup.away.tactic.lineup] },
   };
   ctx.injuries = generateInjuries(ctx);
   recomputePossession(ctx);
@@ -119,6 +143,15 @@ export function applyTactic(ctx: MatchContext, side: 'home' | 'away', tactic: Ta
   next.shots = cur.shots;
   next.possessionTicks = cur.possessionTicks;
   ctx[side] = next;
+  // 새로 들어온 선수를 "이번 경기에 뛴 전원" 목록에 추가(중복 제거) — 교체돼 나간
+  // 선수도 이미 이 목록에 있으므로 카드·평점 집계에서 계속 대상으로 남는다.
+  const seen = new Set(ctx.playedLineups[side].map((s) => s.playerId));
+  for (const slot of tactic.lineup) {
+    if (!seen.has(slot.playerId)) {
+      ctx.playedLineups[side].push(slot);
+      seen.add(slot.playerId);
+    }
+  }
   recomputePossession(ctx);
 }
 
@@ -156,10 +189,14 @@ export function stepMinute(ctx: MatchContext, minute: number): MatchEvent | null
   if (!rng.roll(pShot)) return null;
 
   const shooter = pickShooter(att, rng);
+  if (!shooter) return null; // 가용 선수가 전무(전원 부상·정지)한 극단적 상황 — 이번 틱은 무산
   const st = ensureStat(ctx, shooter);
   att.shots++;
   st.shots++;
-  const outcome = resolveShot(att.strength.attack, def.strength.gk, chance, rng);
+  const outcome = resolveShot(
+    att.strength.attack, def.strength.gk, chance, rng,
+    chance === 'setpiece' ? shooter.attributes.setPiece : undefined,
+  );
 
   if (outcome === 'GOAL') {
     att.goals++;
@@ -187,11 +224,13 @@ export function stepMinute(ctx: MatchContext, minute: number): MatchEvent | null
  * 득점 보너스는 stepMinute에서 이미 누적됨.
  */
 function finalizeRatings(ctx: MatchContext): void {
-  const settle = (side: Side, conceded: number, resultMod: number) => {
+  const settle = (side: Side, sideKey: 'home' | 'away', conceded: number, resultMod: number) => {
     const byId = new Map(side.club.players.map((p) => [p.id, p]));
-    for (const slot of side.tactic.lineup) {
+    // 최종(하프타임 교체 후) 라인업이 아니라 "이번 경기에 실제로 뛴 전원" 기준으로 집계 —
+    // 그래야 전반에 뛰다 교체된 선수도 평점을 받고, 교체 투입 선수만 이중으로 보정받지 않는다.
+    for (const slot of ctx.playedLineups[sideKey]) {
       const player = byId.get(slot.playerId);
-      if (!player || player.injuryMatches > 0) continue;
+      if (!player || !isAvailable(player)) continue;
       const st = ensureStat(ctx, player);
       let r = st.rating + resultMod;
       const line = lineOf(slot.position);
@@ -201,22 +240,23 @@ function finalizeRatings(ctx: MatchContext): void {
   };
   const [hg, ag] = [ctx.home.goals, ctx.away.goals];
   const mod = (gf: number, ga: number) => (gf > ga ? 0.3 : gf < ga ? -0.3 : 0);
-  settle(ctx.home, ag, mod(hg, ag));
-  settle(ctx.away, hg, mod(ag, hg));
+  settle(ctx.home, 'home', ag, mod(hg, ag));
+  settle(ctx.away, 'away', hg, mod(ag, hg));
 }
 
 /**
  * 카드 생성 (징계). 경기 rng와 독립된 시드로 결정론적 생성.
- * 선발(출전 가능)만 대상, 적극성(aggression)이 높을수록 카드 확률↑.
+ * 이번 경기에 실제로 뛴 선수 전원(하프타임 교체 포함) 대상, 적극성(aggression)이
+ * 높을수록 카드 확률↑.
  */
 function generateCards(ctx: MatchContext): CardEvent[] {
   const cards: CardEvent[] = [];
   const rng = new Rng(ctx.seed * 3 + 12345);
   const roll = (side: Side, sideKey: 'home' | 'away') => {
     const byId = new Map(side.club.players.map((p) => [p.id, p]));
-    for (const slot of side.tactic.lineup) {
+    for (const slot of ctx.playedLineups[sideKey]) {
       const p = byId.get(slot.playerId);
-      if (!p || p.injuryMatches > 0 || p.suspensionMatches > 0) continue;
+      if (!p || !isAvailable(p)) continue;
       const aggr = p.attributes.aggression;
       const cardMul = hasTrait(p, 'hothead') ? 1.6 : 1; // 다혈질: 카드 확률↑
       const yellowP = clamp((0.03 + (aggr - 10) * 0.006) * cardMul, 0.01, 0.16);
