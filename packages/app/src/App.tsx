@@ -10,6 +10,7 @@ import {
 } from './game.js';
 import type { Tactic, MatchResult } from '@soccer-tycoon/engine';
 import { createSaveStore } from './storage.js';
+import { recordSackedStint } from './career.js';
 import { StartScreen } from './components/StartScreen.js';
 import { Dashboard } from './components/Dashboard.js';
 import { Squad } from './components/Squad.js';
@@ -54,8 +55,9 @@ export function App() {
   const [showHelp, setShowHelp] = useState(false);
   const [detailPlayer, setDetailPlayer] = useState<Player | null>(null);
 
-  /** 상태 갱신 + 자동 저장. */
+  /** 상태 갱신 + 자동 저장. 경질로 새로 전환되면 커리어 아카이브에 재임 기록을 남긴다. */
   function update(next: GameState) {
+    if (next.sacked && !game?.sacked) recordSackedStint(next);
     setGame(next);
     if (slotId) setSavedAt(store.save(slotId, next).savedAt);
   }
@@ -253,6 +255,7 @@ function Sacked({ game, onQuit }: { game: GameState; onQuit: () => void }) {
         <p className="muted small">
           목표를 꾸준히 달성하면 이사회 신뢰도를 유지할 수 있습니다. 다시 도전해 보세요.
         </p>
+        <p className="muted small">🎖️ 이 재임은 감독 커리어 기록에 영구 보존됩니다.</p>
         <button className="btn-advance big" onClick={onQuit}>메뉴로 돌아가기</button>
       </div>
     </div>

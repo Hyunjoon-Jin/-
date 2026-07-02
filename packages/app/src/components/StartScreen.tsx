@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { createLeague, DIFFICULTIES, DIVISION_LABELS, type Difficulty, type GameState } from '../game.js';
 import type { SaveStore, SaveSlotMeta } from '../storage.js';
+import { loadCareer, type CareerStint } from '../career.js';
 import { formatMoney } from '@soccer-tycoon/engine';
 
 const DEFAULT_SEED = 2026;
@@ -18,6 +19,7 @@ export function StartScreen({ store, onStart, onLoad }: Props) {
   const [selected, setSelected] = useState<string | null>(null);
   const [difficulty, setDifficulty] = useState<Difficulty>('normal');
   const [saves, setSaves] = useState<SaveSlotMeta[]>(() => store.list());
+  const career = useMemo<CareerStint[]>(() => loadCareer(), []);
 
   function loadSlot(id: string) {
     const state = store.load(id);
@@ -53,6 +55,30 @@ export function StartScreen({ store, onStart, onLoad }: Props) {
               </div>
             ))}
           </div>
+        </section>
+      )}
+
+      {career.length > 0 && (
+        <section className="career-archive">
+          <h2 className="section-title">🎖️ 감독 커리어</h2>
+          <p className="subtitle">지금까지 경질로 끝난 재임 기록입니다. 세이브와 무관하게 영구 보존됩니다.</p>
+          <table className="data-table compact">
+            <thead>
+              <tr><th>구단</th><th>재임 시즌</th><th>최고 순위</th><th>리그 우승</th><th>컵 우승</th><th>경질일</th></tr>
+            </thead>
+            <tbody>
+              {[...career].reverse().map((c, i) => (
+                <tr key={i}>
+                  <td className="name">{c.clubName}</td>
+                  <td>{c.seasons}시즌</td>
+                  <td>{c.bestFinish ? `${c.bestFinish}위` : '-'}</td>
+                  <td className={c.leagueTitles > 0 ? 'pos' : 'muted'}>{c.leagueTitles}회</td>
+                  <td className={c.cupTitles > 0 ? 'pos' : 'muted'}>{c.cupTitles}회</td>
+                  <td className="muted small">{new Date(c.endedAt).toLocaleDateString('ko-KR')}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </section>
       )}
 

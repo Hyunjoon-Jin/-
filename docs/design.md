@@ -361,6 +361,16 @@ soccer-tycoon/
       이미 확정돼 있어 "예정" 컬럼으로 점선 카드 표시. 컵 종료 시 별도
       트로피 컬럼에 우승팀 카드. 순수 UI 재작성 — game.ts·엔진 변경 없음
       (cup.rounds·nextCupPairings 등 기존 데이터만 재사용).
+- [x] 감독 커리어 아카이브: 경질(sacked)로 게임 오버가 되면 그 재임이
+      영구 소멸하는 게 아쉬워서, 세이브 슬롯과 완전히 독립된 기록(localStorage
+      키 st_career, career.ts)을 추가. App.tsx의 update()가 sacked가
+      false→true로 전이하는 순간(딱 1회) 그 시점 GameState.history를 스캔해
+      구단명·재임 시즌 수·최고 순위·리그/컵 우승 횟수를 스냅샷으로 저장 —
+      세이브 슬롯 자체는 지우지 않으므로(경질 후에도 "이어하기" 목록에
+      남아 다시 열면 경질 화면이 다시 뜬다) 커리어 기록과 세이브는 별개
+      개념. 시작 화면(StartScreen)에 세이브 목록과 별도로 "🎖️ 감독 커리어"
+      표로 노출. Electron/웹 모두 렌더러 프로세스라 localStorage를 그대로
+      쓸 수 있어 SaveStore(Electron=SQLite) 추상화와는 무관하게 단순화.
 
 기획했던 핵심·확장 시스템이 모두 구현됨. 이후는 콘텐츠 확충·디테일 다듬기 영역.
 

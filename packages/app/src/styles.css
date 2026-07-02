@@ -81,6 +81,9 @@ body {
 .btn-small:hover { border-color: var(--accent-2); }
 .btn-small.danger:hover { border-color: #ff6b6b; color: #ff6b6b; }
 
+.career-archive { margin-bottom: 28px; text-align: left; }
+.career-archive .subtitle { margin-bottom: 12px; }
+
 .btn-ghost {
   background: transparent; color: var(--muted); border: 1px solid var(--line);
   border-radius: 8px; padding: 7px 12px; cursor: pointer; font-size: 13px;
