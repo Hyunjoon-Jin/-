@@ -766,3 +766,29 @@ h3 { font-size: 14px; margin: 0 0 10px; color: var(--muted); text-transform: upp
 .ls-row .ls-num:last-child { text-align: right; }
 .ls-row .ls-num.lead { color: var(--text); font-weight: 700; }
 .ls-label { text-align: center; }
+
+/* ── 반응형(Track 5) ──
+   예전엔 관전 화면의 2단 레이아웃(1200px) 하나만 좁은 화면에 대응했고, 나머지
+   다단 그리드(전술/이적/스태프/히스토리/통계/선수상세)는 데스크톱 폭을 그대로
+   가정해 좁은 창에서 깨졌다. 두 단계로 점진적으로 1열로 좁힌다. */
+@media (max-width: 1024px) {
+  .tactics { grid-template-columns: 1fr; }
+  .market-cols { grid-template-columns: 1fr; }
+  .history-cols { grid-template-columns: 1fr; }
+  .stats-cols { grid-template-columns: 1fr; }
+  .match-cols { grid-template-columns: 1fr; }
+  .watch-body { grid-template-columns: 1fr; }
+  .staff-cards { grid-template-columns: repeat(2, 1fr); }
+  .pd-cols { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 720px) {
+  .content { padding: 12px; }
+  .tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .tab { padding: 10px 12px; font-size: 13px; white-space: nowrap; }
+  .topbar { flex-wrap: wrap; gap: 8px; row-gap: 6px; }
+  .club-info { margin-left: 0; flex-wrap: wrap; }
+  .staff-cards { grid-template-columns: 1fr; }
+  .pd-cols { grid-template-columns: 1fr; }
+  .cards { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+}
