@@ -2,10 +2,12 @@ import { useState } from 'react';
 import { myClub, rivalClub, DIVISION_LABELS, type GameState } from '../game.js';
 import { careerScorers, type SeasonSquadEntry } from '@soccer-tycoon/engine';
 import { useModalA11y } from './useModalA11y.js';
+import { onKeyActivate } from '../a11y.js';
 
 const RESULT_LABEL: Record<'win' | 'draw' | 'loss', string> = { win: '승', draw: '무', loss: '패' };
 
 type HistorySeason = GameState['history'][number];
+type HistoryTab = 'seasons' | 'titles' | 'scorers' | 'legends' | 'rivals';
 
 export function History({ game }: { game: GameState }) {
   const club = myClub(game);
@@ -49,6 +51,17 @@ export function History({ game }: { game: GameState }) {
     { s: HistorySeason; leagueWon: boolean; cupWon: boolean } | null
   >(null);
 
+  const tabDefs: { key: HistoryTab; label: string; show: boolean }[] = [
+    { key: 'seasons', label: '역대 시즌', show: true },
+    { key: 'titles', label: '리그 우승 순위', show: true },
+    { key: 'scorers', label: '통산 득점 순위', show: leaders.length > 0 },
+    { key: 'legends', label: '레전드', show: game.legends.length > 0 },
+    { key: 'rivals', label: '라이벌전', show: game.rivalMeetings.length > 0 },
+  ];
+  const availableTabs = tabDefs.filter((t) => t.show);
+  const [tab, setTab] = useState<HistoryTab>('seasons');
+  const activeTab = availableTabs.some((t) => t.key === tab) ? tab : availableTabs[0]!.key;
+
   return (
     <div className="history">
       <div className="honors">
@@ -65,7 +78,22 @@ export function History({ game }: { game: GameState }) {
         </div>
       </div>
 
-      <div className="history-cols">
+      <div className="modal-tabs" role="tablist">
+        {availableTabs.map((t) => (
+          <button
+            key={t.key}
+            className={activeTab === t.key ? 'modal-tab active' : 'modal-tab'}
+            role="tab"
+            aria-selected={activeTab === t.key}
+            onClick={() => setTab(t.key)}
+            onKeyDown={onKeyActivate(() => setTab(t.key))}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'seasons' && (
         <div>
           <h3>역대 시즌</h3>
           <table className="data-table compact">
@@ -108,7 +136,9 @@ export function History({ game }: { game: GameState }) {
             </tbody>
           </table>
         </div>
+      )}
 
+      {activeTab === 'titles' && (
         <div>
           <h3>리그 우승 순위</h3>
           <table className="data-table compact">
@@ -125,9 +155,9 @@ export function History({ game }: { game: GameState }) {
             </tbody>
           </table>
         </div>
-      </div>
+      )}
 
-      {leaders.length > 0 && (
+      {activeTab === 'scorers' && leaders.length > 0 && (
         <div className="career-leaders">
           <h3>🥇 현역 통산 득점 순위 <span className="muted small">(전 구단 · 리그+컵)</span></h3>
           <table className="data-table compact">
@@ -151,7 +181,7 @@ export function History({ game }: { game: GameState }) {
         </div>
       )}
 
-      {game.legends.length > 0 && (
+      {activeTab === 'legends' && game.legends.length > 0 && (
         <div className="legends">
           <h3>🕯️ 레전드 명예의 전당 <span className="muted small">(은퇴 선수 · {club.name})</span></h3>
           <table className="data-table compact">
@@ -175,7 +205,7 @@ export function History({ game }: { game: GameState }) {
         </div>
       )}
 
-      {game.rivalMeetings.length > 0 && (
+      {activeTab === 'rivals' && game.rivalMeetings.length > 0 && (
         <div className="rival-history">
           <h3>
             🔥 라이벌전 전적 <span className="muted small">

@@ -6,9 +6,11 @@ import {
   type AttrKey, type Player, type DerivedRatings, type TrainingFocus,
   type PlayerFormEntry, type OverallTier, type PotentialTier, type AgeProfile, type ScoutingReport,
 } from '@soccer-tycoon/engine';
+import { useState } from 'react';
 import { formStability, revealPotential, type TimelineEntry, type SeasonRatingEntry } from '../game.js';
 import { useModalA11y } from './useModalA11y.js';
 import { useResultToast } from '../toast.js';
+import { onKeyActivate } from '../a11y.js';
 
 function moraleLabel(m: number): { text: string; cls: string } {
   if (m >= 0.65) return { text: '😀 만족', cls: 'cond-good' };
@@ -105,6 +107,13 @@ interface Props {
   scouting: number;
 }
 
+type PdTab = 'overview' | 'development' | 'career';
+const PD_TABS: { key: PdTab; label: string }[] = [
+  { key: 'overview', label: '개요' },
+  { key: 'development', label: '성장' },
+  { key: 'career', label: '커리어' },
+];
+
 export function PlayerDetail({
   player, onClose, onSetFocus, onRenew, recentForm, timeline, ratingHistory, scouting,
 }: Props) {
@@ -117,6 +126,7 @@ export function PlayerDetail({
     .map(([pos]) => pos);
   const stability = formStability(ratingHistory ?? []);
   const ref = useModalA11y<HTMLDivElement>(onClose);
+  const [tab, setTab] = useState<PdTab>('overview');
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -153,87 +163,114 @@ export function PlayerDetail({
           {(player.caps ?? 0) > 0 && <span className="pd-caps" title="국가대표 A매치 출전 캡">🎽 A매치 {player.caps}경</span>}
         </div>
 
-        {recentForm && recentForm.length > 0 && (
-          <div className="pd-form">
-            <span className="muted small">최근 폼</span>
-            {recentForm.map((f, i) => (
-              <span key={i} className={`form-rating ${ratingCls(f.rating)}`} title={`vs ${f.opponentName} (${f.home ? '홈' : '원정'})`}>
-                {f.rating.toFixed(1)}{f.goals > 0 ? ` ⚽${f.goals}` : ''}
-              </span>
-            ))}
-          </div>
-        )}
-
-        {onRenew && (
-          <div className="pd-renew">
-            {player.contractYears <= 2 ? (
-              <>
-                <span className="muted">계약 만료 임박 ({player.contractYears}년) — </span>
-                <button className="btn-small" onClick={() => toast(onRenew())}>재계약 (계약금 {formatMoney(player.wage * 20)})</button>
-              </>
-            ) : (
-              <span className="muted small">계약 {player.contractYears}년 남음 — 재계약 불필요.</span>
-            )}
-          </div>
-        )}
-        {(player.traits ?? []).length > 0 && (
-          <div className="pd-traits">
-            {(player.traits ?? []).map((t) => (
-              <span key={t} className="trait-chip" title={TRAIT_DESC[t]}>★ {TRAIT_LABELS[t]}</span>
-            ))}
-          </div>
-        )}
-        <ScoutingPanel player={player} scouting={scouting} />
-        <div className="pd-fam muted">가능 포지션: {fam.join(', ') || player.position}</div>
-
-        {onSetFocus && (
-          <div className="pd-training">
-            <span className="muted">훈련 포커스:</span>
-            <select value={player.trainingFocus} onChange={(e) => onSetFocus(e.target.value as TrainingFocus)}>
-              {TRAINING_FOCUSES.map((f) => (
-                <option key={f} value={f}>{TRAINING_LABELS[f]}</option>
-              ))}
-            </select>
-            <span className="muted small">시즌 성장 시 해당 능력 그룹을 강조합니다 (성장 중인 선수).</span>
-          </div>
-        )}
-
-        <GrowthChart history={player.caHistory ?? []} current={Math.round(ca)} />
-
-        {ratingHistory && ratingHistory.length >= 2 && <RatingChart history={ratingHistory} />}
-        {stability && (
-          <p className="muted small pd-form-stability">
-            {stability === 'steady'
-              ? '📊 폼 안정성: 시즌마다 꾸준한 경기력을 보였습니다.'
-              : '📊 폼 안정성: 시즌별 기복이 있는 편입니다.'}
-          </p>
-        )}
-
-        {timeline && timeline.length > 0 && <CareerTimeline entries={timeline} />}
-
-        <div className="pd-cols">
-          <AttrGroup title="기술" attrs={TECHNICAL_ATTRS} player={player} />
-          <AttrGroup title="정신" attrs={MENTAL_ATTRS} player={player} />
-          <div>
-            <AttrGroup title="신체" attrs={PHYSICAL_ATTRS} player={player} />
-            {player.position === 'GK' && (
-              <AttrGroup title="골키핑" attrs={GOALKEEPING_ATTRS} player={player} />
-            )}
-          </div>
-        </div>
-
-        <div className="pd-derived">
-          <h3>파생 전력</h3>
-          {DERIVED_LABELS.map(({ key, label }) => (
-            <div className="bar-row" key={key}>
-              <span className="bar-label">{label}</span>
-              <div className="bar-track">
-                <div className="bar-fill" style={{ width: `${Math.min(100, derived[key])}%` }} />
-              </div>
-              <span className="bar-val">{derived[key].toFixed(0)}</span>
-            </div>
+        <div className="modal-tabs" role="tablist">
+          {PD_TABS.map((t) => (
+            <button
+              key={t.key}
+              className={tab === t.key ? 'modal-tab active' : 'modal-tab'}
+              role="tab"
+              aria-selected={tab === t.key}
+              onClick={() => setTab(t.key)}
+              onKeyDown={onKeyActivate(() => setTab(t.key))}
+            >
+              {t.label}
+            </button>
           ))}
         </div>
+
+        {tab === 'overview' && (
+          <>
+            {recentForm && recentForm.length > 0 && (
+              <div className="pd-form">
+                <span className="muted small">최근 폼</span>
+                {recentForm.map((f, i) => (
+                  <span key={i} className={`form-rating ${ratingCls(f.rating)}`} title={`vs ${f.opponentName} (${f.home ? '홈' : '원정'})`}>
+                    {f.rating.toFixed(1)}{f.goals > 0 ? ` ⚽${f.goals}` : ''}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {onRenew && (
+              <div className="pd-renew">
+                {player.contractYears <= 2 ? (
+                  <>
+                    <span className="muted">계약 만료 임박 ({player.contractYears}년) — </span>
+                    <button className="btn-small" onClick={() => toast(onRenew())}>재계약 (계약금 {formatMoney(player.wage * 20)})</button>
+                  </>
+                ) : (
+                  <span className="muted small">계약 {player.contractYears}년 남음 — 재계약 불필요.</span>
+                )}
+              </div>
+            )}
+            {(player.traits ?? []).length > 0 && (
+              <div className="pd-traits">
+                {(player.traits ?? []).map((t) => (
+                  <span key={t} className="trait-chip" title={TRAIT_DESC[t]}>★ {TRAIT_LABELS[t]}</span>
+                ))}
+              </div>
+            )}
+            <ScoutingPanel player={player} scouting={scouting} />
+            <div className="pd-fam muted">가능 포지션: {fam.join(', ') || player.position}</div>
+
+            <div className="pd-cols">
+              <AttrGroup title="기술" attrs={TECHNICAL_ATTRS} player={player} />
+              <AttrGroup title="정신" attrs={MENTAL_ATTRS} player={player} />
+              <div>
+                <AttrGroup title="신체" attrs={PHYSICAL_ATTRS} player={player} />
+                {player.position === 'GK' && (
+                  <AttrGroup title="골키핑" attrs={GOALKEEPING_ATTRS} player={player} />
+                )}
+              </div>
+            </div>
+
+            <div className="pd-derived">
+              <h3>파생 전력</h3>
+              {DERIVED_LABELS.map(({ key, label }) => (
+                <div className="bar-row" key={key}>
+                  <span className="bar-label">{label}</span>
+                  <div className="bar-track">
+                    <div className="bar-fill" style={{ width: `${Math.min(100, derived[key])}%` }} />
+                  </div>
+                  <span className="bar-val">{derived[key].toFixed(0)}</span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {tab === 'development' && (
+          <>
+            {onSetFocus && (
+              <div className="pd-training">
+                <span className="muted">훈련 포커스:</span>
+                <select value={player.trainingFocus} onChange={(e) => onSetFocus(e.target.value as TrainingFocus)}>
+                  {TRAINING_FOCUSES.map((f) => (
+                    <option key={f} value={f}>{TRAINING_LABELS[f]}</option>
+                  ))}
+                </select>
+                <span className="muted small">시즌 성장 시 해당 능력 그룹을 강조합니다 (성장 중인 선수).</span>
+              </div>
+            )}
+
+            <GrowthChart history={player.caHistory ?? []} current={Math.round(ca)} />
+
+            {ratingHistory && ratingHistory.length >= 2 && <RatingChart history={ratingHistory} />}
+            {stability && (
+              <p className="muted small pd-form-stability">
+                {stability === 'steady'
+                  ? '📊 폼 안정성: 시즌마다 꾸준한 경기력을 보였습니다.'
+                  : '📊 폼 안정성: 시즌별 기복이 있는 편입니다.'}
+              </p>
+            )}
+          </>
+        )}
+
+        {tab === 'career' && (
+          timeline && timeline.length > 0
+            ? <CareerTimeline entries={timeline} />
+            : <p className="muted small">아직 커리어 기록이 없습니다.</p>
+        )}
       </div>
     </div>
   );

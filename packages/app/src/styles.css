@@ -249,6 +249,20 @@ body {
 .pd-sub { font-size: 13px; margin-top: 2px; }
 .pd-meta { display: flex; flex-wrap: wrap; gap: 16px; margin: 8px 0; font-size: 14px; }
 .pd-meta b { font-size: 15px; }
+
+.modal-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin: 4px 0 14px; }
+.modal-tab {
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  padding: 8px 14px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  border-bottom: 2px solid transparent;
+}
+.modal-tab:hover { color: var(--text); }
+.modal-tab.active { color: var(--text); border-bottom-color: var(--accent); }
 .pd-fam { font-size: 13px; margin-bottom: 10px; }
 .pd-form { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
 .form-rating {
@@ -484,9 +498,6 @@ body {
 /* ── History ── */
 .honors { margin-bottom: 18px; }
 .honors h2 { margin: 0 0 12px; }
-.history-cols { display: grid; grid-template-columns: 1.7fr 1fr; gap: 20px; align-items: start; }
-.history-cols h3 { margin-top: 0; }
-
 /* ── Cup ── */
 .cup-head { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
 .cup-head h2 { margin: 0; }
@@ -775,7 +786,6 @@ h3 { font-size: 14px; margin: 0 0 10px; color: var(--muted); text-transform: upp
 @media (max-width: 1024px) {
   .tactics { grid-template-columns: 1fr; }
   .market-cols { grid-template-columns: 1fr; }
-  .history-cols { grid-template-columns: 1fr; }
   .stats-cols { grid-template-columns: 1fr; }
   .match-cols { grid-template-columns: 1fr; }
   .watch-body { grid-template-columns: 1fr; }
