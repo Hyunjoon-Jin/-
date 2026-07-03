@@ -2,6 +2,7 @@ import {
   liveTopScorers, liveSquadStats, lastSummary, myClub, type GameState,
 } from '../game.js';
 import type { PlayerSeasonStat } from '@soccer-tycoon/engine';
+import { ratingClass } from '../rating.js';
 
 export function Stats({ game }: { game: GameState }) {
   // 진행 중이면 라이브 통계, 아니면 지난 시즌 최종 통계
@@ -79,10 +80,6 @@ function ScorerTable({
       </tbody>
     </table>
   );
-}
-
-function ratingClass(r: number): string {
-  return r >= 7.2 ? 'cond-good' : r >= 6.5 ? 'cond-mid' : '';
 }
 
 /** 지난 시즌 내 구단 선수 통계(어워드 시점 topScorers엔 일부만 있으므로 재집계 불가 →

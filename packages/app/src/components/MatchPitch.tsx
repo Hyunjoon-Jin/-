@@ -71,7 +71,16 @@ export function MatchPitch(props: PitchState) {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     draw(ctx, props);
-  }, [props]);
+    // props는 매 렌더마다 새로 생성되는 객체라 참조 자체를 의존성으로 두면 피치와
+    // 무관한 상위 리렌더(중계 피드·통계 갱신 등)에도 캔버스를 다시 그린다.
+    // 실제로 그림에 영향을 주는 원시값/직렬화 가능한 필드만 의존성으로 좁힌다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    props.homeName, props.awayName, props.score[0], props.score[1], props.minute,
+    props.ball.x, props.ball.y, props.goalFlash, props.userIsHome,
+    props.isDerby, props.isFinal,
+    props.homeFormation.join(','), props.awayFormation.join(','),
+  ]);
 
   return <canvas ref={ref} width={W} height={H} className="pitch-canvas" />;
 }
@@ -170,11 +179,20 @@ function draw(ctx: CanvasRenderingContext2D, s: PitchState) {
     ctx.strokeRect(W / 2 - barW / 2, 4, barW, 26);
   }
   ctx.fillStyle = '#fff';
-  ctx.font = 'bold 15px sans-serif';
   ctx.textAlign = 'center';
   const homeMark = s.userIsHome ? '●' : '';
   const awayMark = !s.userIsHome ? '●' : '';
-  ctx.fillText(`${homeMark}${s.homeName} ${s.score[0]} : ${s.score[1]} ${s.awayName}${awayMark}`, W / 2, 22);
+  const scoreboardText = `${homeMark}${s.homeName} ${s.score[0]} : ${s.score[1]} ${s.awayName}${awayMark}`;
+  // 절차 생성된 긴 구단명이 고정폭 바를 넘으면 라이벌전·결승 트로피 아이콘과 겹치므로,
+  // measureText로 실제 폭을 확인해 넘칠 때만 최소 폰트까지 점진적으로 축소한다.
+  const maxTextW = barW - 16;
+  let fontSize = 15;
+  ctx.font = `bold ${fontSize}px sans-serif`;
+  while (ctx.measureText(scoreboardText).width > maxTextW && fontSize > 10) {
+    fontSize -= 1;
+    ctx.font = `bold ${fontSize}px sans-serif`;
+  }
+  ctx.fillText(scoreboardText, W / 2, 22);
   if (highlight) {
     ctx.font = '16px sans-serif';
     const icon = highlight === 'final' ? '🏆' : '🔥';

@@ -1,5 +1,6 @@
 import type { MatchResult, PlayerMatchStat } from '@soccer-tycoon/engine';
 import { useModalA11y } from './useModalA11y.js';
+import { ratingClass } from '../rating.js';
 
 /** 경기 상세 통계 본문 (점유율·슈팅·선수 평점). */
 export function MatchStats({ result, myClubId }: { result: MatchResult; myClubId?: string }) {
@@ -64,7 +65,7 @@ function RatingCol({ title, stats, highlight }: { title: string; stats: PlayerMa
 }
 
 function ratingCls(r: number): string {
-  return r >= 7.5 ? 'cond-good rating' : r >= 6.5 ? 'cond-mid rating' : 'rating';
+  return `${ratingClass(r)} rating`.trim();
 }
 
 /** 경기 상세 모달 (헤더 + 통계). */
