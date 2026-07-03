@@ -8,6 +8,7 @@ import {
   boardStatus, DEMAND_LABEL, type BoardStatus, type ManagerPersona,
 } from '@soccer-tycoon/engine';
 import { Banner } from './Banner.js';
+import { InfoTip } from './InfoTip.js';
 
 /** 대시보드에 한 번에 펼쳐 보여줄 시즌 소식 배너 수 — 나머지는 "더 보기"로 접는다. */
 const VISIBLE_SEASON_BANNERS = 2;
@@ -21,7 +22,17 @@ const PERSONA_LABEL: Record<Exclude<ManagerPersona, 'neutral'>, { label: string;
   humble: { label: '신중한 리더', desc: '겸손하고 책임감 있는 인터뷰로 신뢰를 얻고 있습니다.' },
 };
 
-export function Dashboard({ game, onSignContract }: { game: GameState; onSignContract: (years: number) => void }) {
+interface Props {
+  game: GameState;
+  onSignContract: (years: number) => void;
+  /** "전술" 탭을 방문했는지 — 첫 시즌 체크리스트 진행 상황 표시용. */
+  visitedTactics: boolean;
+  /** "이적" 또는 "스태프" 탭을 방문했는지 — 첫 시즌 체크리스트 진행 상황 표시용. */
+  visitedSquadPrep: boolean;
+  onGoToTab: (tab: 'tactics' | 'transfers' | 'match') => void;
+}
+
+export function Dashboard({ game, onSignContract, visitedTactics, visitedSquadPrep, onGoToTab }: Props) {
   const club = myClub(game);
   const rival = rivalClub(game);
   const last = lastSummary(game);
@@ -126,17 +137,26 @@ export function Dashboard({ game, onSignContract }: { game: GameState; onSignCon
   const visibleBanners = showAllBanners ? seasonBanners : seasonBanners.slice(0, VISIBLE_SEASON_BANNERS);
   const hiddenBannerCount = seasonBanners.length - visibleBanners.length;
 
+  const checklistKey = `checklist_dismissed_${game.seed}_${game.myClubId}`;
+  const [checklistDismissed, setChecklistDismissed] = useState(
+    () => window.localStorage.getItem(checklistKey) === '1',
+  );
+
   return (
     <div className="dashboard">
-      {firstRun && (
-        <div className="welcome">
-          <h2>👋 {club.name}에 오신 것을 환영합니다</h2>
-          <p className="muted">
-            보드진의 목표는 <b>리그 {game.objective}위 이내</b>입니다 (난이도: {DIFFICULTIES[game.difficulty].label}).
-            먼저 <b>전술</b> 탭에서 라인업을 점검하고, 필요하면 <b>이적</b>·<b>스태프</b>로 스쿼드를 보강한 뒤,
-            <b>경기</b> 탭에서 "시즌 시작"을 눌러 진행하세요. 내 경기는 직접 관전하며 하프타임에 전술을 바꿀 수 있습니다.
-          </p>
-        </div>
+      {firstRun && !checklistDismissed && (
+        <OnboardingChecklist
+          clubName={club.name}
+          objective={game.objective}
+          difficultyLabel={DIFFICULTIES[game.difficulty].label}
+          visitedTactics={visitedTactics}
+          visitedSquadPrep={visitedSquadPrep}
+          onGoToTab={onGoToTab}
+          onDismiss={() => {
+            window.localStorage.setItem(checklistKey, '1');
+            setChecklistDismissed(true);
+          }}
+        />
       )}
 
       {crisis ? (
@@ -285,6 +305,46 @@ export function Dashboard({ game, onSignContract }: { game: GameState; onSignCon
   );
 }
 
+function OnboardingChecklist({
+  clubName, objective, difficultyLabel, visitedTactics, visitedSquadPrep, onGoToTab, onDismiss,
+}: {
+  clubName: string;
+  objective: number;
+  difficultyLabel: string;
+  visitedTactics: boolean;
+  visitedSquadPrep: boolean;
+  onGoToTab: (tab: 'tactics' | 'transfers' | 'match') => void;
+  onDismiss: () => void;
+}) {
+  const steps: { done: boolean; label: string; tab: 'tactics' | 'transfers' | 'match' }[] = [
+    { done: visitedTactics, label: '전술 탭에서 라인업 점검', tab: 'tactics' },
+    { done: visitedSquadPrep, label: '이적·스태프로 스쿼드 보강', tab: 'transfers' },
+    { done: false, label: '경기 탭에서 시즌 시작', tab: 'match' },
+  ];
+  return (
+    <div className="checklist">
+      <div className="checklist-head">
+        <h2>👋 {clubName}에 오신 것을 환영합니다</h2>
+        <button className="btn-ghost" onClick={onDismiss}>닫기 ✕</button>
+      </div>
+      <p className="muted">
+        보드진의 목표는 <b>리그 {objective}위 이내</b>입니다 (난이도: {difficultyLabel}).
+        내 경기는 직접 관전하며 하프타임에 전술을 바꿀 수 있습니다.
+      </p>
+      <ol className="checklist-steps">
+        {steps.map((s) => (
+          <li key={s.label} className={s.done ? 'done' : ''}>
+            <button className="checklist-step" onClick={() => onGoToTab(s.tab)}>
+              <span className="checklist-mark">{s.done ? '✓' : ''}</span>
+              {s.label}
+            </button>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
 function Card({ title, value }: { title: string; value: string }) {
   return (
     <div className="stat-card">
@@ -299,7 +359,14 @@ function BoardConfidence({ value }: { value: number }) {
   return (
     <div className="board-conf">
       <div className="bc-head">
-        <span>🏛 이사회 신뢰도</span>
+        <span>
+          🏛 이사회 신뢰도
+          <InfoTip title="이사회 신뢰도">
+            시즌 성적이 목표 순위를 넘으면 오르고, 못 미치면 내려갑니다. 이사회 특별 요구를
+            달성/실패해도 오르내립니다. 0에 가까워지면(경질 위기) 이번 시즌 목표를 놓치는 순간
+            감독직에서 경질됩니다.
+          </InfoTip>
+        </span>
         <b className={`bc-status ${status}`}>{BOARD_LABEL[status]} · {Math.round(value)}</b>
       </div>
       <div className="bc-bar">

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   startGame, myClub, myTactic, setMyTactic,
   startSeason, playRound, playRestOfSeason, finishSeason, advanceFullSeason,
@@ -57,6 +57,13 @@ export function App() {
   const [showHelp, setShowHelp] = useState(false);
   const [detailPlayer, setDetailPlayer] = useState<Player | null>(null);
   const [saveError, setSaveError] = useState(false);
+  /** 첫 시즌 체크리스트 진행 상황 — 탭 방문 여부로 추정(전술 확인 / 이적·스태프 보강). */
+  const [visitedTactics, setVisitedTactics] = useState(false);
+  const [visitedSquadPrep, setVisitedSquadPrep] = useState(false);
+  useEffect(() => {
+    if (tab === 'tactics') setVisitedTactics(true);
+    if (tab === 'transfers' || tab === 'staff') setVisitedSquadPrep(true);
+  }, [tab]);
 
   /** 상태 갱신 + 자동 저장. 경질로 새로 전환되면 커리어 아카이브에 재임 기록을 남긴다.
    *  게임 상태 반영(setGame)을 항상 먼저 수행 — 커리어 기록·저장은 부수 효과이므로
@@ -97,6 +104,8 @@ export function App() {
     resetOverlays();
     setGame(state);
     setSlotId(id);
+    setVisitedTactics(false);
+    setVisitedSquadPrep(false);
     try {
       setSavedAt(store.save(id, state).savedAt);
     } catch (err) {
@@ -111,6 +120,8 @@ export function App() {
     setGame(state);
     setSlotId(id);
     setSavedAt(null);
+    setVisitedTactics(false);
+    setVisitedSquadPrep(false);
     setTab('dashboard');
   }
 
@@ -231,7 +242,13 @@ export function App() {
         ) : (
           <>
             {tab === 'dashboard' && (
-              <Dashboard game={game} onSignContract={(years) => update(signContract(game, years))} />
+              <Dashboard
+                game={game}
+                onSignContract={(years) => update(signContract(game, years))}
+                visitedTactics={visitedTactics}
+                visitedSquadPrep={visitedSquadPrep}
+                onGoToTab={setTab}
+              />
             )}
             {tab === 'squad' && <Squad key={slotId} club={club} onSelect={setDetailPlayer} />}
             {tab === 'tactics' && (

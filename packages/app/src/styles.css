@@ -163,12 +163,36 @@ body {
 .div-badge { background: var(--accent-2); color: #06203f; border-radius: 6px; padding: 1px 8px; font-size: 13px; }
 .obj-met { color: var(--accent); font-weight: 700; }
 .obj-miss { color: var(--color-danger); font-weight: 700; }
-.welcome {
+.checklist {
   background: var(--panel-2); border: 1px solid var(--accent-2); border-radius: 10px;
   padding: 16px 20px; margin-bottom: 16px;
 }
-.welcome h2 { margin: 0 0 8px; }
-.welcome p { line-height: 1.6; margin: 0; }
+.checklist-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.checklist h2 { margin: 0 0 8px; }
+.checklist > p { line-height: 1.6; margin: 0 0 12px; }
+.checklist-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.checklist-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  color: var(--text);
+  font-size: 14px;
+  cursor: pointer;
+}
+.checklist-step:hover { border-color: var(--accent); }
+.checklist-steps li.done .checklist-step { color: var(--muted); }
+.checklist-mark {
+  width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--line);
+  display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+  font-size: 12px; color: #2fa84f;
+}
+.checklist-steps li.done .checklist-mark { border-color: #2fa84f; background: rgba(47,168,79,0.15); }
 /* ── 공용 알림 카드(Banner.tsx) ──
    은퇴·마일스톤·유스·기대주소식·이변·페이스체크·라이벌·감독이미지·계약제안·재정경고·
    이사회요구가 각자 거의 동일한 그라디언트 카드를 복붙해 쓰던 것을 하나로 통합.
@@ -313,6 +337,43 @@ body {
 .bc-warn { margin: 8px 0 0; color: var(--color-danger); font-size: 13px; font-weight: 600; }
 .rival-record { color: var(--muted); }
 .derby-badge { color: var(--color-danger); font-weight: 700; }
+
+/* 컨텍스트 도움말(?) 팝오버 */
+.info-tip { position: relative; display: inline-block; margin-left: 4px; }
+.info-tip-btn {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+}
+.info-tip-btn:hover { color: var(--text); border-color: var(--accent); }
+.info-tip-pop {
+  position: absolute;
+  top: 22px;
+  left: 0;
+  z-index: 20;
+  width: 240px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  font-size: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  animation: modal-in var(--dur-fast) var(--ease);
+}
+.info-tip-pop b { display: block; margin-bottom: 4px; font-size: 12px; }
+.info-tip-pop p { margin: 0; color: var(--muted); line-height: 1.5; }
 .derby-badge.small { font-size: 12px; }
 .final-badge { color: var(--color-gold); font-weight: 700; }
 .derby-banner {

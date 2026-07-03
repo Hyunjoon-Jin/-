@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useModalA11y } from './useModalA11y.js';
 
 interface Props { onClose: () => void }
@@ -16,6 +17,11 @@ const ITEMS: { tab: string; text: string }[] = [
 
 export function Help({ onClose }: Props) {
   const ref = useModalA11y<HTMLDivElement>(onClose);
+  const [query, setQuery] = useState('');
+  const q = query.trim().toLowerCase();
+  const filtered = q
+    ? ITEMS.filter((it) => it.tab.toLowerCase().includes(q) || it.text.toLowerCase().includes(q))
+    : ITEMS;
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div
@@ -31,14 +37,26 @@ export function Help({ onClose }: Props) {
           <h2>도움말 — 화면 안내</h2>
           <button className="btn-ghost" onClick={onClose}>닫기 ✕</button>
         </div>
-        <ul className="help-list">
-          {ITEMS.map((it) => (
-            <li key={it.tab}>
-              <b className="help-tab">{it.tab}</b>
-              <span className="muted">{it.text}</span>
-            </li>
-          ))}
-        </ul>
+        <input
+          className="search"
+          type="text"
+          placeholder="궁금한 내용 검색 (예: 스카우팅, 재계약, 라이벌)"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          autoFocus
+        />
+        {filtered.length > 0 ? (
+          <ul className="help-list">
+            {filtered.map((it) => (
+              <li key={it.tab}>
+                <b className="help-tab">{it.tab}</b>
+                <span className="muted">{it.text}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="muted">"{query}"에 대한 도움말을 찾지 못했습니다.</p>
+        )}
         <p className="muted small">
           팁: 매 경기를 뛴 선발은 컨디션이 떨어집니다. 중요한 경기 전에는 스쿼드를 로테이션하세요.
           관전 중 부상이 발생하면 즉시 교체하거나 계속 뛰게 둘 수 있습니다. 모든 진행은 자동 저장됩니다.

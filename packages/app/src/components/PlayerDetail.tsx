@@ -11,6 +11,7 @@ import { formStability, revealPotential, type TimelineEntry, type SeasonRatingEn
 import { useModalA11y } from './useModalA11y.js';
 import { useResultToast } from '../toast.js';
 import { onKeyActivate } from '../a11y.js';
+import { InfoTip } from './InfoTip.js';
 
 function moraleLabel(m: number): { text: string; cls: string } {
   if (m >= 0.65) return { text: '😀 만족', cls: 'cond-good' };
@@ -151,7 +152,14 @@ export function PlayerDetail({
 
         <div className="pd-meta">
           <span>CA <b>{ca.toFixed(0)}</b></span>
-          <span>PA <b>{revealPotential(scouting, player.potential)}</b></span>
+          <span>
+            PA <b>{revealPotential(scouting, player.potential)}</b>
+            <InfoTip title="CA / PA">
+              CA는 현재 실력, PA는 성장했을 때 도달 가능한 최대 실력입니다. 스카우팅 레벨이
+              낮으면 PA가 범위("~")로만 표시되며, 스태프의 스카우팅 등급을 올리면 더 정확히
+              드러납니다. 내 구단 선수는 항상 정확한 PA가 보입니다.
+            </InfoTip>
+          </span>
           <span>가치 <b>{formatMoney(marketValue(player))}</b></span>
           <span>주급 <b>{formatMoney(player.wage)}</b></span>
           <span className={status.cls}>{status.text}</span>
@@ -243,7 +251,13 @@ export function PlayerDetail({
           <>
             {onSetFocus && (
               <div className="pd-training">
-                <span className="muted">훈련 포커스:</span>
+                <span className="muted">
+                  훈련 포커스:
+                  <InfoTip title="훈련 포커스">
+                    시즌 성장 시 선택한 능력 그룹(기술/정신/신체 등)이 더 크게 오릅니다. 이미
+                    성장이 끝난 노장 선수에게는 큰 영향이 없습니다.
+                  </InfoTip>
+                </span>
                 <select value={player.trainingFocus} onChange={(e) => onSetFocus(e.target.value as TrainingFocus)}>
                   {TRAINING_FOCUSES.map((f) => (
                     <option key={f} value={f}>{TRAINING_LABELS[f]}</option>
