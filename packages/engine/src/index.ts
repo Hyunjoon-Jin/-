@@ -45,6 +45,7 @@ export { settleSeason, leaguePrize, type SeasonFinanceReport } from './finance.j
 export { runTransferWindow, type TransferDeal } from './transfer.js';
 export {
   createCup, playCupRound, playCupToEnd, isCupOver, cupSurvivors, nextCupPairings,
+  CUP_FINAL_ROUND_NAME,
   type CupState, type CupRound, type CupTie, type CupPairing, type NextCupRound,
 } from './cup.js';
 export {

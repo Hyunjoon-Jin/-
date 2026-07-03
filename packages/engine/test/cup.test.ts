@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   createCup, playCupRound, playCupToEnd, cupSurvivors, isCupOver, nextCupPairings,
+  CUP_FINAL_ROUND_NAME,
 } from '../src/cup.js';
 import { simulateMatch } from '../src/simulateMatch.js';
 import { defaultTactic } from '../src/generate.js';
@@ -61,6 +62,30 @@ describe('cup: 부전승 공정성(회귀 테스트)', () => {
 
     const second = nextCupPairings(cup, clubs)!;
     expect(second.byeId).not.toBe('c0'); // 이미 부전승을 받았으니 이번엔 다른 구단이 받는다
+  });
+});
+
+describe('cup: 라운드 이름(결승까지 남은 라운드 수 기준)', () => {
+  it('생존자 2명은 결승, 3~4명은 준결승, 5~8명은 8강, 9~16명은 16강으로 표시된다', () => {
+    // 24개 구단 → 24(16강 이상)→12(8강)→6(8강, 부전승 없음... 실제로는 6=8강 버킷)→3(준결승)→2(결승)
+    const clubs = makeClubs(24, 1);
+    let cup = createCup(clubs, 200);
+    const seen: { survivors: number; name: string }[] = [];
+    for (let round = 0; round < 8 && !isCupOver(cup); round++) {
+      const next = nextCupPairings(cup, clubs);
+      if (!next) break;
+      seen.push({ survivors: cupSurvivors(cup).length, name: next.roundName });
+      cup = playCupRound(cup, clubs);
+    }
+    for (const { survivors, name } of seen) {
+      if (survivors <= 2) expect(name).toBe(CUP_FINAL_ROUND_NAME);
+      else if (survivors <= 4) expect(name).toBe('준결승');
+      else if (survivors <= 8) expect(name).toBe('8강');
+      else if (survivors <= 16) expect(name).toBe('16강');
+      else expect(name).toBe('예선');
+    }
+    // 마지막으로 관찰된 라운드가 결승이어야 한다(그 다음이 챔피언 결정).
+    expect(seen[seen.length - 1]!.name).toBe(CUP_FINAL_ROUND_NAME);
   });
 });
 

@@ -63,10 +63,22 @@ export function cupSurvivors(cup: CupState): string[] {
   return cup.rounds[cup.rounds.length - 1]!.ties.map((t) => t.winnerId);
 }
 
+/** 결승 라운드 이름 — 문자열 리터럴을 여러 곳에 하드코딩하지 않도록 공유. */
+export const CUP_FINAL_ROUND_NAME = '결승';
+
+/**
+ * 라운드 이름 — 이번 라운드 시작 시 생존자 수 기준, 결승까지 남은 라운드 수로
+ * 결정한다(부전승으로 홀수여도 "남은 라운드 수"는 log2 반올림으로 안정적으로
+ * 계산됨). 2의 거듭제곱이 아닌 인원(부전승 반복 등)에서는 관례상 명칭이
+ * 근사치일 수밖에 없다 — 예: 5명 생존(부전승 1+경기 2)도 "8강"으로 표시되는데,
+ * 이는 이 라운드 이후 3명이 남아 다음이 "준결승"이 되는 구조와 일치한다.
+ */
 function roundName(survivors: number): string {
-  if (survivors <= 2) return '결승';
-  if (survivors <= 4) return '준결승';
-  if (survivors <= 8) return '8강';
+  const roundsToFinal = Math.ceil(Math.log2(Math.max(2, survivors)));
+  if (roundsToFinal <= 1) return CUP_FINAL_ROUND_NAME;
+  if (roundsToFinal === 2) return '준결승';
+  if (roundsToFinal === 3) return '8강';
+  if (roundsToFinal === 4) return '16강';
   return '예선';
 }
 

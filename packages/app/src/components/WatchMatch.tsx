@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   LiveMatch, HALF_TIME, MATCH_LENGTH, currentAbility, isAvailable, SEVERITY_LABEL,
+  CUP_FINAL_ROUND_NAME,
   type Club, type Tactic, type MatchEvent, type MatchResult, type LiveStats, type InjuryEvent,
 } from '@soccer-tycoon/engine';
 import type { WatchSetup, MatchPreview as MatchPreviewData } from '../game.js';
@@ -47,7 +48,7 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
   const awayName = watch.setup.away.club.name;
   const userSide: 'home' | 'away' = watch.userIsHome ? 'home' : 'away';
   const isDerby = watch.opponent.id === rivalClubId;
-  const isFinal = watch.cupRoundName === '결승';
+  const isFinal = watch.cupRoundName === CUP_FINAL_ROUND_NAME;
 
   const [phase, setPhase] = useState<Phase>('ready');
   const [view, setView] = useState<View>({ minute: 0, score: [0, 0], ball: { x: 0.5, y: 0.5 } });
