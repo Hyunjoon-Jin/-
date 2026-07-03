@@ -32,8 +32,10 @@ interface View {
   minute: number;
   score: [number, number];
   ball: { x: number; y: number };
-  goalFlash: 'home' | 'away' | null;
 }
+
+/** "GOAL!" 배너 표시 지속시간(ms) — 틱 주기(TICK_MS)와 무관하게 고정. */
+const GOAL_FLASH_MS = 1500;
 
 export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId, onDone, onCancel }: Props) {
   const liveRef = useRef<LiveMatch | null>(null);
@@ -48,7 +50,12 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
   const isFinal = watch.cupRoundName === '결승';
 
   const [phase, setPhase] = useState<Phase>('ready');
-  const [view, setView] = useState<View>({ minute: 0, score: [0, 0], ball: { x: 0.5, y: 0.5 }, goalFlash: null });
+  const [view, setView] = useState<View>({ minute: 0, score: [0, 0], ball: { x: 0.5, y: 0.5 } });
+  const [goalFlash, setGoalFlash] = useState<'home' | 'away' | null>(null);
+  const goalFlashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (goalFlashTimerRef.current) clearTimeout(goalFlashTimerRef.current);
+  }, []);
   const [feed, setFeed] = useState<MatchEvent[]>([]);
   const [tactic, setTactic] = useState<Tactic>(initialTactic);
   const [stats, setStats] = useState<LiveStats>({ possession: [50, 50], shots: [0, 0], shotsOnTarget: [0, 0] });
@@ -94,7 +101,15 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
     const ball = last
       ? { x: last.side === 'home' ? 0.84 : 0.16, y: 0.28 + Math.random() * 0.44 }
       : { x: 0.4 + Math.random() * 0.2, y: 0.34 + Math.random() * 0.32 };
-    setView({ minute: target, score: live.score(), ball, goalFlash: goal ? goal.side : null });
+    setView({ minute: target, score: live.score(), ball });
+    if (goal) {
+      // 틱 주기(130ms)에 얹으면 다음 틱이 없을 때(하프타임 경계 등) 배너가 얼어붙어
+      // 남아있거나, 반대로 다음 틱이 바로 이어지면 한 프레임만 스쳐 지나간다 —
+      // 틱과 무관한 고정 지속시간을 직접 타이머로 관리한다.
+      if (goalFlashTimerRef.current) clearTimeout(goalFlashTimerRef.current);
+      setGoalFlash(goal.side);
+      goalFlashTimerRef.current = setTimeout(() => setGoalFlash(null), GOAL_FLASH_MS);
+    }
     setStats(live.stats());
     const notable = evs.filter((e) => e.outcome === 'GOAL' || e.outcome === 'SAVE');
     if (notable.length) setFeed((f) => [...notable.reverse(), ...f]);
@@ -150,7 +165,7 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
   const awayTactic = watch.userIsHome ? watch.setup.away.tactic : tactic;
   const pitch: PitchState = {
     homeName, awayName, score: view.score, minute: view.minute,
-    ball: view.ball, goalFlash: view.goalFlash, userIsHome: watch.userIsHome,
+    ball: view.ball, goalFlash, userIsHome: watch.userIsHome,
     homeFormation: homeTactic.lineup.map((s) => s.position),
     awayFormation: awayTactic.lineup.map((s) => s.position),
     isDerby,
