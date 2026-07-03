@@ -57,7 +57,7 @@ function RatingCol({ title, stats, highlight }: { title: string; stats: PlayerMa
               <td className={ratingCls(s.rating)}>{s.rating.toFixed(1)}</td>
             </tr>
           ))}
-          {rows.length === 0 && <tr><td className="muted small">기록 없음</td></tr>}
+          {rows.length === 0 && <tr><td className="muted small" colSpan={2}>기록 없음</td></tr>}
         </tbody>
       </table>
     </div>

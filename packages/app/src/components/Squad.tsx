@@ -96,7 +96,7 @@ export function Squad({ club, onSelect }: { club: Club; onSelect: (p: Player) =>
         >📋 재계약 임박</button>
       </div>
       <input
-        className="search" placeholder="선수 이름 검색…"
+        className="search" placeholder="선수 이름 검색…" aria-label="선수 이름 검색"
         value={search} onChange={(e) => setSearch(e.target.value)}
       />
 

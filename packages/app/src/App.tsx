@@ -41,7 +41,9 @@ const TABS: { key: Tab; label: string }[] = [
 ];
 
 function newSlotId(): string {
-  return `s_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
+  // crypto.randomUUID는 충돌 확률이 사실상 0이라, Date.now()+정수 조합처럼
+  // 드물게 충돌해 관계없는 세이브를 덮어쓸 위험이 없다.
+  return `s_${crypto.randomUUID()}`;
 }
 
 export function App() {

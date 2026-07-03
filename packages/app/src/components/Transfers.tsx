@@ -160,7 +160,7 @@ function TransferMarket({ game, onNegotiate, onBuyAt, onOffers, onAcceptSell, on
               >{f.label}</button>
             ))}
           </div>
-          <input className="search" placeholder="선수 이름 검색…"
+          <input className="search" placeholder="선수 이름 검색…" aria-label="선수 이름 검색"
             value={search} onChange={(e) => setSearch(e.target.value)} />
           <table className="data-table compact">
             <thead>

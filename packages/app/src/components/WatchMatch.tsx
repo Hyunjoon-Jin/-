@@ -298,13 +298,16 @@ function Feed({
   if (items.length === 0) return <p className="muted small">아직 주요 장면이 없습니다.</p>;
   return (
     <ul className="feed">
-      {items.map((it, i) => it.kind === 'match' ? (
-        <li key={i} className={it.ev.outcome === 'GOAL' ? (it.ev.side === userSide ? 'goal mine' : 'goal') : ''}>
+      {items.map((it) => it.kind === 'match' ? (
+        <li
+          key={`match-${it.ev.minute}-${it.ev.playerId}`}
+          className={it.ev.outcome === 'GOAL' ? (it.ev.side === userSide ? 'goal mine' : 'goal') : ''}
+        >
           <span className="feed-min">{it.ev.minute}'</span>
           <span className="feed-text">{it.ev.playerName} — {OUTCOME[it.ev.outcome]}</span>
         </li>
       ) : (
-        <li key={i} className="injury-feed">
+        <li key={`injury-${it.ev.minute}-${it.ev.playerId}`} className="injury-feed">
           <span className="feed-min">{it.ev.minute}'</span>
           <span className="feed-text">
             🚑 {it.ev.playerName} {SEVERITY_LABEL[it.ev.severity]} 부상 ({it.ev.name})
@@ -399,8 +402,8 @@ function FullTime({
       <p className="ft-score">{homeName} {score[0]} : {score[1]} {awayName}</p>
       {result.cards.length > 0 && (
         <ul className="card-list">
-          {result.cards.map((c, i) => (
-            <li key={i}>
+          {result.cards.map((c) => (
+            <li key={`${c.minute}-${c.playerId}-${c.type}`}>
               <span className="feed-min">{c.minute}'</span>
               <span>{c.type === 'red' ? '🟥' : '🟨'} {c.playerName}</span>
             </li>

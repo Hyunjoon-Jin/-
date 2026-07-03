@@ -185,8 +185,8 @@ export function History({ game }: { game: GameState }) {
           <table className="data-table compact">
             <thead><tr><th>시즌</th><th>대회</th><th>홈/원정</th><th>스코어</th><th>결과</th></tr></thead>
             <tbody>
-              {[...game.rivalMeetings].reverse().map((m, i) => (
-                <tr key={i}>
+              {[...game.rivalMeetings].reverse().map((m) => (
+                <tr key={`${m.season}-${m.competition}-${m.home}`}>
                   <td className="muted small">{m.season}</td>
                   <td className="small muted">{m.competition === 'cup' ? '컵' : '리그'}</td>
                   <td className="small muted">{m.home ? '홈' : '원정'}</td>

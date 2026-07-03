@@ -80,8 +80,11 @@ export function Dashboard({ game, onSignContract }: { game: GameState; onSignCon
         {game.rivalMeetings.length > 0 && (
           <span className="rival-form">
             {' '}
-            {game.rivalMeetings.slice(-5).map((m, i) => (
-              <span key={i} className={`form-dot ${m.result === 'win' ? 'W' : m.result === 'loss' ? 'L' : 'D'}`}>
+            {game.rivalMeetings.slice(-5).map((m) => (
+              <span
+                key={`${m.season}-${m.competition}-${m.home}`}
+                className={`form-dot ${m.result === 'win' ? 'W' : m.result === 'loss' ? 'L' : 'D'}`}
+              >
                 {m.result === 'win' ? '승' : m.result === 'loss' ? '패' : '무'}
               </span>
             ))}
@@ -151,8 +154,8 @@ export function Dashboard({ game, onSignContract }: { game: GameState; onSignCon
             )}
             {last.milestones !== undefined && last.milestones.length > 0 && (
               <div className="milestone-banner">
-                {last.milestones.map((m, i) => (
-                  <p key={i}>
+                {last.milestones.map((m) => (
+                  <p key={`${m.playerId}-${m.kind}-${m.value}`}>
                     🎉 <b>{m.name}</b>, 통산 <b>{m.value}{m.kind === 'apps' ? '경기 출전' : '골'}</b> 달성!
                   </p>
                 ))}
@@ -171,8 +174,8 @@ export function Dashboard({ game, onSignContract }: { game: GameState; onSignCon
             {last.prospectUpdates !== undefined && last.prospectUpdates.length > 0 && (
               <div className="prospect-update-banner">
                 <p className="prospect-update-banner-title">📣 유스 기대주 소식</p>
-                {last.prospectUpdates.map((u, i) => (
-                  <p key={i}>
+                {last.prospectUpdates.map((u) => (
+                  <p key={`${u.playerId}-${u.kind}`}>
                     {u.kind === 'debut'
                       ? <>유스 기대주 출신 <b>{u.name}</b>, 1군 <b>데뷔</b>에 성공했습니다!</>
                       : <>유스 기대주 출신 <b>{u.name}</b>, 커리어 <b>첫 골</b>을 기록했습니다!</>}
