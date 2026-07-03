@@ -1,4 +1,27 @@
+/* Oswald 600/700, Latin 서브셋만 자체 호스팅(SIL Open Font License 1.1, fonts.google.com/specimen/Oswald).
+   한글은 글리프가 없어 자동으로 시스템 한글 폰트로 폴백된다 — 숫자·영문 위주 요소에만 의도적으로 사용. */
+@font-face {
+  font-family: 'Oswald';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('./assets/fonts/oswald-600.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122;
+}
+@font-face {
+  font-family: 'Oswald';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('./assets/fonts/oswald-700.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122;
+}
+
 :root {
+  --font-body: 'Segoe UI', 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif;
+  /* 라틴 글자·숫자에만 적용되는 디스플레이 서체 — 한글은 --font-body로 자동 폴백. */
+  --font-display: 'Oswald', var(--font-body);
+
   --bg: #0f1420;
   --panel: #1a2233;
   --panel-2: #222c42;
@@ -55,6 +78,13 @@
   --dur-base: 200ms;
   --dur-slow: 320ms;
   --ease: cubic-bezier(0.2, 0, 0.2, 1);
+
+  /* ── 그림자(depth) — 2단계. 모든 패널에 똑같이 주면 위계가 사라지므로,
+     대시보드 핵심 위젯(KPI·이사회 신뢰도·체크리스트 등)에만 -md를 쓰고
+     나머지 보조 패널은 무테 또는 -sm에 그친다. ── */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 2px 6px rgba(0, 0, 0, 0.3), 0 10px 24px rgba(0, 0, 0, 0.22);
+  --shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.35), 0 24px 48px rgba(0, 0, 0, 0.35);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -65,9 +95,10 @@
 
 body {
   margin: 0;
-  font-family: 'Segoe UI', 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif;
+  font-family: var(--font-body);
   background: var(--bg);
   color: var(--text);
+  font-variant-numeric: tabular-nums;
 }
 
 /* ── Start screen ── */
@@ -77,7 +108,13 @@ body {
   padding: 48px 24px;
   text-align: center;
 }
-.start h1 { font-size: 40px; margin: 0 0 8px; }
+.start h1 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 44px;
+  letter-spacing: 0.5px;
+  margin: 0 0 8px;
+}
 .subtitle { color: var(--muted); margin-bottom: 28px; }
 .club-grid {
   display: grid;
@@ -93,16 +130,17 @@ body {
   color: var(--text);
   text-align: left;
   cursor: pointer;
-  transition: border-color .15s, transform .1s;
+  box-shadow: var(--shadow-sm);
+  transition: border-color .15s, transform .1s, box-shadow .15s;
 }
-.club-card:hover { border-color: var(--accent-2); transform: translateY(-2px); }
+.club-card:hover { border-color: var(--accent-2); transform: translateY(-2px); box-shadow: var(--shadow-md); }
 .club-card.selected { border-color: var(--accent); background: var(--panel-2); }
 .club-card-name { font-weight: 700; margin-bottom: 8px; }
 .club-card-row { font-size: 13px; color: var(--text); }
 .club-card-row.muted { color: var(--muted); }
 
 .btn-primary {
-  background: var(--accent);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0) 60%), var(--accent);
   color: #06270f;
   border: 0;
   border-radius: 8px;
@@ -110,7 +148,11 @@ body {
   font-size: 16px;
   font-weight: 700;
   cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: filter .12s, transform .1s;
 }
+.btn-primary:hover:not(:disabled) { filter: brightness(1.08); }
+.btn-primary:active:not(:disabled) { filter: brightness(0.92); transform: translateY(1px); }
 .btn-primary:disabled { opacity: .4; cursor: not-allowed; }
 
 /* ── Saves (start screen) ── */
@@ -165,7 +207,7 @@ body {
 .obj-miss { color: var(--color-danger); font-weight: 700; }
 .checklist {
   background: var(--panel-2); border: 1px solid var(--accent-2); border-radius: 10px;
-  padding: 16px 20px; margin-bottom: 16px;
+  padding: 16px 20px; margin-bottom: 16px; box-shadow: var(--shadow-md);
 }
 .checklist-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
 .checklist h2 { margin: 0 0 8px; }
@@ -242,6 +284,7 @@ body {
 .modal {
   background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
   padding: 22px 26px; max-width: 640px; width: 90%; max-height: 82vh; overflow: auto;
+  box-shadow: var(--shadow-lg);
   animation: modal-in var(--dur-base) var(--ease);
 }
 @keyframes modal-backdrop-in { from { opacity: 0; } to { opacity: 1; } }
@@ -272,7 +315,7 @@ body {
 .player-detail { max-width: 860px; }
 .pd-sub { font-size: 13px; margin-top: 2px; }
 .pd-meta { display: flex; flex-wrap: wrap; gap: 16px; margin: 8px 0; font-size: 14px; }
-.pd-meta b { font-size: 15px; }
+.pd-meta b { font-family: var(--font-display); font-size: 16px; font-weight: 600; }
 
 .modal-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin: 4px 0 14px; }
 .modal-tab {
@@ -324,7 +367,7 @@ body {
 .rival-history h3 { margin-bottom: 10px; }
 
 /* 이사회 신뢰도 */
-.board-conf { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; margin-bottom: 16px; }
+.board-conf { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; margin-bottom: 16px; box-shadow: var(--shadow-md); }
 .bc-head { display: flex; justify-content: space-between; align-items: center; font-size: 14px; margin-bottom: 8px; }
 .bc-status.secure, .bc-status.stable { color: #2fa84f; }
 .bc-status.shaky { color: var(--color-warning); }
@@ -461,7 +504,7 @@ body {
   background: var(--panel);
   border-bottom: 1px solid var(--line);
 }
-.brand { font-weight: 800; font-size: 18px; }
+.brand { font-family: var(--font-display); font-weight: 700; font-size: 19px; letter-spacing: 0.3px; }
 .club-info { display: flex; align-items: center; gap: 10px; margin-left: auto; }
 .club-name { font-weight: 700; }
 .season-badge {
@@ -473,14 +516,19 @@ body {
   color: var(--muted);
 }
 .btn-advance {
-  background: var(--accent-2);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0) 60%), var(--accent-2);
   color: #06203f;
   border: 0;
   border-radius: 8px;
   padding: 9px 18px;
   font-weight: 700;
   cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: filter .12s, transform .1s;
 }
+.btn-advance:hover:not(:disabled) { filter: brightness(1.08); }
+.btn-advance:active:not(:disabled) { filter: brightness(0.92); transform: translateY(1px); }
+.btn-advance:disabled { opacity: .5; cursor: not-allowed; }
 
 .tabs { display: flex; gap: 2px; background: var(--panel); padding: 0 12px; border-bottom: 1px solid var(--line); }
 .tab {
@@ -490,10 +538,12 @@ body {
   padding: 12px 18px;
   cursor: pointer;
   font-size: 14px;
+  font-weight: 600;
   border-bottom: 2px solid transparent;
+  transition: color .12s, background-color .12s, border-color .12s;
 }
-.tab:hover { color: var(--text); }
-.tab.active { color: var(--text); border-bottom-color: var(--accent); }
+.tab:hover { color: var(--text); background: rgba(255, 255, 255, 0.04); }
+.tab.active { color: var(--text); background: rgba(61, 220, 132, 0.1); border-bottom-color: var(--accent); }
 
 .content { flex: 1; overflow: auto; padding: 20px; }
 
@@ -509,11 +559,12 @@ body {
   border: 1px solid var(--line);
   border-radius: 10px;
   padding: 14px;
+  box-shadow: var(--shadow-md);
 }
 .stat-title { color: var(--muted); font-size: 12px; margin-bottom: 6px; }
-.stat-value { font-size: 20px; font-weight: 700; }
+.stat-value { font-family: var(--font-display); font-size: 21px; font-weight: 600; letter-spacing: 0.2px; }
 
-.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; box-shadow: var(--shadow-md); }
 .panel h2 { margin: 0 0 10px; font-size: 16px; }
 .season-more-btn { margin-bottom: var(--space-4); }
 .pos { color: var(--accent); }
@@ -525,6 +576,7 @@ body {
 .data-table th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; }
 .data-table td.name, .data-table th:nth-child(2) { text-align: left; }
 .data-table .name { font-weight: 600; }
+.data-table tbody tr:nth-child(even) { background: rgba(255, 255, 255, 0.04); }
 .data-table tbody tr:hover { background: var(--panel); }
 .data-table tr.mine { background: var(--mine); }
 .data-table tr.mine:hover { background: #32472f; }
@@ -626,7 +678,7 @@ body {
 .staff-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
 .staff-card {
   background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
-  padding: 20px; text-align: center;
+  padding: 20px; text-align: center; box-shadow: var(--shadow-sm);
 }
 .staff-icon { font-size: 34px; }
 .staff-name { font-size: 18px; font-weight: 800; margin: 6px 0; }
