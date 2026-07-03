@@ -7,6 +7,7 @@ import {
 import { ScoutingSummary } from './PlayerDetail.js';
 import { useModalA11y } from './useModalA11y.js';
 import { onKeyActivate } from '../a11y.js';
+import { SortableTh } from './SortableTh.js';
 
 interface Props {
   game: GameState;
@@ -166,13 +167,13 @@ function TransferMarket({ game, onNegotiate, onBuyAt, onOffers, onAcceptSell, on
             <thead>
               <tr>
                 <th>선수</th><th>구단</th><th>P</th>
-                <MarketSortHeader label="나이" k="age" sort={sort} dir={dir} onClick={toggleSort} />
-                <MarketSortHeader label="CA" k="ca" sort={sort} dir={dir} onClick={toggleSort} />
-                <MarketSortHeader
+                <SortableTh label="나이" k="age" sort={sort} dir={dir} onClick={toggleSort} />
+                <SortableTh label="CA" k="ca" sort={sort} dir={dir} onClick={toggleSort} />
+                <SortableTh
                   label="잠재" k="potential" sort={sort} dir={dir} onClick={toggleSort}
                   title={`스카우팅 Lv.${scouting}`}
                 />
-                <MarketSortHeader label="가치" k="value" sort={sort} dir={dir} onClick={toggleSort} />
+                <SortableTh label="가치" k="value" sort={sort} dir={dir} onClick={toggleSort} />
                 <th></th>
               </tr>
             </thead>
@@ -214,10 +215,10 @@ function TransferMarket({ game, onNegotiate, onBuyAt, onOffers, onAcceptSell, on
             <thead>
               <tr>
                 <th>선수</th><th>P</th>
-                <MarketSortHeader label="나이" k="age" sort={squadSort} dir={squadDir} onClick={toggleSquadSort} />
-                <MarketSortHeader label="CA" k="ca" sort={squadSort} dir={squadDir} onClick={toggleSquadSort} />
-                <MarketSortHeader label="잠재" k="potential" sort={squadSort} dir={squadDir} onClick={toggleSquadSort} />
-                <MarketSortHeader label="가치" k="value" sort={squadSort} dir={squadDir} onClick={toggleSquadSort} />
+                <SortableTh label="나이" k="age" sort={squadSort} dir={squadDir} onClick={toggleSquadSort} />
+                <SortableTh label="CA" k="ca" sort={squadSort} dir={squadDir} onClick={toggleSquadSort} />
+                <SortableTh label="잠재" k="potential" sort={squadSort} dir={squadDir} onClick={toggleSquadSort} />
+                <SortableTh label="가치" k="value" sort={squadSort} dir={squadDir} onClick={toggleSquadSort} />
                 <th></th>
               </tr>
             </thead>
@@ -469,22 +470,3 @@ function TransferHistory({ game }: { game: GameState }) {
   );
 }
 
-function MarketSortHeader({
-  label, k, sort, dir, onClick, title,
-}: {
-  label: string; k: MarketSortKey; sort: MarketSortKey; dir: SortDir;
-  onClick: (k: MarketSortKey) => void; title?: string;
-}) {
-  return (
-    <th
-      className={sort === k ? 'sortable active' : 'sortable'}
-      onClick={() => onClick(k)}
-      title={title}
-      role="button"
-      tabIndex={0}
-      onKeyDown={onKeyActivate(() => onClick(k))}
-    >
-      {label} {sort === k ? (dir === 1 ? '▴' : '▾') : ''}
-    </th>
-  );
-}

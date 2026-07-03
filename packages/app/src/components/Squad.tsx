@@ -4,6 +4,7 @@ import {
   type Club, type Player, type Line,
 } from '@soccer-tycoon/engine';
 import { onKeyActivate } from '../a11y.js';
+import { SortableTh } from './SortableTh.js';
 
 type SortKey = 'ca' | 'age' | 'value' | 'wage' | 'condition';
 type SortDir = 1 | -1;
@@ -108,14 +109,14 @@ export function Squad({ club, onSelect }: { club: Club; onSelect: (p: Player) =>
             <tr>
               <th>이름</th>
               <th>포지션</th>
-              <SortHeader label="나이" k="age" sort={sort} dir={dir} onClick={toggleSort} />
-              <SortHeader label="CA" k="ca" sort={sort} dir={dir} onClick={toggleSort} />
+              <SortableTh label="나이" k="age" sort={sort} dir={dir} onClick={toggleSort} />
+              <SortableTh label="CA" k="ca" sort={sort} dir={dir} onClick={toggleSort} />
               <th>잠재력</th>
-              <SortHeader label="컨디션" k="condition" sort={sort} dir={dir} onClick={toggleSort} />
+              <SortableTh label="컨디션" k="condition" sort={sort} dir={dir} onClick={toggleSort} />
               <th>국적</th>
               <th>계약</th>
-              <SortHeader label="가치" k="value" sort={sort} dir={dir} onClick={toggleSort} />
-              <SortHeader label="주급" k="wage" sort={sort} dir={dir} onClick={toggleSort} />
+              <SortableTh label="가치" k="value" sort={sort} dir={dir} onClick={toggleSort} />
+              <SortableTh label="주급" k="wage" sort={sort} dir={dir} onClick={toggleSort} />
             </tr>
           </thead>
           <tbody>
@@ -144,21 +145,5 @@ export function Squad({ club, onSelect }: { club: Club; onSelect: (p: Player) =>
         </table>
       )}
     </div>
-  );
-}
-
-function SortHeader({
-  label, k, sort, dir, onClick,
-}: { label: string; k: SortKey; sort: SortKey; dir: SortDir; onClick: (k: SortKey) => void }) {
-  return (
-    <th
-      className={sort === k ? 'sortable active' : 'sortable'}
-      onClick={() => onClick(k)}
-      role="button"
-      tabIndex={0}
-      onKeyDown={onKeyActivate(() => onClick(k))}
-    >
-      {label} {sort === k ? (dir === 1 ? '▴' : '▾') : ''}
-    </th>
   );
 }
