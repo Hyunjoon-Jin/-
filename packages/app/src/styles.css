@@ -213,10 +213,17 @@ body {
 .modal-backdrop {
   position: fixed; inset: 0; background: rgba(0,0,0,.6);
   display: flex; align-items: center; justify-content: center; z-index: 50;
+  animation: modal-backdrop-in var(--dur-fast) var(--ease);
 }
 .modal {
   background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
   padding: 22px 26px; max-width: 640px; width: 90%; max-height: 82vh; overflow: auto;
+  animation: modal-in var(--dur-base) var(--ease);
+}
+@keyframes modal-backdrop-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes modal-in {
+  from { opacity: 0; transform: scale(0.96) translateY(6px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
 }
 .modal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .modal-head h2 { margin: 0; }
@@ -287,7 +294,7 @@ body {
 .bc-status.shaky { color: var(--color-warning); }
 .bc-status.critical { color: var(--color-danger); }
 .bc-bar { height: 10px; border-radius: 5px; background: var(--panel-2); overflow: hidden; }
-.bc-fill { height: 100%; transition: width 0.3s; }
+.bc-fill { height: 100%; transition: width var(--dur-slow) var(--ease); }
 .bc-fill.secure, .bc-fill.stable { background: #2fa84f; }
 .bc-fill.shaky { background: var(--color-warning); }
 .bc-fill.critical { background: var(--color-danger); }
@@ -365,7 +372,7 @@ body {
 .mstat-mid { }
 .mstat-label { text-align: center; font-size: 12px; color: var(--muted); margin-bottom: 2px; }
 .mstat-bar { height: 8px; background: var(--accent-2); border-radius: 4px; overflow: hidden; }
-.mstat-fill { height: 100%; background: var(--accent); }
+.mstat-fill { height: 100%; background: var(--accent); transition: width var(--dur-slow) var(--ease); }
 .mstats-ratings { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 14px; }
 .rating-col h4 { margin: 0 0 6px; font-size: 13px; color: var(--muted); }
 .rating-col.mine h4 { color: var(--accent); }
@@ -555,7 +562,7 @@ body {
 .staff-level { font-size: 14px; color: var(--muted); margin-bottom: 8px; }
 .staff-level b { color: var(--text); font-size: 18px; }
 .staff-bar { height: 8px; background: var(--panel-2); border-radius: 4px; overflow: hidden; margin-bottom: 12px; }
-.staff-bar-fill { height: 100%; background: var(--accent-2); }
+.staff-bar-fill { height: 100%; background: var(--accent-2); transition: width var(--dur-slow) var(--ease); }
 .staff-effect { font-size: 13px; min-height: 34px; margin-bottom: 12px; }
 .staff-btn { width: 100%; }
 .staff-btn:disabled { opacity: .4; cursor: not-allowed; }
@@ -590,7 +597,7 @@ h3 { font-size: 14px; margin: 0 0 10px; color: var(--muted); text-transform: upp
 .bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
 .bar-label { width: 36px; font-size: 13px; color: var(--muted); }
 .bar-track { flex: 1; height: 8px; background: var(--panel-2); border-radius: 4px; overflow: hidden; }
-.bar-fill { height: 100%; background: var(--accent); }
+.bar-fill { height: 100%; background: var(--accent); transition: width var(--dur-slow) var(--ease); }
 .bar-val { width: 28px; text-align: right; font-size: 13px; font-weight: 700; }
 
 /* ── Match / Season ── */
@@ -737,7 +744,7 @@ h3 { font-size: 14px; margin: 0 0 10px; color: var(--muted); text-transform: upp
 .pv-num { font-size: 13px; text-align: center; color: var(--muted); }
 .pv-num.lead { color: var(--text); font-weight: 700; }
 .pv-bar { position: relative; display: flex; height: 20px; border-radius: 4px; overflow: hidden; background: var(--panel-2); }
-.pv-seg { height: 100%; }
+.pv-seg { height: 100%; transition: width var(--dur-slow) var(--ease); }
 .pv-seg.mine { background: var(--accent); }
 .pv-seg.opp { background: #55617a; }
 .pv-label {
@@ -753,8 +760,8 @@ h3 { font-size: 14px; margin: 0 0 10px; color: var(--muted); text-transform: upp
 .ls-head .mine { color: var(--accent); }
 .ls-poss-nums { display: flex; justify-content: space-between; align-items: center; font-size: 14px; }
 .ls-poss-bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; background: var(--panel-2); margin: 5px 0 10px; }
-.ls-seg.mine { background: var(--accent); }
-.ls-seg.opp { background: #55617a; }
+.ls-seg.mine { background: var(--accent); transition: width var(--dur-slow) var(--ease); }
+.ls-seg.opp { background: #55617a; transition: width var(--dur-slow) var(--ease); }
 .ls-row { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; margin: 3px 0; }
 .ls-row .ls-num { font-size: 14px; color: var(--muted); }
 .ls-row .ls-num:first-child { text-align: left; }
