@@ -6,6 +6,7 @@ import {
 import type { MatchResult, MediaTone } from '@soccer-tycoon/engine';
 import { MatchDetailModal } from './MatchStats.js';
 import { MediaInterview } from './MediaInterview.js';
+import { Banner, type BannerTone } from './Banner.js';
 
 interface Props {
   game: GameState;
@@ -58,6 +59,9 @@ const PACE_TEXT: Record<'ahead' | 'onTrack' | 'behind', { icon: string; label: s
   onTrack: { icon: '📊', label: '페이스 유지 중' },
   behind: { icon: '📉', label: '페이스 이탈' },
 };
+const PACE_TONE: Record<'ahead' | 'onTrack' | 'behind', BannerTone> = {
+  ahead: 'success', onTrack: 'warning', behind: 'danger',
+};
 
 function InSeason(props: Props) {
   const { game, onPlayRound, onPlayRest, onWatch, onMediaRespond, onMediaDismiss } = props;
@@ -86,7 +90,7 @@ function InSeason(props: Props) {
         )}
       </div>
       {checkpoint && (
-        <div className={`pace-checkpoint ${checkpoint.status}`}>
+        <Banner tone={PACE_TONE[checkpoint.status]}>
           {PACE_TEXT[checkpoint.status].icon} <b>{PACE_TEXT[checkpoint.status].label}</b> — {checkpoint.round}/{checkpoint.totalRounds}라운드 기준 <b>{checkpoint.position}위</b>
           <span className="muted small"> (목표 {checkpoint.objective}위 이내)</span>
           {checkpoint.rival && (
@@ -99,7 +103,7 @@ function InSeason(props: Props) {
                   : `보다 ${checkpoint.position - checkpoint.rival.position}계단 아래`}
             </span>
           )}
-        </div>
+        </Banner>
       )}
       <div className="phase-actions">
         {next && <button className="btn-advance" onClick={onWatch}>내 경기 관전 ▶</button>}

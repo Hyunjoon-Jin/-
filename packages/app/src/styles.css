@@ -8,6 +8,57 @@
   --accent: #3ddc84;
   --accent-2: #4aa3ff;
   --mine: #2a3b2f;
+
+  /* ── 의미 기반 상태 색상(디자인 토큰) ──
+     예전엔 "안 좋음"을 뜻하는 빨강 계열이 5가지, "경고/주의"를 뜻하는 호박색 계열이
+     3가지, 화면마다 조금씩 다르게 쓰였다. 하나의 값으로 통일하고 의미 이름을 붙여,
+     이후 색을 조정할 때 한 곳만 고치면 되게 한다. */
+  --color-success: var(--accent);
+  --color-success-bg: #1f3a26;
+  --color-danger: #e0574b;
+  --color-danger-bg: #3a2020;
+  --color-warning: #e0a83b;
+  --color-warning-bg: #332a1a;
+  --color-caution: #ff9d5c;
+  --color-gold: #f0be46;
+  --color-gold-bg: rgba(240, 190, 70, 0.14);
+  --color-info: var(--accent-2);
+  --color-special: #a57dfa;
+  --color-special-bg: rgba(165, 125, 250, 0.12);
+
+  /* ── radius 스케일(예전엔 4~20px, 999px가 규칙 없이 섞여 있었음) ── */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-pill: 999px;
+
+  /* ── spacing 스케일 ── */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  /* ── 타입 스케일(예전엔 10px~40px까지 매직 넘버가 산발적으로 쓰였음) ── */
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: 13px;
+  --text-md: 14px;
+  --text-lg: 16px;
+  --text-xl: 20px;
+  --text-2xl: 26px;
+  --text-3xl: 34px;
+
+  /* ── 모션(prefers-reduced-motion에서 0으로 재정의됨) ── */
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --dur-slow: 320ms;
+  --ease: cubic-bezier(0.2, 0, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur-fast: 0ms; --dur-base: 0ms; --dur-slow: 0ms; }
 }
 
 * { box-sizing: border-box; }
@@ -79,7 +130,7 @@ body {
   border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 13px;
 }
 .btn-small:hover { border-color: var(--accent-2); }
-.btn-small.danger:hover { border-color: #ff6b6b; color: #ff6b6b; }
+.btn-small.danger:hover { border-color: var(--color-danger); color: var(--color-danger); }
 
 .career-archive { margin-bottom: 28px; text-align: left; }
 .career-archive .subtitle { margin-bottom: 12px; }
@@ -90,7 +141,7 @@ body {
 }
 .btn-ghost:hover { color: var(--text); border-color: var(--accent-2); }
 .saved-badge { color: var(--accent); font-size: 12px; }
-.saved-badge.save-error { color: #e0544a; font-weight: 700; }
+.saved-badge.save-error { color: var(--color-danger); font-weight: 700; }
 .help-btn { padding: 4px 10px; font-weight: 700; }
 
 /* ── Difficulty (start) ── */
@@ -111,16 +162,52 @@ body {
 }
 .div-badge { background: var(--accent-2); color: #06203f; border-radius: 6px; padding: 1px 8px; font-size: 13px; }
 .obj-met { color: var(--accent); font-weight: 700; }
-.obj-miss { color: #ff8080; font-weight: 700; }
+.obj-miss { color: var(--color-danger); font-weight: 700; }
 .welcome {
   background: var(--panel-2); border: 1px solid var(--accent-2); border-radius: 10px;
   padding: 16px 20px; margin-bottom: 16px;
 }
 .welcome h2 { margin: 0 0 8px; }
 .welcome p { line-height: 1.6; margin: 0; }
-.fin-warn { border-radius: 10px; padding: 12px 16px; margin-bottom: 16px; font-size: 14px; font-weight: 600; }
-.fin-warn.crisis { background: #3a2020; border: 1px solid #ff6b6b; color: #ff8080; }
-.fin-warn.caution { background: #332a1a; border: 1px solid #e0c14a; color: #e0c14a; }
+/* ── 공용 알림 카드(Banner.tsx) ──
+   은퇴·마일스톤·유스·기대주소식·이변·페이스체크·라이벌·감독이미지·계약제안·재정경고·
+   이사회요구가 각자 거의 동일한 그라디언트 카드를 복붙해 쓰던 것을 하나로 통합.
+   톤은 의미(성공/위험/경고/축하/정보/특별)만 고르면 되고, 시각 스타일은 공용이다. */
+.banner {
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-4);
+  font-size: var(--text-md);
+}
+.banner-title { font-weight: 700; margin-bottom: var(--space-1); }
+.banner-body { font-size: var(--text-md); }
+.banner-body p { margin: 0; font-size: var(--text-md); }
+.banner-body p + p { margin-top: var(--space-2); }
+
+.banner-success {
+  background: linear-gradient(135deg, rgba(61, 220, 132, 0.14), rgba(61, 220, 132, 0.04));
+  border: 1px solid rgba(61, 220, 132, 0.4);
+}
+.banner-danger {
+  background: linear-gradient(135deg, rgba(224, 87, 75, 0.14), rgba(224, 87, 75, 0.04));
+  border: 1px solid rgba(224, 87, 75, 0.4);
+}
+.banner-warning {
+  background: linear-gradient(135deg, rgba(224, 168, 59, 0.14), rgba(224, 168, 59, 0.04));
+  border: 1px solid rgba(224, 168, 59, 0.4);
+}
+.banner-gold {
+  background: linear-gradient(135deg, rgba(240, 190, 70, 0.14), rgba(240, 190, 70, 0.04));
+  border: 1px solid rgba(240, 190, 70, 0.4);
+}
+.banner-info {
+  background: linear-gradient(135deg, rgba(90, 170, 250, 0.14), rgba(90, 170, 250, 0.04));
+  border: 1px solid rgba(90, 170, 250, 0.4);
+}
+.banner-special {
+  background: linear-gradient(135deg, rgba(165, 125, 250, 0.13), rgba(165, 125, 250, 0.03));
+  border: 1px solid rgba(165, 125, 250, 0.4);
+}
 
 /* ── Modal (help) ── */
 .modal-backdrop {
@@ -144,7 +231,7 @@ body {
 .media-opt { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; width: 100%; padding: 10px 14px; }
 .media-opt.on-brand { border-color: rgba(240, 190, 70, 0.5); background: rgba(240, 190, 70, 0.08); }
 .media-opt-text { font-size: 14px; }
-.media-opt-star { color: #f0be46; margin-right: 4px; }
+.media-opt-star { color: var(--color-gold); margin-right: 4px; }
 .media-skip { width: 100%; }
 
 /* ── Clickable rows / links ── */
@@ -164,8 +251,8 @@ body {
   background: var(--panel-2); border: 1px solid var(--line); color: var(--muted);
 }
 .form-rating.good { color: #3ddc84; border-color: rgba(61,220,132,0.4); }
-.form-rating.mid { color: #e0be46; border-color: rgba(224,190,70,0.4); }
-.form-rating.poor { color: #e0574b; border-color: rgba(224,87,75,0.4); }
+.form-rating.mid { color: var(--color-warning); border-color: rgba(224,190,70,0.4); }
+.form-rating.poor { color: var(--color-danger); border-color: rgba(224,87,75,0.4); }
 .pd-growth { margin: 6px 0 16px; }
 .pd-growth h3 { margin: 0 0 6px; }
 .growth-svg { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; display: block; }
@@ -182,7 +269,7 @@ body {
 }
 .timeline-item:last-child { border-bottom: none; }
 .timeline-season { color: var(--muted); min-width: 52px; flex-shrink: 0; }
-.timeline-item.retired .timeline-text { color: #f0be46; }
+.timeline-item.retired .timeline-text { color: var(--color-gold); }
 
 .career-leaders { margin-top: 22px; }
 .career-leaders h3 { margin-bottom: 10px; }
@@ -197,102 +284,24 @@ body {
 .board-conf { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; margin-bottom: 16px; }
 .bc-head { display: flex; justify-content: space-between; align-items: center; font-size: 14px; margin-bottom: 8px; }
 .bc-status.secure, .bc-status.stable { color: #2fa84f; }
-.bc-status.shaky { color: #e0a83b; }
-.bc-status.critical { color: #d0463b; }
+.bc-status.shaky { color: var(--color-warning); }
+.bc-status.critical { color: var(--color-danger); }
 .bc-bar { height: 10px; border-radius: 5px; background: var(--panel-2); overflow: hidden; }
 .bc-fill { height: 100%; transition: width 0.3s; }
 .bc-fill.secure, .bc-fill.stable { background: #2fa84f; }
-.bc-fill.shaky { background: #e0a83b; }
-.bc-fill.critical { background: #d0463b; }
-.bc-warn { margin: 8px 0 0; color: #e0574b; font-size: 13px; font-weight: 600; }
-.board-demand { background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--accent-2); border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; font-size: 14px; }
-
-.retirement-banner {
-  background: linear-gradient(135deg, rgba(240, 190, 70, 0.12), rgba(240, 190, 70, 0.04));
-  border: 1px solid rgba(240, 190, 70, 0.35); border-radius: 8px;
-  padding: 10px 14px; margin-bottom: 14px;
-}
-.retirement-banner p { margin: 0; font-size: 14px; }
-.retirement-banner p + p { margin-top: 6px; }
-
-.milestone-banner {
-  background: linear-gradient(135deg, rgba(61, 220, 132, 0.12), rgba(61, 220, 132, 0.04));
-  border: 1px solid rgba(61, 220, 132, 0.35); border-radius: 8px;
-  padding: 10px 14px; margin-bottom: 14px;
-}
-.milestone-banner p { margin: 0; font-size: 14px; }
-.milestone-banner p + p { margin-top: 6px; }
-
-.youth-banner {
-  background: linear-gradient(135deg, rgba(90, 170, 250, 0.12), rgba(90, 170, 250, 0.04));
-  border: 1px solid rgba(90, 170, 250, 0.35); border-radius: 8px;
-  padding: 10px 14px; margin-bottom: 14px;
-}
-.youth-banner p { margin: 0; font-size: 14px; }
-.youth-banner p + p { margin-top: 6px; }
-.youth-banner-title { font-weight: 700; }
-
-.prospect-update-banner {
-  background: linear-gradient(135deg, rgba(170, 120, 250, 0.12), rgba(170, 120, 250, 0.04));
-  border: 1px solid rgba(170, 120, 250, 0.35); border-radius: 8px;
-  padding: 10px 14px; margin-bottom: 14px;
-}
-.prospect-update-banner p { margin: 0; font-size: 14px; }
-.prospect-update-banner p + p { margin-top: 6px; }
-.prospect-update-banner-title { font-weight: 700; }
-
-.surprise-banner { border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; }
-.surprise-banner p { margin: 0; font-size: 14px; }
-.surprise-banner.overperform {
-  background: linear-gradient(135deg, rgba(90, 170, 250, 0.14), rgba(90, 170, 250, 0.04));
-  border: 1px solid rgba(90, 170, 250, 0.4);
-}
-.surprise-banner.underperform {
-  background: linear-gradient(135deg, rgba(208, 70, 59, 0.14), rgba(208, 70, 59, 0.04));
-  border: 1px solid rgba(208, 70, 59, 0.4);
-}
-
-.pace-checkpoint { border-radius: 8px; padding: 10px 14px; margin-bottom: 14px; font-size: 14px; }
-.pace-checkpoint.ahead {
-  background: linear-gradient(135deg, rgba(61, 220, 132, 0.14), rgba(61, 220, 132, 0.04));
-  border: 1px solid rgba(61, 220, 132, 0.4);
-}
-.pace-checkpoint.onTrack {
-  background: linear-gradient(135deg, rgba(224, 190, 70, 0.14), rgba(224, 190, 70, 0.04));
-  border: 1px solid rgba(224, 190, 70, 0.4);
-}
-.pace-checkpoint.behind {
-  background: linear-gradient(135deg, rgba(208, 70, 59, 0.14), rgba(208, 70, 59, 0.04));
-  border: 1px solid rgba(208, 70, 59, 0.4);
-}
-
-.rival-card {
-  background: linear-gradient(135deg, rgba(224, 87, 75, 0.12), rgba(224, 87, 75, 0.03));
-  border: 1px solid rgba(224, 87, 75, 0.35); border-radius: 8px;
-  padding: 10px 14px; margin-bottom: 16px; font-size: 14px;
-}
+.bc-fill.shaky { background: var(--color-warning); }
+.bc-fill.critical { background: var(--color-danger); }
+.bc-warn { margin: 8px 0 0; color: var(--color-danger); font-size: 13px; font-weight: 600; }
 .rival-record { color: var(--muted); }
-.derby-badge { color: #e0574b; font-weight: 700; }
+.derby-badge { color: var(--color-danger); font-weight: 700; }
 .derby-badge.small { font-size: 12px; }
-.final-badge { color: #f0be46; font-weight: 700; }
+.final-badge { color: var(--color-gold); font-weight: 700; }
 .derby-banner {
   background: linear-gradient(135deg, rgba(224, 87, 75, 0.18), rgba(224, 87, 75, 0.05));
   border: 1px solid rgba(224, 87, 75, 0.4); border-radius: 8px;
-  padding: 8px 14px; margin-bottom: 12px; font-weight: 700; color: #e0574b; text-align: center;
+  padding: 8px 14px; margin-bottom: 12px; font-weight: 700; color: var(--color-danger); text-align: center;
 }
 
-.persona-card {
-  background: linear-gradient(135deg, rgba(160, 130, 250, 0.12), rgba(160, 130, 250, 0.03));
-  border: 1px solid rgba(160, 130, 250, 0.35); border-radius: 8px;
-  padding: 10px 14px; margin-bottom: 16px; font-size: 14px;
-}
-
-.contract-offer {
-  background: linear-gradient(135deg, rgba(240, 190, 70, 0.14), rgba(240, 190, 70, 0.04));
-  border: 1px solid rgba(240, 190, 70, 0.4); border-radius: 8px;
-  padding: 14px 16px; margin-bottom: 16px;
-}
-.contract-offer h3 { margin: 0 0 4px; font-size: 15px; }
 .contract-options { display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
 .contract-opt {
   flex: 1; min-width: 200px; text-align: left; cursor: pointer;
@@ -316,7 +325,7 @@ body {
 .neg-offers { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 14px; }
 .pd-traits { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
 .trait-chip {
-  background: rgba(240, 190, 70, 0.14); color: #f0be46;
+  background: rgba(240, 190, 70, 0.14); color: var(--color-gold);
   border: 1px solid rgba(240, 190, 70, 0.4);
   border-radius: 999px; padding: 3px 10px; font-size: 12px; font-weight: 600;
   cursor: help;
@@ -342,7 +351,7 @@ body {
 .attr-name { color: var(--muted); }
 .attr-val { text-align: right; font-weight: 700; width: 34px; }
 .attr-hi { color: var(--accent); }
-.attr-mid { color: #e0c14a; }
+.attr-mid { color: var(--color-warning); }
 .attr-lo { color: var(--muted); }
 .pd-derived { margin-top: 18px; }
 .pd-derived h3 { margin: 0 0 10px; }
@@ -427,7 +436,7 @@ body {
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; }
 .panel h2 { margin: 0 0 10px; font-size: 16px; }
 .pos { color: var(--accent); }
-.neg { color: #ff6b6b; }
+.neg { color: var(--color-danger); }
 
 /* ── Tables ── */
 .data-table { width: 100%; border-collapse: collapse; font-size: 14px; }
@@ -447,10 +456,10 @@ body {
 /* 컨디션 / 부상 */
 .cond { font-weight: 700; }
 .cond-good { color: var(--accent); }
-.cond-mid { color: #e0c14a; }
-.cond-low { color: #ff9d5c; }
-.injury { color: #ff6b6b; font-weight: 700; }
-.suspended { color: #ff8f4a; font-weight: 700; }
+.cond-mid { color: var(--color-warning); }
+.cond-low { color: var(--color-caution); }
+.injury { color: var(--color-danger); font-weight: 700; }
+.suspended { color: var(--color-caution); font-weight: 700; }
 .slot-injured { background: #2e1c1c; }
 .card-list { list-style: none; padding: 0; margin: 0 0 14px; text-align: left; }
 .card-list li { display: flex; gap: 8px; padding: 4px 0; font-size: 13px; }
@@ -477,7 +486,7 @@ body {
 .cup-head h2 { margin: 0; }
 .cup-status { font-size: 13px; padding: 3px 10px; border-radius: 14px; }
 .cup-status.alive { background: #1f3a26; color: var(--accent); }
-.cup-status.out { background: #3a2020; color: #ff8080; }
+.cup-status.out { background: #3a2020; color: var(--color-danger); }
 .cup-champ { font-size: 16px; }
 .cup-head .btn-advance { margin-left: auto; }
 
@@ -505,7 +514,7 @@ body {
 .tie-score { background: var(--panel-2); border-radius: 4px; padding: 1px 7px; font-weight: 700; font-size: 12px; white-space: nowrap; }
 .tie-card.bye { grid-template-columns: 1fr auto; }
 .tie-card.mine.win { background: #1f3a26; border-color: #2fa84f; }
-.tie-card.mine.loss { background: #3a2020; border-color: #d0463b; }
+.tie-card.mine.loss { background: #3a2020; border-color: var(--color-danger); }
 .tie-card.pending { border-style: dashed; opacity: 0.85; }
 .tie-card.pending.mine { border-color: var(--accent); }
 .tie-card.champion {
@@ -518,7 +527,7 @@ body {
 .tie-card.upset { border-color: rgba(240, 190, 70, 0.7); box-shadow: 0 0 0 1px rgba(240, 190, 70, 0.3) inset; }
 .upset-badge {
   position: absolute; top: -9px; left: 8px;
-  background: #f0be46; color: #06203f; font-weight: 700; font-size: 10px;
+  background: var(--color-gold); color: #06203f; font-weight: 700; font-size: 10px;
   padding: 1px 6px; border-radius: 4px;
 }
 .cup-favorites .upset-badge { position: static; display: inline-block; margin-left: 4px; }
@@ -611,7 +620,7 @@ h3 { font-size: 14px; margin: 0 0 10px; color: var(--muted); text-transform: upp
 .budget { color: var(--accent); font-size: 16px; }
 .toast { padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 600; }
 .toast.ok { background: #1f3a26; color: var(--accent); }
-.toast.err { background: #3a2020; color: #ff8080; }
+.toast.err { background: #3a2020; color: var(--color-danger); }
 .market-cols { display: grid; grid-template-columns: 1.25fr 1fr; gap: 18px; }
 .market-panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
 .filters { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
@@ -654,7 +663,7 @@ h3 { font-size: 14px; margin: 0 0 10px; color: var(--muted); text-transform: upp
 .feed .feed-min { color: var(--muted); width: 34px; font-weight: 700; }
 .feed li.goal { background: #243a2a; border-radius: 6px; font-weight: 600; }
 .feed li.goal.mine { background: #1f3a26; color: var(--accent); }
-.feed li.injury-feed { background: #3a2a24; border-radius: 6px; color: #e0a83b; }
+.feed li.injury-feed { background: #3a2a24; border-radius: 6px; color: var(--color-warning); }
 
 /* 부상 교체 모달 */
 .modal.injury-modal { max-width: 460px; }
@@ -669,11 +678,11 @@ h3 { font-size: 14px; margin: 0 0 10px; color: var(--muted); text-transform: upp
 .derby-result { font-size: 16px; font-weight: 700; margin: 0 0 4px; }
 .derby-result.win { color: #3ddc84; }
 .derby-result.draw { color: var(--muted); }
-.derby-result.loss { color: #e0574b; }
+.derby-result.loss { color: var(--color-danger); }
 .final-result { font-size: 16px; font-weight: 700; margin: 0 0 4px; }
-.final-result.win { color: #f0be46; }
+.final-result.win { color: var(--color-gold); }
 .final-result.draw { color: var(--muted); }
-.final-result.loss { color: #e0574b; }
+.final-result.loss { color: var(--color-danger); }
 /* 하프타임 전술 편집은 좁은 칼럼이므로 1열로 */
 .watch-side .tactics { grid-template-columns: 1fr; }
 
@@ -694,7 +703,7 @@ h3 { font-size: 14px; margin: 0 0 10px; color: var(--muted); text-transform: upp
 }
 .form-dot.W { background: #2fa84f; }
 .form-dot.D { background: #7a869a; }
-.form-dot.L { background: #d0463b; }
+.form-dot.L { background: var(--color-danger); }
 .pv-metrics { display: flex; flex-direction: column; gap: 6px; }
 .pv-row { display: grid; grid-template-columns: 30px 1fr 30px; align-items: center; gap: 8px; }
 .pv-num { font-size: 13px; text-align: center; color: var(--muted); }

@@ -6,6 +6,7 @@ import {
   formatMoney, currentAbility, wageBudget, annualWageBill, inFinancialCrisis,
   boardStatus, DEMAND_LABEL, type BoardStatus, type ManagerPersona,
 } from '@soccer-tycoon/engine';
+import { Banner } from './Banner.js';
 
 const BOARD_LABEL: Record<BoardStatus, string> = {
   secure: '신뢰 두터움', stable: '안정적', shaky: '불안', critical: '경질 위기',
@@ -49,14 +50,14 @@ export function Dashboard({ game, onSignContract }: { game: GameState; onSignCon
       )}
 
       {crisis ? (
-        <div className="fin-warn crisis">
+        <Banner tone="danger">
           ⚠ 재정 위기 — 보유 자금이 마이너스입니다. 선수를 매각해 자금을 확보하지 않으면
           시즌 후 보드진이 고가 선수를 강제 매각합니다.
-        </div>
+        </Banner>
       ) : overWages ? (
-        <div className="fin-warn caution">
+        <Banner tone="warning">
           ⚠ 임금 과다 — 임금 총액이 지속가능 수준을 넘었습니다. 장기 재정에 주의하세요.
-        </div>
+        </Banner>
       ) : null}
 
       <div className="objective">
@@ -71,7 +72,7 @@ export function Dashboard({ game, onSignContract }: { game: GameState; onSignCon
         <span className="muted small"> · 📝 계약 잔여 {Math.max(0, game.contractSeasonsLeft)}시즌</span>
       </div>
 
-      <div className="rival-card">
+      <Banner tone="danger">
         🔥 라이벌: <b>{rival.name}</b>
         <span className="muted"> ({DIVISION_LABELS[rival.division]})</span>
         <span className="rival-record">
@@ -90,18 +91,17 @@ export function Dashboard({ game, onSignContract }: { game: GameState; onSignCon
             ))}
           </span>
         )}
-      </div>
+      </Banner>
 
       {persona !== 'neutral' && (
-        <div className="persona-card">
+        <Banner tone="special">
           🗣️ 언론이 부르는 별명: <b>{PERSONA_LABEL[persona].label}</b>
           <span className="muted"> — {PERSONA_LABEL[persona].desc}</span>
-        </div>
+        </Banner>
       )}
 
       {contract && (
-        <div className="contract-offer">
-          <h3>📝 감독 계약 만료 — 갱신 제안</h3>
+        <Banner tone="gold" title="📝 감독 계약 만료 — 갱신 제안">
           <p className="muted small">이사회가 재계약을 제안합니다. 계약 기간을 선택하세요.</p>
           <div className="contract-options">
             {contract.map((o) => (
@@ -114,16 +114,16 @@ export function Dashboard({ game, onSignContract }: { game: GameState; onSignCon
               </button>
             ))}
           </div>
-        </div>
+        </Banner>
       )}
 
       <BoardConfidence value={game.boardConfidence} />
 
       {game.demand && (
-        <div className="board-demand">
+        <Banner tone="info">
           📋 이사회 특별 요구: <b>{DEMAND_LABEL[game.demand.kind]}</b>
           <span className="muted small"> (달성 시 신뢰도 +{game.demand.reward} · 실패 시 −{game.demand.penalty})</span>
-        </div>
+        </Banner>
       )}
 
       <div className="cards">
@@ -140,7 +140,7 @@ export function Dashboard({ game, onSignContract }: { game: GameState; onSignCon
         {last ? (
           <div className="last-season">
             {retiredThisSeason.length > 0 && (
-              <div className="retirement-banner">
+              <Banner tone="gold">
                 {retiredThisSeason.map((l) => (
                   <p key={l.playerId}>
                     🕯️ <b>{l.name}</b>({l.position})이(가) {l.finalAge}세로 은퇴했습니다 — 통산{' '}
@@ -150,30 +150,28 @@ export function Dashboard({ game, onSignContract }: { game: GameState; onSignCon
                     그동안 수고했습니다.
                   </p>
                 ))}
-              </div>
+              </Banner>
             )}
             {last.milestones !== undefined && last.milestones.length > 0 && (
-              <div className="milestone-banner">
+              <Banner tone="success">
                 {last.milestones.map((m) => (
                   <p key={`${m.playerId}-${m.kind}-${m.value}`}>
                     🎉 <b>{m.name}</b>, 통산 <b>{m.value}{m.kind === 'apps' ? '경기 출전' : '골'}</b> 달성!
                   </p>
                 ))}
-              </div>
+              </Banner>
             )}
             {last.youthProspects !== undefined && last.youthProspects.length > 0 && (
-              <div className="youth-banner">
-                <p className="youth-banner-title">🌱 이번 시즌 유스 기대주</p>
+              <Banner tone="info" title="🌱 이번 시즌 유스 기대주">
                 {last.youthProspects.map((p) => (
                   <p key={p.playerId}>
                     <b>{p.name}</b> ({p.position} · {p.age}세) — 잠재력 <b>{p.potential.toFixed(0)}</b>
                   </p>
                 ))}
-              </div>
+              </Banner>
             )}
             {last.prospectUpdates !== undefined && last.prospectUpdates.length > 0 && (
-              <div className="prospect-update-banner">
-                <p className="prospect-update-banner-title">📣 유스 기대주 소식</p>
+              <Banner tone="special" title="📣 유스 기대주 소식">
                 {last.prospectUpdates.map((u) => (
                   <p key={`${u.playerId}-${u.kind}`}>
                     {u.kind === 'debut'
@@ -181,16 +179,16 @@ export function Dashboard({ game, onSignContract }: { game: GameState; onSignCon
                       : <>유스 기대주 출신 <b>{u.name}</b>, 커리어 <b>첫 골</b>을 기록했습니다!</>}
                   </p>
                 ))}
-              </div>
+              </Banner>
             )}
             {last.surprise && (
-              <div className={`surprise-banner ${last.surprise}`}>
+              <Banner tone={last.surprise === 'overperform' ? 'info' : 'danger'}>
                 <p>
                   {last.surprise === 'overperform'
                     ? <>🎉 <b>이변의 시즌!</b> 언론은 {last.preseasonRank}위로 예상했지만 <b>{pos}위</b>로 마쳤습니다.</>
                     : <>😞 <b>실망스러운 시즌.</b> 언론은 {last.preseasonRank}위를 예상했지만 <b>{pos}위</b>에 그쳤습니다.</>}
                 </p>
-              </div>
+              </Banner>
             )}
             <p>
               {last.division !== undefined && <><b>{DIVISION_LABELS[last.division]}</b> · </>}
