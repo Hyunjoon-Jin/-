@@ -81,9 +81,11 @@ export function matchOutcomeKind(myGoals: number, oppGoals: number): MediaEventK
   return 'draw';
 }
 
-/** 답변 톤 선택지(결과 유형별). */
+/** 답변 톤 선택지(결과 유형별). 공유 모듈 상태의 원본 배열을 그대로 반환하면
+ *  호출부가 이 배열을 변형(.sort() 등)할 때 이후 모든 호출·모든 구단의 톤
+ *  옵션이 영구 오염되므로, 얕은 복사본을 반환한다. */
 export function mediaToneOptions(kind: MediaEventKind): MediaToneOption[] {
-  return OPTIONS[kind];
+  return [...OPTIONS[kind]];
 }
 
 /** 매 경기 인터뷰가 열릴 확률(전부는 아님 — 언론 관심이 있을 때만). */

@@ -84,8 +84,10 @@ export function repairTactic(club: Club, tactic: Tactic): Tactic {
   return { ...tactic, lineup };
 }
 
-/** 슬롯의 선수를 교체한 새 전술 반환(이미 다른 슬롯에 있으면 자리 교환). */
+/** 슬롯의 선수를 교체한 새 전술 반환(이미 다른 슬롯에 있으면 자리 교환).
+ *  범위 밖 slotIndex는 non-null 단언이 런타임에 그대로 터지므로 먼저 걸러낸다. */
 export function swapPlayer(tactic: Tactic, slotIndex: number, playerId: string): Tactic {
+  if (slotIndex < 0 || slotIndex >= tactic.lineup.length) return tactic;
   const lineup = tactic.lineup.map((s) => ({ ...s }));
   const existing = lineup.findIndex((s) => s.playerId === playerId);
   if (existing >= 0 && existing !== slotIndex) {

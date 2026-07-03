@@ -673,8 +673,8 @@ export function release(state: GameState, playerId: string): ActionOutcome {
 const STAFF_LABEL: Record<string, string> = { coaching: '코칭', medical: '의료', scouting: '스카우팅' };
 
 /** 스태프 업그레이드 (보유 자금 사용). */
-export function upgradeStaffAction(state: GameState, kind: string): ActionOutcome {
-  const r = engineUpgradeStaff(myClub(state), kind as StaffKind);
+export function upgradeStaffAction(state: GameState, kind: StaffKind): ActionOutcome {
+  const r = engineUpgradeStaff(myClub(state), kind);
   if (!r.ok) return { state, ok: false, message: r.reason! };
   return {
     state: { ...state },
@@ -718,10 +718,16 @@ export interface PaceCheckpoint {
  */
 export function paceCheckpoint(state: GameState): PaceCheckpoint | null {
   if (!state.live) return null;
+  const live = state.live;
+  if (live.cursor === 0) return null; // 아직 완료된 라운드가 없음
+  // liveProgress().round는 "다음에 진행할" 라운드라 체크포인트에 이 값을 그대로 쓰면
+  // checkMediaEvent와 달리 "마지막으로 끝난 라운드"가 아닌 한 라운드 이른 시점에
+  // 체크포인트가 뜨면서, 정작 순위표에는 그 이전 라운드까지의 데이터만 반영돼 있었다.
+  const lastCompletedRound = live.fixtures[live.cursor - 1]!.round;
   const prog = liveProgress(state);
-  if (prog.over || prog.round <= 0) return null;
+  if (prog.over) return null;
   const checkpointRounds = PACE_CHECKPOINT_FRACTIONS.map((f) => Math.round(prog.total * f));
-  if (!checkpointRounds.includes(prog.round)) return null;
+  if (!checkpointRounds.includes(lastCompletedRound)) return null;
   const table = liveTable(state);
   const position = table.findIndex((r) => r.clubId === state.myClubId) + 1;
   if (position <= 0) return null;
@@ -729,7 +735,7 @@ export function paceCheckpoint(state: GameState): PaceCheckpoint | null {
   const status: PaceCheckpoint['status'] = gap >= 2 ? 'ahead' : gap >= -1 ? 'onTrack' : 'behind';
   const rivalIdx = table.findIndex((r) => r.clubId === state.rivalClubId);
   const rival = rivalIdx >= 0 ? { name: table[rivalIdx]!.name, position: rivalIdx + 1 } : undefined;
-  return { round: prog.round, totalRounds: prog.total, position, objective: state.objective, status, rival };
+  return { round: lastCompletedRound, totalRounds: prog.total, position, objective: state.objective, status, rival };
 }
 
 /** 내 구단의 다음 라운드 경기. */
@@ -793,6 +799,10 @@ export function checkMediaEvent(state: GameState): MediaEvent | null {
 
 /** 인터뷰 답변 적용: 스쿼드 사기(전원) + 이사회 신뢰도, 해당 라운드를 처리 완료로 표시. */
 export function respondMedia(state: GameState, event: MediaEvent, tone: MediaTone): GameState {
+  // 이미 처리된 라운드의 이벤트를 재적용하면(이중 클릭 등) 사기·신뢰도가 두 번
+  // 반영되고 managerPersona 집계도 중복 카운트된다 — checkMediaEvent가 다시 반환하지
+  // 않는 이벤트라도 호출자가 들고 있던 값으로 재호출할 수 있으므로 여기서도 막는다.
+  if (!state.live || event.round <= state.live.mediaHandledThroughRound) return state;
   const option = event.options.find((o) => o.tone === tone);
   if (option) {
     applyMediaTone(myClub(state), option);
@@ -849,6 +859,9 @@ export function contractOptions(state: GameState): ContractOption[] | null {
 
 /** 계약 갱신 체결: 잔여 시즌 재설정 + 신뢰도 보너스 + (장기 계약이면) 장기적 목표 상향. */
 export function signContract(state: GameState, years: number): GameState {
+  // contractOptions와 동일한 전제조건 — 계약이 아직 유효한데(잔여>0) 호출되면
+  // 잔여 기간을 리셋하고 신뢰도·ambition 보너스를 조용히 또 부여하게 된다.
+  if (state.sacked || state.contractSeasonsLeft > 0) return state;
   const option = CONTRACT_OPTIONS.find((o) => o.years === years);
   if (!option) return state;
   const boardConfidence = applyConfidence(state.boardConfidence, option.confidenceDelta);
@@ -1066,6 +1079,16 @@ export function commitWatchedRound(state: GameState, watched: MatchResult): Game
   if (ss.cursor >= ss.fixtures.length) return state;
   const round = ss.fixtures[ss.cursor]!.round;
   const clubById = (id: string) => state.clubs.find((c) => c.id === id)!;
+
+  // 관전 결과가 실제 이번 라운드의 내 픽스처와 일치하는지 확인 — 오래된/잘못된
+  // MatchResult가 주입되면 순위표·통계가 조용히 오염될 수 있어 조기에 드러낸다.
+  const userFx = ss.fixtures.find(
+    (f, i) => i >= ss.cursor && f.round === round &&
+      (f.homeId === state.myClubId || f.awayId === state.myClubId),
+  );
+  if (userFx && (watched.homeClubId !== userFx.homeId || watched.awayClubId !== userFx.awayId)) {
+    throw new Error('commitWatchedRound: 관전 결과가 이번 라운드의 내 픽스처와 일치하지 않습니다.');
+  }
 
   const userTactic = myTactic(state);
   while (ss.cursor < ss.fixtures.length && ss.fixtures[ss.cursor]!.round === round) {

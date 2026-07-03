@@ -4,7 +4,7 @@ import { upgradeCost, STAFF_MAX, formatMoney, type StaffKind } from '@soccer-tyc
 
 interface Props {
   game: GameState;
-  onUpgrade: (kind: string) => ActionOutcome;
+  onUpgrade: (kind: StaffKind) => ActionOutcome;
 }
 
 const STAFF: { key: StaffKind; label: string; icon: string; effect: string }[] = [

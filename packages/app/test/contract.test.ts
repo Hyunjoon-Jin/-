@@ -75,6 +75,14 @@ describe('감독 계약', () => {
     expect(after).toBe(before);
   });
 
+  it('계약이 아직 유효한데(잔여>0) 호출하면 상태가 변하지 않는다(중복 체결 방지)', () => {
+    const g = startGame(2026, 'c0'); // 새 게임은 잔여 3시즌으로 시작
+    expect(g.contractSeasonsLeft).toBeGreaterThan(0);
+    const before = g;
+    const after = signContract(g, 3);
+    expect(after).toBe(before);
+  });
+
   it('myClub 헬퍼가 정상 동작해 계약 로직이 올바른 구단을 참조한다', () => {
     const g = startGame(2026, 'c0');
     expect(myClub(g).id).toBe('c0');

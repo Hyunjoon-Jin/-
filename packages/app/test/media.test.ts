@@ -57,6 +57,19 @@ describe('media: 감독 인터뷰(앱 레이어)', () => {
     expect(checkMediaEvent(g)).toBeNull();
   });
 
+  it('이미 처리된 이벤트를 들고 재호출(이중 클릭)해도 사기·신뢰도가 두 번 반영되지 않는다', () => {
+    let g = advanceUntilMyMatchPlayed(startSeason(startGame(2026, 'c5')));
+    const event = checkMediaEvent(g);
+    if (!event) return;
+    const option = event.options[0]!;
+    g = respondMedia(g, event, option.tone);
+    const afterFirst = g;
+    // 같은(오래된) event 객체로 재호출 — checkMediaEvent는 더 이상 이 이벤트를
+    // 반환하지 않지만, 호출자가 들고 있던 값으로 다시 호출할 수 있다.
+    g = respondMedia(g, event, option.tone);
+    expect(g).toBe(afterFirst);
+  });
+
   it('응답한 톤이 mediaToneCounts에 누적된다', () => {
     let g = advanceUntilMyMatchPlayed(startSeason(startGame(2026, 'c5')));
     const event = checkMediaEvent(g);

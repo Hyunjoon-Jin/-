@@ -134,7 +134,7 @@ export function App() {
 
   const handleTacticChange = (t: Tactic) => update(setMyTactic(game, t));
 
-  const runAction = (fn: (s: GameState, id: string) => ActionOutcome, id: string): ActionOutcome => {
+  const runAction = <T,>(fn: (s: GameState, id: T) => ActionOutcome, id: T): ActionOutcome => {
     const outcome = fn(game, id);
     if (outcome.ok) update(outcome.state);
     return outcome;

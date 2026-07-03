@@ -13,6 +13,15 @@ describe('media: 감독 인터뷰', () => {
     expect(matchOutcomeKind(1, 1)).toBe('draw');
   });
 
+  it('반환된 배열을 변형해도 다음 호출에는 영향이 없다(공유 참조 아님)', () => {
+    const first = mediaToneOptions('win');
+    first.sort((a, b) => a.moraleDelta - b.moraleDelta); // 호출부가 정렬 등으로 변형
+    first.pop();
+    const second = mediaToneOptions('win');
+    expect(second.length).toBeGreaterThanOrEqual(2);
+    expect(second).not.toBe(first);
+  });
+
   it('결과 유형별 답변 톤 선택지가 2개 이상 있고, trade-off가 존재한다', () => {
     for (const kind of ['win', 'draw', 'loss'] as const) {
       const opts = mediaToneOptions(kind);

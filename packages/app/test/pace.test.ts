@@ -16,11 +16,13 @@ describe('시즌 중간 페이스 체크포인트', () => {
     let seenAtCheckpoint = 0;
     for (let i = 0; i < total; i++) {
       g = playRound(g);
-      const prog = liveProgress(g);
+      // i+1 = 방금 완료된(마지막으로 끝난) 라운드 번호 — paceCheckpoint는 이제
+      // liveProgress().round(다음에 진행할 라운드)가 아니라 이 값을 기준으로 판정한다.
+      const justCompletedRound = i + 1;
       const cp = paceCheckpoint(g);
-      if (checkpointRounds.includes(prog.round) && !prog.over) {
+      if (checkpointRounds.includes(justCompletedRound)) {
         expect(cp).not.toBeNull();
-        expect(cp!.round).toBe(prog.round);
+        expect(cp!.round).toBe(justCompletedRound);
         seenAtCheckpoint++;
       } else {
         expect(cp).toBeNull();
