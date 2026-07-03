@@ -231,7 +231,7 @@ export function App() {
             {tab === 'dashboard' && (
               <Dashboard game={game} onSignContract={(years) => update(signContract(game, years))} />
             )}
-            {tab === 'squad' && <Squad club={club} onSelect={setDetailPlayer} />}
+            {tab === 'squad' && <Squad key={slotId} club={club} onSelect={setDetailPlayer} />}
             {tab === 'tactics' && (
               <Tactics club={club} tactic={myTactic(game)} onChange={handleTacticChange} />
             )}
@@ -260,6 +260,7 @@ export function App() {
             {tab === 'stats' && <Stats game={game} />}
             {tab === 'transfers' && (
               <Transfers
+                key={slotId}
                 game={game}
                 onNegotiate={(id, offer) => negotiate(game, id, offer)}
                 onBuyAt={handleBuyAt}

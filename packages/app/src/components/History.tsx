@@ -21,22 +21,27 @@ export function History({ game }: { game: GameState }) {
     return idx >= 0 ? idx + 1 : undefined;
   };
 
-  // 내 구단 명예
-  const leagueTitles = seasons.filter((s) => s.championId === myId).length;
+  // 내 구단 명예 — 1부/2부 우승은 가치가 다르므로(강등된 부에서의 우승과 승격한
+  // 부에서의 우승이 동일 취급되면 안 됨) division별로 구분 집계한다.
+  const leagueTitlesD0 = seasons.filter((s) => s.championId === myId && s.division === 0).length;
+  const leagueTitlesD1 = seasons.filter((s) => s.championId === myId && s.division === 1).length;
   const cupTitles = seasons.filter((s) => s.cupChampionId === myId).length;
   const positions = seasons.map(posOf).filter((p): p is number => p !== undefined);
   const bestFinish = positions.length ? Math.min(...positions) : undefined;
   const demandSeasons = seasons.filter((s) => s.demand);
   const demandsMet = demandSeasons.filter((s) => s.demand!.met).length;
 
-  // 리그 우승 순위 (구단별)
-  const titleCount = new Map<string, { name: string; count: number }>();
+  // 리그 우승 순위 (구단별, 부별로 별도 집계 — 같은 구단이 1부·2부 모두 우승한
+  // 이력을 하나의 숫자로 합치면 서로 다른 무게의 우승이 뒤섞인다).
+  const titleCount = new Map<string, { name: string; division: number; count: number }>();
   for (const s of seasons) {
-    const cur = titleCount.get(s.championId) ?? { name: s.championName, count: 0 };
+    if (s.division === undefined) continue;
+    const key = `${s.championId}-${s.division}`;
+    const cur = titleCount.get(key) ?? { name: s.championName, division: s.division, count: 0 };
     cur.count++;
-    titleCount.set(s.championId, cur);
+    titleCount.set(key, cur);
   }
-  const titleTable = [...titleCount.values()].sort((a, b) => b.count - a.count);
+  const titleTable = [...titleCount.values()].sort((a, b) => b.count - a.count || a.division - b.division);
 
   const leaders = careerScorers(game.clubs, 15);
 
@@ -49,7 +54,8 @@ export function History({ game }: { game: GameState }) {
       <div className="honors">
         <h2>🏛️ 명예의 전당 — {club.name}</h2>
         <div className="cards">
-          <HonorCard title="리그 우승" value={`${leagueTitles}회`} />
+          <HonorCard title="1부 우승" value={`${leagueTitlesD0}회`} />
+          <HonorCard title="2부 우승" value={`${leagueTitlesD1}회`} />
           <HonorCard title="컵 우승" value={`${cupTitles}회`} />
           <HonorCard title="최고 순위" value={bestFinish ? `${bestFinish}위` : '-'} />
           <HonorCard title="치른 시즌" value={`${seasons.length}시즌`} />
@@ -106,12 +112,13 @@ export function History({ game }: { game: GameState }) {
         <div>
           <h3>리그 우승 순위</h3>
           <table className="data-table compact">
-            <thead><tr><th>#</th><th>구단</th><th>우승</th></tr></thead>
+            <thead><tr><th>#</th><th>구단</th><th>부</th><th>우승</th></tr></thead>
             <tbody>
               {titleTable.map((t, i) => (
-                <tr key={t.name} className={t.name === club.name ? 'mine' : ''}>
+                <tr key={`${t.name}-${t.division}`} className={t.name === club.name ? 'mine' : ''}>
                   <td>{i + 1}</td>
                   <td className="name">{t.name}</td>
+                  <td className="small muted">{DIVISION_LABELS[t.division] ?? '-'}</td>
                   <td><b>{t.count}</b></td>
                 </tr>
               ))}

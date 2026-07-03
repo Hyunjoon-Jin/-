@@ -223,7 +223,16 @@ function TransferMarket({ game, onNegotiate, onBuyAt, onOffers, onAcceptSell, on
                   <td>{formatMoney(marketValue(p))}</td>
                   <td className="sell-actions">
                     <button className="btn-small" onClick={() => { setMsg(null); setSelling(p); }}>판매</button>
-                    <button className="btn-small danger" onClick={() => act(onRelease(p.id))}>방출</button>
+                    <button
+                      className="btn-small danger"
+                      onClick={() => {
+                        if (window.confirm(`${p.name} 선수를 방출하시겠습니까? 보상 없이 영구히 스쿼드에서 빠집니다.`)) {
+                          act(onRelease(p.id));
+                        }
+                      }}
+                    >
+                      방출
+                    </button>
                   </td>
                 </tr>
               ))}
