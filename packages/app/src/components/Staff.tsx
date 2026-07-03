@@ -1,6 +1,6 @@
-import { useState } from 'react';
 import { myClub, type GameState, type ActionOutcome } from '../game.js';
 import { upgradeCost, STAFF_MAX, formatMoney, type StaffKind } from '@soccer-tycoon/engine';
+import { useResultToast } from '../toast.js';
 
 interface Props {
   game: GameState;
@@ -16,7 +16,7 @@ const STAFF: { key: StaffKind; label: string; icon: string; effect: string }[] =
 
 export function Staff({ game, onUpgrade }: Props) {
   const club = myClub(game);
-  const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const toast = useResultToast();
 
   const staffWage =
     (club.staff.coaching + club.staff.medical + club.staff.scouting + club.staff.youth) * 600;
@@ -29,7 +29,6 @@ export function Staff({ game, onUpgrade }: Props) {
           <b className="budget">{formatMoney(club.finance.balance)}</b>
           <span className="muted"> · 스태프 연봉 {formatMoney(staffWage)}/시즌</span>
         </div>
-        {msg && <span className={msg.ok ? 'toast ok' : 'toast err'}>{msg.text}</span>}
       </div>
 
       <div className="staff-cards">
@@ -52,7 +51,7 @@ export function Staff({ game, onUpgrade }: Props) {
               <button
                 className="btn-advance staff-btn"
                 disabled={maxed || !afford}
-                onClick={() => setMsg({ ...pick(onUpgrade(s.key)) })}
+                onClick={() => toast(onUpgrade(s.key))}
               >
                 {maxed ? '최고 레벨' : `업그레이드 (${formatMoney(cost)})`}
               </button>
@@ -62,8 +61,4 @@ export function Staff({ game, onUpgrade }: Props) {
       </div>
     </div>
   );
-}
-
-function pick(o: ActionOutcome): { text: string; ok: boolean } {
-  return { text: o.message, ok: o.ok };
 }

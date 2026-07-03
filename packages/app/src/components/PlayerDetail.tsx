@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import {
   TECHNICAL_ATTRS, MENTAL_ATTRS, PHYSICAL_ATTRS, GOALKEEPING_ATTRS,
   TRAINING_FOCUSES, TRAINING_LABELS, TRAIT_LABELS, TRAIT_DESC,
@@ -9,6 +8,7 @@ import {
 } from '@soccer-tycoon/engine';
 import { formStability, revealPotential, type TimelineEntry, type SeasonRatingEntry } from '../game.js';
 import { useModalA11y } from './useModalA11y.js';
+import { useResultToast } from '../toast.js';
 
 function moraleLabel(m: number): { text: string; cls: string } {
   if (m >= 0.65) return { text: '😀 만족', cls: 'cond-good' };
@@ -77,10 +77,6 @@ const DERIVED_LABELS: { key: keyof DerivedRatings; label: string }[] = [
   { key: 'gk', label: '골키핑' },
 ];
 
-function pickOut(o: { ok: boolean; message: string }): { text: string; ok: boolean } {
-  return { text: o.message, ok: o.ok };
-}
-
 function attrClass(v: number): string {
   return v >= 15 ? 'attr-hi' : v >= 10 ? 'attr-mid' : 'attr-lo';
 }
@@ -112,7 +108,7 @@ interface Props {
 export function PlayerDetail({
   player, onClose, onSetFocus, onRenew, recentForm, timeline, ratingHistory, scouting,
 }: Props) {
-  const [msg, setMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const toast = useResultToast();
   const ca = currentAbility(player);
   const derived = playerDerived(player, player.position);
   const status = statusBadge(player);
@@ -173,12 +169,11 @@ export function PlayerDetail({
             {player.contractYears <= 2 ? (
               <>
                 <span className="muted">계약 만료 임박 ({player.contractYears}년) — </span>
-                <button className="btn-small" onClick={() => setMsg(pickOut(onRenew()))}>재계약 (계약금 {formatMoney(player.wage * 20)})</button>
+                <button className="btn-small" onClick={() => toast(onRenew())}>재계약 (계약금 {formatMoney(player.wage * 20)})</button>
               </>
             ) : (
               <span className="muted small">계약 {player.contractYears}년 남음 — 재계약 불필요.</span>
             )}
-            {msg && <span className={msg.ok ? 'toast ok' : 'toast err'}>{msg.text}</span>}
           </div>
         )}
         {(player.traits ?? []).length > 0 && (

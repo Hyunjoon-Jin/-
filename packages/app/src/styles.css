@@ -621,6 +621,34 @@ h3 { font-size: 14px; margin: 0 0 10px; color: var(--muted); text-transform: upp
 .toast { padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: 600; }
 .toast.ok { background: #1f3a26; color: var(--accent); }
 .toast.err { background: #3a2020; color: var(--color-danger); }
+
+/* ── 공용 토스트 스택(toast.tsx) — 화면 우하단, 자동 소멸 ── */
+.toast-stack {
+  position: fixed;
+  right: var(--space-4);
+  bottom: var(--space-4);
+  display: flex;
+  flex-direction: column-reverse;
+  gap: var(--space-2);
+  z-index: 200;
+  pointer-events: none;
+}
+.toast-item {
+  pointer-events: auto;
+  max-width: 360px;
+  padding: 10px 16px;
+  border-radius: var(--radius-md);
+  font-size: var(--text-md);
+  font-weight: 600;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+  animation: toast-in var(--dur-base) var(--ease);
+}
+.toast-item.ok { background: var(--color-success-bg); color: var(--accent); border: 1px solid rgba(61,220,132,0.4); }
+.toast-item.err { background: var(--color-danger-bg); color: var(--color-danger); border: 1px solid rgba(224,87,75,0.4); }
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 .market-cols { display: grid; grid-template-columns: 1.25fr 1fr; gap: 18px; }
 .market-panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
 .filters { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }

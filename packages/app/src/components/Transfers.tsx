@@ -8,6 +8,7 @@ import { ScoutingSummary } from './PlayerDetail.js';
 import { useModalA11y } from './useModalA11y.js';
 import { onKeyActivate } from '../a11y.js';
 import { SortableTh } from './SortableTh.js';
+import { useToast } from '../toast.js';
 
 interface Props {
   game: GameState;
@@ -54,7 +55,7 @@ export function Transfers(props: Props) {
 
 function TransferMarket({ game, onNegotiate, onBuyAt, onOffers, onAcceptSell, onRelease, onSelect }: Props) {
   const club = myClub(game);
-  const [msg, setMsg] = useState<Msg | null>(null);
+  const toast = useToast();
   const [line, setLine] = useState<LineFilter>('ALL');
   const [ageFilter, setAgeFilter] = useState<AgeFilter>('ALL');
   const [search, setSearch] = useState('');
@@ -120,7 +121,7 @@ function TransferMarket({ game, onNegotiate, onBuyAt, onOffers, onAcceptSell, on
   }, [club.players, squadSort, squadDir]);
 
   function act(outcome: ActionOutcome) {
-    setMsg({ text: outcome.message, ok: outcome.ok });
+    toast(outcome.message, outcome.ok);
   }
 
   return (
@@ -131,7 +132,6 @@ function TransferMarket({ game, onNegotiate, onBuyAt, onOffers, onAcceptSell, on
           <b className="budget">{formatMoney(budget)}</b>
           <span className="muted"> · 스쿼드 {club.players.length}명</span>
         </div>
-        {msg && <span className={msg.ok ? 'toast ok' : 'toast err'}>{msg.text}</span>}
       </div>
 
       <div className="market-cols">
@@ -197,7 +197,7 @@ function TransferMarket({ game, onNegotiate, onBuyAt, onOffers, onAcceptSell, on
                   <td>{formatMoney(t.value)}</td>
                   <td>
                     <button className="btn-small"
-                      onClick={() => { setMsg(null); setNegotiating(t); }}>협상</button>
+                      onClick={() => setNegotiating(t)}>협상</button>
                   </td>
                 </tr>
               ))}
@@ -240,7 +240,7 @@ function TransferMarket({ game, onNegotiate, onBuyAt, onOffers, onAcceptSell, on
                   <td className="muted">{p.potential.toFixed(0)}</td>
                   <td>{formatMoney(marketValue(p))}</td>
                   <td className="sell-actions">
-                    <button className="btn-small" onClick={() => { setMsg(null); setSelling(p); }}>판매</button>
+                    <button className="btn-small" onClick={() => setSelling(p)}>판매</button>
                     <button
                       className="btn-small danger"
                       onClick={() => {
@@ -266,7 +266,7 @@ function TransferMarket({ game, onNegotiate, onBuyAt, onOffers, onAcceptSell, on
           scouting={scouting}
           onNegotiate={onNegotiate}
           onBuyAt={onBuyAt}
-          onResult={(m) => { setMsg(m); setNegotiating(null); }}
+          onResult={(m) => { toast(m.text, m.ok); setNegotiating(null); }}
           onClose={() => setNegotiating(null)}
         />
       )}
@@ -275,7 +275,7 @@ function TransferMarket({ game, onNegotiate, onBuyAt, onOffers, onAcceptSell, on
           player={selling}
           offers={onOffers(selling.id)}
           onAcceptSell={onAcceptSell}
-          onResult={(m) => { setMsg(m); setSelling(null); }}
+          onResult={(m) => { toast(m.text, m.ok); setSelling(null); }}
           onClose={() => setSelling(null)}
         />
       )}
