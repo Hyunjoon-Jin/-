@@ -241,10 +241,8 @@ body {
 .media-opt-star { color: var(--color-gold); margin-right: 4px; }
 .media-skip { width: 100%; }
 
-/* ── Clickable rows / links ── */
+/* ── Clickable rows ── */
 .data-table tr.clickable { cursor: pointer; }
-.data-table td.link { cursor: pointer; color: var(--accent-2); }
-.data-table td.link:hover { text-decoration: underline; }
 
 /* ── Player detail ── */
 .player-detail { max-width: 860px; }

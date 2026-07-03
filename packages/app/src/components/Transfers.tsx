@@ -179,16 +179,15 @@ function TransferMarket({ game, onNegotiate, onBuyAt, onOffers, onAcceptSell, on
             </thead>
             <tbody>
               {targets.map((t) => (
-                <tr key={t.player.id}>
-                  <td
-                    className="name link"
-                    onClick={() => onSelect(t.player)}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={onKeyActivate(() => onSelect(t.player))}
-                  >
-                    {t.player.name}
-                  </td>
+                <tr
+                  key={t.player.id}
+                  className="clickable"
+                  onClick={() => onSelect(t.player)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={onKeyActivate(() => onSelect(t.player))}
+                >
+                  <td className="name">{t.player.name}</td>
                   <td className="muted small">{t.clubName}</td>
                   <td>{t.player.position}</td>
                   <td>{t.player.age}</td>
@@ -196,8 +195,12 @@ function TransferMarket({ game, onNegotiate, onBuyAt, onOffers, onAcceptSell, on
                   <td className="muted">{revealPotential(scouting, t.player.potential)}</td>
                   <td>{formatMoney(t.value)}</td>
                   <td>
-                    <button className="btn-small"
-                      onClick={() => setNegotiating(t)}>협상</button>
+                    <button
+                      className="btn-small"
+                      onClick={(e) => { e.stopPropagation(); setNegotiating(t); }}
+                    >
+                      협상
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -224,26 +227,26 @@ function TransferMarket({ game, onNegotiate, onBuyAt, onOffers, onAcceptSell, on
             </thead>
             <tbody>
               {mySquad.map((p: Player) => (
-                <tr key={p.id}>
-                  <td
-                    className="name link"
-                    onClick={() => onSelect(p)}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={onKeyActivate(() => onSelect(p))}
-                  >
-                    {p.name}
-                  </td>
+                <tr
+                  key={p.id}
+                  className="clickable"
+                  onClick={() => onSelect(p)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={onKeyActivate(() => onSelect(p))}
+                >
+                  <td className="name">{p.name}</td>
                   <td>{p.position}</td>
                   <td>{p.age}</td>
                   <td><b>{currentAbility(p).toFixed(0)}</b></td>
                   <td className="muted">{p.potential.toFixed(0)}</td>
                   <td>{formatMoney(marketValue(p))}</td>
                   <td className="sell-actions">
-                    <button className="btn-small" onClick={() => setSelling(p)}>판매</button>
+                    <button className="btn-small" onClick={(e) => { e.stopPropagation(); setSelling(p); }}>판매</button>
                     <button
                       className="btn-small danger"
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation();
                         if (window.confirm(`${p.name} 선수를 방출하시겠습니까? 보상 없이 영구히 스쿼드에서 빠집니다.`)) {
                           act(onRelease(p.id));
                         }
