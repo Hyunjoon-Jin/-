@@ -17,6 +17,9 @@ export interface CareerStint {
 }
 
 const KEY = 'st_career';
+/** 세이브와 별개로 세션(브라우저/기기)마다 영구 누적되는 기록이라 자연스러운 상한이
+ *  없다 — localStorage 용량을 실제 세이브와 공유하므로 최근 N개로 캡한다. */
+const MAX_STINTS = 50;
 
 function readAll(storage: Storage): CareerStint[] {
   const raw = storage.getItem(KEY);
@@ -48,6 +51,7 @@ export function recordSackedStint(state: GameState, storage: Storage = window.lo
     cupTitles: state.history.filter((s) => s.cupChampionId === myId).length,
     endedAt: new Date().toISOString(),
   };
-  storage.setItem(KEY, JSON.stringify([...readAll(storage), stint]));
+  const all = [...readAll(storage), stint];
+  storage.setItem(KEY, JSON.stringify(all.length > MAX_STINTS ? all.slice(-MAX_STINTS) : all));
   return stint;
 }

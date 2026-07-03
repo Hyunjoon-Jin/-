@@ -383,6 +383,15 @@ export function finishSeason(state: GameState): GameState {
     const hist = [...(ratingHistory[st.playerId] ?? []), { season: state.season, avgRating: st.avgRating }];
     ratingHistory[st.playerId] = hist.length > 20 ? hist.slice(-20) : hist;
   }
+  // 더 이상 내 구단 소속이 아닌 선수(방출·판매·은퇴)의 키는 정리 — PlayerDetail은
+  // 현재 스쿼드 선수만 열람 가능해 다시 조회될 일이 없는데도 세이브에 영구히
+  // 쌓이는 것을 막는다.
+  {
+    const myPlayerIds = new Set(myClub(state).players.map((p) => p.id));
+    for (const id of Object.keys(ratingHistory)) {
+      if (!myPlayerIds.has(id)) delete ratingHistory[id];
+    }
+  }
 
   // 라이벌전 전적 갱신(같은 부에서 맞붙은 경우만 — 다른 부일 땐 이번 시즌 대결 없음).
   const rivalRecord = { ...state.rivalRecord };

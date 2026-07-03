@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  startGame, advanceFullSeason, playerRatingHistory, formStability, myClub,
+  startGame, advanceFullSeason, playerRatingHistory, formStability, myClub, release,
 } from '../src/game.js';
 
 describe('선수 시즌별 평균 평점 이력', () => {
@@ -36,6 +36,23 @@ describe('선수 시즌별 평균 평점 이력', () => {
       const hist = playerRatingHistory(g, p.id);
       expect(hist.length).toBeLessThanOrEqual(20);
     }
+  });
+
+  it('방출된 선수의 이력 키는 다음 시즌 종료 시 정리된다(세이브 크기 증가 방지)', () => {
+    let g = startGame(2026, 'c0');
+    for (let i = 0; i < 3; i++) g = advanceFullSeason(g);
+    const departed = myClub(g).players.find((p) => (g.ratingHistory[p.id]?.length ?? 0) > 0);
+    if (!departed) return; // 이 시드에서 우연히 없으면 스킵
+    expect(Object.keys(g.ratingHistory)).toContain(departed.id);
+
+    const r = release(g, departed.id);
+    expect(r.ok).toBe(true);
+    g = advanceFullSeason(r.state);
+
+    expect(Object.keys(g.ratingHistory)).not.toContain(departed.id);
+    // 현재 스쿼드 선수의 키는 여전히 살아있어야 한다(과잉 정리 아님).
+    const stillMine = myClub(g).players.find((p) => (g.ratingHistory[p.id]?.length ?? 0) > 0);
+    expect(stillMine).toBeDefined();
   });
 });
 

@@ -46,4 +46,23 @@ describe('career: 감독 커리어 아카이브', () => {
     expect(all[0]!.clubName).toBe('FC 서울리온');
     expect(all[1]!.clubName).not.toBe('FC 서울리온');
   });
+
+  it('브라우저/기기에 영구 누적되는 기록이라 자연스러운 상한이 없는 것을 최근 50개로 캡한다', () => {
+    const storage = fakeStorage();
+    const existing = Array.from({ length: 55 }, (_, i) => ({
+      clubName: `구단${i}`, seasons: 1, leagueTitles: 0, cupTitles: 0,
+      endedAt: new Date(2020, 0, i + 1).toISOString(),
+    }));
+    storage.setItem('st_career', JSON.stringify(existing));
+
+    const g = advanceFullSeason(startGame(2026, 'c0'));
+    recordSackedStint(g, storage);
+
+    const all = loadCareer(storage);
+    expect(all.length).toBe(50);
+    // 가장 오래된 항목들이 잘려나가고 최신 기록(방금 추가한 것 포함)은 남아있다.
+    expect(all[all.length - 1]!.clubName).toBe('FC 서울리온');
+    expect(all.some((c) => c.clubName === '구단0')).toBe(false);
+    expect(all.some((c) => c.clubName === '구단54')).toBe(true);
+  });
 });
