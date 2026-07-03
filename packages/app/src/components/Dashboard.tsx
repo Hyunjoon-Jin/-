@@ -1,3 +1,4 @@
+import { useEffect, useState, type ReactNode } from 'react';
 import {
   myClub, rivalClub, lastSummary, myLastPosition, managerPersona, contractOptions,
   DIFFICULTIES, DIVISION_LABELS, type GameState,
@@ -7,6 +8,9 @@ import {
   boardStatus, DEMAND_LABEL, type BoardStatus, type ManagerPersona,
 } from '@soccer-tycoon/engine';
 import { Banner } from './Banner.js';
+
+/** 대시보드에 한 번에 펼쳐 보여줄 시즌 소식 배너 수 — 나머지는 "더 보기"로 접는다. */
+const VISIBLE_SEASON_BANNERS = 2;
 
 const BOARD_LABEL: Record<BoardStatus, string> = {
   secure: '신뢰 두터움', stable: '안정적', shaky: '불안', critical: '경질 위기',
@@ -35,6 +39,92 @@ export function Dashboard({ game, onSignContract }: { game: GameState; onSignCon
   const retiredThisSeason = last ? game.legends.filter((l) => l.season === last.season) : [];
   const persona = managerPersona(game);
   const contract = contractOptions(game);
+
+  // 시즌 종료 배너를 중요도순으로 담아, 여러 개가 한꺼번에 세로로 쌓이지 않도록
+  // 상위 몇 개만 펼쳐 보여주고 나머지는 "더 보기"로 접는다.
+  const seasonBanners: { key: string; priority: number; node: ReactNode }[] = [];
+  if (last?.surprise) {
+    seasonBanners.push({
+      key: 'surprise', priority: 1,
+      node: (
+        <Banner tone={last.surprise === 'overperform' ? 'info' : 'danger'}>
+          <p>
+            {last.surprise === 'overperform'
+              ? <>🎉 <b>이변의 시즌!</b> 언론은 {last.preseasonRank}위로 예상했지만 <b>{pos}위</b>로 마쳤습니다.</>
+              : <>😞 <b>실망스러운 시즌.</b> 언론은 {last.preseasonRank}위를 예상했지만 <b>{pos}위</b>에 그쳤습니다.</>}
+          </p>
+        </Banner>
+      ),
+    });
+  }
+  if (last?.milestones !== undefined && last.milestones.length > 0) {
+    seasonBanners.push({
+      key: 'milestones', priority: 2,
+      node: (
+        <Banner tone="success">
+          {last.milestones.map((m) => (
+            <p key={`${m.playerId}-${m.kind}-${m.value}`}>
+              🎉 <b>{m.name}</b>, 통산 <b>{m.value}{m.kind === 'apps' ? '경기 출전' : '골'}</b> 달성!
+            </p>
+          ))}
+        </Banner>
+      ),
+    });
+  }
+  if (retiredThisSeason.length > 0) {
+    seasonBanners.push({
+      key: 'retirement', priority: 3,
+      node: (
+        <Banner tone="gold">
+          {retiredThisSeason.map((l) => (
+            <p key={l.playerId}>
+              🕯️ <b>{l.name}</b>({l.position})이(가) {l.finalAge}세로 은퇴했습니다 — 통산{' '}
+              <b>{l.careerApps}경기</b>
+              {l.careerGoals > 0 && <> <b>{l.careerGoals}골</b></>}
+              {l.caps > 0 && <span className="muted"> · A매치 {l.caps}경</span>}.
+              그동안 수고했습니다.
+            </p>
+          ))}
+        </Banner>
+      ),
+    });
+  }
+  if (last?.youthProspects !== undefined && last.youthProspects.length > 0) {
+    seasonBanners.push({
+      key: 'youth', priority: 4,
+      node: (
+        <Banner tone="info" title="🌱 이번 시즌 유스 기대주">
+          {last.youthProspects.map((p) => (
+            <p key={p.playerId}>
+              <b>{p.name}</b> ({p.position} · {p.age}세) — 잠재력 <b>{p.potential.toFixed(0)}</b>
+            </p>
+          ))}
+        </Banner>
+      ),
+    });
+  }
+  if (last?.prospectUpdates !== undefined && last.prospectUpdates.length > 0) {
+    seasonBanners.push({
+      key: 'prospectUpdates', priority: 5,
+      node: (
+        <Banner tone="special" title="📣 유스 기대주 소식">
+          {last.prospectUpdates.map((u) => (
+            <p key={`${u.playerId}-${u.kind}`}>
+              {u.kind === 'debut'
+                ? <>유스 기대주 출신 <b>{u.name}</b>, 1군 <b>데뷔</b>에 성공했습니다!</>
+                : <>유스 기대주 출신 <b>{u.name}</b>, 커리어 <b>첫 골</b>을 기록했습니다!</>}
+            </p>
+          ))}
+        </Banner>
+      ),
+    });
+  }
+  seasonBanners.sort((a, b) => a.priority - b.priority);
+
+  const [showAllBanners, setShowAllBanners] = useState(false);
+  useEffect(() => { setShowAllBanners(false); }, [last?.season]);
+  const visibleBanners = showAllBanners ? seasonBanners : seasonBanners.slice(0, VISIBLE_SEASON_BANNERS);
+  const hiddenBannerCount = seasonBanners.length - visibleBanners.length;
 
   return (
     <div className="dashboard">
@@ -139,56 +229,11 @@ export function Dashboard({ game, onSignContract }: { game: GameState; onSignCon
         <h2>지난 시즌</h2>
         {last ? (
           <div className="last-season">
-            {retiredThisSeason.length > 0 && (
-              <Banner tone="gold">
-                {retiredThisSeason.map((l) => (
-                  <p key={l.playerId}>
-                    🕯️ <b>{l.name}</b>({l.position})이(가) {l.finalAge}세로 은퇴했습니다 — 통산{' '}
-                    <b>{l.careerApps}경기</b>
-                    {l.careerGoals > 0 && <> <b>{l.careerGoals}골</b></>}
-                    {l.caps > 0 && <span className="muted"> · A매치 {l.caps}경</span>}.
-                    그동안 수고했습니다.
-                  </p>
-                ))}
-              </Banner>
-            )}
-            {last.milestones !== undefined && last.milestones.length > 0 && (
-              <Banner tone="success">
-                {last.milestones.map((m) => (
-                  <p key={`${m.playerId}-${m.kind}-${m.value}`}>
-                    🎉 <b>{m.name}</b>, 통산 <b>{m.value}{m.kind === 'apps' ? '경기 출전' : '골'}</b> 달성!
-                  </p>
-                ))}
-              </Banner>
-            )}
-            {last.youthProspects !== undefined && last.youthProspects.length > 0 && (
-              <Banner tone="info" title="🌱 이번 시즌 유스 기대주">
-                {last.youthProspects.map((p) => (
-                  <p key={p.playerId}>
-                    <b>{p.name}</b> ({p.position} · {p.age}세) — 잠재력 <b>{p.potential.toFixed(0)}</b>
-                  </p>
-                ))}
-              </Banner>
-            )}
-            {last.prospectUpdates !== undefined && last.prospectUpdates.length > 0 && (
-              <Banner tone="special" title="📣 유스 기대주 소식">
-                {last.prospectUpdates.map((u) => (
-                  <p key={`${u.playerId}-${u.kind}`}>
-                    {u.kind === 'debut'
-                      ? <>유스 기대주 출신 <b>{u.name}</b>, 1군 <b>데뷔</b>에 성공했습니다!</>
-                      : <>유스 기대주 출신 <b>{u.name}</b>, 커리어 <b>첫 골</b>을 기록했습니다!</>}
-                  </p>
-                ))}
-              </Banner>
-            )}
-            {last.surprise && (
-              <Banner tone={last.surprise === 'overperform' ? 'info' : 'danger'}>
-                <p>
-                  {last.surprise === 'overperform'
-                    ? <>🎉 <b>이변의 시즌!</b> 언론은 {last.preseasonRank}위로 예상했지만 <b>{pos}위</b>로 마쳤습니다.</>
-                    : <>😞 <b>실망스러운 시즌.</b> 언론은 {last.preseasonRank}위를 예상했지만 <b>{pos}위</b>에 그쳤습니다.</>}
-                </p>
-              </Banner>
+            {visibleBanners.map((b) => <div key={b.key}>{b.node}</div>)}
+            {hiddenBannerCount > 0 && (
+              <button className="btn-ghost season-more-btn" onClick={() => setShowAllBanners(true)}>
+                이번 시즌 소식 {hiddenBannerCount}개 더 보기 ▾
+              </button>
             )}
             <p>
               {last.division !== undefined && <><b>{DIVISION_LABELS[last.division]}</b> · </>}

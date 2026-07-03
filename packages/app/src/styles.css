@@ -440,6 +440,7 @@ body {
 
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; }
 .panel h2 { margin: 0 0 10px; font-size: 16px; }
+.season-more-btn { margin-bottom: var(--space-4); }
 .pos { color: var(--accent); }
 .neg { color: var(--color-danger); }
 
