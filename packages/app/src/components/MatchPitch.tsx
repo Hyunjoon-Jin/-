@@ -14,6 +14,9 @@ export interface PitchState {
   /** 홈/원정 선발 포메이션(슬롯 포지션 순서). 선수 점 배치에 사용. */
   homeFormation: Position[];
   awayFormation: Position[];
+  /** 각 슬롯 선수의 이니셜(2자) — 포메이션과 같은 순서. 점 안에 라벨로 표시. */
+  homeLabels: string[];
+  awayLabels: string[];
   /** 라이벌전이면 스코어보드를 강조 표시. */
   isDerby?: boolean;
   /** 컵 결승이면 스코어보드를 금색으로 강조 표시(라이벌전보다 우선). */
@@ -80,6 +83,7 @@ export function MatchPitch(props: PitchState) {
     props.ball.x, props.ball.y, props.goalFlash, props.userIsHome,
     props.isDerby, props.isFinal,
     props.homeFormation.join(','), props.awayFormation.join(','),
+    props.homeLabels.join(','), props.awayLabels.join(','),
   ]);
 
   return <canvas ref={ref} width={W} height={H} className="pitch-canvas" />;
@@ -129,7 +133,7 @@ function draw(ctx: CanvasRenderingContext2D, s: PitchState) {
   const homeColor = s.userIsHome ? userColor : oppColor;
   const awayColor = s.userIsHome ? oppColor : userColor;
 
-  const drawTeam = (formation: Position[], mirror: boolean, color: string) => {
+  const drawTeam = (formation: Position[], labels: string[], mirror: boolean, color: string) => {
     const coords = formationCoords(formation);
     coords.forEach((c, i) => {
       const baseX = mirror ? 1 - c.x : c.x;
@@ -145,10 +149,19 @@ function draw(ctx: CanvasRenderingContext2D, s: PitchState) {
       ctx.strokeStyle = 'rgba(0,0,0,0.55)';
       ctx.lineWidth = 1.5;
       ctx.stroke();
+      const label = labels[i];
+      if (label) {
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 7px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, px, py + 0.5);
+      }
     });
   };
-  drawTeam(s.homeFormation, false, homeColor);
-  drawTeam(s.awayFormation, true, awayColor);
+  drawTeam(s.homeFormation, s.homeLabels, false, homeColor);
+  drawTeam(s.awayFormation, s.awayLabels, true, awayColor);
+  ctx.textBaseline = 'alphabetic';
 
   // 공
   const bx = m + s.ball.x * pw;

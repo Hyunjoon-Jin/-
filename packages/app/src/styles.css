@@ -744,7 +744,14 @@ h3 { font-size: 14px; margin: 0 0 10px; color: var(--muted); text-transform: upp
 .watch-topbar { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
 .watch-2col { display: grid; grid-template-columns: 780px 1fr; gap: 18px; align-items: start; }
 .pitch-canvas { border-radius: 10px; border: 1px solid var(--line); display: block; width: 100%; max-width: 760px; }
-.watch-controls { display: flex; gap: 10px; margin-top: 12px; }
+.watch-controls { display: flex; align-items: center; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+.speed-toggle { display: flex; gap: 2px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 2px; }
+.speed-btn {
+  background: transparent; border: 0; color: var(--muted); padding: 6px 10px;
+  font-size: 13px; font-weight: 700; border-radius: 4px; cursor: pointer;
+}
+.speed-btn:hover { color: var(--text); }
+.speed-btn.active { background: var(--accent); color: #06203f; }
 @media (max-width: 1200px) { .watch-2col { grid-template-columns: 1fr; } }
 
 /* ── Watch match (legacy scoreboard, 미사용시 무해) ── */

@@ -51,6 +51,8 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
   const isFinal = watch.cupRoundName === CUP_FINAL_ROUND_NAME;
 
   const [phase, setPhase] = useState<Phase>('ready');
+  const [paused, setPaused] = useState(false);
+  const [speed, setSpeed] = useState<1 | 2 | 4>(1);
   const [view, setView] = useState<View>({ minute: 0, score: [0, 0], ball: { x: 0.5, y: 0.5 } });
   const [goalFlash, setGoalFlash] = useState<'home' | 'away' | null>(null);
   const goalFlashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -116,10 +118,11 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
     if (notable.length) setFeed((f) => [...notable.reverse(), ...f]);
   }
 
-  // 분 단위 진행 타이머 (phase가 진행 중이고, 교체 결정 대기 중이 아닐 때만)
+  // 분 단위 진행 타이머 (phase가 진행 중이고, 교체 결정 대기 중이 아니고, 일시정지 상태가 아닐 때만)
   useEffect(() => {
     if (phase !== 'playing' && phase !== 'playing2') return;
     if (activeInjury) return; // 부상 교체 프롬프트 응답 전에는 진행 정지
+    if (paused) return;
     const id = setInterval(() => {
       const target = Math.min(minuteRef.current + 1, MATCH_LENGTH);
       if (target === minuteRef.current) return;
@@ -127,10 +130,10 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
       minuteRef.current = target;
       applyMinute(target, evs);
       revealInjuriesUpTo(target, tactic);
-    }, TICK_MS);
+    }, TICK_MS / speed);
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, activeInjury, tactic]);
+  }, [phase, activeInjury, tactic, paused, speed]);
 
   // 경계(하프타임·풀타임) 전환
   useEffect(() => {
@@ -158,17 +161,22 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
 
   function startSecondHalf() {
     live.setTactic(userSide, tactic);
+    setPaused(false);
     setPhase('playing2');
   }
 
   // 현재 포메이션(하프타임 전술 변경 반영): 사용자 측은 라이브 tactic, 상대는 셋업 고정.
   const homeTactic = watch.userIsHome ? tactic : watch.setup.home.tactic;
   const awayTactic = watch.userIsHome ? watch.setup.away.tactic : tactic;
+  const homeClub = watch.setup.home.club;
+  const awayClub = watch.setup.away.club;
   const pitch: PitchState = {
     homeName, awayName, score: view.score, minute: view.minute,
     ball: view.ball, goalFlash, userIsHome: watch.userIsHome,
     homeFormation: homeTactic.lineup.map((s) => s.position),
     awayFormation: awayTactic.lineup.map((s) => s.position),
+    homeLabels: homeTactic.lineup.map((slot) => playerInitials(homeClub, slot.playerId)),
+    awayLabels: awayTactic.lineup.map((slot) => playerInitials(awayClub, slot.playerId)),
     isDerby,
     isFinal,
   };
@@ -190,9 +198,25 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
               <button className="btn-advance big" onClick={() => setPhase('playing')}>킥오프 ▶</button>
             )}
             {(phase === 'playing' || phase === 'playing2') && (
-              <button className="btn-ghost" onClick={skip}>
-                빠르게 ▶▶ ({phase === 'playing' ? '하프타임' : '경기 종료'}까지)
-              </button>
+              <>
+                <button className="btn-ghost" onClick={() => setPaused((p) => !p)}>
+                  {paused ? '▶ 재개' : '⏸ 일시정지'}
+                </button>
+                <div className="speed-toggle">
+                  {([1, 2, 4] as const).map((s) => (
+                    <button
+                      key={s}
+                      className={speed === s ? 'speed-btn active' : 'speed-btn'}
+                      onClick={() => setSpeed(s)}
+                    >
+                      {s}x
+                    </button>
+                  ))}
+                </div>
+                <button className="btn-ghost" onClick={skip}>
+                  빠르게 ▶▶ ({phase === 'playing' ? '하프타임' : '경기 종료'}까지)
+                </button>
+              </>
             )}
             {phase === 'halftime' && (
               <button className="btn-advance" onClick={startSecondHalf}>후반 시작 ▶</button>
@@ -417,4 +441,13 @@ function FullTime({
 
 function avgCA(club: Club): number {
   return Math.round(club.players.reduce((s, p) => s + currentAbility(p), 0) / club.players.length);
+}
+
+/** 등번호가 없으므로 이름 이니셜 2자로 피치 위 선수를 구분한다. */
+function playerInitials(club: Club, playerId: string): string {
+  const player = club.players.find((p) => p.id === playerId);
+  if (!player) return '';
+  const parts = player.name.trim().split(/\s+/);
+  if (parts.length >= 2) return (parts[0]![0]! + parts[1]![0]!).toUpperCase();
+  return player.name.slice(0, 2).toUpperCase();
 }
