@@ -34,13 +34,25 @@ export function StartScreen({ store, onStart, onLoad }: Props) {
       return [];
     }
   }, []);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   function loadSlot(id: string) {
+    setLoadError(null);
     try {
       const state = store.load(id);
-      if (state) onLoad(id, state);
+      if (state) {
+        onLoad(id, state);
+        return;
+      }
+      // load()가 null을 반환 — 손상됐거나 호환되지 않는(구버전) 세이브. 조용히
+      // 무시하면 고아 슬롯이 목록에 영구히 남아 클릭할 때마다 똑같이 무반응하므로,
+      // 사용자에게 알리고 목록에서 제거한다.
+      setLoadError('이 세이브를 불러올 수 없습니다(손상되었거나 호환되지 않는 버전). 목록에서 제거합니다.');
+      store.remove(id);
+      setSaves(store.list());
     } catch (err) {
       console.error('세이브를 불러오지 못했습니다:', err);
+      setLoadError('이 세이브를 불러오는 중 오류가 발생했습니다.');
     }
   }
 
@@ -56,6 +68,7 @@ export function StartScreen({ store, onStart, onLoad }: Props) {
   return (
     <div className="start">
       <h1>⚽ Soccer Tycoon</h1>
+      {loadError && <p className="toast err">{loadError}</p>}
 
       {saves.length > 0 && (
         <section className="saves">
