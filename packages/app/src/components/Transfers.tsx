@@ -6,6 +6,7 @@ import {
 } from '@soccer-tycoon/engine';
 import { ScoutingSummary } from './PlayerDetail.js';
 import { useModalA11y } from './useModalA11y.js';
+import { onKeyActivate } from '../a11y.js';
 
 interface Props {
   game: GameState;
@@ -178,7 +179,15 @@ function TransferMarket({ game, onNegotiate, onBuyAt, onOffers, onAcceptSell, on
             <tbody>
               {targets.map((t) => (
                 <tr key={t.player.id}>
-                  <td className="name link" onClick={() => onSelect(t.player)}>{t.player.name}</td>
+                  <td
+                    className="name link"
+                    onClick={() => onSelect(t.player)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={onKeyActivate(() => onSelect(t.player))}
+                  >
+                    {t.player.name}
+                  </td>
                   <td className="muted small">{t.clubName}</td>
                   <td>{t.player.position}</td>
                   <td>{t.player.age}</td>
@@ -215,7 +224,15 @@ function TransferMarket({ game, onNegotiate, onBuyAt, onOffers, onAcceptSell, on
             <tbody>
               {mySquad.map((p: Player) => (
                 <tr key={p.id}>
-                  <td className="name link" onClick={() => onSelect(p)}>{p.name}</td>
+                  <td
+                    className="name link"
+                    onClick={() => onSelect(p)}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={onKeyActivate(() => onSelect(p))}
+                  >
+                    {p.name}
+                  </td>
                   <td>{p.position}</td>
                   <td>{p.age}</td>
                   <td><b>{currentAbility(p).toFixed(0)}</b></td>
@@ -459,7 +476,14 @@ function MarketSortHeader({
   onClick: (k: MarketSortKey) => void; title?: string;
 }) {
   return (
-    <th className={sort === k ? 'sortable active' : 'sortable'} onClick={() => onClick(k)} title={title}>
+    <th
+      className={sort === k ? 'sortable active' : 'sortable'}
+      onClick={() => onClick(k)}
+      title={title}
+      role="button"
+      tabIndex={0}
+      onKeyDown={onKeyActivate(() => onClick(k))}
+    >
       {label} {sort === k ? (dir === 1 ? '▴' : '▾') : ''}
     </th>
   );

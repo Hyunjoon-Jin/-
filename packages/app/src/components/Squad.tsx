@@ -3,6 +3,7 @@ import {
   formatMoney, currentAbility, marketValue, isInjured, isSuspended, lineOf,
   type Club, type Player, type Line,
 } from '@soccer-tycoon/engine';
+import { onKeyActivate } from '../a11y.js';
 
 type SortKey = 'ca' | 'age' | 'value' | 'wage' | 'condition';
 type SortDir = 1 | -1;
@@ -119,7 +120,14 @@ export function Squad({ club, onSelect }: { club: Club; onSelect: (p: Player) =>
           </thead>
           <tbody>
             {rows.map(({ player, ca, value }) => (
-              <tr key={player.id} className="clickable" onClick={() => onSelect(player)}>
+              <tr
+                key={player.id}
+                className="clickable"
+                onClick={() => onSelect(player)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={onKeyActivate(() => onSelect(player))}
+              >
                 <td className="name">{player.name}</td>
                 <td>{player.position}</td>
                 <td>{player.age}</td>
@@ -143,7 +151,13 @@ function SortHeader({
   label, k, sort, dir, onClick,
 }: { label: string; k: SortKey; sort: SortKey; dir: SortDir; onClick: (k: SortKey) => void }) {
   return (
-    <th className={sort === k ? 'sortable active' : 'sortable'} onClick={() => onClick(k)}>
+    <th
+      className={sort === k ? 'sortable active' : 'sortable'}
+      onClick={() => onClick(k)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={onKeyActivate(() => onClick(k))}
+    >
       {label} {sort === k ? (dir === 1 ? '▴' : '▾') : ''}
     </th>
   );
