@@ -79,14 +79,15 @@ export {
 } from './transferActions.js';
 export {
   upgradeStaff, upgradeCost, STAFF_KINDS, STAFF_MAX,
-  type StaffKind, type UpgradeResult,
+  SPECIALIST_COACH_KINDS, NAMED_STAFF_KINDS, specialistCoachLevel, effectiveCoaching,
+  type StaffKind, type UpgradeResult, type SpecialistCoachKind, type NamedStaffKind,
 } from './staffActions.js';
 export {
   enforceFinancialFairPlay, inFinancialCrisis, wageBudget, annualWageBill,
   type FireSaleResult,
 } from './financeControl.js';
 export {
-  buildScoutingReport,
+  buildScoutingReport, academyNationPool,
   type ScoutingReport, type OverallTier, type PotentialTier, type AgeProfile,
 } from './scouting.js';
 export {

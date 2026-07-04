@@ -143,6 +143,15 @@ export interface Tactic {
 // ── 구단 ──────────────────────────────────────────────────
 
 /** 스태프 능력 (1~20). 경영으로 업그레이드. */
+/** 스태프 직책에 배정된 실명 인물(이름·나이·계약기간). 구버전 세이브·미도입 구단은
+ *  Staff.members 자체가 없을 수 있어 항상 optional로 다룬다. */
+export interface StaffMember {
+  name: string;
+  age: number;
+  /** 잔여 계약 연수. 0이 되면 시즌 경계에 조용히 재계약된다(교체 드라마는 후속 확장 몫). */
+  contractYears: number;
+}
+
 export interface Staff {
   /** 코칭: 선수 성장률↑. */
   coaching: number;
@@ -152,6 +161,14 @@ export interface Staff {
   scouting: number;
   /** 유스: 아카데미 유망주 배출 수·잠재력↑. */
   youth: number;
+  /** 세부 코치 레벨(GK/공격/수비/피지컬) — 구버전 세이브·미도입 구단은 undefined이며,
+   *  이 경우 성장 계산 시 기존 coaching 레벨을 그대로 대체값으로 사용한다(하위 호환). */
+  coachGk?: number;
+  coachAttack?: number;
+  coachDefense?: number;
+  coachPhysical?: number;
+  /** 각 스태프 직책의 실명 인물 정보(선택 — coaching/medical/scouting/youth만 대상). */
+  members?: Partial<Record<'coaching' | 'medical' | 'scouting' | 'youth', StaffMember>>;
 }
 
 /** 구단 재정 상태 (economy.md 4장). 단위: 만원. */

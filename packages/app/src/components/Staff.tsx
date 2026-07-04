@@ -1,6 +1,12 @@
-import { ClipboardList, Stethoscope, Search, GraduationCap, type LucideIcon } from 'lucide-react';
+import {
+  ClipboardList, Stethoscope, Search, GraduationCap, Hand, Target, Shield, Dumbbell,
+  type LucideIcon,
+} from 'lucide-react';
 import { myClub, type GameState, type ActionOutcome } from '../game.js';
-import { upgradeCost, STAFF_MAX, formatMoney, type StaffKind } from '@soccer-tycoon/engine';
+import {
+  upgradeCost, STAFF_MAX, formatMoney, specialistCoachLevel,
+  type StaffKind, type SpecialistCoachKind, type NamedStaffKind, type Club,
+} from '@soccer-tycoon/engine';
 import { useResultToast } from '../toast.js';
 
 interface Props {
@@ -8,12 +14,25 @@ interface Props {
   onUpgrade: (kind: StaffKind) => ActionOutcome;
 }
 
+const SPECIALIST_KINDS: SpecialistCoachKind[] = ['coachGk', 'coachAttack', 'coachDefense', 'coachPhysical'];
+const NAMED_KINDS: NamedStaffKind[] = ['coaching', 'medical', 'scouting', 'youth'];
+
 const STAFF: { key: StaffKind; label: string; icon: LucideIcon; effect: string }[] = [
-  { key: 'coaching', label: '코칭', icon: ClipboardList, effect: '선수 성장률 향상 (유망주 육성)' },
+  { key: 'coaching', label: '총괄 코치', icon: ClipboardList, effect: '세부 코치가 없는 포지션의 성장률을 대신 담당' },
   { key: 'medical', label: '의료', icon: Stethoscope, effect: '부상 확률·기간 감소, 컨디션 회복 향상' },
-  { key: 'scouting', label: '스카우팅', icon: Search, effect: '이적 매물 잠재력 정보 정확도 향상' },
+  { key: 'scouting', label: '스카우팅', icon: Search, effect: '이적 매물 잠재력 정확도 + 아카데미 해외 네트워크 확장' },
   { key: 'youth', label: '유스', icon: GraduationCap, effect: '매 시즌 아카데미 유망주 배출 수·잠재력 향상' },
+  { key: 'coachGk', label: 'GK 코치', icon: Hand, effect: '골키퍼 성장률 향상' },
+  { key: 'coachAttack', label: '공격 코치', icon: Target, effect: '공격수·미드필더 성장률 향상' },
+  { key: 'coachDefense', label: '수비 코치', icon: Shield, effect: '수비수·미드필더 성장률 향상' },
+  { key: 'coachPhysical', label: '피지컬 코치', icon: Dumbbell, effect: '전 포지션 성장률에 보조로 반영' },
 ];
+
+function levelOf(staff: Club['staff'], kind: StaffKind): number {
+  return (SPECIALIST_KINDS as StaffKind[]).includes(kind)
+    ? specialistCoachLevel(staff, kind as SpecialistCoachKind)
+    : (staff[kind as NamedStaffKind] as number);
+}
 
 export function Staff({ game, onUpgrade }: Props) {
   const club = myClub(game);
@@ -34,14 +53,22 @@ export function Staff({ game, onUpgrade }: Props) {
 
       <div className="staff-cards">
         {STAFF.map((s) => {
-          const level = club.staff[s.key];
+          const level = levelOf(club.staff, s.key);
           const maxed = level >= STAFF_MAX;
           const cost = maxed ? 0 : upgradeCost(level);
           const afford = club.finance.balance >= cost;
+          const member = (NAMED_KINDS as StaffKind[]).includes(s.key)
+            ? club.staff.members?.[s.key as NamedStaffKind]
+            : undefined;
           return (
             <div className="staff-card" key={s.key}>
               <div className="staff-icon"><s.icon size={32} strokeWidth={1.75} /></div>
               <div className="staff-name">{s.label}</div>
+              {member && (
+                <div className="staff-member muted small">
+                  {member.name} · {member.age}세 · 계약 {member.contractYears}년
+                </div>
+              )}
               <div className="staff-level">
                 Lv. <b>{level}</b> / {STAFF_MAX}
               </div>

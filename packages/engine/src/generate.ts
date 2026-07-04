@@ -14,15 +14,10 @@ import { currentAbility, isAvailable } from './derived.js';
 import { rollTraits, hasTrait } from './traits.js';
 import { FORMATIONS } from './formations.js';
 import { lineOf } from './teamStrength.js';
+import { FIRST, LAST } from './names.js';
+import { academyNationPool } from './scouting.js';
+import { hireInitialStaffMembers } from './staffActions.js';
 
-const FIRST = [
-  'Min', 'Jun', 'Leo', 'Marco', 'Diego', 'Yuki', 'Omar', 'Kai', 'Luka', 'Tom',
-  'Ravi', 'Sven', 'Pablo', 'Noah', 'Eric', 'Hugo', 'Ali', 'Sora', 'Ivan', 'Cole',
-];
-const LAST = [
-  'Kim', 'Park', 'Silva', 'Rossi', 'Sato', 'Khan', 'Muller', 'Novak', 'Costa', 'Lee',
-  'Adams', 'Berg', 'Diaz', 'Okafor', 'Petrov', 'Tan', 'Vidal', 'Yamamoto', 'Cruz', 'Ono',
-];
 const NATIONS = ['KOR', 'JPN', 'BRA', 'ITA', 'GER', 'ESP', 'FRA', 'ENG', 'NED', 'ARG'];
 
 /** 4-3-3 기본 포메이션 슬롯(하위 호환용 별칭 — 실제 정의는 formations.ts). */
@@ -150,10 +145,13 @@ export function generateClub(rng: Rng, id: string, name: string, tier: number, d
   const balance = reputation * 50_000 + rng.int(0, 100_000);   // 만원
   const transferBudget = Math.round(balance * 0.4);
   const staffLevel = () => clamp(tier + rng.int(-3, 2), 1, 20);
-  const staff = {
+  const staff: Club['staff'] = {
     coaching: staffLevel(), medical: staffLevel(),
     scouting: staffLevel(), youth: staffLevel(),
+    coachGk: staffLevel(), coachAttack: staffLevel(),
+    coachDefense: staffLevel(), coachPhysical: staffLevel(),
   };
+  staff.members = hireInitialStaffMembers(id, staff);
   return { id, name, players, finance: { balance, transferBudget, reputation }, staff, division };
 }
 
@@ -168,10 +166,14 @@ const ACADEMY_POSITIONS: Position[] = [
 
 /**
  * 유스 아카데미 유망주 배출 (매 시즌).
- * 유스 레벨이 높을수록 배출 인원↑·잠재력↑.
+ * 유스 레벨이 높을수록 배출 인원↑·잠재력↑. scoutingLevel이 높을수록 해외 스카우팅
+ * 네트워크가 넓어져 더 다양한 국적의 유망주가 나온다(academyNationPool).
  */
-export function generateAcademyIntake(rng: Rng, tier: number, youthLevel: number): Player[] {
+export function generateAcademyIntake(
+  rng: Rng, tier: number, youthLevel: number, scoutingLevel = 20,
+): Player[] {
   const count = 1 + Math.floor(youthLevel / 8); // 1~7:1명, 8~15:2명, 16~20:3명
+  const nationPool = academyNationPool(scoutingLevel);
   const out: Player[] = [];
   for (let i = 0; i < count; i++) {
     const pos = ACADEMY_POSITIONS[rng.int(0, ACADEMY_POSITIONS.length - 1)]!;
@@ -179,6 +181,7 @@ export function generateAcademyIntake(rng: Rng, tier: number, youthLevel: number
     // 아카데미 수준에 따른 잠재력 보너스(유스 8=중립)
     const bonus = Math.max(0, youthLevel - 8) * 2;
     p.potential = clamp(p.potential + bonus, 0, 200);
+    p.nationality = rng.pick(nationPool);
     out.push(p);
   }
   return out;

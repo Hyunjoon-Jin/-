@@ -703,16 +703,24 @@ export function release(state: GameState, playerId: string): ActionOutcome {
   return { state: afterSquadChange(state), ok: true, message: `${r.playerName} 방출 완료` };
 }
 
-const STAFF_LABEL: Record<string, string> = { coaching: '코칭', medical: '의료', scouting: '스카우팅' };
+const STAFF_LABEL: Record<string, string> = {
+  coaching: '총괄 코치', medical: '의료', scouting: '스카우팅', youth: '유스',
+  coachGk: 'GK 코치', coachAttack: '공격 코치', coachDefense: '수비 코치', coachPhysical: '피지컬 코치',
+};
 
-/** 스태프 업그레이드 (보유 자금 사용). */
+/** 스태프 업그레이드 (보유 자금 사용). 실명 직책(코칭/의료/스카우팅/유스)은 업그레이드와
+ *  함께 새 인물이 영입되므로, 결과 메시지에 신규 영입 소식을 함께 담는다. */
 export function upgradeStaffAction(state: GameState, kind: StaffKind): ActionOutcome {
-  const r = engineUpgradeStaff(myClub(state), kind);
+  const club = myClub(state);
+  const r = engineUpgradeStaff(club, kind);
   if (!r.ok) return { state, ok: false, message: r.reason! };
+  const membersRec = club.staff.members as Record<string, { name: string; age: number }> | undefined;
+  const member = membersRec?.[kind];
+  const hireMsg = member ? ` — 신규 영입: ${member.name}(${member.age}세)` : '';
   return {
     state: { ...state },
     ok: true,
-    message: `${STAFF_LABEL[kind]} Lv.${r.newLevel} (−${formatMoney(r.cost!)})`,
+    message: `${STAFF_LABEL[kind]} Lv.${r.newLevel} (−${formatMoney(r.cost!)})${hireMsg}`,
   };
 }
 

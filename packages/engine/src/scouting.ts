@@ -13,6 +13,24 @@ export type OverallTier = 'worldClass' | 'star' | 'quality' | 'squad' | 'fringe'
 export type PotentialTier = 'generational' | 'high' | 'moderate' | 'limited' | 'unknown';
 export type AgeProfile = 'wonderkid' | 'prime' | 'veteran' | 'declining';
 
+/**
+ * 스카우팅 레벨에 따라 아카데미 유스 선수의 국적 후보 풀이 단계적으로 넓어진다.
+ * 레벨이 낮은 구단은 소수 핵심 국가 위주로만 유망주를 배출하고, 스카우팅에
+ * 투자할수록 해외 네트워크가 넓어져 더 다양한 국적의 유망주가 나온다.
+ */
+const ACADEMY_NATION_TIERS: { minScouting: number; nations: string[] }[] = [
+  { minScouting: 0, nations: ['KOR', 'JPN', 'ENG', 'ESP'] },
+  { minScouting: 8, nations: ['GER', 'ITA', 'FRA'] },
+  { minScouting: 15, nations: ['BRA', 'NED', 'ARG'] },
+];
+
+/** 주어진 스카우팅 레벨에서 아카데미 유입이 가능한 국적 목록(레벨이 오를수록 누적 확장). */
+export function academyNationPool(scoutingLevel: number): string[] {
+  return ACADEMY_NATION_TIERS
+    .filter((t) => scoutingLevel >= t.minScouting)
+    .flatMap((t) => t.nations);
+}
+
 export interface ScoutingReport {
   overallTier: OverallTier;
   potentialTier: PotentialTier;

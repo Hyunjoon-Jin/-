@@ -14,6 +14,7 @@ import { runInternationalBreak } from './international.js';
 import { currentAbility } from './derived.js';
 import { hasTrait } from './traits.js';
 import { lineOf } from './teamStrength.js';
+import { effectiveCoaching, tickStaffContracts } from './staffActions.js';
 import { clamp } from './math.js';
 import {
   summarizeStats, type PlayerSeasonStat, type SeasonAwards, type SeasonSquadEntry,
@@ -221,7 +222,7 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
       player.morale = clamp(moraleRetention * player.morale + (1 - moraleRetention) * (target + leaderBonus), 0, 1);
 
       const mentorBonus = hasMentor(club, player) ? MENTOR_GROWTH_MUL : 1;
-      progressPlayer(player, rng, club.staff.coaching, mentorBonus);
+      progressPlayer(player, rng, effectiveCoaching(player.position, club.staff), mentorBonus);
       // 성장 곡선: 이번 시즌 종료 시점 CA 스냅샷(최근 20시즌 유지)
       const hist = player.caHistory ?? (player.caHistory = []);
       hist.push(Math.round(currentAbility(player)));
@@ -272,8 +273,11 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
     const fire = enforceFinancialFairPlay(club);
     fireSalesByClub.set(club.id, fire.sold.length);
 
+    // 실명 스태프 계약 잔여연수 감소(0이면 조용히 재계약)
+    tickStaffContracts(club);
+
     // 유스 아카데미 배출
-    const intake = generateAcademyIntake(rng, club.finance.reputation, club.staff.youth);
+    const intake = generateAcademyIntake(rng, club.finance.reputation, club.staff.youth, club.staff.scouting);
     club.players.push(...intake);
     for (const p of intake) assignSquadNumber(rng, club.players, p);
     intakeByClub.set(club.id, intake.length);
