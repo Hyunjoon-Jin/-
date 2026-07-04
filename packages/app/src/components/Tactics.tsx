@@ -21,15 +21,39 @@ const STRENGTH_LABELS: { key: keyof TeamStrength; label: string }[] = [
   { key: 'gk', label: 'GK' },
 ];
 
+type SliderKey = 'mentality' | 'tempo' | 'pressing' | 'width' | 'defensiveLine';
+
+/** 슬라이더 5개 조합 한 번에 적용하는 전술 스타일 프리셋. */
+const PRESETS: { key: string; label: string; desc: string; values: Pick<Tactic, SliderKey> }[] = [
+  {
+    key: 'tiki', label: '티키타카', desc: '점유·짧은 패스망 위주로 상대를 지치게 한다',
+    values: { mentality: 0.55, tempo: 0.35, pressing: 0.65, width: 0.35, defensiveLine: 0.6 },
+  },
+  {
+    key: 'counter', label: '역습 축구', desc: '웅크렸다 공을 따내면 빠르게 전환한다',
+    values: { mentality: 0.35, tempo: 0.75, pressing: 0.35, width: 0.55, defensiveLine: 0.3 },
+  },
+  {
+    key: 'gegen', label: '게겐프레싱', desc: '공을 뺏기는 즉시 전방위로 강하게 압박한다',
+    values: { mentality: 0.65, tempo: 0.8, pressing: 0.9, width: 0.55, defensiveLine: 0.7 },
+  },
+];
+
 export function Tactics({ club, tactic, onChange, disabled }: Props) {
   const byId = useMemo(() => new Map(club.players.map((p) => [p.id, p])), [club.players]);
   const strength = useMemo(() => computeTeamStrength(club, tactic), [club, tactic]);
+  // 공격 성향(공격+창출) 대 수비 성향(수비+중원)의 균형 — -100(수비 편중)~+100(공격 편중).
+  const rawBalance = (strength.attack + strength.creation) - (strength.defense + strength.midfield);
+  const balance = Math.round(Math.max(-100, Math.min(100, rawBalance / 2.2)));
 
   function setFormation(f: string) {
     onChange({ ...tactic, formation: f, lineup: autoPickLineup(club, f) });
   }
-  function setSlider(key: 'mentality' | 'tempo' | 'pressing', v: number) {
+  function setSlider(key: SliderKey, v: number) {
     onChange({ ...tactic, [key]: v });
+  }
+  function applyPreset(values: Pick<Tactic, SliderKey>) {
+    onChange({ ...tactic, ...values });
   }
 
   return (
@@ -93,6 +117,19 @@ export function Tactics({ club, tactic, onChange, disabled }: Props) {
       <div className="tactics-right">
         <div className="panel">
           <h3>팀 지시</h3>
+          <div className="preset-row">
+            {PRESETS.map((p) => (
+              <button
+                key={p.key}
+                className="chip preset-chip"
+                title={p.desc}
+                disabled={disabled}
+                onClick={() => applyPreset(p.values)}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
           <Slider label="멘탈리티" left="수비적" right="공격적"
             value={tactic.mentality} disabled={disabled}
             onChange={(v) => setSlider('mentality', v)} />
@@ -102,6 +139,12 @@ export function Tactics({ club, tactic, onChange, disabled }: Props) {
           <Slider label="압박" left="약함" right="강함"
             value={tactic.pressing} disabled={disabled}
             onChange={(v) => setSlider('pressing', v)} />
+          <Slider label="폭" left="좁게" right="넓게"
+            value={tactic.width} disabled={disabled}
+            onChange={(v) => setSlider('width', v)} />
+          <Slider label="수비라인" left="낮게" right="높게"
+            value={tactic.defensiveLine} disabled={disabled}
+            onChange={(v) => setSlider('defensiveLine', v)} />
         </div>
 
         <div className="panel">
@@ -115,6 +158,20 @@ export function Tactics({ club, tactic, onChange, disabled }: Props) {
               <span className="bar-val">{strength[key].toFixed(0)}</span>
             </div>
           ))}
+          <div className="balance-row" title="공격(공격+창출) 대 수비(수비+중원) 편중도">
+            <span className="bar-label">밸런스</span>
+            <div className="balance-track">
+              <div className="balance-mid" />
+              <div
+                className={`balance-fill ${balance >= 0 ? 'atk' : 'def'}`}
+                style={{
+                  width: `${Math.abs(balance) / 2}%`,
+                  left: balance >= 0 ? '50%' : `${50 - Math.abs(balance) / 2}%`,
+                }}
+              />
+            </div>
+            <span className="bar-val">{balance > 0 ? `공격 +${balance}` : balance < 0 ? `수비 +${-balance}` : '중립'}</span>
+          </div>
         </div>
       </div>
     </div>

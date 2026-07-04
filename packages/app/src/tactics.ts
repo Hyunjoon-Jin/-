@@ -45,6 +45,8 @@ export function makeDefaultTactic(club: Club): Tactic {
     mentality: 0.5,
     tempo: 0.5,
     pressing: 0.5,
+    width: 0.5,
+    defensiveLine: 0.5,
   };
 }
 

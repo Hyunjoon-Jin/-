@@ -104,3 +104,37 @@ describe('AI 전술 지능화: 압박강도(pressing)', () => {
     expect(bigMatch).toBeLessThan(normal);
   });
 });
+
+describe('AI 전술 지능화: 폭(width)·수비라인(defensiveLine)', () => {
+  it('3-5-2(윙백)를 쓰는 스쿼드는 4-2-3-1(더블 피벗)을 쓰는 스쿼드보다 폭이 넓다', () => {
+    const wide = generateClub(new Rng(4001), 'c', 'C', 12);
+    bumpLine(wide, 'ATT', 6);
+    bumpLine(wide, 'DEF', -6);
+    const narrow = generateClub(new Rng(4002), 'c', 'C', 12);
+    bumpLine(narrow, 'DEF', 6);
+    bumpLine(narrow, 'ATT', -6);
+    expect(defaultTactic(wide).formation).toBe('3-5-2');
+    expect(defaultTactic(narrow).formation).toBe('4-2-3-1');
+    expect(defaultTactic(wide).width).toBeGreaterThan(defaultTactic(narrow).width);
+  });
+
+  it('공격적인 팀(mentality 높음)은 수비라인도 함께 높인다(일관된 스타일)', () => {
+    const club = makeClubAtTier(4003, 13);
+    const weakOpp = makeClubAtTier(4004, 4);
+    const strongOpp = makeClubAtTier(4005, 20);
+    const attacking = defaultTactic(club, { opponent: weakOpp });
+    const defensive = defaultTactic(club, { opponent: strongOpp });
+    expect(attacking.mentality).toBeGreaterThan(defensive.mentality);
+    expect(attacking.defensiveLine).toBeGreaterThan(defensive.defensiveLine);
+  });
+
+  it('width·defensiveLine은 항상 유효 범위([0,1]) 안에 있다', () => {
+    const club = makeClubAtTier(4006, 20);
+    const weakOpp = makeClubAtTier(4007, 1);
+    const t = defaultTactic(club, { opponent: weakOpp, isHome: true });
+    expect(t.width).toBeGreaterThanOrEqual(0);
+    expect(t.width).toBeLessThanOrEqual(1);
+    expect(t.defensiveLine).toBeGreaterThanOrEqual(0);
+    expect(t.defensiveLine).toBeLessThanOrEqual(1);
+  });
+});

@@ -89,11 +89,26 @@ export function computeTeamStrength(club: Club, tactic: Tactic): TeamStrength {
 
   // mentality 0~1 → 공격/수비 가중 (0.85~1.15 범위)
   const attBias = 0.85 + 0.30 * tactic.mentality;
-  const defBias = 1.15 - 0.30 * tactic.mentality;
+  // 수비 배율은 선형 구간(0.85~1.15) 위에 "역습 실점 위험"을 비선형으로 얹는다.
+  // mentality 0.5(중립)에서는 위험항이 정확히 0이라 기존 균형(중립 전술의 밸런스
+  // 리포트 기준선)을 그대로 보존하고, 0.5를 넘어 공격적으로 갈수록 위험이 가속돼
+  // "무리하게 밀어붙일수록 뒷공간을 크게 내준다"는 진짜 트레이드오프를 만든다.
+  const attackRisk = Math.max(0, tactic.mentality - 0.5);
+  const defBias = (1.15 - 0.30 * tactic.mentality) - 0.6 * attackRisk * attackRisk;
   // pressing 0~1 → 높은 압박은 볼 탈취(수비)와 탈취 후 전환(창출)을 함께 끌어올린다
   // (0.5가 중립). mentality처럼 소폭 가중치라 극단적으로 결과를 뒤집진 않는다.
   const pressDefBias = 1 + (tactic.pressing - 0.5) * 0.24;
   const pressCreationBias = 1 + (tactic.pressing - 0.5) * 0.12;
+
+  // width 0~1 → 넓게 벌릴수록 측면을 활용한 창출력↑, 중앙 밀집이 옅어져 공중볼 다툼↓.
+  const widthCreationBias = 1 + (tactic.width - 0.5) * 0.16;
+  const widthAerialBias = 1 - (tactic.width - 0.5) * 0.12;
+
+  // defensiveLine 0~1 → 라인을 올릴수록 전방 압박 구역이 넓어져 창출에 소폭 보탬이 되지만,
+  // mentality와 같은 설계로 0.5를 넘어서면 뒷공간 노출 위험이 비선형으로 커진다.
+  const lineCreationBias = 1 + (tactic.defensiveLine - 0.5) * 0.10;
+  const lineRisk = Math.max(0, tactic.defensiveLine - 0.5);
+  const lineDefBias = 1 - 0.5 * lineRisk * lineRisk;
 
   // 공격: 전방 선수의 attack + 중원의 일부 기여
   const attack = clamp(
@@ -102,10 +117,11 @@ export function computeTeamStrength(club: Club, tactic: Tactic): TeamStrength {
     0, 110,
   );
 
-  // 창출: 전방·중원의 creation (높은 압박으로 탈취한 공을 빠르게 전환)
+  // 창출: 전방·중원의 creation (높은 압박으로 탈취한 공을 빠르게 전환, 넓은 폭·높은 라인이 가산)
   const creation = clamp(
     (lineMean(slots, 'ATT', slotCounts, 'creation', 30) * 0.55 +
-      lineMean(slots, 'MID', slotCounts, 'creation', 30) * 0.45) * attBias * pressCreationBias,
+      lineMean(slots, 'MID', slotCounts, 'creation', 30) * 0.45) *
+      attBias * pressCreationBias * widthCreationBias * lineCreationBias,
     0, 110,
   );
 
@@ -116,16 +132,21 @@ export function computeTeamStrength(club: Club, tactic: Tactic): TeamStrength {
     0, 110,
   );
 
-  // 수비: 수비 라인 + 중원 수비 가담 (높은 압박은 상대 전개를 방해해 수비력에 가산)
+  // 수비: 수비 라인 + 중원 수비 가담 (높은 압박은 상대 전개를 방해해 수비력에 가산,
+  // 라인을 과하게 올리면 뒷공간 노출로 감산)
   const defense = clamp(
     (lineMean(slots, 'DEF', slotCounts, 'defense', 30) * 0.7 +
-      lineMean(slots, 'MID', slotCounts, 'defense', 25) * 0.3) * defBias * pressDefBias,
+      lineMean(slots, 'MID', slotCounts, 'defense', 25) * 0.3) * defBias * pressDefBias * lineDefBias,
     0, 110,
   );
 
   const outfieldLines: Line[] = ['DEF', 'MID', 'ATT'];
   const physical = combinedLineMean(slots, outfieldLines, slotCounts, 'physical', 30);
-  const aerial = combinedLineMean(slots, outfieldLines, slotCounts, 'aerial', 30);
+  // 공중볼: 넓게 벌릴수록 박스 안 인원이 줄어 다툼에서 소폭 불리해진다.
+  const aerial = clamp(
+    combinedLineMean(slots, outfieldLines, slotCounts, 'aerial', 30) * widthAerialBias,
+    0, 110,
+  );
   // 골키퍼가 아예 없으면(부상·정지로 전원 결장) 중립 폴백(25) 대신 붕괴 페널티 —
   // 사실상 빈 골문인데 실점 확률이 소폭만 증가하던 문제를 막는다.
   const gk = gkSlot ? gkSlot.d.gk : (slotCounts.GK > 0 ? LINE_WIPED_PENALTY : 25);

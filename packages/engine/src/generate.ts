@@ -203,6 +203,15 @@ function pickFormation(club: Club): string {
   return '4-3-3';
 }
 
+/** 포메이션별 기본 폭(width) — 윙백·와이드 미드필더가 있으면 넓게, 더블 피벗 위주면 좁게. */
+const FORMATION_WIDTH: Record<string, number> = {
+  '4-3-3': 0.6, '4-4-2': 0.65, '4-2-3-1': 0.45, '3-5-2': 0.7,
+};
+/** 포메이션별 기본 수비라인 높이 — 더블 피벗(4-2-3-1)은 안정성 위주로 낮게 시작. */
+const FORMATION_LINE: Record<string, number> = {
+  '4-3-3': 0.55, '4-4-2': 0.5, '4-2-3-1': 0.4, '3-5-2': 0.5,
+};
+
 /**
  * AI 공격성향(mentality) 결정 — 예전엔 항상 0.5 고정이었다.
  * 상대 대비 전력 격차(강하면 더 공격적, 약하면 더 수비적), 원정 보정(소폭 수비적),
@@ -224,6 +233,23 @@ function computeAiPressing(ctx: TacticContext): number {
   let pressing = 0.5;
   if (ctx.isBigMatch) pressing -= 0.05;
   return clamp(pressing, 0.2, 0.8);
+}
+
+/** AI 폭(width) 결정 — 포메이션 기본값에 공격성향을 소폭 더한다(공격적일수록 측면도 더 활용). */
+function computeAiWidth(formation: string, mentality: number): number {
+  const base = FORMATION_WIDTH[formation] ?? 0.55;
+  return clamp(base + (mentality - 0.5) * 0.2, 0.15, 0.85);
+}
+
+/**
+ * AI 수비라인 높이 결정 — 포메이션 기본값에 공격성향을 더해(공격적인 팀은 라인도
+ * 함께 올려 일관된 스타일을 만든다), 빅매치에서는 신중하게 소폭 낮춘다.
+ */
+function computeAiDefensiveLine(formation: string, mentality: number, ctx: TacticContext): number {
+  const base = FORMATION_LINE[formation] ?? 0.5;
+  let line = base + (mentality - 0.5) * 0.3;
+  if (ctx.isBigMatch) line -= 0.05;
+  return clamp(line, 0.15, 0.85);
 }
 
 /**
@@ -248,11 +274,14 @@ export function defaultTactic(club: Club, ctx: TacticContext = {}): Tactic {
     used.add(pick.id);
     return { position, playerId: pick.id };
   });
+  const mentality = computeAiMentality(club, ctx);
   return {
     formation,
     lineup,
-    mentality: computeAiMentality(club, ctx),
+    mentality,
     tempo: 0.5,
     pressing: computeAiPressing(ctx),
+    width: computeAiWidth(formation, mentality),
+    defensiveLine: computeAiDefensiveLine(formation, mentality, ctx),
   };
 }

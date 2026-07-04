@@ -90,6 +90,34 @@ describe('matchEffects: 피로·회복·사기', () => {
     expect(benchB.condition).toBeGreaterThan(benchA.condition);
   });
 
+  it('압박·템포를 중립(0.5) 이상으로 올리면 같은 스태미너 선수라도 더 지친다', () => {
+    const a = setup();
+    const b = setup();
+    a.ht = { ...a.ht, pressing: 1, tempo: 1 };
+    b.ht = { ...b.ht, pressing: 0.5, tempo: 0.5 };
+    const starterId = a.ht.lineup[0]!.playerId;
+    const starterA = a.home.players.find((p) => p.id === starterId)!;
+    const starterB = b.home.players.find((p) => p.id === starterId)!;
+    starterA.condition = 0.5; starterB.condition = 0.5;
+    applyMatchEffects(a.home, a.ht, a.away, a.at, fakeResult(a.home, a.away, 0, 0), new Rng(5));
+    applyMatchEffects(b.home, b.ht, b.away, b.at, fakeResult(b.home, b.away, 0, 0), new Rng(5));
+    expect(starterA.condition).toBeLessThan(starterB.condition);
+  });
+
+  it('압박·템포를 중립 미만으로 낮춰도 추가 페널티는 없다(중립과 동일)', () => {
+    const a = setup();
+    const b = setup();
+    a.ht = { ...a.ht, pressing: 0.1, tempo: 0.1 };
+    b.ht = { ...b.ht, pressing: 0.5, tempo: 0.5 };
+    const starterId = a.ht.lineup[0]!.playerId;
+    const starterA = a.home.players.find((p) => p.id === starterId)!;
+    const starterB = b.home.players.find((p) => p.id === starterId)!;
+    starterA.condition = 0.5; starterB.condition = 0.5;
+    applyMatchEffects(a.home, a.ht, a.away, a.at, fakeResult(a.home, a.away, 0, 0), new Rng(5));
+    applyMatchEffects(b.home, b.ht, b.away, b.at, fakeResult(b.home, b.away, 0, 0), new Rng(5));
+    expect(starterA.condition).toBeCloseTo(starterB.condition, 9);
+  });
+
   it('동일 시드면 동일한 상태 변화 (재현성)', () => {
     const a = setup();
     const b = setup();

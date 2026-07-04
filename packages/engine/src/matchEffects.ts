@@ -29,12 +29,20 @@ const TUNING = {
 
 type Outcome = 'W' | 'D' | 'L';
 
+/** 압박·템포가 중립(0.5)보다 높을수록 체력 소모가 커진다 — 강도를 올린 대가.
+ *  중립 이하에서는 영향 없음(무리하지 않으면 페널티도 없음), 둘 다 최대치면 최대 1.35배. */
+function tacticFatigueMul(tactic: Tactic): number {
+  const intensity = (tactic.pressing + tactic.tempo) / 2;
+  return 1 + Math.max(0, intensity - 0.5) * 0.7;
+}
+
 function applySide(club: Club, tactic: Tactic, outcome: Outcome, injuries: InjuryEvent[]): void {
   const starters = new Set(tactic.lineup.map((s) => s.playerId));
   const dMorale = outcome === 'W' ? TUNING.moraleWin : outcome === 'L' ? -TUNING.moraleLoss : 0;
   // 의료 레벨이 높을수록 회복 보너스 (0.9~1.15배, 의료 20에서만 상한 도달)
   const recoveryBonus = clamp(0.9 + (club.staff.medical / 20) * 0.25, 0.9, 1.15);
   const injuryByPlayer = new Map(injuries.map((e) => [e.playerId, e]));
+  const fatigueMul = tacticFatigueMul(tactic);
 
   for (const p of club.players) {
     if (p.injuryMatches > 0) {
@@ -48,8 +56,9 @@ function applySide(club: Club, tactic: Tactic, outcome: Outcome, injuries: Injur
       p.seasonApps++; // 선발 출전 기록(사기·재계약 판단)
       // 특성: 철강왕(피로↓).
       const fatMul = hasTrait(p, 'ironMan') ? 0.6 : 1;
-      // 선발: 피로 누적 (스태미너 높을수록 덜 지침, 회복 공식과 동일한 분모)
-      const fatigue = TUNING.fatigueBase * (1 - p.attributes.stamina / 20) * fatMul;
+      // 선발: 피로 누적 (스태미너 높을수록 덜 지침, 회복 공식과 동일한 분모).
+      // 압박·템포를 중립 이상으로 올리면(고강도 전술) 그만큼 더 지친다.
+      const fatigue = TUNING.fatigueBase * (1 - p.attributes.stamina / 20) * fatMul * fatigueMul;
       p.condition = Math.max(TUNING.minCondition, p.condition - fatigue);
       // 부상 반영 (판정은 simulateMatch.generateInjuries가 이미 확정)
       const inj = injuryByPlayer.get(p.id);
