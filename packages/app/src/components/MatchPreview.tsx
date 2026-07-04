@@ -1,5 +1,6 @@
 import type { MatchPreview as Preview, TeamPreview } from '../game.js';
 import type { TeamStrength, FormResult } from '@soccer-tycoon/engine';
+import { ATTR_LABELS } from './PlayerDetail.js';
 
 const METRICS: { key: keyof TeamStrength; label: string }[] = [
   { key: 'attack', label: '공격' },
@@ -13,9 +14,31 @@ const METRICS: { key: keyof TeamStrength; label: string }[] = [
 
 const FORM_MARK: Record<FormResult, string> = { W: '승', D: '무', L: '패' };
 
+/** 두 팀의 전력 지표를 비교해 스카우팅 리포트 한 줄 요약을 만든다(가장 큰 격차 위주). */
+function scoutingInsight(mine: TeamStrength, opp: TeamStrength): string {
+  const THRESHOLD = 6;
+  let oppBest: { label: string; gap: number; m: number; o: number } | null = null;
+  let mineBest: { label: string; gap: number; m: number; o: number } | null = null;
+  for (const { key, label } of METRICS) {
+    const gap = opp[key] - mine[key];
+    if (gap > 0 && (!oppBest || gap > oppBest.gap)) oppBest = { label, gap, m: mine[key], o: opp[key] };
+    if (gap < 0 && (!mineBest || -gap > mineBest.gap)) mineBest = { label, gap: -gap, m: mine[key], o: opp[key] };
+  }
+  const parts: string[] = [];
+  if (oppBest && oppBest.gap >= THRESHOLD) {
+    parts.push(`상대는 ${oppBest.label}에서 앞섭니다 (${Math.round(oppBest.o)} vs ${Math.round(oppBest.m)})`);
+  }
+  if (mineBest && mineBest.gap >= THRESHOLD) {
+    parts.push(`우리는 ${mineBest.label}에서 더 강합니다 (${Math.round(mineBest.m)} vs ${Math.round(mineBest.o)})`);
+  }
+  return parts.length === 0 ? '두 팀의 전력이 전반적으로 비슷합니다.' : `${parts.join(' · ')}.`;
+}
+
 export function MatchPreview({ preview, rivalClubId }: { preview: Preview; rivalClubId?: string }) {
   const { home, away } = preview;
   const isDerby = rivalClubId !== undefined && (home.clubId === rivalClubId || away.clubId === rivalClubId);
+  const mine = home.isMine ? home : away;
+  const opp = home.isMine ? away : home;
   return (
     <div className="preview">
       <h3>경기 프리뷰</h3>
@@ -25,6 +48,8 @@ export function MatchPreview({ preview, rivalClubId }: { preview: Preview; rival
         <span className="pv-vs">VS</span>
         <TeamHead team={away} align="right" />
       </div>
+
+      <div className="pv-insight">🔎 {scoutingInsight(mine.strength, opp.strength)}</div>
 
       <div className="pv-metrics">
         {METRICS.map((m) => {
@@ -68,7 +93,14 @@ function TeamHead({ team, align }: { team: TeamPreview; align: 'left' | 'right' 
         )}
       </div>
       {team.keyPlayer && (
-        <div className="pv-key muted small">핵심 {team.keyPlayer.name} · CA {team.keyPlayer.ca}</div>
+        <div className="pv-key muted small">
+          핵심 {team.keyPlayer.name} · CA {team.keyPlayer.ca}
+          {team.keyPlayerReport && (
+            <div className="pv-key-attrs">
+              강점 {team.keyPlayerReport.strengths.map((k) => ATTR_LABELS[k]).join('/')}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

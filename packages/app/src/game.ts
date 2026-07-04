@@ -23,11 +23,11 @@ import {
   type BoardDemand, type RetiredLegend,
   type MediaEventKind, type MediaTone, type MediaToneOption, type ManagerPersona,
   upgradeStaff as engineUpgradeStaff, formatMoney,
-  computeTeamStrength, currentAbility, recentForm,
+  computeTeamStrength, currentAbility, recentForm, buildScoutingReport,
   type Club, type Tactic, type MatchResult, type MatchSetup, type SeasonSummary,
   type Fixture, type TableRow, type PlayerSeasonStat, type CupState, type StaffKind,
   type PlayerFormEntry, type Player, type YouthProspect, type YouthProspectUpdate,
-  type TeamStrength, type FormSummary,
+  type TeamStrength, type FormSummary, type ScoutingReport,
 } from '@soccer-tycoon/engine';
 import { makeDefaultTactic, repairTactic } from './tactics.js';
 
@@ -1045,6 +1045,8 @@ export interface TeamPreview {
   form: FormSummary;
   /** 예상 선발 중 CA 최고 선수. */
   keyPlayer: { name: string; ca: number } | null;
+  /** 키플레이어의 스카우팅 리포트(강점/약점) — 상대는 내 스카우팅 등급에 따라 표기. */
+  keyPlayerReport: ScoutingReport | null;
 }
 
 export interface MatchPreview {
@@ -1053,14 +1055,15 @@ export interface MatchPreview {
 }
 
 /** 선발(전술 라인업) 중 현재 능력 최고 선수. */
-function keyPlayerOf(club: Club, tactic: Tactic): { name: string; ca: number } | null {
+function keyPlayerOf(club: Club, tactic: Tactic): Player | null {
   const byId = new Map(club.players.map((p) => [p.id, p]));
-  let best: { name: string; ca: number } | null = null;
+  let best: Player | null = null;
+  let bestCa = -1;
   for (const slot of tactic.lineup) {
     const p = byId.get(slot.playerId);
     if (!p) continue;
-    const ca = Math.round(currentAbility(p));
-    if (!best || ca > best.ca) best = { name: p.name, ca };
+    const ca = currentAbility(p);
+    if (ca > bestCa) { best = p; bestCa = ca; }
   }
   return best;
 }
@@ -1070,20 +1073,26 @@ function buildPreviewFrom(state: GameState, setup: MatchSetup): MatchPreview | n
   if (!state.live) return null;
   const results = state.live.results;
   const table = liveTable(state);
+  const myScouting = state.clubs.find((c) => c.id === state.myClubId)?.staff.scouting ?? 10;
   const posOf = (clubId: string): number | null => {
     if (results.length === 0) return null;
     const i = table.findIndex((r) => r.clubId === clubId);
     return i < 0 ? null : i + 1; // 타 부 상대는 순위 정보 없음(null)
   };
-  const build = (club: Club, tactic: Tactic): TeamPreview => ({
-    clubId: club.id,
-    name: club.name,
-    isMine: club.id === state.myClubId,
-    position: posOf(club.id),
-    strength: computeTeamStrength(club, tactic),
-    form: recentForm(results, club.id, 5),
-    keyPlayer: keyPlayerOf(club, tactic),
-  });
+  const build = (club: Club, tactic: Tactic): TeamPreview => {
+    const isMine = club.id === state.myClubId;
+    const kp = keyPlayerOf(club, tactic);
+    return {
+      clubId: club.id,
+      name: club.name,
+      isMine,
+      position: posOf(club.id),
+      strength: computeTeamStrength(club, tactic),
+      form: recentForm(results, club.id, 5),
+      keyPlayer: kp ? { name: kp.name, ca: Math.round(currentAbility(kp)) } : null,
+      keyPlayerReport: kp ? buildScoutingReport(kp, isMine ? 20 : myScouting) : null,
+    };
+  };
   return {
     home: build(setup.home.club, setup.home.tactic),
     away: build(setup.away.club, setup.away.tactic),
