@@ -9,6 +9,7 @@ import { currentAbility } from './derived.js';
 import { marketValue, weeklyWage } from './valuation.js';
 import { annualWageBill, wageBudget } from './financeControl.js';
 import { MIN_SQUAD } from './transferActions.js';
+import { assignSquadNumber } from './generate.js';
 import { Rng } from './rng.js';
 
 export interface TransferDeal {
@@ -116,6 +117,7 @@ export function runTransferWindow(
     player.contractYears = 4;
     player.wage = weeklyWage(player);
     buyer.players.push(player);
+    assignSquadNumber(rng, buyer.players, player);
     moved.add(player.id);
 
     deals.push({

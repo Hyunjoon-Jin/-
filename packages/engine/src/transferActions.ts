@@ -8,6 +8,20 @@ import { currentAbility } from './derived.js';
 import { marketValue, weeklyWage } from './valuation.js';
 import { clamp } from './math.js';
 
+/** 이적으로 새 구단에 합류할 때 등번호 배정 — 기존 번호가 새 구단에서 비어있으면
+ *  유지하고, 겹치면 가장 작은 빈 번호로(협상에 무작위성을 추가하지 않기 위해
+ *  Rng 없이 결정론적으로 처리). */
+function reassignSquadNumber(club: Club, player: Player): void {
+  const used = new Set(
+    club.players.filter((p) => p.id !== player.id).map((p) => p.squadNumber).filter((n): n is number => n !== undefined),
+  );
+  if (player.squadNumber !== undefined && !used.has(player.squadNumber)) return;
+  for (let n = 1; n <= 99; n++) {
+    if (!used.has(n)) { player.squadNumber = n; return; }
+  }
+  player.squadNumber = undefined;
+}
+
 /** 스쿼드 크기 제약. */
 export const MIN_SQUAD = 14;
 export const MAX_SQUAD = 30;
@@ -162,6 +176,7 @@ export function buyPlayerAt(clubs: Club[], myClubId: string, playerId: string, f
   player.contractYears = 4;
   player.wage = weeklyWage(player);
   me.players.push(player);
+  reassignSquadNumber(me, player);
 
   return { ok: true, fee, playerName: player.name };
 }
@@ -205,6 +220,7 @@ export function sellPlayer(clubs: Club[], myClubId: string, playerId: string): S
   player.contractYears = 4;
   player.wage = weeklyWage(player);
   buyer.players.push(player);
+  reassignSquadNumber(buyer, player);
 
   return { ok: true, fee, buyerName: buyer.name, playerName: player.name };
 }
@@ -276,6 +292,7 @@ export function acceptSellOffer(
   player.contractYears = 4;
   player.wage = weeklyWage(player);
   buyer.players.push(player);
+  reassignSquadNumber(buyer, player);
 
   return { ok: true, fee, buyerName: buyer.name, playerName: player.name };
 }

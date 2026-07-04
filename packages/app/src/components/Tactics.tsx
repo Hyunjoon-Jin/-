@@ -1,9 +1,12 @@
 import { useMemo } from 'react';
 import {
-  computeTeamStrength, currentAbility, isInjured, isSuspended, isAvailable, lineOf,
+  computeTeamStrength, currentAbility, isInjured, isSuspended, isAvailable, lineOf, hasTrait,
   type Club, type Tactic, type TeamStrength,
 } from '@soccer-tycoon/engine';
-import { FORMATION_NAMES, autoPickLineup, swapPlayer, pickSetPieceTaker, ensureSetPieceTaker } from '../tactics.js';
+import {
+  FORMATION_NAMES, autoPickLineup, swapPlayer, pickSetPieceTaker, ensureSetPieceTaker,
+  pickCaptain, ensureCaptain,
+} from '../tactics.js';
 
 interface Props {
   club: Club;
@@ -48,7 +51,11 @@ export function Tactics({ club, tactic, onChange, disabled }: Props) {
 
   function setFormation(f: string) {
     const lineup = autoPickLineup(club, f);
-    onChange({ ...tactic, formation: f, lineup, setPieceTakerId: pickSetPieceTaker(club, lineup) });
+    onChange({
+      ...tactic, formation: f, lineup,
+      setPieceTakerId: pickSetPieceTaker(club, lineup),
+      captainId: pickCaptain(club, lineup),
+    });
   }
   function setSlider(key: SliderKey, v: number) {
     onChange({ ...tactic, [key]: v });
@@ -59,12 +66,20 @@ export function Tactics({ club, tactic, onChange, disabled }: Props) {
   function setSetPieceTaker(playerId: string) {
     onChange({ ...tactic, setPieceTakerId: playerId });
   }
+  function setCaptain(playerId: string) {
+    onChange({ ...tactic, captainId: playerId });
+  }
 
   const setPieceCandidates = tactic.lineup
     .filter((slot) => lineOf(slot.position) === 'ATT' || lineOf(slot.position) === 'MID')
     .map((slot) => byId.get(slot.playerId))
     .filter((p): p is NonNullable<typeof p> => p !== undefined)
     .sort((a, b) => b.attributes.setPiece - a.attributes.setPiece);
+
+  const captainCandidates = tactic.lineup
+    .map((slot) => byId.get(slot.playerId))
+    .filter((p): p is NonNullable<typeof p> => p !== undefined)
+    .sort((a, b) => b.attributes.leadership - a.attributes.leadership);
 
   return (
     <div className="tactics">
@@ -105,12 +120,16 @@ export function Tactics({ club, tactic, onChange, disabled }: Props) {
                       disabled={disabled}
                       onChange={(e) => {
                         const next = swapPlayer(tactic, i, e.target.value);
-                        onChange({ ...next, setPieceTakerId: ensureSetPieceTaker(club, next.lineup, next.setPieceTakerId) });
+                        onChange({
+                          ...next,
+                          setPieceTakerId: ensureSetPieceTaker(club, next.lineup, next.setPieceTakerId),
+                          captainId: ensureCaptain(club, next.lineup, next.captainId),
+                        });
                       }}
                     >
                       {club.players.map((pl) => (
                         <option key={pl.id} value={pl.id}>
-                          {mark(pl)}{pl.name} ({pl.position} · {currentAbility(pl).toFixed(0)})
+                          {mark(pl)}{pl.id === tactic.captainId ? '(C) ' : ''}{pl.name} ({pl.position} · {currentAbility(pl).toFixed(0)})
                         </option>
                       ))}
                     </select>
@@ -179,6 +198,29 @@ export function Tactics({ club, tactic, onChange, disabled }: Props) {
                 ))}
               </select>
               <p className="muted small">코너킥·프리킥 상황의 상당수를 이 선수가 직접 맡습니다.</p>
+            </>
+          )}
+        </div>
+
+        <div className="panel">
+          <h3>주장</h3>
+          {captainCandidates.length === 0 ? (
+            <p className="muted small">라인업이 비어 있습니다.</p>
+          ) : (
+            <>
+              <select
+                className="setpiece-select"
+                value={tactic.captainId ?? ''}
+                disabled={disabled}
+                onChange={(e) => setCaptain(e.target.value)}
+              >
+                {captainCandidates.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}{hasTrait(p, 'leader') ? ' ★리더' : ''} (리더십 {p.attributes.leadership})
+                  </option>
+                ))}
+              </select>
+              <p className="muted small">주장이 결장하면 팀 전체 사기에 소폭 페널티가 붙습니다.</p>
             </>
           )}
         </div>

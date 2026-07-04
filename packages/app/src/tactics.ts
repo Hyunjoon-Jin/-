@@ -45,6 +45,24 @@ export function ensureSetPieceTaker(club: Club, lineup: Tactic['lineup'], curren
   return pickSetPieceTaker(club, lineup);
 }
 
+/** 라인업 중 리더 특성 보유자를 우선하고, 없으면 리더십 능력치가 가장 높은 선수를 주장으로 자동 지정(엔진 로직과 동일). */
+export function pickCaptain(club: Club, lineup: Tactic['lineup']): string | undefined {
+  const byId = new Map(club.players.map((p) => [p.id, p]));
+  const inLineup = lineup
+    .map((s) => byId.get(s.playerId))
+    .filter((p): p is Player => p !== undefined);
+  if (inLineup.length === 0) return undefined;
+  const leaders = inLineup.filter((p) => hasTrait(p, 'leader'));
+  const pool = leaders.length > 0 ? leaders : inLineup;
+  return [...pool].sort((a, b) => b.attributes.leadership - a.attributes.leadership)[0]!.id;
+}
+
+/** 현재 주장이 새 라인업에 더는 없으면(포메이션·스쿼드 변동) 다시 자동 지정. */
+export function ensureCaptain(club: Club, lineup: Tactic['lineup'], currentId?: string): string | undefined {
+  if (currentId && lineup.some((s) => s.playerId === currentId)) return currentId;
+  return pickCaptain(club, lineup);
+}
+
 /** 포메이션에 맞춰 자동으로 베스트 XI를 뽑는다. */
 export function autoPickLineup(club: Club, formation: string): Tactic['lineup'] {
   const positions = FORMATIONS[formation] ?? FORMATIONS['4-3-3']!;
@@ -74,6 +92,7 @@ export function makeDefaultTactic(club: Club): Tactic {
     width: 0.5,
     defensiveLine: 0.5,
     setPieceTakerId: pickSetPieceTaker(club, lineup),
+    captainId: pickCaptain(club, lineup),
   };
 }
 
@@ -106,7 +125,12 @@ export function repairTactic(club: Club, tactic: Tactic): Tactic {
       lineup.push({ position: pos, playerId: pick.id });
     }
   });
-  return { ...tactic, lineup, setPieceTakerId: ensureSetPieceTaker(club, lineup, tactic.setPieceTakerId) };
+  return {
+    ...tactic,
+    lineup,
+    setPieceTakerId: ensureSetPieceTaker(club, lineup, tactic.setPieceTakerId),
+    captainId: ensureCaptain(club, lineup, tactic.captainId),
+  };
 }
 
 /** 슬롯의 선수를 교체한 새 전술 반환(이미 다른 슬롯에 있으면 자리 교환).

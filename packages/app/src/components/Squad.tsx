@@ -108,6 +108,7 @@ export function Squad({ club, onSelect }: { club: Club; onSelect: (p: Player) =>
         <table className="data-table">
           <thead>
             <tr>
+              <th>번호</th>
               <th>이름</th>
               <th>포지션</th>
               <SortableTh label="나이" k="age" sort={sort} dir={dir} onClick={toggleSort} />
@@ -130,6 +131,7 @@ export function Squad({ club, onSelect }: { club: Club; onSelect: (p: Player) =>
                 tabIndex={0}
                 onKeyDown={onKeyActivate(() => onSelect(player))}
               >
+                <td className="squad-number muted">{player.squadNumber ?? '-'}</td>
                 <td className="name">{player.name}</td>
                 <td><span className={`pos-chip pos-${lineOf(player.position).toLowerCase()}`}>{player.position}</span></td>
                 <td>{player.age}</td>

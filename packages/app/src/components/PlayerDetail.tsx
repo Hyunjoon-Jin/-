@@ -142,7 +142,7 @@ export function PlayerDetail({
       >
         <div className="modal-head">
           <div>
-            <h2>{player.name}</h2>
+            <h2>{player.squadNumber !== undefined && <span className="pd-number">#{player.squadNumber}</span>} {player.name}</h2>
             <div className="muted pd-sub">
               <span className={`pos-chip pos-${lineOf(player.position).toLowerCase()}`}>{player.position}</span>
               {' · '}{player.age}세 · {flagFor(player.nationality)} {player.nationality} · 계약 {player.contractYears}년

@@ -62,6 +62,8 @@ export interface Player {
   age: number;
   /** 주 포지션 */
   position: Position;
+  /** 등번호(1~99, 구단 내 유일). 구세이브 호환을 위해 선택적. */
+  squadNumber?: number;
   /** 포지션별 숙련도 (0~1). 주 포지션은 1.0. */
   familiarity: Partial<Record<Position, number>>;
   attributes: Attributes;
@@ -131,6 +133,8 @@ export interface Tactic {
   /** 세트피스(코너·프리킥) 전담자. 지정하면 세트피스 상황의 상당수를 이 선수가 직접
    *  맡는다(라인업에 없거나 미지정이면 예전처럼 무작위). */
   setPieceTakerId?: string;
+  /** 주장. 라인업에 없는 날(결장)에는 팀 전체 사기에 소폭 페널티가 붙는다. */
+  captainId?: string;
 }
 
 // ── 구단 ──────────────────────────────────────────────────

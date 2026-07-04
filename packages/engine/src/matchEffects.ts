@@ -25,6 +25,8 @@ const TUNING = {
   yellowThreshold: 5,
   /** 퇴장 출전정지 경기 수. */
   redSuspension: 2,
+  /** 주장이 결장(부상·정지·로테이션)했을 때 팀 전체에 붙는 소폭 사기 페널티. */
+  captainMissingPenalty: 0.02,
 } as const;
 
 type Outcome = 'W' | 'D' | 'L';
@@ -40,6 +42,9 @@ function applySide(club: Club, tactic: Tactic, outcome: Outcome, injuries: Injur
   const starters = new Set(tactic.lineup.map((s) => s.playerId));
   const slotByPlayer = new Map(tactic.lineup.map((s) => [s.playerId, s.position]));
   const dMorale = outcome === 'W' ? TUNING.moraleWin : outcome === 'L' ? -TUNING.moraleLoss : 0;
+  // 주장이 지정돼 있는데 이번 경기 라인업에 없으면(결장) 팀 전체에 소폭 사기 페널티.
+  const captainMissing = tactic.captainId !== undefined && !starters.has(tactic.captainId);
+  const captainPenalty = captainMissing ? TUNING.captainMissingPenalty : 0;
   // 의료 레벨이 높을수록 회복 보너스 (0.9~1.15배, 의료 20에서만 상한 도달)
   const recoveryBonus = clamp(0.9 + (club.staff.medical / 20) * 0.25, 0.9, 1.15);
   const injuryByPlayer = new Map(injuries.map((e) => [e.playerId, e]));
@@ -85,7 +90,7 @@ function applySide(club: Club, tactic: Tactic, outcome: Outcome, injuries: Injur
       p.condition = Math.min(1, p.condition + recovery);
       if (p.suspensionMatches > 0) p.suspensionMatches--;
     }
-    p.morale = clamp(p.morale + dMorale, 0, 1);
+    p.morale = clamp(p.morale + dMorale - captainPenalty, 0, 1);
   }
 }
 

@@ -8,7 +8,7 @@ import { simulateSeason, type TableRow } from './league.js';
 import { settleSeason, type SeasonFinanceReport } from './finance.js';
 import { runTransferWindow, type TransferDeal } from './transfer.js';
 import { progressPlayer } from './progression.js';
-import { generateAcademyIntake, generateYouthPlayer } from './generate.js';
+import { generateAcademyIntake, generateYouthPlayer, assignSquadNumber } from './generate.js';
 import { enforceFinancialFairPlay } from './financeControl.js';
 import { runInternationalBreak } from './international.js';
 import { currentAbility } from './derived.js';
@@ -243,13 +243,16 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
     // 유스 아카데미 배출
     const intake = generateAcademyIntake(rng, club.finance.reputation, club.staff.youth);
     club.players.push(...intake);
+    for (const p of intake) assignSquadNumber(rng, club.players, p);
     intakeByClub.set(club.id, intake.length);
     intakePlayersByClub.set(club.id, intake);
 
     // 은퇴·유입 후에도 골키퍼가 한 명도 없으면(극단적으로 보유 GK 전원이 같은
     // 시즌에 은퇴) 전문 GK 없이 시즌을 운영하게 되므로 응급 유스 GK로 보강한다.
     if (!club.players.some((p) => p.position === 'GK')) {
-      club.players.push(generateYouthPlayer(rng, 'GK', club.finance.reputation));
+      const emergencyGk = generateYouthPlayer(rng, 'GK', club.finance.reputation);
+      club.players.push(emergencyGk);
+      assignSquadNumber(rng, club.players, emergencyGk);
     }
 
     // 스쿼드 상한 정리

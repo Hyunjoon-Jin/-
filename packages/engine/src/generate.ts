@@ -101,6 +101,16 @@ function genPlayer(rng: Rng, position: Position, tier: number, fixedAge?: number
   return player;
 }
 
+/** 구단 내에서 아직 쓰이지 않는 등번호(1~99) 중 하나를 무작위로 배정. */
+export function assignSquadNumber(rng: Rng, existingPlayers: Player[], player: Player): void {
+  const used = new Set(
+    existingPlayers.map((p) => p.squadNumber).filter((n): n is number => n !== undefined),
+  );
+  const free: number[] = [];
+  for (let n = 1; n <= 99; n++) if (!used.has(n)) free.push(n);
+  player.squadNumber = free.length > 0 ? free[rng.int(0, free.length - 1)] : undefined;
+}
+
 /**
  * 한 구단 생성: 선발 11 + 후보 7 = 18명.
  * tier(1~20)로 팀 전력 차등.
@@ -116,6 +126,7 @@ export function generateClub(rng: Rng, id: string, name: string, tier: number, d
   for (const pos of benchPos) {
     players.push(genPlayer(rng, pos, tier - 1));
   }
+  for (const p of players) assignSquadNumber(rng, players, p);
 
   // 재정: 평판 ≈ tier, 자금/예산은 평판 기반.
   const reputation = clamp(tier, 1, 20);
@@ -277,6 +288,18 @@ function pickSetPieceTaker(club: Club, lineup: { position: Position; playerId: s
   return eligible.sort((a, b) => setPieceTakerScore(b) - setPieceTakerScore(a))[0]!.id;
 }
 
+/** 라인업 중 리더 특성 보유자를 우선하고, 없으면 리더십 능력치가 가장 높은 선수를 주장으로 자동 지정. */
+function pickCaptain(club: Club, lineup: { position: Position; playerId: string }[]): string | undefined {
+  const byId = new Map(club.players.map((p) => [p.id, p]));
+  const inLineup = lineup
+    .map((s) => byId.get(s.playerId))
+    .filter((p): p is Player => p !== undefined);
+  if (inLineup.length === 0) return undefined;
+  const leaders = inLineup.filter((p) => hasTrait(p, 'leader'));
+  const pool = leaders.length > 0 ? leaders : inLineup;
+  return [...pool].sort((a, b) => b.attributes.leadership - a.attributes.leadership)[0]!.id;
+}
+
 /**
  * 기본 전술(AI용). 포지션별 최적 선수로 베스트 XI를 구성하고, 스쿼드 강점에 맞는
  * 포메이션과 경기 맥락(상대 전력·홈/원정·빅매치 여부)에 반응하는 공격성향·압박강도를 정한다.
@@ -309,5 +332,6 @@ export function defaultTactic(club: Club, ctx: TacticContext = {}): Tactic {
     width: computeAiWidth(formation, mentality),
     defensiveLine: computeAiDefensiveLine(formation, mentality, ctx),
     setPieceTakerId: pickSetPieceTaker(club, lineup),
+    captainId: pickCaptain(club, lineup),
   };
 }
