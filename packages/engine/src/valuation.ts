@@ -57,3 +57,16 @@ export function weeklyWage(player: Player): number {
   const ca = currentAbility(player);
   return Math.max(0, Math.round(Math.pow(ca / 100, 2) * 900 * ageWageFactor(player.age)));
 }
+
+/** 에이전트 수수료 기준 계약 연수(4년 기준 요율). */
+const AGENT_FEE_BASE_YEARS = 4;
+/** 이적료 대비 에이전트 수수료 요율(기준 계약 연수 기준). */
+const AGENT_FEE_RATE = 0.05;
+
+/**
+ * 에이전트 수수료 (만원). 이적료와 별개로 이적 예산이 아닌 구단 잔고에서 차감된다.
+ * 계약 연수가 길수록(에이전트가 더 오랜 기간의 미래 수입을 협상하므로) 수수료도 커진다.
+ */
+export function agentFee(fee: number, contractYears: number): number {
+  return Math.max(0, Math.round(fee * AGENT_FEE_RATE * (contractYears / AGENT_FEE_BASE_YEARS)));
+}

@@ -163,6 +163,11 @@ export function PlayerDetail({
           </span>
           <span>가치 <b>{formatMoney(marketValue(player))}</b></span>
           <span>주급 <b>{formatMoney(player.wage)}</b></span>
+          {player.releaseClause !== undefined && (
+            <span className="pd-clause" title="협상 없이 이 금액으로 즉시 영입 가능">
+              🔓 방출조항 <b>{formatMoney(player.releaseClause)}</b>
+            </span>
+          )}
           <span className={status.cls}>{status.text}</span>
           <span className={moraleLabel(player.morale).cls}>사기 {moraleLabel(player.morale).text}</span>
           <span className="muted">시즌 {player.seasonApps}경 {player.seasonGoals ?? 0}골</span>

@@ -9,7 +9,7 @@ import type {
 import { ALL_ATTRS, GOALKEEPING_ATTRS } from './types.js';
 import { Rng } from './rng.js';
 import { clamp } from './math.js';
-import { weeklyWage } from './valuation.js';
+import { weeklyWage, marketValue } from './valuation.js';
 import { currentAbility, isAvailable } from './derived.js';
 import { rollTraits, hasTrait } from './traits.js';
 import { FORMATIONS } from './formations.js';
@@ -98,7 +98,24 @@ function genPlayer(rng: Rng, position: Position, tier: number, fixedAge?: number
   };
   player.wage = weeklyWage(player);
   player.traits = rollTraits(player, rng);
+  player.releaseClause = rollReleaseClause(rng, player);
   return player;
+}
+
+/** 방출조항 부여 상한 연령 — 어린 유망주 위주로만 설정(베테랑은 클럽이 조항을 걸지 않음). */
+const RELEASE_CLAUSE_MAX_AGE = 24;
+/** 방출조항 부여 확률. */
+const RELEASE_CLAUSE_CHANCE = 0.18;
+
+/**
+ * 방출(바이아웃) 조항 금액 결정 — 어린 선수 일부에게만 시장가의 1.4~2.0배 수준으로 부여.
+ * 협상 없이 이 금액을 내면 즉시 영입 가능하므로 시장가보다 프리미엄을 둔다.
+ */
+function rollReleaseClause(rng: Rng, player: Player): number | undefined {
+  if (player.age > RELEASE_CLAUSE_MAX_AGE) return undefined;
+  if (!rng.roll(RELEASE_CLAUSE_CHANCE)) return undefined;
+  const multiplier = 1.4 + rng.int(0, 6) / 10;
+  return Math.round(marketValue(player) * multiplier);
 }
 
 /** 구단 내에서 아직 쓰이지 않는 등번호(1~99) 중 하나를 무작위로 배정. */

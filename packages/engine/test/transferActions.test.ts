@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
-  transferTargets, buyPlayer, buyPlayerAt, sellPlayer, releasePlayer, askingPrice, MIN_SQUAD,
+  transferTargets, buyPlayer, buyPlayerAt, buyPlayerViaReleaseClause, sellPlayer, releasePlayer,
+  askingPrice, evaluateOffer, MAX_NEGOTIATION_ROUNDS, MIN_SQUAD,
 } from '../src/transferActions.js';
-import { marketValue } from '../src/valuation.js';
+import { marketValue, agentFee } from '../src/valuation.js';
 import { currentAbility } from '../src/derived.js';
 import { generateClub } from '../src/generate.js';
 import { Rng } from '../src/rng.js';
@@ -150,5 +151,153 @@ describe('transferActions: 판매/방출', () => {
     expect(r.ok).toBe(false);
     const s = sellPlayer(clubs, 'c0', me.players[0]!.id);
     expect(s.ok).toBe(false);
+  });
+});
+
+describe('transferActions: 다회차 협상(A01)', () => {
+  it('라운드가 진행될수록 매도 구단의 호가가 조급증만큼 오른다', () => {
+    const clubs = makeLeague();
+    const me = clubs.find((c) => c.id === 'c0')!;
+    me.finance.transferBudget = 999_999_999;
+    me.finance.balance = 999_999_999;
+    const seller = clubs.find((c) => c.id !== 'c0')!;
+    const player = seller.players[0]!;
+    const base = evaluateOffer(clubs, 'c0', player.id, 1, 0);
+    const laterRound = evaluateOffer(clubs, 'c0', player.id, 1, MAX_NEGOTIATION_ROUNDS);
+    expect(laterRound.asking!).toBeGreaterThan(base.asking!);
+  });
+
+  it('라운드 상한을 넘기면 역제안 없이 협상이 결렬된다', () => {
+    const clubs = makeLeague();
+    const me = clubs.find((c) => c.id === 'c0')!;
+    me.finance.transferBudget = 999_999_999;
+    me.finance.balance = 999_999_999;
+    const seller = clubs.find((c) => c.id !== 'c0')!;
+    const player = seller.players[0]!;
+    const asking = askingPrice(seller, player);
+    // 라운드가 늘수록 호가에 조급증이 붙어 오르지만(floor도 같은 비율로 오름), 0.95배는
+    // 최대 라운드의 조급증을 반영해도 항상 floor보다 높고 asking보다는 낮은 안전한 구간.
+    const lowball = Math.round(asking * 0.95);
+    const withinRounds = evaluateOffer(clubs, 'c0', player.id, lowball, MAX_NEGOTIATION_ROUNDS - 1);
+    expect(withinRounds.outcome).toBe('countered');
+    const exhausted = evaluateOffer(clubs, 'c0', player.id, lowball, MAX_NEGOTIATION_ROUNDS + 1);
+    expect(exhausted.outcome).toBe('rejected');
+    expect(exhausted.roundsExhausted).toBe(true);
+  });
+
+  it('호가 이상을 제시하면 라운드와 무관하게 수락된다', () => {
+    const clubs = makeLeague();
+    const me = clubs.find((c) => c.id === 'c0')!;
+    me.finance.transferBudget = 999_999_999;
+    me.finance.balance = 999_999_999;
+    const seller = clubs.find((c) => c.id !== 'c0')!;
+    const player = seller.players[0]!;
+    // 라운드가 진행될수록 조급증으로 호가 자체가 오르므로, 그 상한(round=MAX)을
+    // 반영해도 넉넉히 웃도는 금액을 제시한다.
+    const overwhelming = Math.round(askingPrice(seller, player) * 2);
+    const r = evaluateOffer(clubs, 'c0', player.id, overwhelming, MAX_NEGOTIATION_ROUNDS + 5);
+    expect(r.outcome).toBe('accepted');
+  });
+});
+
+describe('transferActions: 에이전트 수수료(A02)', () => {
+  it('영입 시 이적료와 별개로 에이전트 수수료가 산정돼 잔고에서 추가로 차감된다', () => {
+    const clubs = makeLeague();
+    const me = clubs.find((c) => c.id === 'c0')!;
+    me.finance.transferBudget = 999_999_999;
+    me.finance.balance = 999_999_999;
+    const seller = clubs.find((c) => c.id !== 'c0')!;
+    const player = seller.players[0]!;
+    const fee = askingPrice(seller, player);
+    const budgetBefore = me.finance.transferBudget;
+    const balanceBefore = me.finance.balance;
+
+    const r = buyPlayerAt(clubs, 'c0', player.id, fee);
+    expect(r.ok).toBe(true);
+    expect(r.agentFee).toBe(agentFee(fee, 4));
+    expect(r.agentFee!).toBeGreaterThan(0);
+    // 이적 예산은 이적료만큼만 차감
+    expect(me.finance.transferBudget).toBe(budgetBefore - fee);
+    // 잔고는 이적료 + 에이전트 수수료만큼 차감
+    expect(me.finance.balance).toBe(balanceBefore - fee - r.agentFee!);
+  });
+
+  it('이적료는 감당해도 에이전트 수수료까지 감당하지 못하면 영입이 거절된다', () => {
+    const clubs = makeLeague();
+    const me = clubs.find((c) => c.id === 'c0')!;
+    const seller = clubs.find((c) => c.id !== 'c0')!;
+    const player = seller.players[0]!;
+    const fee = askingPrice(seller, player);
+    me.finance.transferBudget = fee + 1;
+    me.finance.balance = fee; // 수수료를 낼 여유가 없음
+    const r = buyPlayerAt(clubs, 'c0', player.id, fee);
+    expect(r.ok).toBe(false);
+  });
+});
+
+describe('transferActions: 방출(바이아웃) 조항(A03)', () => {
+  function findPlayerWithClause(): { clubs: Club[]; clubId: string; playerId: string } | null {
+    for (let seed = 1; seed < 40; seed++) {
+      const clubs = makeLeague(seed);
+      for (const club of clubs) {
+        const p = club.players.find((pl) => pl.releaseClause !== undefined);
+        if (p) return { clubs, clubId: club.id, playerId: p.id };
+      }
+    }
+    return null;
+  }
+
+  it('방출조항이 설정된 선수는 협상 없이 조항 금액으로 즉시 영입된다', () => {
+    const found = findPlayerWithClause();
+    expect(found).not.toBeNull();
+    const { clubs, clubId, playerId } = found!;
+    const seller = clubs.find((c) => c.id === clubId)!;
+    const player = seller.players.find((p) => p.id === playerId)!;
+    const clause = player.releaseClause!;
+    const me = clubs.find((c) => c.id !== clubId)!;
+    me.finance.transferBudget = clause * 2;
+    me.finance.balance = clause * 2;
+    const sellerBalBefore = seller.finance.balance;
+
+    const r = buyPlayerViaReleaseClause(clubs, me.id, playerId);
+    expect(r.ok).toBe(true);
+    expect(r.fee).toBe(clause);
+    expect(seller.finance.balance).toBe(sellerBalBefore + clause);
+    expect(me.players.some((p) => p.id === playerId)).toBe(true);
+    // 새 구단에서는 조항이 사라진다(재협상 전제).
+    expect(me.players.find((p) => p.id === playerId)!.releaseClause).toBeUndefined();
+  });
+
+  it('방출조항이 없는 선수는 실패한다', () => {
+    const clubs = makeLeague();
+    const me = clubs.find((c) => c.id === 'c0')!;
+    const seller = clubs.find((c) => c.id !== 'c0')!;
+    const noClausePlayer = seller.players.find((p) => p.releaseClause === undefined);
+    expect(noClausePlayer).toBeDefined();
+    const r = buyPlayerViaReleaseClause(clubs, 'c0', noClausePlayer!.id);
+    expect(r.ok).toBe(false);
+  });
+
+  it('방출조항은 라인 뎁스 제약과 무관하게 조항 금액 그대로 성사된다(일반 협상이었다면 거절됐을 상황)', () => {
+    const clubs = makeLeague();
+    const me = clubs.find((c) => c.id === 'c0')!;
+    me.finance.transferBudget = 999_999_999;
+    me.finance.balance = 999_999_999;
+    const seller = clubs.find((c) => c.id !== 'c0')!;
+    const gks = seller.players.filter((p) => p.position === 'GK');
+    expect(gks.length).toBeGreaterThanOrEqual(2);
+    const target = gks[0]!;
+    // 자연 롤과 무관하게 시나리오를 통제하기 위해 조항을 직접 부여.
+    const clause = Math.round(marketValue(target) * 1.5);
+    target.releaseClause = clause;
+    // 다른 GK를 모두 제거해 라인 뎁스를 바닥낸다.
+    seller.players = seller.players.filter((p) => p.id === target.id || p.position !== 'GK');
+
+    const normal = buyPlayerAt(clubs, 'c0', target.id, clause);
+    expect(normal.ok).toBe(false); // 뎁스 부족으로 일반 협상 경로는 거절
+
+    const viaClause = buyPlayerViaReleaseClause(clubs, 'c0', target.id);
+    expect(viaClause.ok).toBe(true); // 방출조항은 뎁스와 무관하게 성사
+    expect(viaClause.fee).toBe(clause);
   });
 });

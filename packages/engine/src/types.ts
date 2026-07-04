@@ -103,6 +103,8 @@ export interface Player {
   careerGoals: number;
   /** 시즌별 CA 스냅샷(성장 곡선). 오프시즌마다 1개 추가. */
   caHistory: number[];
+  /** 방출(바이아웃) 조항 금액(만원). 설정돼 있으면 협상 없이 이 금액으로 즉시 영입 가능. */
+  releaseClause?: number;
 }
 
 export type TrainingFocus =

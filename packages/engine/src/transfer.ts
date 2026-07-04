@@ -116,6 +116,7 @@ export function runTransferWindow(
     seller.players = seller.players.filter((p) => p.id !== player.id);
     player.contractYears = 4;
     player.wage = weeklyWage(player);
+    player.releaseClause = undefined;
     buyer.players.push(player);
     assignSquadNumber(rng, buyer.players, player);
     moved.add(player.id);

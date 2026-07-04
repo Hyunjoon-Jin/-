@@ -360,6 +360,7 @@ body {
 .growth-svg { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; display: block; }
 .growth-ends { display: flex; justify-content: space-between; width: 320px; margin-top: 3px; }
 .pd-caps { color: #6cb6ff; font-weight: 600; }
+.pd-clause { color: var(--accent-2); font-weight: 600; }
 .pd-form-stability { margin: -8px 0 16px; }
 
 .pd-timeline { margin: 6px 0 16px; }
@@ -915,6 +916,10 @@ h3 { font-size: 14px; margin: 0 0 10px; color: var(--muted); text-transform: upp
 .data-table.compact th, .data-table.compact td { padding: 5px 7px; font-size: 13px; }
 .data-table .small { font-size: 12px; }
 .sell-actions { display: flex; gap: 4px; }
+.market-actions { display: flex; gap: 4px; }
+.clause-badge { margin-left: 5px; font-size: 12px; cursor: help; }
+.clause-buy { border-color: var(--accent-2); color: var(--accent-2); }
+.clause-buy:hover { background: var(--accent-2); color: #06203f; }
 
 /* ── Watch match (2D) ── */
 .watch-topbar { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }

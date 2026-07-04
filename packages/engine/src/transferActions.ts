@@ -5,7 +5,7 @@
 import type { Club, Line, Player } from './types.js';
 import { lineOf } from './teamStrength.js';
 import { currentAbility } from './derived.js';
-import { marketValue, weeklyWage } from './valuation.js';
+import { marketValue, weeklyWage, agentFee } from './valuation.js';
 import { clamp } from './math.js';
 
 /** 이적으로 새 구단에 합류할 때 등번호 배정 — 기존 번호가 새 구단에서 비어있으면
@@ -59,7 +59,10 @@ export function transferTargets(clubs: Club[], myClubId: string): TransferTarget
   return out;
 }
 
-export interface BuyResult { ok: boolean; fee?: number; playerName?: string; reason?: string }
+export interface BuyResult { ok: boolean; fee?: number; agentFee?: number; playerName?: string; reason?: string }
+
+/** 신규 계약 시 부여되는 계약 연수(에이전트 수수료 산정 기준). */
+const NEW_CONTRACT_YEARS = 4;
 
 /**
  * 매도 구단의 호가(asking price).
@@ -91,19 +94,30 @@ export interface OfferEvaluation {
   ok: boolean;
   reason?: string;
   outcome?: OfferOutcome;
-  /** 매도 구단 호가(제안 시 공개). */
+  /** 매도 구단 호가(제안 시 공개, 라운드가 진행될수록 조급증이 반영돼 소폭 상승). */
   asking?: number;
   /** 역제안 금액(countered일 때). */
   counter?: number;
   playerName?: string;
+  /** 이번 제안이 몇 번째 라운드였는지(0-base). */
+  round?: number;
+  /** 라운드 상한 소진으로 협상이 완전히 결렬됐는지(재역제안 없이 거절). */
+  roundsExhausted?: boolean;
 }
+
+/** 밀당 가능한 최대 라운드 수 — 이 이상 역제안이 반복되면 매도 구단이 협상을 접는다. */
+export const MAX_NEGOTIATION_ROUNDS = 3;
+/** 라운드가 진행될수록(=계속 낮은 제안이 반복될수록) 매도 구단이 조급해하며 호가에 얹는 가산율. */
+const NEGOTIATION_IMPATIENCE_PER_ROUND = 0.03;
 
 /**
  * 제안액에 대한 매도 구단의 반응(순수 함수 — 구단을 변경하지 않음).
  * 호가 이상이면 수락, 하한 이상이면 역제안, 그 미만이면 거절.
+ * round(0-base, 이 협상에서 이미 진행된 역제안 횟수)가 클수록 호가가 조금씩 오르고,
+ * MAX_NEGOTIATION_ROUNDS를 넘기면 매도 구단이 더 이상 밀당하지 않고 협상을 접는다.
  */
 export function evaluateOffer(
-  clubs: Club[], myClubId: string, playerId: string, offer: number,
+  clubs: Club[], myClubId: string, playerId: string, offer: number, round = 0,
 ): OfferEvaluation {
   const me = clubs.find((c) => c.id === myClubId);
   if (!me) return { ok: false, reason: '내 구단을 찾을 수 없습니다.' };
@@ -123,19 +137,24 @@ export function evaluateOffer(
   if (offer > me.finance.transferBudget) return { ok: false, reason: '이적 예산을 초과했습니다.' };
   if (offer > me.finance.balance) return { ok: false, reason: '보유 자금이 부족합니다.' };
 
-  const asking = askingPrice(seller, player);
+  const impatience = 1 + Math.min(round, MAX_NEGOTIATION_ROUNDS) * NEGOTIATION_IMPATIENCE_PER_ROUND;
+  const asking = Math.round(askingPrice(seller, player) * impatience);
   const floor = Math.round(asking * 0.82);
   let outcome: OfferOutcome;
   let counter: number | undefined;
+  let roundsExhausted = false;
   if (offer >= asking) {
     outcome = 'accepted';
+  } else if (round >= MAX_NEGOTIATION_ROUNDS) {
+    outcome = 'rejected';
+    roundsExhausted = true;
   } else if (offer >= floor) {
     outcome = 'countered';
     counter = Math.min(asking, Math.round((asking + offer) / 2));
   } else {
     outcome = 'rejected';
   }
-  return { ok: true, outcome, asking, counter, playerName: player.name };
+  return { ok: true, outcome, asking, counter, playerName: player.name, round, roundsExhausted };
 }
 
 /** 지정 이적료로 영입 실행 (협상 타결분). 예산·스쿼드 제약 검증. */
@@ -161,24 +180,68 @@ export function buyPlayerAt(clubs: Club[], myClubId: string, playerId: string, f
   if (fee < floor) {
     return { ok: false, reason: '제안액이 너무 낮아 거절당했습니다.' };
   }
+  const commission = agentFee(fee, NEW_CONTRACT_YEARS);
   if (me.finance.transferBudget < fee) {
     return { ok: false, reason: '이적 예산이 부족합니다.' };
   }
-  if (me.finance.balance < fee) {
-    return { ok: false, reason: '보유 자금이 부족합니다.' };
+  if (me.finance.balance < fee + commission) {
+    return { ok: false, reason: '보유 자금이 부족합니다(이적료+에이전트 수수료).' };
   }
 
   me.finance.transferBudget -= fee;
-  me.finance.balance -= fee;
+  me.finance.balance -= fee + commission;
   seller.finance.balance += fee;
   seller.finance.transferBudget += fee;
   seller.players = seller.players.filter((p) => p.id !== playerId);
-  player.contractYears = 4;
+  player.contractYears = NEW_CONTRACT_YEARS;
   player.wage = weeklyWage(player);
+  player.releaseClause = undefined;
   me.players.push(player);
   reassignSquadNumber(me, player);
 
-  return { ok: true, fee, playerName: player.name };
+  return { ok: true, fee, agentFee: commission, playerName: player.name };
+}
+
+/**
+ * 방출(바이아웃) 조항 이용 즉시 영입 — 협상 없이 조항 금액을 그대로 지불한다.
+ * 매도 구단은 포지션 뎁스·선수 중요도를 이유로 거절할 수 없다(방출조항의 본질).
+ * 다만 스쿼드 최소 인원(MIN_SQUAD)만은 시뮬레이션 무결성을 위해 예외적으로 유지한다.
+ */
+export function buyPlayerViaReleaseClause(clubs: Club[], myClubId: string, playerId: string): BuyResult {
+  const me = clubs.find((c) => c.id === myClubId);
+  if (!me) return { ok: false, reason: '내 구단을 찾을 수 없습니다.' };
+  if (me.players.length >= MAX_SQUAD) {
+    return { ok: false, reason: `스쿼드가 가득 찼습니다 (최대 ${MAX_SQUAD}명).` };
+  }
+  const seller = clubs.find((c) => c.id !== myClubId && c.players.some((p) => p.id === playerId));
+  if (!seller) return { ok: false, reason: '해당 선수를 찾을 수 없습니다.' };
+  if (seller.players.length - 1 < MIN_SQUAD) {
+    return { ok: false, reason: '상대 구단이 최소 스쿼드 인원을 유지하려 합니다.' };
+  }
+  const player = seller.players.find((p) => p.id === playerId)!;
+  const fee = player.releaseClause;
+  if (fee === undefined) return { ok: false, reason: '이 선수는 방출조항이 없습니다.' };
+
+  const commission = agentFee(fee, NEW_CONTRACT_YEARS);
+  if (me.finance.transferBudget < fee) {
+    return { ok: false, reason: '이적 예산이 부족합니다.' };
+  }
+  if (me.finance.balance < fee + commission) {
+    return { ok: false, reason: '보유 자금이 부족합니다(이적료+에이전트 수수료).' };
+  }
+
+  me.finance.transferBudget -= fee;
+  me.finance.balance -= fee + commission;
+  seller.finance.balance += fee;
+  seller.finance.transferBudget += fee;
+  seller.players = seller.players.filter((p) => p.id !== playerId);
+  player.contractYears = NEW_CONTRACT_YEARS;
+  player.wage = weeklyWage(player);
+  player.releaseClause = undefined;
+  me.players.push(player);
+  reassignSquadNumber(me, player);
+
+  return { ok: true, fee, agentFee: commission, playerName: player.name };
 }
 
 /** 타 구단 선수 영입 (호가로 즉시 — AI/구버전 경로).
@@ -219,6 +282,7 @@ export function sellPlayer(clubs: Club[], myClubId: string, playerId: string): S
   buyer.finance.transferBudget -= fee;
   player.contractYears = 4;
   player.wage = weeklyWage(player);
+  player.releaseClause = undefined;
   buyer.players.push(player);
   reassignSquadNumber(buyer, player);
 
@@ -291,6 +355,7 @@ export function acceptSellOffer(
   buyer.finance.transferBudget -= fee;
   player.contractYears = 4;
   player.wage = weeklyWage(player);
+  player.releaseClause = undefined;
   buyer.players.push(player);
   reassignSquadNumber(buyer, player);
 

@@ -43,7 +43,7 @@ export {
 export { TUNING } from './tuning.js';
 export { DERIVED_WEIGHTS, type DerivedKey } from './roleWeights.js';
 export { formatMoney, EOK } from './money.js';
-export { marketValue, weeklyWage } from './valuation.js';
+export { marketValue, weeklyWage, agentFee } from './valuation.js';
 export { settleSeason, leaguePrize, type SeasonFinanceReport } from './finance.js';
 export { runTransferWindow, type TransferDeal } from './transfer.js';
 export {
@@ -71,9 +71,9 @@ export {
   type DemandKind, type BoardDemand, type DemandContext, type DemandResult,
 } from './demands.js';
 export {
-  transferTargets, buyPlayer, buyPlayerAt, sellPlayer, releasePlayer,
+  transferTargets, buyPlayer, buyPlayerAt, buyPlayerViaReleaseClause, sellPlayer, releasePlayer,
   askingPrice, evaluateOffer, sellOffers, acceptSellOffer,
-  MIN_SQUAD, MAX_SQUAD,
+  MIN_SQUAD, MAX_SQUAD, MAX_NEGOTIATION_ROUNDS,
   type TransferTarget, type BuyResult, type SellResult,
   type OfferOutcome, type OfferEvaluation, type SellOffer,
 } from './transferActions.js';

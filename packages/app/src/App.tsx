@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   startGame, myClub, myTactic, setMyTactic,
   startSeason, playRound, playRestOfSeason, finishSeason, advanceFullSeason,
-  playCupRound, negotiate, buyAt, offersFor, acceptSell, release, upgradeStaffAction,
+  playCupRound, negotiate, buyAt, buyViaReleaseClause, offersFor, acceptSell, release, upgradeStaffAction,
   setTrainingFocus, setTrainingPosition, renewContract,
   watchSetup, matchPreview, commitWatchedRound,
   watchCupSetup, cupPreview, commitWatchedCupRound,
@@ -160,6 +160,12 @@ export function App() {
     return outcome;
   };
 
+  const handleBuyViaReleaseClause = (id: string): ActionOutcome => {
+    const outcome = buyViaReleaseClause(game, id);
+    if (outcome.ok) update(outcome.state);
+    return outcome;
+  };
+
   const handleAcceptSell = (id: string, buyerId: string): ActionOutcome => {
     const outcome = acceptSell(game, id, buyerId);
     if (outcome.ok) update(outcome.state);
@@ -283,8 +289,9 @@ export function App() {
               <Transfers
                 key={slotId}
                 game={game}
-                onNegotiate={(id, offer) => negotiate(game, id, offer)}
+                onNegotiate={(id, offer, round) => negotiate(game, id, offer, round)}
                 onBuyAt={handleBuyAt}
+                onBuyViaReleaseClause={handleBuyViaReleaseClause}
                 onOffers={(id) => offersFor(game, id)}
                 onAcceptSell={handleAcceptSell}
                 onRelease={(id) => runAction(release, id)}

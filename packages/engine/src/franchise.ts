@@ -172,6 +172,13 @@ const MENTEE_MAX_AGE = 23;
 const MENTOR_VETERAN_AGE = 30;
 const MENTOR_VETERAN_LEADERSHIP = 14;
 
+/** 오프시즌 사기 수렴 시 기존 사기에 두는 가중치(기본) — 낮을수록 목표치로 빨리 수렴. */
+const BASE_MORALE_RETENTION = 0.4;
+/** 라커룸 마찰(다혈질 2명 이상 + 리더 부재) 시의 가중치 — 목표치로의 수렴이 둔화된다. */
+const FRICTION_MORALE_RETENTION = 0.55;
+/** 이 인원 이상의 다혈질 특성 보유자가 한 스쿼드에 있으면 마찰이 발생한다. */
+const HOTHEAD_FRICTION_THRESHOLD = 2;
+
 /** 성장 중인 유망주와 같은 라인에 멘토(리더 특성 또는 리더십 높은 베테랑)가 있는지. */
 function hasMentor(club: Club, player: Player): boolean {
   if (player.age > MENTEE_MAX_AGE) return false;
@@ -197,6 +204,11 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
     const medianCA = cas[Math.floor(cas.length / 2)] ?? 0;
     // 리더 특성 보유 선수가 있으면 스쿼드 전체 사기가 소폭 상승.
     const leaderBonus = club.players.some((p) => hasTrait(p, 'leader')) ? 0.05 : 0;
+    // 라커룸 케미스트리: 다혈질(hothead) 2명 이상이 부딪히면 사기 수렴이 느려진다 —
+    // 다만 리더가 있으면 갈등을 중재해 마찰이 무마된다.
+    const hotheadCount = club.players.filter((p) => hasTrait(p, 'hothead')).length;
+    const chemistryFriction = hotheadCount >= HOTHEAD_FRICTION_THRESHOLD && leaderBonus === 0;
+    const moraleRetention = chemistryFriction ? FRICTION_MORALE_RETENTION : BASE_MORALE_RETENTION;
 
     for (const player of club.players) {
       // 출전 시간 기반 사기 갱신 (핵심 선수가 벤치면 불만)
@@ -206,7 +218,7 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
       if (ratio >= 0.55) target = 0.8;
       else if (ratio < 0.25 && key) target = 0.3;
       else if (ratio < 0.25) target = 0.5;
-      player.morale = clamp(0.4 * player.morale + 0.6 * (target + leaderBonus), 0, 1);
+      player.morale = clamp(moraleRetention * player.morale + (1 - moraleRetention) * (target + leaderBonus), 0, 1);
 
       const mentorBonus = hasMentor(club, player) ? MENTOR_GROWTH_MUL : 1;
       progressPlayer(player, rng, club.staff.coaching, mentorBonus);

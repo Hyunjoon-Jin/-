@@ -7,7 +7,7 @@ import {
   generateClub, runTransferWindow, runOffseason, settleSeason, Rng,
   createSeasonState, playRound as enginePlayRound, playToEnd, computeTable, totalRounds, currentRound,
   commitResult, simulateMatch, simulateSeason, defaultTactic, applyMatchEffects,
-  buyPlayer, buyPlayerAt, evaluateOffer, sellPlayer, releasePlayer,
+  buyPlayer, buyPlayerAt, buyPlayerViaReleaseClause, evaluateOffer, sellPlayer, releasePlayer,
   sellOffers, acceptSellOffer,
   type OfferEvaluation, type SellOffer,
   summarizeStats, aggregatePlayerStats, topScorers as engineTopScorers, recentPlayerForm,
@@ -645,18 +645,31 @@ export function buy(state: GameState, playerId: string): ActionOutcome {
   return { state: afterSquadChange(state), ok: true, message: `${r.playerName} 영입 완료` };
 }
 
-/** 이적 협상: 제안액에 대한 매도 구단 반응(수락/역제안/거절). 상태 변경 없음. */
-export function negotiate(state: GameState, playerId: string, offer: number): OfferEvaluation {
+/** 이적 협상: 제안액에 대한 매도 구단 반응(수락/역제안/거절). round는 이 협상에서 이미
+ *  진행된 역제안 횟수(0-base) — 라운드가 늘수록 매도 구단 호가에 조급증이 붙고,
+ *  상한을 넘기면 더 이상 밀당하지 않고 협상을 접는다. 상태 변경 없음. */
+export function negotiate(state: GameState, playerId: string, offer: number, round = 0): OfferEvaluation {
   if (state.live) return { ok: false, reason: '이적은 프리시즌에만 가능합니다.' };
-  return evaluateOffer(state.clubs, state.myClubId, playerId, offer);
+  return evaluateOffer(state.clubs, state.myClubId, playerId, offer, round);
 }
 
-/** 합의된 이적료로 영입 실행(협상 타결). */
+/** 합의된 이적료로 영입 실행(협상 타결). 이적료 외에 계약 연수에 비례한 에이전트
+ *  수수료가 별도로 잔고에서 차감된다. */
 export function buyAt(state: GameState, playerId: string, fee: number): ActionOutcome {
   if (state.live) return { state, ok: false, message: '이적은 프리시즌에만 가능합니다.' };
   const r = buyPlayerAt(state.clubs, state.myClubId, playerId, fee);
   if (!r.ok) return { state, ok: false, message: r.reason! };
-  return { state: afterSquadChange(state), ok: true, message: `${r.playerName} 영입 완료 (${formatMoney(r.fee!)})` };
+  const feeMsg = `이적료 ${formatMoney(r.fee!)} + 에이전트 수수료 ${formatMoney(r.agentFee!)}`;
+  return { state: afterSquadChange(state), ok: true, message: `${r.playerName} 영입 완료 (${feeMsg})` };
+}
+
+/** 방출(바이아웃) 조항 이용 즉시 영입 — 협상 없이 조항 금액 그대로 지불한다. */
+export function buyViaReleaseClause(state: GameState, playerId: string): ActionOutcome {
+  if (state.live) return { state, ok: false, message: '이적은 프리시즌에만 가능합니다.' };
+  const r = buyPlayerViaReleaseClause(state.clubs, state.myClubId, playerId);
+  if (!r.ok) return { state, ok: false, message: r.reason! };
+  const feeMsg = `방출조항 ${formatMoney(r.fee!)} + 에이전트 수수료 ${formatMoney(r.agentFee!)}`;
+  return { state: afterSquadChange(state), ok: true, message: `${r.playerName} 영입 완료 (${feeMsg})` };
 }
 
 export function sell(state: GameState, playerId: string): ActionOutcome {

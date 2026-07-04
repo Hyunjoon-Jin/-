@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { myClub, lastSummary, revealPotential, type GameState, type ActionOutcome } from '../game.js';
 import {
   transferTargets, marketValue, currentAbility, formatMoney, lineOf, buildScoutingReport,
+  MAX_NEGOTIATION_ROUNDS,
   type Line, type Player, type OfferEvaluation, type TransferTarget, type SellOffer,
 } from '@soccer-tycoon/engine';
 import { ScoutingSummary } from './PlayerDetail.js';
@@ -13,8 +14,9 @@ import { ConfirmDialog } from './ConfirmDialog.js';
 
 interface Props {
   game: GameState;
-  onNegotiate: (playerId: string, offer: number) => OfferEvaluation;
+  onNegotiate: (playerId: string, offer: number, round?: number) => OfferEvaluation;
   onBuyAt: (playerId: string, fee: number) => ActionOutcome;
+  onBuyViaReleaseClause: (playerId: string) => ActionOutcome;
   onOffers: (playerId: string) => SellOffer[];
   onAcceptSell: (playerId: string, buyerId: string) => ActionOutcome;
   onRelease: (playerId: string) => ActionOutcome;
@@ -54,7 +56,9 @@ export function Transfers(props: Props) {
   return <TransferMarket {...props} />;
 }
 
-function TransferMarket({ game, onNegotiate, onBuyAt, onOffers, onAcceptSell, onRelease, onSelect }: Props) {
+function TransferMarket({
+  game, onNegotiate, onBuyAt, onBuyViaReleaseClause, onOffers, onAcceptSell, onRelease, onSelect,
+}: Props) {
   const club = myClub(game);
   const toast = useToast();
   const [line, setLine] = useState<LineFilter>('ALL');
@@ -68,6 +72,9 @@ function TransferMarket({ game, onNegotiate, onBuyAt, onOffers, onAcceptSell, on
   const [negotiating, setNegotiating] = useState<TransferTarget | null>(null);
   const [selling, setSelling] = useState<Player | null>(null);
   const [releasing, setReleasing] = useState<Player | null>(null);
+  const [buyingViaClause, setBuyingViaClause] = useState<TransferTarget | null>(null);
+  // 협상 중 진행된 라운드 수 — 선수별로 유지해, 모달을 닫았다 다시 열어도 조급증이 리셋되지 않는다.
+  const [roundsUsed, setRoundsUsed] = useState<Record<string, number>>({});
 
   const budget = club.finance.transferBudget;
   const scouting = club.staff.scouting;
@@ -189,20 +196,36 @@ function TransferMarket({ game, onNegotiate, onBuyAt, onOffers, onAcceptSell, on
                   tabIndex={0}
                   onKeyDown={onKeyActivate(() => onSelect(t.player))}
                 >
-                  <td className="name">{t.player.name}</td>
+                  <td className="name">
+                    {t.player.name}
+                    {t.player.releaseClause !== undefined && (
+                      <span className="clause-badge" title={`방출조항 ${formatMoney(t.player.releaseClause)} — 협상 없이 즉시 영입 가능`}>
+                        🔓
+                      </span>
+                    )}
+                  </td>
                   <td className="muted small">{t.clubName}</td>
                   <td><span className={`pos-chip pos-${lineOf(t.player.position).toLowerCase()}`}>{t.player.position}</span></td>
                   <td>{t.player.age}</td>
                   <td><b>{currentAbility(t.player).toFixed(0)}</b></td>
                   <td className="muted">{revealPotential(scouting, t.player.potential)}</td>
                   <td>{formatMoney(t.value)}</td>
-                  <td>
+                  <td className="market-actions">
                     <button
                       className="btn-small"
                       onClick={(e) => { e.stopPropagation(); setNegotiating(t); }}
                     >
                       협상
                     </button>
+                    {t.player.releaseClause !== undefined && (
+                      <button
+                        className="btn-small clause-buy"
+                        title={`방출조항 ${formatMoney(t.player.releaseClause)}로 즉시 영입`}
+                        onClick={(e) => { e.stopPropagation(); setBuyingViaClause(t); }}
+                      >
+                        즉시영입
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -264,10 +287,21 @@ function TransferMarket({ game, onNegotiate, onBuyAt, onOffers, onAcceptSell, on
           target={negotiating}
           budget={budget}
           scouting={scouting}
+          round={roundsUsed[negotiating.player.id] ?? 0}
+          onRoundChange={(r) => setRoundsUsed((prev) => ({ ...prev, [negotiating.player.id]: r }))}
           onNegotiate={onNegotiate}
           onBuyAt={onBuyAt}
           onResult={(m) => { toast(m.text, m.ok); if (m.ok) setNegotiating(null); }}
           onClose={() => setNegotiating(null)}
+        />
+      )}
+      {buyingViaClause && (
+        <ConfirmDialog
+          title="방출조항 즉시 영입"
+          message={`${buyingViaClause.player.name} 선수의 방출조항 ${formatMoney(buyingViaClause.player.releaseClause ?? 0)}을(를) 지불하고 협상 없이 즉시 영입하시겠습니까?`}
+          confirmLabel="즉시 영입"
+          onConfirm={() => { act(onBuyViaReleaseClause(buyingViaClause.player.id)); setBuyingViaClause(null); }}
+          onCancel={() => setBuyingViaClause(null)}
         />
       )}
       {selling && (
@@ -365,25 +399,34 @@ function SellModal({
 }
 
 function NegotiationModal({
-  target, budget, scouting, onNegotiate, onBuyAt, onResult, onClose,
+  target, budget, scouting, round: initialRound, onRoundChange, onNegotiate, onBuyAt, onResult, onClose,
 }: {
   target: TransferTarget;
   budget: number;
   scouting: number;
-  onNegotiate: (playerId: string, offer: number) => OfferEvaluation;
+  /** 이 선수와의 협상에서 지금까지 진행된 역제안 횟수(0-base, 모달을 닫아도 유지). */
+  round: number;
+  onRoundChange: (round: number) => void;
+  onNegotiate: (playerId: string, offer: number, round?: number) => OfferEvaluation;
   onBuyAt: (playerId: string, fee: number) => ActionOutcome;
   onResult: (m: Msg) => void;
   onClose: () => void;
 }) {
   const { player, value } = target;
   const [ev, setEv] = useState<OfferEvaluation | null>(null);
+  const [round, setRound] = useState(initialRound);
 
   const offer = (amount: number) => {
-    const r = onNegotiate(player.id, amount);
+    const r = onNegotiate(player.id, amount, round);
     if (r.ok && r.outcome === 'accepted') {
       const bought = onBuyAt(player.id, amount);
       onResult({ text: bought.message, ok: bought.ok });
       return;
+    }
+    if (r.outcome === 'countered') {
+      const nextRound = round + 1;
+      setRound(nextRound);
+      onRoundChange(nextRound);
     }
     setEv(r);
   };
@@ -423,10 +466,14 @@ function NegotiationModal({
           <span>예상 가치 <b>{formatMoney(value)}</b></span>
           <span>이적 예산 <b className="budget">{formatMoney(budget)}</b></span>
           {ev?.asking !== undefined && <span>상대 호가 <b>{formatMoney(ev.asking)}</b></span>}
+          <span className="muted small">라운드 {Math.min(round, MAX_NEGOTIATION_ROUNDS)}/{MAX_NEGOTIATION_ROUNDS}</span>
         </div>
 
         {ev && !ev.ok && <p className="toast err">{ev.reason}</p>}
-        {ev?.outcome === 'rejected' && (
+        {ev?.outcome === 'rejected' && ev.roundsExhausted && (
+          <p className="toast err">여러 차례 밀당했지만 이견을 좁히지 못해 상대가 협상을 접었습니다. 다음 시즌에 다시 시도하세요.</p>
+        )}
+        {ev?.outcome === 'rejected' && !ev.roundsExhausted && (
           <p className="toast err">제안이 너무 낮아 거절당했습니다. 더 높은 금액을 제시하세요.</p>
         )}
         {ev?.outcome === 'countered' && ev.counter !== undefined && (
@@ -448,7 +495,7 @@ function NegotiationModal({
               <button
                 key={p.label}
                 className="btn-small"
-                disabled={amount > budget}
+                disabled={amount > budget || !!ev?.roundsExhausted}
                 onClick={() => offer(amount)}
               >{p.label} ({formatMoney(amount)})</button>
             );
