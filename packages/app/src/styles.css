@@ -369,6 +369,8 @@ body {
 /* 이사회 신뢰도 */
 .board-conf { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; margin-bottom: 16px; box-shadow: var(--shadow-md); }
 .bc-head { display: flex; justify-content: space-between; align-items: center; font-size: 14px; margin-bottom: 8px; }
+.bc-title { display: inline-flex; align-items: center; gap: 5px; }
+.bc-title svg { color: var(--accent); flex-shrink: 0; }
 .bc-status.secure, .bc-status.stable { color: #2fa84f; }
 .bc-status.shaky { color: var(--color-warning); }
 .bc-status.critical { color: var(--color-danger); }
@@ -685,7 +687,7 @@ body {
   background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
   padding: 20px; text-align: center; box-shadow: var(--shadow-sm);
 }
-.staff-icon { font-size: 34px; }
+.staff-icon { display: flex; justify-content: center; color: var(--accent); margin-bottom: 4px; }
 .staff-name { font-size: 18px; font-weight: 800; margin: 6px 0; }
 .staff-level { font-size: 14px; color: var(--muted); margin-bottom: 8px; }
 .staff-level b { color: var(--text); font-size: 18px; }

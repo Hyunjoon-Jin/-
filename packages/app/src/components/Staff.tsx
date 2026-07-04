@@ -1,3 +1,4 @@
+import { ClipboardList, Stethoscope, Search, GraduationCap, type LucideIcon } from 'lucide-react';
 import { myClub, type GameState, type ActionOutcome } from '../game.js';
 import { upgradeCost, STAFF_MAX, formatMoney, type StaffKind } from '@soccer-tycoon/engine';
 import { useResultToast } from '../toast.js';
@@ -7,11 +8,11 @@ interface Props {
   onUpgrade: (kind: StaffKind) => ActionOutcome;
 }
 
-const STAFF: { key: StaffKind; label: string; icon: string; effect: string }[] = [
-  { key: 'coaching', label: '코칭', icon: '📋', effect: '선수 성장률 향상 (유망주 육성)' },
-  { key: 'medical', label: '의료', icon: '🩺', effect: '부상 확률·기간 감소, 컨디션 회복 향상' },
-  { key: 'scouting', label: '스카우팅', icon: '🔍', effect: '이적 매물 잠재력 정보 정확도 향상' },
-  { key: 'youth', label: '유스', icon: '🎓', effect: '매 시즌 아카데미 유망주 배출 수·잠재력 향상' },
+const STAFF: { key: StaffKind; label: string; icon: LucideIcon; effect: string }[] = [
+  { key: 'coaching', label: '코칭', icon: ClipboardList, effect: '선수 성장률 향상 (유망주 육성)' },
+  { key: 'medical', label: '의료', icon: Stethoscope, effect: '부상 확률·기간 감소, 컨디션 회복 향상' },
+  { key: 'scouting', label: '스카우팅', icon: Search, effect: '이적 매물 잠재력 정보 정확도 향상' },
+  { key: 'youth', label: '유스', icon: GraduationCap, effect: '매 시즌 아카데미 유망주 배출 수·잠재력 향상' },
 ];
 
 export function Staff({ game, onUpgrade }: Props) {
@@ -39,7 +40,7 @@ export function Staff({ game, onUpgrade }: Props) {
           const afford = club.finance.balance >= cost;
           return (
             <div className="staff-card" key={s.key}>
-              <div className="staff-icon">{s.icon}</div>
+              <div className="staff-icon"><s.icon size={32} strokeWidth={1.75} /></div>
               <div className="staff-name">{s.label}</div>
               <div className="staff-level">
                 Lv. <b>{level}</b> / {STAFF_MAX}

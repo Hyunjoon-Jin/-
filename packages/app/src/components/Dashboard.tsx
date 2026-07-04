@@ -7,6 +7,7 @@ import {
   formatMoney, currentAbility, wageBudget, annualWageBill, inFinancialCrisis,
   boardStatus, DEMAND_LABEL, type BoardStatus, type ManagerPersona,
 } from '@soccer-tycoon/engine';
+import { Landmark } from 'lucide-react';
 import { Banner } from './Banner.js';
 import { InfoTip } from './InfoTip.js';
 
@@ -359,8 +360,8 @@ function BoardConfidence({ value }: { value: number }) {
   return (
     <div className="board-conf">
       <div className="bc-head">
-        <span>
-          🏛 이사회 신뢰도
+        <span className="bc-title">
+          <Landmark size={16} strokeWidth={2} /> 이사회 신뢰도
           <InfoTip title="이사회 신뢰도">
             시즌 성적이 목표 순위를 넘으면 오르고, 못 미치면 내려갑니다. 이사회 특별 요구를
             달성/실패해도 오르내립니다. 0에 가까워지면(경질 위기) 이번 시즌 목표를 놓치는 순간
