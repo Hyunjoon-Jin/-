@@ -13,6 +13,7 @@ import { enforceFinancialFairPlay } from './financeControl.js';
 import { runInternationalBreak } from './international.js';
 import { currentAbility } from './derived.js';
 import { hasTrait } from './traits.js';
+import { lineOf } from './teamStrength.js';
 import { clamp } from './math.js';
 import {
   summarizeStats, type PlayerSeasonStat, type SeasonAwards, type SeasonSquadEntry,
@@ -163,6 +164,24 @@ export interface OffseasonResult {
   debutEvents: DebutEvent[];
 }
 
+/** 멘토링 보너스 배율 — 같은 라인에 리더 특성 보유자나 리더십 높은 베테랑이 있으면 성장 가속. */
+const MENTOR_GROWTH_MUL = 1.15;
+/** 멘토링 대상은 아직 성장 중인 유망주(23세 이하)만. */
+const MENTEE_MAX_AGE = 23;
+/** "리더십 높은 베테랑" 기준(리더 특성이 없어도 이 조건이면 멘토 자격). */
+const MENTOR_VETERAN_AGE = 30;
+const MENTOR_VETERAN_LEADERSHIP = 14;
+
+/** 성장 중인 유망주와 같은 라인에 멘토(리더 특성 또는 리더십 높은 베테랑)가 있는지. */
+function hasMentor(club: Club, player: Player): boolean {
+  if (player.age > MENTEE_MAX_AGE) return false;
+  const line = lineOf(player.position);
+  return club.players.some((p) => {
+    if (p.id === player.id || lineOf(p.position) !== line) return false;
+    return hasTrait(p, 'leader') || (p.age >= MENTOR_VETERAN_AGE && p.attributes.leadership >= MENTOR_VETERAN_LEADERSHIP);
+  });
+}
+
 export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
   let retirements = 0;
   const intakeByClub = new Map<string, number>();
@@ -189,7 +208,8 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
       else if (ratio < 0.25) target = 0.5;
       player.morale = clamp(0.4 * player.morale + 0.6 * (target + leaderBonus), 0, 1);
 
-      progressPlayer(player, rng, club.staff.coaching);
+      const mentorBonus = hasMentor(club, player) ? MENTOR_GROWTH_MUL : 1;
+      progressPlayer(player, rng, club.staff.coaching, mentorBonus);
       // 성장 곡선: 이번 시즌 종료 시점 CA 스냅샷(최근 20시즌 유지)
       const hist = player.caHistory ?? (player.caHistory = []);
       hist.push(Math.round(currentAbility(player)));

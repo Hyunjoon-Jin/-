@@ -106,7 +106,8 @@ export interface Player {
 }
 
 export type TrainingFocus =
-  | 'balanced' | 'finishing' | 'playmaking' | 'defending' | 'physical' | 'goalkeeping';
+  | 'balanced' | 'finishing' | 'playmaking' | 'defending' | 'physical' | 'goalkeeping'
+  | 'conditioning';
 
 export type PlayerTrait =
   | 'leader' | 'injuryProne' | 'ironMan' | 'wonderkid'

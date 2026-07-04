@@ -315,7 +315,10 @@ export function generateInjuries(ctx: MatchContext): InjuryEvent[] {
     for (const slot of side.tactic.lineup) {
       const p = byId.get(slot.playerId);
       if (!p || p.injuryMatches > 0 || p.suspensionMatches > 0) continue;
-      const injMul = hasTrait(p, 'ironMan') ? 0.5 : hasTrait(p, 'injuryProne') ? 1.7 : 1;
+      const traitMul = hasTrait(p, 'ironMan') ? 0.5 : hasTrait(p, 'injuryProne') ? 1.7 : 1;
+      // 훈련 포커스를 부상방지로 맞추면(다른 능력 성장 강조는 포기하는 대가로) 부상 확률이 더 낮아진다.
+      const trainingMul = p.trainingFocus === 'conditioning' ? 0.85 : 1;
+      const injMul = traitMul * trainingMul;
       if (!rng.roll(TUNING.injuryTriggerChance * medFactor * injMul)) continue;
       const inj = rollInjury(rng, side.club.staff.medical);
       injuries.push({

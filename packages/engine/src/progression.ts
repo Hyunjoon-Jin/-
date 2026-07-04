@@ -100,15 +100,18 @@ function progressFamiliarity(player: Player, coaching: number): void {
 /**
  * 한 선수의 시즌 경계 진행. 객체를 직접 변경한다.
  * @param coaching 구단 코칭 레벨(기본 10=중립).
+ * @param mentorBonus 같은 라인에 멘토(리더 특성·리더십 높은 베테랑)가 있으면 호출부에서
+ *   가산해 넘기는 성장 배율(기본 1=보정 없음). 호출부(franchise.ts)가 스쿼드 전체를
+ *   봐야 판단할 수 있어 이 함수 자체는 판단하지 않는다.
  */
-export function progressPlayer(player: Player, rng: Rng, coaching = 10): void {
+export function progressPlayer(player: Player, rng: Rng, coaching = 10, mentorBonus = 1): void {
   player.age += 1;
   player.contractYears = Math.max(0, player.contractYears - 1);
 
   const ca = currentAbility(player);
   // 특급 유망주(wonderkid)는 성장 속도가 빠르다.
   const wonderMul = hasTrait(player, 'wonderkid') ? 1.25 : 1;
-  const rate = developmentRate(player.age) * coachingMultiplier(coaching) * wonderMul;
+  const rate = developmentRate(player.age) * coachingMultiplier(coaching) * wonderMul * mentorBonus;
 
   if (rate > 0 && ca < player.potential) {
     const gap = player.potential - ca;

@@ -5,7 +5,7 @@
 import type { AttrKey, TrainingFocus } from './types.js';
 
 export const TRAINING_FOCUSES: TrainingFocus[] = [
-  'balanced', 'finishing', 'playmaking', 'defending', 'physical', 'goalkeeping',
+  'balanced', 'finishing', 'playmaking', 'defending', 'physical', 'goalkeeping', 'conditioning',
 ];
 
 export const TRAINING_LABELS: Record<TrainingFocus, string> = {
@@ -15,9 +15,11 @@ export const TRAINING_LABELS: Record<TrainingFocus, string> = {
   defending: '수비',
   physical: '피지컬',
   goalkeeping: '골키핑',
+  conditioning: '부상방지',
 };
 
-/** 포커스별 강조 능력. 'balanced'는 강조 없음(전체 균등). */
+/** 포커스별 강조 능력. 'balanced'·'conditioning'은 강조 없음(conditioning은 능력치
+ *  대신 부상 확률을 낮춘다 — simulateMatch.ts의 generateInjuries 참고). */
 export const TRAINING_FOCUS_ATTRS: Record<TrainingFocus, AttrKey[]> = {
   balanced: [],
   finishing: ['finishing', 'shooting', 'composure', 'offTheBall', 'technique'],
@@ -25,4 +27,5 @@ export const TRAINING_FOCUS_ATTRS: Record<TrainingFocus, AttrKey[]> = {
   defending: ['tackling', 'marking', 'positioning', 'anticipation', 'concentration'],
   physical: ['pace', 'acceleration', 'stamina', 'strength', 'agility'],
   goalkeeping: ['reflexes', 'handling', 'oneOnOne', 'aerialReach', 'goalkicks'],
+  conditioning: [],
 };
