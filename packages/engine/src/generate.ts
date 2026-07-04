@@ -252,6 +252,17 @@ function computeAiDefensiveLine(formation: string, mentality: number, ctx: Tacti
   return clamp(line, 0.15, 0.85);
 }
 
+/** 라인업(ATT·MID) 중 세트피스 능력치가 가장 높은 선수를 전담자로 자동 지정. */
+function pickSetPieceTaker(club: Club, lineup: { position: Position; playerId: string }[]): string | undefined {
+  const byId = new Map(club.players.map((p) => [p.id, p]));
+  const eligible = lineup
+    .filter((s) => lineOf(s.position) === 'ATT' || lineOf(s.position) === 'MID')
+    .map((s) => byId.get(s.playerId))
+    .filter((p): p is Player => p !== undefined);
+  if (eligible.length === 0) return undefined;
+  return eligible.sort((a, b) => b.attributes.setPiece - a.attributes.setPiece)[0]!.id;
+}
+
 /**
  * 기본 전술(AI용). 포지션별 최적 선수로 베스트 XI를 구성하고, 스쿼드 강점에 맞는
  * 포메이션과 경기 맥락(상대 전력·홈/원정·빅매치 여부)에 반응하는 공격성향·압박강도를 정한다.
@@ -283,5 +294,6 @@ export function defaultTactic(club: Club, ctx: TacticContext = {}): Tactic {
     pressing: computeAiPressing(ctx),
     width: computeAiWidth(formation, mentality),
     defensiveLine: computeAiDefensiveLine(formation, mentality, ctx),
+    setPieceTakerId: pickSetPieceTaker(club, lineup),
   };
 }

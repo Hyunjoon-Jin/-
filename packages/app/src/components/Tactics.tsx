@@ -1,9 +1,9 @@
 import { useMemo } from 'react';
 import {
-  computeTeamStrength, currentAbility, isInjured, isSuspended, isAvailable,
+  computeTeamStrength, currentAbility, isInjured, isSuspended, isAvailable, lineOf,
   type Club, type Tactic, type TeamStrength,
 } from '@soccer-tycoon/engine';
-import { FORMATION_NAMES, autoPickLineup, swapPlayer } from '../tactics.js';
+import { FORMATION_NAMES, autoPickLineup, swapPlayer, pickSetPieceTaker, ensureSetPieceTaker } from '../tactics.js';
 
 interface Props {
   club: Club;
@@ -47,7 +47,8 @@ export function Tactics({ club, tactic, onChange, disabled }: Props) {
   const balance = Math.round(Math.max(-100, Math.min(100, rawBalance / 2.2)));
 
   function setFormation(f: string) {
-    onChange({ ...tactic, formation: f, lineup: autoPickLineup(club, f) });
+    const lineup = autoPickLineup(club, f);
+    onChange({ ...tactic, formation: f, lineup, setPieceTakerId: pickSetPieceTaker(club, lineup) });
   }
   function setSlider(key: SliderKey, v: number) {
     onChange({ ...tactic, [key]: v });
@@ -55,6 +56,15 @@ export function Tactics({ club, tactic, onChange, disabled }: Props) {
   function applyPreset(values: Pick<Tactic, SliderKey>) {
     onChange({ ...tactic, ...values });
   }
+  function setSetPieceTaker(playerId: string) {
+    onChange({ ...tactic, setPieceTakerId: playerId });
+  }
+
+  const setPieceCandidates = tactic.lineup
+    .filter((slot) => lineOf(slot.position) === 'ATT' || lineOf(slot.position) === 'MID')
+    .map((slot) => byId.get(slot.playerId))
+    .filter((p): p is NonNullable<typeof p> => p !== undefined)
+    .sort((a, b) => b.attributes.setPiece - a.attributes.setPiece);
 
   return (
     <div className="tactics">
@@ -93,7 +103,10 @@ export function Tactics({ club, tactic, onChange, disabled }: Props) {
                     <select
                       value={slot.playerId}
                       disabled={disabled}
-                      onChange={(e) => onChange(swapPlayer(tactic, i, e.target.value))}
+                      onChange={(e) => {
+                        const next = swapPlayer(tactic, i, e.target.value);
+                        onChange({ ...next, setPieceTakerId: ensureSetPieceTaker(club, next.lineup, next.setPieceTakerId) });
+                      }}
                     >
                       {club.players.map((pl) => (
                         <option key={pl.id} value={pl.id}>
@@ -145,6 +158,29 @@ export function Tactics({ club, tactic, onChange, disabled }: Props) {
           <Slider label="수비라인" left="낮게" right="높게"
             value={tactic.defensiveLine} disabled={disabled}
             onChange={(v) => setSlider('defensiveLine', v)} />
+        </div>
+
+        <div className="panel">
+          <h3>세트피스 전담자</h3>
+          {setPieceCandidates.length === 0 ? (
+            <p className="muted small">라인업에 공격·미드필더가 없습니다.</p>
+          ) : (
+            <>
+              <select
+                className="setpiece-select"
+                value={tactic.setPieceTakerId ?? ''}
+                disabled={disabled}
+                onChange={(e) => setSetPieceTaker(e.target.value)}
+              >
+                {setPieceCandidates.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} (세트피스 {p.attributes.setPiece})
+                  </option>
+                ))}
+              </select>
+              <p className="muted small">코너킥·프리킥 상황의 상당수를 이 선수가 직접 맡습니다.</p>
+            </>
+          )}
         </div>
 
         <div className="panel">

@@ -52,10 +52,18 @@ function buildSide(club: Club, tactic: Tactic, isHome: boolean): Side {
   return { club, tactic, strength, isHome, goals: 0, shots: 0, possessionTicks: 0, attackers };
 }
 
-function pickShooter(side: Side, rng: Rng): Player | null {
+/** 세트피스 상황에서 전담자가 직접 슈팅으로 이어질 확률(나머지는 크로스·코너 경합 등으로
+ *  다른 선수에게 넘어감 — 100%로 몰아주면 팀 전체 세트피스 위협이 한 선수에 과도하게 종속). */
+const SET_PIECE_TAKER_SHARE = 0.55;
+
+function pickShooter(side: Side, rng: Rng, chance: ChanceType): Player | null {
   const available = side.club.players.filter(isAvailable);
   const pool = side.attackers.length > 0 ? side.attackers : available;
   if (pool.length === 0) return null;
+  if (chance === 'setpiece' && side.tactic.setPieceTakerId) {
+    const taker = pool.find((p) => p.id === side.tactic.setPieceTakerId);
+    if (taker && rng.roll(SET_PIECE_TAKER_SHARE)) return taker;
+  }
   return pool[rng.int(0, pool.length - 1)]!;
 }
 
@@ -190,7 +198,7 @@ export function stepMinute(ctx: MatchContext, minute: number): MatchEvent | null
   );
   if (!rng.roll(pShot)) return null;
 
-  const shooter = pickShooter(att, rng);
+  const shooter = pickShooter(att, rng, chance);
   if (!shooter) return null; // 가용 선수가 전무(전원 부상·정지)한 극단적 상황 — 이번 틱은 무산
   const st = ensureStat(ctx, shooter);
   att.shots++;
