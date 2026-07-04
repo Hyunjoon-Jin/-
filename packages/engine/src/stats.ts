@@ -14,16 +14,20 @@ export interface PlayerSeasonStat {
   goals: number;
   shots: number;
   avgRating: number;
+  /** GK로 출전해 무실점으로 마친 경기 수(골든글러브 집계용). GK가 아니면 0. */
+  cleanSheets: number;
 }
 
 export interface SeasonAwards {
   topScorer?: { playerId: string; name: string; clubName: string; goals: number };
   playerOfSeason?: { playerId: string; name: string; clubName: string; avgRating: number };
+  /** 시즌 최다 클린시트 GK. */
+  goldenGlove?: { playerId: string; name: string; clubName: string; cleanSheets: number };
 }
 
 interface Acc {
   playerId: string; name: string; clubId: string; clubName: string;
-  apps: number; goals: number; shots: number; totalRating: number;
+  apps: number; goals: number; shots: number; totalRating: number; cleanSheets: number;
 }
 
 /** 시즌 전 경기 결과에서 선수별 통계 집계. */
@@ -34,7 +38,7 @@ export function aggregatePlayerStats(results: MatchResult[]): PlayerSeasonStat[]
   ) => {
     let a = map.get(st.playerId);
     if (!a) {
-      a = { playerId: st.playerId, name: st.name, clubId, clubName, apps: 0, goals: 0, shots: 0, totalRating: 0 };
+      a = { playerId: st.playerId, name: st.name, clubId, clubName, apps: 0, goals: 0, shots: 0, totalRating: 0, cleanSheets: 0 };
       map.set(st.playerId, a);
     }
     // 이적으로 소속이 바뀌면 최신 소속으로 갱신
@@ -43,6 +47,7 @@ export function aggregatePlayerStats(results: MatchResult[]): PlayerSeasonStat[]
     a.goals += st.goals;
     a.shots += st.shots;
     a.totalRating += st.rating;
+    if (st.cleanSheet) a.cleanSheets++;
   };
   for (const r of results) {
     for (const st of r.playerStats.home) add(st, r.homeClubId, r.homeClubName);
@@ -52,7 +57,15 @@ export function aggregatePlayerStats(results: MatchResult[]): PlayerSeasonStat[]
     playerId: a.playerId, name: a.name, clubId: a.clubId, clubName: a.clubName,
     apps: a.apps, goals: a.goals, shots: a.shots,
     avgRating: a.apps > 0 ? a.totalRating / a.apps : 0,
+    cleanSheets: a.cleanSheets,
   }));
+}
+
+/** 시즌 최다 클린시트 GK(1개 이상일 때만). */
+export function goldenGlove(stats: PlayerSeasonStat[]): PlayerSeasonStat | undefined {
+  const withCleanSheets = stats.filter((s) => s.cleanSheets > 0);
+  if (withCleanSheets.length === 0) return undefined;
+  return [...withCleanSheets].sort((a, b) => b.cleanSheets - a.cleanSheets || b.avgRating - a.avgRating)[0];
 }
 
 /** 득점 → 평균 평점 → 출전 순 정렬. */
@@ -73,12 +86,16 @@ export function playerOfSeason(stats: PlayerSeasonStat[], minApps: number): Play
 export function seasonAwards(stats: PlayerSeasonStat[], minApps: number): SeasonAwards {
   const scorer = topScorers(stats, 1)[0];
   const potm = playerOfSeason(stats, minApps);
+  const glove = goldenGlove(stats);
   return {
     topScorer: scorer && scorer.goals > 0
       ? { playerId: scorer.playerId, name: scorer.name, clubName: scorer.clubName, goals: scorer.goals }
       : undefined,
     playerOfSeason: potm
       ? { playerId: potm.playerId, name: potm.name, clubName: potm.clubName, avgRating: potm.avgRating }
+      : undefined,
+    goldenGlove: glove
+      ? { playerId: glove.playerId, name: glove.name, clubName: glove.clubName, cleanSheets: glove.cleanSheets }
       : undefined,
   };
 }

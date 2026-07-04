@@ -906,11 +906,14 @@ export function playerForm(state: GameState, playerId: string, n = 5): PlayerFor
   return recentPlayerForm(state.live.results, playerId, n);
 }
 
+export type SeasonAwardKind = 'playerOfSeason' | 'topScorer' | 'goldenGlove';
+
 /** 선수 개인 커리어 타임라인 항목. */
 export type TimelineEntry =
   | { season: number; kind: 'transfer'; fromClubName: string; toClubName: string; fee: number }
   | { season: number; kind: 'milestone'; milestoneKind: 'apps' | 'goals'; value: number }
-  | { season: number; kind: 'retired'; finalAge: number; careerApps: number; careerGoals: number; caps: number };
+  | { season: number; kind: 'retired'; finalAge: number; careerApps: number; careerGoals: number; caps: number }
+  | { season: number; kind: 'award'; awardKind: SeasonAwardKind };
 
 /**
  * 한 선수의 커리어 타임라인(이적·통산 마일스톤·은퇴)을 시즌순으로 재구성.
@@ -930,6 +933,15 @@ export function playerTimeline(state: GameState, playerId: string): TimelineEntr
       if (m.playerId === playerId) {
         entries.push({ season: s.season, kind: 'milestone', milestoneKind: m.kind, value: m.value });
       }
+    }
+    if (s.awards.playerOfSeason?.playerId === playerId) {
+      entries.push({ season: s.season, kind: 'award', awardKind: 'playerOfSeason' });
+    }
+    if (s.awards.topScorer?.playerId === playerId) {
+      entries.push({ season: s.season, kind: 'award', awardKind: 'topScorer' });
+    }
+    if (s.awards.goldenGlove?.playerId === playerId) {
+      entries.push({ season: s.season, kind: 'award', awardKind: 'goldenGlove' });
     }
   }
   const legend = state.legends.find((l) => l.playerId === playerId);

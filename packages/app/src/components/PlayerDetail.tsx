@@ -388,6 +388,11 @@ function RatingChart({ history }: { history: SeasonRatingEntry[] }) {
 }
 
 const MILESTONE_KIND_LABEL: Record<'apps' | 'goals', string> = { apps: '경기 출전', goals: '골' };
+const AWARD_LABEL: Record<'playerOfSeason' | 'topScorer' | 'goldenGlove', { icon: string; text: string }> = {
+  playerOfSeason: { icon: '⭐', text: '시즌 베스트 플레이어' },
+  topScorer: { icon: '🥇', text: '득점왕' },
+  goldenGlove: { icon: '🧤', text: '골든글러브' },
+};
 
 /** 이적·통산 마일스톤·은퇴를 시즌 역순(최신 먼저)으로 나열. */
 function CareerTimeline({ entries }: { entries: TimelineEntry[] }) {
@@ -413,6 +418,11 @@ function CareerTimeline({ entries }: { entries: TimelineEntry[] }) {
               <span className="timeline-text">
                 🕯️ {e.finalAge}세로 은퇴 — 통산 {e.careerApps}경기 {e.careerGoals}골
                 {e.caps > 0 && <span className="muted small"> · A매치 {e.caps}경</span>}
+              </span>
+            )}
+            {e.kind === 'award' && (
+              <span className="timeline-text">
+                {AWARD_LABEL[e.awardKind].icon} <b>{AWARD_LABEL[e.awardKind].text}</b> 수상
               </span>
             )}
           </li>

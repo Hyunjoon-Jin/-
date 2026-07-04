@@ -562,6 +562,13 @@ function FullTime({
         </p>
       )}
       <p className="ft-score">{homeName} {score[0]} : {score[1]} {awayName}</p>
+      {(() => {
+        const motm = [...result.playerStats.home, ...result.playerStats.away]
+          .find((s) => s.playerId === result.motmPlayerId);
+        return motm ? (
+          <p className="ft-motm">🏅 맨오브더매치 — <b>{motm.name}</b> ({motm.rating.toFixed(1)})</p>
+        ) : null;
+      })()}
       {result.cards.length > 0 && (
         <ul className="card-list">
           {result.cards.map((c) => (

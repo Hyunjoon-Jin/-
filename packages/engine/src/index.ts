@@ -14,7 +14,7 @@ export {
 } from './injury.js';
 export {
   aggregatePlayerStats, topScorers, playerOfSeason, seasonAwards, summarizeStats,
-  careerScorers, recentPlayerForm, seasonSquadSnapshot,
+  careerScorers, recentPlayerForm, seasonSquadSnapshot, goldenGlove,
   type PlayerSeasonStat, type SeasonAwards, type CareerStat, type PlayerFormEntry,
   type SeasonSquadEntry,
 } from './stats.js';

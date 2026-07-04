@@ -28,7 +28,7 @@ export function Stats({ game }: { game: GameState }) {
     <div className="stats">
       <h2>{heading}</h2>
 
-      {awards && (awards.topScorer || awards.playerOfSeason) && (
+      {awards && (awards.topScorer || awards.playerOfSeason || awards.goldenGlove) && (
         <div className="awards">
           {awards.topScorer && (
             <div className="award">
@@ -42,6 +42,13 @@ export function Stats({ game }: { game: GameState }) {
               <div className="award-title">⭐ 시즌 베스트</div>
               <div className="award-name">{awards.playerOfSeason.name}</div>
               <div className="muted">{awards.playerOfSeason.clubName} · 평점 {awards.playerOfSeason.avgRating.toFixed(2)}</div>
+            </div>
+          )}
+          {awards.goldenGlove && (
+            <div className="award">
+              <div className="award-title">🧤 골든글러브</div>
+              <div className="award-name">{awards.goldenGlove.name}</div>
+              <div className="muted">{awards.goldenGlove.clubName} · 클린시트 {awards.goldenGlove.cleanSheets}회</div>
             </div>
           )}
         </div>

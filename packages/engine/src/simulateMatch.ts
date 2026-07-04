@@ -258,6 +258,7 @@ function finalizeRatings(ctx: MatchContext): void {
       const line = lineOf(slot.position);
       if (line === 'GK' || line === 'DEF') r -= 0.18 * Math.max(0, conceded - 1);
       st.rating = clamp(r, 1, 10);
+      if (line === 'GK') st.cleanSheet = conceded === 0;
     }
   };
   const [hg, ag] = [ctx.home.goals, ctx.away.goals];
@@ -342,6 +343,11 @@ export function finalize(ctx: MatchContext): MatchResult {
     club.players
       .map((p) => ctx.statMap.get(p.id))
       .filter((s): s is PlayerMatchStat => Boolean(s));
+  const homeStats = splitStats(home.club);
+  const awayStats = splitStats(away.club);
+  // 맨오브더매치: 양 팀 통틀어 평점(동률이면 득점) 최고 — 이미 계산된 statMap의 순수 파생.
+  const motm = [...homeStats, ...awayStats]
+    .sort((a, b) => b.rating - a.rating || b.goals - a.goals)[0];
 
   return {
     homeClubId: home.club.id,
@@ -354,8 +360,9 @@ export function finalize(ctx: MatchContext): MatchResult {
     events: ctx.events,
     cards,
     injuries,
-    playerStats: { home: splitStats(home.club), away: splitStats(away.club) },
+    playerStats: { home: homeStats, away: awayStats },
     seed: ctx.seed,
+    motmPlayerId: motm?.playerId,
   };
 }
 

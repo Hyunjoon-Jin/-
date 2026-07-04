@@ -209,6 +209,8 @@ export interface PlayerMatchStat {
   rating: number;
   shots: number;
   goals: number;
+  /** GK 슬롯으로 뛴 선수가 무실점으로 경기를 마쳤는지(골든글러브 집계용). GK가 아니면 미설정. */
+  cleanSheet?: boolean;
 }
 
 export interface InjuryEvent {
@@ -237,4 +239,6 @@ export interface MatchResult {
   injuries: InjuryEvent[];
   playerStats: { home: PlayerMatchStat[]; away: PlayerMatchStat[] };
   seed: number;
+  /** 양 팀 통틀어 평점(동률이면 득점)이 가장 높은 선수 — 맨오브더매치. 출전자가 없으면 미설정. */
+  motmPlayerId?: string;
 }

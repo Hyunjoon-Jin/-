@@ -948,6 +948,8 @@ h3 { font-size: 14px; margin: 0 0 10px; color: var(--muted); text-transform: upp
 .ht-banner { background: var(--accent-2); color: #06203f; font-weight: 700; padding: 10px 14px; border-radius: 8px; text-align: center; }
 .ft-panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px; text-align: center; }
 .ft-score { font-size: 18px; font-weight: 700; margin: 8px 0 16px; }
+.ft-motm { font-size: 14px; color: var(--muted); margin: 0 0 14px; }
+.ft-motm b { color: var(--color-gold); }
 .derby-result { font-size: 16px; font-weight: 700; margin: 0 0 4px; }
 .derby-result.win { color: #3ddc84; }
 .derby-result.draw { color: var(--muted); }
