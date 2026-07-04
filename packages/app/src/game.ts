@@ -521,6 +521,7 @@ export function finishSeason(state: GameState): GameState {
       wageUnderBudget,
       cupWon: cupChampionId === state.myClubId,
       clubTopScorer: awards.topScorer?.clubName === myName,
+      topHalfFinish: myPosition <= Math.ceil(myTable.length / 2),
     });
     demandDelta = demandConfidence(state.demand, met);
     demandResult = { label: DEMAND_LABEL[state.demand.kind], met };

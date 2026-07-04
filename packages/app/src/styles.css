@@ -179,6 +179,10 @@ body {
 
 .career-archive { margin-bottom: 28px; text-align: left; }
 .career-archive .subtitle { margin-bottom: 12px; }
+.career-trend { font-size: 13.5px; margin: -6px 0 14px; font-weight: 600; }
+.career-trend.rising { color: var(--accent); }
+.career-trend.falling { color: var(--color-danger); }
+.career-trend.steady { color: var(--muted); }
 
 .btn-ghost {
   background: transparent; color: var(--muted); border: 1px solid var(--line);
@@ -813,6 +817,26 @@ h3 { font-size: 14px; margin: 0 0 10px; color: var(--muted); text-transform: upp
 
 .preset-row { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
 .preset-chip { font-size: 12px; padding: 4px 10px; }
+.custom-preset-chip {
+  display: inline-flex; align-items: stretch; padding: 0; overflow: hidden;
+  border: 1px solid var(--line); border-radius: 16px; background: var(--panel);
+}
+.custom-preset-apply {
+  background: none; border: none; color: var(--text); cursor: pointer;
+  font-size: 12px; padding: 4px 6px 4px 10px;
+}
+.custom-preset-apply:hover { color: var(--accent-2); }
+.preset-delete {
+  background: none; border: none; border-left: 1px solid var(--line); color: var(--muted);
+  cursor: pointer; font-size: 13px; padding: 4px 8px; line-height: 1;
+}
+.preset-delete:hover { color: var(--danger); }
+.preset-save-btn { font-size: 12px; padding: 4px 10px; border-style: dashed; color: var(--muted); }
+.preset-save-row { display: flex; gap: 6px; margin-bottom: 12px; align-items: center; }
+.preset-name-input {
+  flex: 1; background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+  border-radius: 6px; padding: 5px 10px; font-size: 13px;
+}
 
 .balance-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--line); }
 .balance-row .bar-label { width: auto; white-space: nowrap; }

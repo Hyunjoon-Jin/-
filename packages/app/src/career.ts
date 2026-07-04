@@ -16,6 +16,24 @@ export interface CareerStint {
   endedAt: string;
 }
 
+export type CareerTrend = 'rising' | 'falling' | 'steady';
+
+/**
+ * 재임별 최고 순위(bestFinish)를 시간순으로 비교해 커리어 흐름을 요약.
+ * 새 상태를 추가하지 않고 이미 기록 중인 bestFinish만으로 파생 — 최근 재임 성적을
+ * 그 이전 재임들의 평균과 비교한다(숫자가 작을수록 좋은 순위).
+ */
+export function careerTrend(stints: CareerStint[]): CareerTrend | null {
+  const withFinish = stints.filter((s): s is CareerStint & { bestFinish: number } => s.bestFinish !== undefined);
+  if (withFinish.length < 2) return null;
+  const latest = withFinish[withFinish.length - 1]!.bestFinish;
+  const priorAvg = withFinish.slice(0, -1).reduce((sum, s) => sum + s.bestFinish, 0) / (withFinish.length - 1);
+  const diff = priorAvg - latest; // 양수면 최근 재임이 더 좋은(낮은) 순위
+  if (diff > 1) return 'rising';
+  if (diff < -1) return 'falling';
+  return 'steady';
+}
+
 const KEY = 'st_career';
 /** 세이브와 별개로 세션(브라우저/기기)마다 영구 누적되는 기록이라 자연스러운 상한이
  *  없다 — localStorage 용량을 실제 세이브와 공유하므로 최근 N개로 캡한다. */

@@ -19,20 +19,25 @@ describe('demands: 이사회 특별 요구', () => {
       kinds.add(d ? d.kind : 'none');
     }
     expect(kinds.has('none')).toBe(true);
-    expect(kinds.has('winCup') || kinds.has('clubTopScorer')).toBe(true);
+    expect(kinds.has('winCup') || kinds.has('clubTopScorer') || kinds.has('topHalfFinish')).toBe(true);
   });
 
   it('평가: 종류별 조건을 정확히 반영', () => {
+    const base = { wageUnderBudget: false, cupWon: false, clubTopScorer: false, topHalfFinish: false };
     const cut: BoardDemand = { kind: 'cutWages', reward: 8, penalty: 10 };
-    expect(evaluateDemand(cut, { wageUnderBudget: true, cupWon: false, clubTopScorer: false })).toBe(true);
-    expect(evaluateDemand(cut, { wageUnderBudget: false, cupWon: true, clubTopScorer: true })).toBe(false);
+    expect(evaluateDemand(cut, { ...base, wageUnderBudget: true })).toBe(true);
+    expect(evaluateDemand(cut, { ...base, cupWon: true, clubTopScorer: true })).toBe(false);
 
     const cup: BoardDemand = { kind: 'winCup', reward: 12, penalty: 4 };
-    expect(evaluateDemand(cup, { wageUnderBudget: false, cupWon: true, clubTopScorer: false })).toBe(true);
-    expect(evaluateDemand(cup, { wageUnderBudget: true, cupWon: false, clubTopScorer: true })).toBe(false);
+    expect(evaluateDemand(cup, { ...base, cupWon: true })).toBe(true);
+    expect(evaluateDemand(cup, { ...base, wageUnderBudget: true, clubTopScorer: true })).toBe(false);
 
     const top: BoardDemand = { kind: 'clubTopScorer', reward: 12, penalty: 4 };
-    expect(evaluateDemand(top, { wageUnderBudget: false, cupWon: false, clubTopScorer: true })).toBe(true);
+    expect(evaluateDemand(top, { ...base, clubTopScorer: true })).toBe(true);
+
+    const half: BoardDemand = { kind: 'topHalfFinish', reward: 12, penalty: 4 };
+    expect(evaluateDemand(half, { ...base, topHalfFinish: true })).toBe(true);
+    expect(evaluateDemand(half, base)).toBe(false);
   });
 
   it('신뢰도 변화: 달성 +reward, 실패 −penalty', () => {

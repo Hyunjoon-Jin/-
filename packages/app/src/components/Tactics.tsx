@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   computeTeamStrength, currentAbility, isInjured, isSuspended, isAvailable, lineOf, hasTrait,
   type Club, type Tactic, type TeamStrength,
@@ -7,6 +7,7 @@ import {
   FORMATION_NAMES, autoPickLineup, swapPlayer, pickSetPieceTaker, ensureSetPieceTaker,
   pickCaptain, ensureCaptain,
 } from '../tactics.js';
+import { loadCustomPresets, saveCustomPreset, deleteCustomPreset, type CustomPreset } from '../customPresets.js';
 
 interface Props {
   club: Club;
@@ -80,6 +81,25 @@ export function Tactics({ club, tactic, onChange, disabled }: Props) {
     .map((slot) => byId.get(slot.playerId))
     .filter((p): p is NonNullable<typeof p> => p !== undefined)
     .sort((a, b) => b.attributes.leadership - a.attributes.leadership);
+
+  const [customPresets, setCustomPresets] = useState<CustomPreset[]>(() => loadCustomPresets());
+  const [presetNameInput, setPresetNameInput] = useState('');
+  const [showSaveInput, setShowSaveInput] = useState(false);
+
+  function handleSavePreset() {
+    const label = presetNameInput.trim();
+    if (!label) return;
+    const values: Pick<Tactic, SliderKey> = {
+      mentality: tactic.mentality, tempo: tactic.tempo, pressing: tactic.pressing,
+      width: tactic.width, defensiveLine: tactic.defensiveLine,
+    };
+    setCustomPresets(saveCustomPreset(label, values));
+    setPresetNameInput('');
+    setShowSaveInput(false);
+  }
+  function handleDeletePreset(id: string) {
+    setCustomPresets(deleteCustomPreset(id));
+  }
 
   return (
     <div className="tactics">
@@ -161,7 +181,52 @@ export function Tactics({ club, tactic, onChange, disabled }: Props) {
                 {p.label}
               </button>
             ))}
+            {customPresets.map((p) => (
+              <span key={p.id} className="chip preset-chip custom-preset-chip">
+                <button
+                  className="custom-preset-apply"
+                  title={`${p.label} (저장한 전술)`}
+                  disabled={disabled}
+                  onClick={() => applyPreset(p.values)}
+                >
+                  ★ {p.label}
+                </button>
+                <button
+                  className="preset-delete"
+                  title="이 프리셋 삭제"
+                  disabled={disabled}
+                  onClick={() => handleDeletePreset(p.id)}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+            {!showSaveInput && (
+              <button
+                className="chip preset-save-btn"
+                disabled={disabled}
+                onClick={() => setShowSaveInput(true)}
+              >
+                + 현재 설정 저장
+              </button>
+            )}
           </div>
+          {showSaveInput && (
+            <div className="preset-save-row">
+              <input
+                className="preset-name-input"
+                type="text"
+                maxLength={20}
+                placeholder="프리셋 이름"
+                value={presetNameInput}
+                onChange={(e) => setPresetNameInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleSavePreset(); if (e.key === 'Escape') setShowSaveInput(false); }}
+                autoFocus
+              />
+              <button className="btn-small" onClick={handleSavePreset} disabled={!presetNameInput.trim()}>저장</button>
+              <button className="btn-small" onClick={() => { setShowSaveInput(false); setPresetNameInput(''); }}>취소</button>
+            </div>
+          )}
           <Slider label="멘탈리티" left="수비적" right="공격적"
             value={tactic.mentality} disabled={disabled}
             onChange={(v) => setSlider('mentality', v)} />

@@ -6,7 +6,7 @@
 import type { Rng } from './rng.js';
 import { clamp } from './math.js';
 
-export type DemandKind = 'cutWages' | 'winCup' | 'clubTopScorer';
+export type DemandKind = 'cutWages' | 'winCup' | 'clubTopScorer' | 'topHalfFinish';
 
 export interface BoardDemand {
   kind: DemandKind;
@@ -20,6 +20,7 @@ export const DEMAND_LABEL: Record<DemandKind, string> = {
   cutWages: '임금 총액을 예산 이내로 줄일 것',
   winCup: '컵대회에서 우승할 것',
   clubTopScorer: '리그 득점왕을 배출할 것',
+  topHalfFinish: '리그 상위 절반 안에서 시즌을 마칠 것',
 };
 
 /** 요구 생성 컨텍스트. */
@@ -46,7 +47,8 @@ export function generateDemand(ctx: DemandContext, rng: Rng): BoardDemand | null
   // 임금이 건전하면 일정 확률로 상향 도전 과제, 아니면 요구 없음(ambition이 높을수록 스킵 확률↓).
   const skipChance = clamp(0.55 - ambition * 0.1, 0.15, 0.9);
   if (rng.next() < skipChance) return null;
-  const kind: DemandKind = rng.roll(0.5) ? 'winCup' : 'clubTopScorer';
+  const kinds: DemandKind[] = ['winCup', 'clubTopScorer', 'topHalfFinish'];
+  const kind = kinds[rng.int(0, kinds.length - 1)]!;
   return { kind, reward: 12 + ambition * 2, penalty: 4 + ambition * 2 };
 }
 
@@ -55,6 +57,8 @@ export interface DemandResult {
   wageUnderBudget: boolean;
   cupWon: boolean;
   clubTopScorer: boolean;
+  /** 리그 최종 순위가 소속 부(division) 상위 절반 안에 들었는가. */
+  topHalfFinish: boolean;
 }
 
 /** 요구 달성 여부. */
@@ -63,6 +67,7 @@ export function evaluateDemand(demand: BoardDemand, res: DemandResult): boolean 
     case 'cutWages': return res.wageUnderBudget;
     case 'winCup': return res.cupWon;
     case 'clubTopScorer': return res.clubTopScorer;
+    case 'topHalfFinish': return res.topHalfFinish;
   }
 }
 

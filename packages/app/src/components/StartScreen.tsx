@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { createLeague, DIFFICULTIES, DIVISION_LABELS, type Difficulty, type GameState } from '../game.js';
 import type { SaveStore, SaveSlotMeta } from '../storage.js';
-import { loadCareer, type CareerStint } from '../career.js';
+import { loadCareer, careerTrend, type CareerStint } from '../career.js';
 import { formatMoney } from '@soccer-tycoon/engine';
 import { ConfirmDialog } from './ConfirmDialog.js';
 
@@ -35,6 +35,7 @@ export function StartScreen({ store, onStart, onLoad }: Props) {
       return [];
     }
   }, []);
+  const trend = useMemo(() => careerTrend(career), [career]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<SaveSlotMeta | null>(null);
 
@@ -100,6 +101,13 @@ export function StartScreen({ store, onStart, onLoad }: Props) {
         <section className="career-archive">
           <h2 className="section-title">🎖️ 감독 커리어</h2>
           <p className="subtitle">지금까지 경질로 끝난 재임 기록입니다. 세이브와 무관하게 영구 보존됩니다.</p>
+          {trend && (
+            <p className={`career-trend ${trend}`}>
+              {trend === 'rising' && '📈 최근 재임 성적이 이전보다 좋아지고 있습니다.'}
+              {trend === 'falling' && '📉 최근 재임 성적이 이전보다 아쉬워지고 있습니다.'}
+              {trend === 'steady' && '📊 재임 성적이 꾸준히 비슷한 수준을 유지하고 있습니다.'}
+            </p>
+          )}
           <table className="data-table compact">
             <thead>
               <tr><th>구단</th><th>재임 시즌</th><th>최고 순위</th><th>리그 우승</th><th>컵 우승</th><th>경질일</th></tr>
