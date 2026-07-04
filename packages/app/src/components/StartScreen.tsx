@@ -3,6 +3,7 @@ import { createLeague, DIFFICULTIES, DIVISION_LABELS, type Difficulty, type Game
 import type { SaveStore, SaveSlotMeta } from '../storage.js';
 import { loadCareer, type CareerStint } from '../career.js';
 import { formatMoney } from '@soccer-tycoon/engine';
+import { ConfirmDialog } from './ConfirmDialog.js';
 
 const DEFAULT_SEED = 2026;
 const DIFF_ORDER: Difficulty[] = ['easy', 'normal', 'hard'];
@@ -35,6 +36,7 @@ export function StartScreen({ store, onStart, onLoad }: Props) {
     }
   }, []);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<SaveSlotMeta | null>(null);
 
   function loadSlot(id: string) {
     setLoadError(null);
@@ -63,6 +65,7 @@ export function StartScreen({ store, onStart, onLoad }: Props) {
     } catch (err) {
       console.error('세이브 삭제에 실패했습니다:', err);
     }
+    setDeleteTarget(null);
   }
 
   return (
@@ -85,7 +88,7 @@ export function StartScreen({ store, onStart, onLoad }: Props) {
                 </div>
                 <div className="save-actions">
                   <button className="btn-small" onClick={() => loadSlot(s.id)}>불러오기</button>
-                  <button className="btn-small danger" onClick={() => deleteSlot(s.id)}>삭제</button>
+                  <button className="btn-small danger" onClick={() => setDeleteTarget(s)}>삭제</button>
                 </div>
               </div>
             ))}
@@ -159,6 +162,17 @@ export function StartScreen({ store, onStart, onLoad }: Props) {
       >
         이 구단으로 시작 ({DIFFICULTIES[difficulty].label})
       </button>
+
+      {deleteTarget && (
+        <ConfirmDialog
+          title="세이브 삭제"
+          message={`${deleteTarget.clubName} (시즌 ${deleteTarget.season}) 세이브를 삭제하시겠습니까? 되돌릴 수 없습니다.`}
+          confirmLabel="삭제"
+          danger
+          onConfirm={() => deleteSlot(deleteTarget.id)}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      )}
     </div>
   );
 }

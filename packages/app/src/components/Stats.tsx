@@ -69,14 +69,15 @@ function ScorerTable({
     <table className="data-table compact">
       <thead>
         <tr>
-          <th>선수</th>
+          <th>순위</th><th>선수</th>
           {showClub && <th>구단</th>}
           <th>출전</th><th>득점</th><th>슛</th><th>평점</th>
         </tr>
       </thead>
       <tbody>
-        {rows.map((s) => (
+        {rows.map((s, i) => (
           <tr key={s.playerId} className={s.clubId === myClubId ? 'mine' : ''}>
+            <td>{i === 0 ? <span className="rank-gold">1</span> : i + 1}</td>
             <td className="name">{s.name}</td>
             {showClub && <td className="muted small">{s.clubName}</td>}
             <td>{s.apps}</td>

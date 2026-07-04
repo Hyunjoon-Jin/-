@@ -933,6 +933,11 @@ h3 { font-size: 14px; margin: 0 0 10px; color: var(--muted); text-transform: upp
 .feed li.goal.mine { background: #1f3a26; color: var(--accent); }
 .feed li.injury-feed { background: #3a2a24; border-radius: 6px; color: var(--color-warning); }
 
+/* 확인 모달(삭제·방출·판매 확정 등 되돌릴 수 없는 동작) */
+.modal.confirm-modal { max-width: 420px; }
+.confirm-modal p { margin: 0 0 18px; color: var(--text); }
+.confirm-actions { display: flex; justify-content: flex-end; gap: 10px; }
+
 /* 부상 교체 모달 */
 .modal.injury-modal { max-width: 460px; }
 .injury-modal p { margin: 0 0 10px; }

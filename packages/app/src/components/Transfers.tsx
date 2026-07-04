@@ -9,6 +9,7 @@ import { useModalA11y } from './useModalA11y.js';
 import { onKeyActivate } from '../a11y.js';
 import { SortableTh } from './SortableTh.js';
 import { useToast } from '../toast.js';
+import { ConfirmDialog } from './ConfirmDialog.js';
 
 interface Props {
   game: GameState;
@@ -66,6 +67,7 @@ function TransferMarket({ game, onNegotiate, onBuyAt, onOffers, onAcceptSell, on
   const [squadDir, setSquadDir] = useState<SortDir>(-1);
   const [negotiating, setNegotiating] = useState<TransferTarget | null>(null);
   const [selling, setSelling] = useState<Player | null>(null);
+  const [releasing, setReleasing] = useState<Player | null>(null);
 
   const budget = club.finance.transferBudget;
   const scouting = club.staff.scouting;
@@ -245,12 +247,7 @@ function TransferMarket({ game, onNegotiate, onBuyAt, onOffers, onAcceptSell, on
                     <button className="btn-small" onClick={(e) => { e.stopPropagation(); setSelling(p); }}>판매</button>
                     <button
                       className="btn-small danger"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (window.confirm(`${p.name} 선수를 방출하시겠습니까? 보상 없이 영구히 스쿼드에서 빠집니다.`)) {
-                          act(onRelease(p.id));
-                        }
-                      }}
+                      onClick={(e) => { e.stopPropagation(); setReleasing(p); }}
                     >
                       방출
                     </button>
@@ -269,7 +266,7 @@ function TransferMarket({ game, onNegotiate, onBuyAt, onOffers, onAcceptSell, on
           scouting={scouting}
           onNegotiate={onNegotiate}
           onBuyAt={onBuyAt}
-          onResult={(m) => { toast(m.text, m.ok); setNegotiating(null); }}
+          onResult={(m) => { toast(m.text, m.ok); if (m.ok) setNegotiating(null); }}
           onClose={() => setNegotiating(null)}
         />
       )}
@@ -278,8 +275,18 @@ function TransferMarket({ game, onNegotiate, onBuyAt, onOffers, onAcceptSell, on
           player={selling}
           offers={onOffers(selling.id)}
           onAcceptSell={onAcceptSell}
-          onResult={(m) => { toast(m.text, m.ok); setSelling(null); }}
+          onResult={(m) => { toast(m.text, m.ok); if (m.ok) setSelling(null); }}
           onClose={() => setSelling(null)}
+        />
+      )}
+      {releasing && (
+        <ConfirmDialog
+          title="선수 방출"
+          message={`${releasing.name} 선수를 방출하시겠습니까? 보상 없이 영구히 스쿼드에서 빠집니다.`}
+          confirmLabel="방출"
+          danger
+          onConfirm={() => { act(onRelease(releasing.id)); setReleasing(null); }}
+          onCancel={() => setReleasing(null)}
         />
       )}
     </div>
@@ -295,6 +302,7 @@ function SellModal({
   onResult: (m: Msg) => void;
   onClose: () => void;
 }) {
+  const [confirming, setConfirming] = useState<SellOffer | null>(null);
   const accept = (buyerId: string) => {
     const r = onAcceptSell(player.id, buyerId);
     onResult({ text: r.message, ok: r.ok });
@@ -334,7 +342,7 @@ function SellModal({
                     <td><b>{formatMoney(o.bid)}</b>
                       {o.bid >= value ? <span className="pos small"> (가치↑)</span> : <span className="muted small"> ({Math.round((o.bid / value) * 100)}%)</span>}
                     </td>
-                    <td><button className="btn-small" onClick={() => accept(o.clubId)}>수락</button></td>
+                    <td><button className="btn-small" onClick={() => setConfirming(o)}>수락</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -342,6 +350,16 @@ function SellModal({
           </>
         )}
       </div>
+      {confirming && (
+        <ConfirmDialog
+          title="판매 확정"
+          message={`${player.name} 선수를 ${confirming.clubName}에 ${formatMoney(confirming.bid)}에 판매하시겠습니까? 되돌릴 수 없습니다.`}
+          confirmLabel="판매 확정"
+          danger
+          onConfirm={() => { accept(confirming.clubId); setConfirming(null); }}
+          onCancel={() => setConfirming(null)}
+        />
+      )}
     </div>
   );
 }
