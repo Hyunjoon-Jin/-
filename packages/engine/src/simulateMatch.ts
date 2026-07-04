@@ -180,10 +180,40 @@ export function applyTactic(ctx: MatchContext, side: 'home' | 'away', tactic: Ta
 function ensureStat(ctx: MatchContext, p: Player): PlayerMatchStat {
   let st = ctx.statMap.get(p.id);
   if (!st) {
-    st = { playerId: p.id, name: p.name, rating: 6.0, shots: 0, goals: 0 };
+    st = { playerId: p.id, name: p.name, position: p.position, rating: 6.0, shots: 0, goals: 0, assists: 0 };
     ctx.statMap.set(p.id, st);
   }
   return st;
+}
+
+/** 득점 상황(chanceType)별 어시스트가 붙을 확률 — 크로스는 거의 항상, 오픈플레이는
+ *  절반 이상, 세트피스(주로 직접 프리킥)는 낮게. */
+const ASSIST_CHANCE: Record<ChanceType, number> = { open: 0.65, cross: 0.88, setpiece: 0.35 };
+
+/** 가중치 기반 무작위 선택 — 합이 0 이하면 null. */
+function pickWeighted<T>(items: T[], weight: (t: T) => number, rng: Rng): T | null {
+  const weights = items.map(weight);
+  const total = weights.reduce((s, w) => s + w, 0);
+  if (total <= 0) return null;
+  let r = rng.next() * total;
+  for (let i = 0; i < items.length; i++) {
+    r -= weights[i]!;
+    if (r <= 0) return items[i]!;
+  }
+  return items[items.length - 1]!;
+}
+
+/** 득점 시 어시스트 제공자 선정 — 시야·패스가 좋을수록, 플레이메이커 특성이 있으면 가중. */
+function pickAssister(att: Side, shooter: Player, chance: ChanceType, rng: Rng): Player | null {
+  if (!rng.roll(ASSIST_CHANCE[chance])) return null;
+  const pool = att.club.players.filter(
+    (p) => isAvailable(p) && p.position !== 'GK' && p.id !== shooter.id,
+  );
+  return pickWeighted(
+    pool,
+    (p) => 1 + (p.attributes.vision + p.attributes.passing) / 10 + (hasTrait(p, 'playmaker') ? 2 : 0),
+    rng,
+  );
 }
 
 /** 한 분(틱) 진행. 생성된 이벤트가 있으면 반환(없으면 null). */
@@ -220,10 +250,17 @@ export function stepMinute(ctx: MatchContext, minute: number): MatchEvent | null
     : undefined;
   const outcome = resolveShot(att.strength.attack, def.strength.gk, chance, rng, setPieceSkill);
 
+  let assister: Player | null = null;
   if (outcome === 'GOAL') {
     att.goals++;
     st.goals++;
     st.rating = clamp(st.rating + 1.2, 0, 10);
+    assister = pickAssister(att, shooter, chance, rng);
+    if (assister) {
+      const ast = ensureStat(ctx, assister);
+      ast.assists++;
+      ast.rating = clamp(ast.rating + 0.5, 0, 10);
+    }
   } else if (outcome === 'OFF_TARGET') {
     st.rating = clamp(st.rating - 0.1, 0, 10);
   }
@@ -235,6 +272,8 @@ export function stepMinute(ctx: MatchContext, minute: number): MatchEvent | null
     outcome,
     playerId: shooter.id,
     playerName: shooter.name,
+    assistPlayerId: assister?.id,
+    assistPlayerName: assister?.name,
   };
   ctx.events.push(ev);
   return ev;

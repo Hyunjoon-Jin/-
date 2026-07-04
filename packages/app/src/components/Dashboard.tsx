@@ -77,6 +77,24 @@ export function Dashboard({ game, onSignContract, visitedTactics, visitedSquadPr
       ),
     });
   }
+  if (last?.promotionPlayoff) {
+    const pp = last.promotionPlayoff;
+    const iParticipated = pp.participants.some((p) => p.clubId === game.myClubId);
+    const iWon = pp.championId === game.myClubId;
+    seasonBanners.push({
+      key: 'promotionPlayoff', priority: 1.5,
+      node: (
+        <Banner tone={iWon ? 'success' : iParticipated ? 'danger' : 'info'}>
+          <p>
+            🏆 <b>승격 플레이오프</b> — 2부 3~6위 4개 구단이 마지막 승격 자리를 놓고 겨룬 결과{' '}
+            <b>{pp.championName}</b>이(가) 승격을 확정지었습니다.
+            {iWon && <span className="pos"> 우리 구단이 우승했습니다! 🎉</span>}
+            {iParticipated && !iWon && <span className="neg"> 아쉽게도 우리 구단은 탈락했습니다.</span>}
+          </p>
+        </Banner>
+      ),
+    });
+  }
   if (last?.milestones !== undefined && last.milestones.length > 0) {
     seasonBanners.push({
       key: 'milestones', priority: 2,

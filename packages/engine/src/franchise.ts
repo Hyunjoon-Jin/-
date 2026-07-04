@@ -103,6 +103,12 @@ export interface SeasonSummary {
   prospectUpdates?: YouthProspectUpdate[];
   /** 스폰서 보너스 목표 결과(앱). */
   sponsorGoal?: { label: string; met: boolean; bonus: number };
+  /** 2부 3~6위 승격 플레이오프 결과(앱). 미니 토너먼트 우승 구단이 마지막 승격 자리를 얻는다. */
+  promotionPlayoff?: {
+    participants: { clubId: string; clubName: string }[];
+    championId: string;
+    championName: string;
+  };
 }
 
 /** 과거 유스 기대주 소개 이후의 후속 소식(데뷔/첫 골). */

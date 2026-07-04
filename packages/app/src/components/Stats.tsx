@@ -2,7 +2,7 @@ import { BarChart3 } from 'lucide-react';
 import {
   liveTopScorers, liveSquadStats, lastSummary, myClub, type GameState,
 } from '../game.js';
-import type { PlayerSeasonStat } from '@soccer-tycoon/engine';
+import type { PlayerSeasonStat, BestXIEntry } from '@soccer-tycoon/engine';
 import { ratingClass } from '../rating.js';
 import { EmptyState } from './EmptyState.js';
 
@@ -28,13 +28,20 @@ export function Stats({ game }: { game: GameState }) {
     <div className="stats">
       <h2>{heading}</h2>
 
-      {awards && (awards.topScorer || awards.playerOfSeason || awards.goldenGlove) && (
+      {awards && (awards.topScorer || awards.topAssist || awards.playerOfSeason || awards.goldenGlove) && (
         <div className="awards">
           {awards.topScorer && (
             <div className="award">
               <div className="award-title">🥇 득점왕</div>
               <div className="award-name">{awards.topScorer.name}</div>
               <div className="muted">{awards.topScorer.clubName} · {awards.topScorer.goals}골</div>
+            </div>
+          )}
+          {awards.topAssist && (
+            <div className="award">
+              <div className="award-title">🎯 도움왕</div>
+              <div className="award-name">{awards.topAssist.name}</div>
+              <div className="muted">{awards.topAssist.clubName} · {awards.topAssist.assists}도움</div>
             </div>
           )}
           {awards.playerOfSeason && (
@@ -54,6 +61,8 @@ export function Stats({ game }: { game: GameState }) {
         </div>
       )}
 
+      {awards?.bestXI && awards.bestXI.length > 0 && <BestXISection entries={awards.bestXI} />}
+
       <div className="stats-cols">
         <div>
           <h3>득점 순위</h3>
@@ -63,6 +72,39 @@ export function Stats({ game }: { game: GameState }) {
           <h3>내 구단 ({myClub(game).name}) 시즌 기록</h3>
           <ScorerTable rows={squad.slice(0, 14)} myClubId={game.myClubId} showClub={false} />
         </div>
+      </div>
+    </div>
+  );
+}
+
+const XI_LINE_ORDER: Record<string, number> = { GK: 0, DEF: 1, MID: 2, ATT: 3 };
+const XI_LINE_LABEL: Record<string, string> = { GK: 'GK', DEF: '수비', MID: '미드필드', ATT: '공격' };
+
+function xiLineOf(position: string): string {
+  if (position === 'GK') return 'GK';
+  if (position.startsWith('D')) return 'DEF';
+  if (position.startsWith('AM') || position === 'MC' || position === 'DM') return 'MID';
+  return 'ATT';
+}
+
+function BestXISection({ entries }: { entries: BestXIEntry[] }) {
+  const sorted = [...entries].sort((a, b) => (XI_LINE_ORDER[xiLineOf(a.position)] ?? 9) - (XI_LINE_ORDER[xiLineOf(b.position)] ?? 9));
+  return (
+    <div className="panel best-xi">
+      <h3>🌟 이번 시즌 베스트 XI</h3>
+      <div className="best-xi-grid">
+        {sorted.map((p) => (
+          <div key={p.playerId} className="best-xi-card">
+            <div className="best-xi-line muted small">{XI_LINE_LABEL[xiLineOf(p.position)]}</div>
+            <div className="best-xi-name">{p.name}</div>
+            <div className="muted small">{p.clubName}</div>
+            <div className="best-xi-stats muted small">
+              평점 {p.avgRating.toFixed(2)}
+              {p.goals > 0 && <> · {p.goals}골</>}
+              {p.assists > 0 && <> · {p.assists}도움</>}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -78,7 +120,7 @@ function ScorerTable({
         <tr>
           <th>순위</th><th>선수</th>
           {showClub && <th>구단</th>}
-          <th>출전</th><th>득점</th><th>슛</th><th>평점</th>
+          <th>출전</th><th>득점</th><th>도움</th><th>슛</th><th>평점</th>
         </tr>
       </thead>
       <tbody>
@@ -89,6 +131,7 @@ function ScorerTable({
             {showClub && <td className="muted small">{s.clubName}</td>}
             <td>{s.apps}</td>
             <td><b>{s.goals}</b></td>
+            <td>{s.assists}</td>
             <td className="muted">{s.shots}</td>
             <td className={ratingClass(s.avgRating)}>{s.avgRating.toFixed(2)}</td>
           </tr>

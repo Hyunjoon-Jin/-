@@ -683,6 +683,16 @@ body {
 .stats-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
 .stats-cols h3 { margin-top: 0; }
 
+.best-xi { margin-bottom: 20px; }
+.best-xi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+.best-xi-card {
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px;
+  padding: 10px 12px; text-align: center;
+}
+.best-xi-line { text-transform: uppercase; letter-spacing: .03em; margin-bottom: 4px; }
+.best-xi-name { font-weight: 700; font-size: 14px; }
+.best-xi-stats { margin-top: 2px; }
+
 /* ── History ── */
 .honors { margin-bottom: 18px; }
 .honors h2 { margin: 0 0 12px; }

@@ -227,6 +227,9 @@ export interface MatchEvent {
   outcome: ShotOutcome;
   playerId: string;
   playerName: string;
+  /** 득점(outcome==='GOAL')에 어시스트가 붙었을 때만 설정. */
+  assistPlayerId?: string;
+  assistPlayerName?: string;
 }
 
 export type CardType = 'yellow' | 'red';
@@ -242,9 +245,12 @@ export interface CardEvent {
 export interface PlayerMatchStat {
   playerId: string;
   name: string;
+  /** 이 경기를 뛴 주 포지션(시즌 집계에서 베스트 XI 등 포지션별 분류에 사용). */
+  position: Position;
   rating: number;
   shots: number;
   goals: number;
+  assists: number;
   /** GK 슬롯으로 뛴 선수가 무실점으로 경기를 마쳤는지(골든글러브 집계용). GK가 아니면 미설정. */
   cleanSheet?: boolean;
 }

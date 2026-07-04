@@ -4,30 +4,48 @@
  * 득점왕·시즌 베스트 플레이어를 뽑는다.
  */
 import type { Club, MatchResult, Position, Tactic } from './types.js';
+import { lineOf } from './teamStrength.js';
 
 export interface PlayerSeasonStat {
   playerId: string;
   name: string;
   clubId: string;
   clubName: string;
+  /** 이 시즌 마지막으로 출전한 포지션(베스트 XI 분류에 사용). */
+  position: Position;
   apps: number;
   goals: number;
+  assists: number;
   shots: number;
   avgRating: number;
   /** GK로 출전해 무실점으로 마친 경기 수(골든글러브 집계용). GK가 아니면 0. */
   cleanSheets: number;
 }
 
+export interface BestXIEntry {
+  position: Position;
+  playerId: string;
+  name: string;
+  clubName: string;
+  avgRating: number;
+  goals: number;
+  assists: number;
+}
+
 export interface SeasonAwards {
   topScorer?: { playerId: string; name: string; clubName: string; goals: number };
+  /** 시즌 최다 어시스트. */
+  topAssist?: { playerId: string; name: string; clubName: string; assists: number };
   playerOfSeason?: { playerId: string; name: string; clubName: string; avgRating: number };
   /** 시즌 최다 클린시트 GK. */
   goldenGlove?: { playerId: string; name: string; clubName: string; cleanSheets: number };
+  /** 시즌 베스트 XI(GK 1 · DEF 4 · MID 3 · ATT 3, 최소 출전 이상 중 라인별 평균 평점 최고). */
+  bestXI?: BestXIEntry[];
 }
 
 interface Acc {
-  playerId: string; name: string; clubId: string; clubName: string;
-  apps: number; goals: number; shots: number; totalRating: number; cleanSheets: number;
+  playerId: string; name: string; clubId: string; clubName: string; position: Position;
+  apps: number; goals: number; assists: number; shots: number; totalRating: number; cleanSheets: number;
 }
 
 /** 시즌 전 경기 결과에서 선수별 통계 집계. */
@@ -38,13 +56,17 @@ export function aggregatePlayerStats(results: MatchResult[]): PlayerSeasonStat[]
   ) => {
     let a = map.get(st.playerId);
     if (!a) {
-      a = { playerId: st.playerId, name: st.name, clubId, clubName, apps: 0, goals: 0, shots: 0, totalRating: 0, cleanSheets: 0 };
+      a = {
+        playerId: st.playerId, name: st.name, clubId, clubName, position: st.position,
+        apps: 0, goals: 0, assists: 0, shots: 0, totalRating: 0, cleanSheets: 0,
+      };
       map.set(st.playerId, a);
     }
-    // 이적으로 소속이 바뀌면 최신 소속으로 갱신
-    a.clubId = clubId; a.clubName = clubName;
+    // 이적으로 소속이 바뀌면 최신 소속으로, 포지션 전환 훈련 중이면 최신 출전 포지션으로 갱신
+    a.clubId = clubId; a.clubName = clubName; a.position = st.position;
     a.apps++;
     a.goals += st.goals;
+    a.assists += st.assists;
     a.shots += st.shots;
     a.totalRating += st.rating;
     if (st.cleanSheet) a.cleanSheets++;
@@ -54,8 +76,8 @@ export function aggregatePlayerStats(results: MatchResult[]): PlayerSeasonStat[]
     for (const st of r.playerStats.away) add(st, r.awayClubId, r.awayClubName);
   }
   return [...map.values()].map((a) => ({
-    playerId: a.playerId, name: a.name, clubId: a.clubId, clubName: a.clubName,
-    apps: a.apps, goals: a.goals, shots: a.shots,
+    playerId: a.playerId, name: a.name, clubId: a.clubId, clubName: a.clubName, position: a.position,
+    apps: a.apps, goals: a.goals, assists: a.assists, shots: a.shots,
     avgRating: a.apps > 0 ? a.totalRating / a.apps : 0,
     cleanSheets: a.cleanSheets,
   }));
@@ -75,6 +97,13 @@ export function topScorers(stats: PlayerSeasonStat[], n = 10): PlayerSeasonStat[
     .slice(0, n);
 }
 
+/** 어시스트 → 평균 평점 → 출전 순 정렬. */
+export function topAssists(stats: PlayerSeasonStat[], n = 10): PlayerSeasonStat[] {
+  return [...stats]
+    .sort((a, b) => b.assists - a.assists || b.avgRating - a.avgRating || b.apps - a.apps)
+    .slice(0, n);
+}
+
 /** 최소 출전 이상에서 평균 평점 최고 = 시즌 베스트 플레이어. */
 export function playerOfSeason(stats: PlayerSeasonStat[], minApps: number): PlayerSeasonStat | undefined {
   return [...stats]
@@ -82,14 +111,44 @@ export function playerOfSeason(stats: PlayerSeasonStat[], minApps: number): Play
     .sort((a, b) => b.avgRating - a.avgRating || b.goals - a.goals)[0];
 }
 
+/** 라인별 베스트 XI 정원(4-3-3 기준 — GK 1 · DEF 4 · MID 3 · ATT 3). */
+const BEST_XI_SHAPE = { GK: 1, DEF: 4, MID: 3, ATT: 3 } as const;
+
+/**
+ * 시즌 베스트 XI. 최소 출전 이상인 선수만 대상으로, 라인(GK/DEF/MID/ATT)별로
+ * 평균 평점(동률이면 득점) 상위 정원만큼 선발한다 — 실제 라인업 포메이션과
+ * 무관하게 항상 4-3-3 기준 11명으로 고정.
+ */
+export function bestXI(stats: PlayerSeasonStat[], minApps: number): BestXIEntry[] {
+  const eligible = stats.filter((s) => s.apps >= minApps);
+  const out: BestXIEntry[] = [];
+  for (const line of ['GK', 'DEF', 'MID', 'ATT'] as const) {
+    const pool = eligible
+      .filter((s) => lineOf(s.position) === line)
+      .sort((a, b) => b.avgRating - a.avgRating || b.goals - a.goals);
+    for (const s of pool.slice(0, BEST_XI_SHAPE[line])) {
+      out.push({
+        position: s.position, playerId: s.playerId, name: s.name, clubName: s.clubName,
+        avgRating: s.avgRating, goals: s.goals, assists: s.assists,
+      });
+    }
+  }
+  return out;
+}
+
 /** 시즌 어워드 산출. minApps는 보통 (총 라운드의 절반). */
 export function seasonAwards(stats: PlayerSeasonStat[], minApps: number): SeasonAwards {
   const scorer = topScorers(stats, 1)[0];
+  const assistLeader = topAssists(stats, 1)[0];
   const potm = playerOfSeason(stats, minApps);
   const glove = goldenGlove(stats);
+  const xi = bestXI(stats, minApps);
   return {
     topScorer: scorer && scorer.goals > 0
       ? { playerId: scorer.playerId, name: scorer.name, clubName: scorer.clubName, goals: scorer.goals }
+      : undefined,
+    topAssist: assistLeader && assistLeader.assists > 0
+      ? { playerId: assistLeader.playerId, name: assistLeader.name, clubName: assistLeader.clubName, assists: assistLeader.assists }
       : undefined,
     playerOfSeason: potm
       ? { playerId: potm.playerId, name: potm.name, clubName: potm.clubName, avgRating: potm.avgRating }
@@ -97,6 +156,7 @@ export function seasonAwards(stats: PlayerSeasonStat[], minApps: number): Season
     goldenGlove: glove
       ? { playerId: glove.playerId, name: glove.name, clubName: glove.clubName, cleanSheets: glove.cleanSheets }
       : undefined,
+    bestXI: xi.length > 0 ? xi : undefined,
   };
 }
 
@@ -174,6 +234,7 @@ export interface SeasonSquadEntry {
   age: number;
   avgRating: number;
   goals: number;
+  assists: number;
 }
 
 /**
@@ -199,6 +260,7 @@ export function seasonSquadSnapshot(
       age: agesAtSeasonEnd.get(slot.playerId) ?? player?.age ?? 0,
       avgRating: st?.avgRating ?? 0,
       goals: st?.goals ?? 0,
+      assists: st?.assists ?? 0,
     };
   });
 }

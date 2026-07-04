@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Landmark } from 'lucide-react';
 import { myClub, rivalClub, DIVISION_LABELS, type GameState } from '../game.js';
 import { careerScorers, type SeasonSquadEntry } from '@soccer-tycoon/engine';
+import { computeClubRecords, type ClubRecordEntry } from '../records.js';
 import { useModalA11y } from './useModalA11y.js';
 import { onKeyActivate } from '../a11y.js';
 import { EmptyState } from './EmptyState.js';
@@ -9,7 +10,7 @@ import { EmptyState } from './EmptyState.js';
 const RESULT_LABEL: Record<'win' | 'draw' | 'loss', string> = { win: '승', draw: '무', loss: '패' };
 
 type HistorySeason = GameState['history'][number];
-type HistoryTab = 'seasons' | 'titles' | 'scorers' | 'legends' | 'rivals';
+type HistoryTab = 'seasons' | 'titles' | 'scorers' | 'records' | 'legends' | 'rivals';
 
 export function History({ game }: { game: GameState }) {
   const club = myClub(game);
@@ -61,10 +62,14 @@ export function History({ game }: { game: GameState }) {
     { s: HistorySeason; leagueWon: boolean; cupWon: boolean } | null
   >(null);
 
+  const records = computeClubRecords(game);
+  const hasRecords = Object.values(records).some((r) => r !== undefined);
+
   const tabDefs: { key: HistoryTab; label: string; show: boolean }[] = [
     { key: 'seasons', label: '역대 시즌', show: true },
     { key: 'titles', label: '리그 우승 순위', show: true },
     { key: 'scorers', label: '통산 득점 순위', show: leaders.length > 0 },
+    { key: 'records', label: '역대 기록집', show: hasRecords },
     { key: 'legends', label: '레전드', show: game.legends.length > 0 },
     { key: 'rivals', label: '라이벌전', show: game.rivalMeetings.length > 0 },
   ];
@@ -201,6 +206,20 @@ export function History({ game }: { game: GameState }) {
         </div>
       )}
 
+      {activeTab === 'records' && hasRecords && (
+        <div className="club-records">
+          <h3>📖 역대 기록집 <span className="muted small">(이번 재임 · {club.name})</span></h3>
+          <div className="cards">
+            {records.bestFinish && <RecordCard entry={records.bestFinish} />}
+            {records.mostPointsSeason && <RecordCard entry={records.mostPointsSeason} />}
+            {records.mostGoalsSeason && <RecordCard entry={records.mostGoalsSeason} />}
+            {records.mostAssistsSeason && <RecordCard entry={records.mostAssistsSeason} />}
+            {records.bestAvgRatingSeason && <RecordCard entry={records.bestAvgRatingSeason} />}
+            {records.bestNetIncomeSeason && <RecordCard entry={records.bestNetIncomeSeason} />}
+          </div>
+        </div>
+      )}
+
       {activeTab === 'legends' && game.legends.length > 0 && (
         <div className="legends">
           <h3>🕯️ 레전드 명예의 전당 <span className="muted small">(은퇴 선수 · {club.name})</span></h3>
@@ -269,6 +288,16 @@ function HonorCard({ title, value }: { title: string; value: string }) {
     <div className="stat-card">
       <div className="stat-title">{title}</div>
       <div className="stat-value">{value}</div>
+    </div>
+  );
+}
+
+function RecordCard({ entry }: { entry: ClubRecordEntry }) {
+  return (
+    <div className="stat-card record-card">
+      <div className="stat-title">{entry.label}</div>
+      <div className="stat-value">{entry.detail}</div>
+      <div className="muted small">{entry.holder} · 시즌 {entry.season}</div>
     </div>
   );
 }

@@ -13,10 +13,10 @@ export {
   rollInjury, SEVERITY_LABEL, type Injury, type InjurySeverity,
 } from './injury.js';
 export {
-  aggregatePlayerStats, topScorers, playerOfSeason, seasonAwards, summarizeStats,
-  careerScorers, recentPlayerForm, seasonSquadSnapshot, goldenGlove,
+  aggregatePlayerStats, topScorers, topAssists, playerOfSeason, seasonAwards, summarizeStats,
+  careerScorers, recentPlayerForm, seasonSquadSnapshot, goldenGlove, bestXI,
   type PlayerSeasonStat, type SeasonAwards, type CareerStat, type PlayerFormEntry,
-  type SeasonSquadEntry,
+  type SeasonSquadEntry, type BestXIEntry,
 } from './stats.js';
 export {
   generateClub, generateYouthPlayer, defaultTactic, FORMATION_433, type TacticContext,

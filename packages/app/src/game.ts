@@ -506,10 +506,32 @@ export function finishSeason(state: GameState): GameState {
   const myCallUps = intl.byClub.get(state.myClubId) ?? 0;
   const myIntlInjuries = myClub(state).players.filter((p) => p.injuryMatches > 0).length;
 
-  // 6) 승강 (1부↔2부)
+  // 6) 승강 (1부↔2부) — 2부 상위 AUTO_PROMOTE_COUNT팀은 자동 승격, 그 아래 4팀(3~6위)은
+  // 미니 토너먼트(준결승+결승)로 마지막 승격 자리를 겨룬다. 강등 인원(PROMOTE_COUNT)은
+  // 그대로 유지해 승강 총원의 균형을 지킨다.
   const d1Table = myDiv === 0 ? myTable : otherTable;
   const d2Table = myDiv === 1 ? myTable : otherTable;
-  const promRel = applyPromotionRelegation(state.clubs, d1Table, d2Table, PROMOTE_COUNT);
+  const AUTO_PROMOTE_COUNT = 2;
+  const promRel = applyPromotionRelegation(state.clubs, d1Table, d2Table, AUTO_PROMOTE_COUNT, PROMOTE_COUNT);
+
+  let promotionPlayoffResult: SeasonSummary['promotionPlayoff'];
+  const playoffCandidateIds = d2Table.slice(AUTO_PROMOTE_COUNT, AUTO_PROMOTE_COUNT + 4).map((r) => r.clubId);
+  if (playoffCandidateIds.length === 4) {
+    const playoffCup: CupState = {
+      participantIds: playoffCandidateIds, rounds: [], baseSeed: seasonSeed(state) + 828_282, championId: null,
+    };
+    const finishedPlayoff = playCupToEnd(playoffCup, state.clubs, tacticMap(state));
+    if (finishedPlayoff.championId) {
+      const champ = state.clubs.find((c) => c.id === finishedPlayoff.championId)!;
+      champ.division = 0;
+      promRel.promoted.push(finishedPlayoff.championId);
+      promotionPlayoffResult = {
+        participants: playoffCandidateIds.map((id) => ({ clubId: id, clubName: state.clubs.find((c) => c.id === id)!.name })),
+        championId: finishedPlayoff.championId,
+        championName: champ.name,
+      };
+    }
+  }
   const promoted = promRel.promoted.includes(state.myClubId);
   const relegated = promRel.relegated.includes(state.myClubId);
 
@@ -593,6 +615,7 @@ export function finishSeason(state: GameState): GameState {
     youthProspects: myYouthProspects,
     prospectUpdates: myProspectUpdates,
     sponsorGoal: sponsorGoalResult,
+    promotionPlayoff: promotionPlayoffResult,
   };
 
   const repaired = repairTactic(myClub(state), myTactic(state));
