@@ -38,6 +38,7 @@ function tacticFatigueMul(tactic: Tactic): number {
 
 function applySide(club: Club, tactic: Tactic, outcome: Outcome, injuries: InjuryEvent[]): void {
   const starters = new Set(tactic.lineup.map((s) => s.playerId));
+  const slotByPlayer = new Map(tactic.lineup.map((s) => [s.playerId, s.position]));
   const dMorale = outcome === 'W' ? TUNING.moraleWin : outcome === 'L' ? -TUNING.moraleLoss : 0;
   // 의료 레벨이 높을수록 회복 보너스 (0.9~1.15배, 의료 20에서만 상한 도달)
   const recoveryBonus = clamp(0.9 + (club.staff.medical / 20) * 0.25, 0.9, 1.15);
@@ -54,6 +55,17 @@ function applySide(club: Club, tactic: Tactic, outcome: Outcome, injuries: Injur
       }
     } else if (starters.has(p.id)) {
       p.seasonApps++; // 선발 출전 기록(사기·재계약 판단)
+      // 부 포지션으로 뛰면 실전 경험으로 해당 포지션 숙련도가 서서히 오른다(전담 훈련보다는 느림).
+      const slot = slotByPlayer.get(p.id);
+      if (slot && slot !== p.position) {
+        const current = p.familiarity[slot] ?? 0.2;
+        if (current < 1) {
+          const decisionsFactor = 0.5 + (p.attributes.decisions / 20) * 1.0;
+          const multiRoleMul = hasTrait(p, 'multiRole') ? 1.3 : 1;
+          const gain = 0.003 * decisionsFactor * multiRoleMul * (1 - current);
+          p.familiarity[slot] = clamp(current + gain, 0, 1);
+        }
+      }
       // 특성: 철강왕(피로↓).
       const fatMul = hasTrait(p, 'ironMan') ? 0.6 : 1;
       // 선발: 피로 누적 (스태미너 높을수록 덜 지침, 회복 공식과 동일한 분모).

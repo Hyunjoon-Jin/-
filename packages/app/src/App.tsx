@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   startGame, myClub, myTactic, setMyTactic,
   startSeason, playRound, playRestOfSeason, finishSeason, advanceFullSeason,
-  playCupRound, negotiate, buyAt, offersFor, acceptSell, release, upgradeStaffAction, setTrainingFocus, renewContract,
+  playCupRound, negotiate, buyAt, offersFor, acceptSell, release, upgradeStaffAction,
+  setTrainingFocus, setTrainingPosition, renewContract,
   watchSetup, matchPreview, commitWatchedRound,
   watchCupSetup, cupPreview, commitWatchedCupRound,
   playerForm, playerTimeline, playerRatingHistory, respondMedia, dismissMedia, signContract,
@@ -201,6 +202,7 @@ export function App() {
             player={detailPlayer}
             onClose={() => setDetailPlayer(null)}
             onSetFocus={isMine ? (focus) => update(setTrainingFocus(game, detailPlayer.id, focus)) : undefined}
+            onSetTrainingPosition={isMine ? (pos) => update(setTrainingPosition(game, detailPlayer.id, pos)) : undefined}
             onRenew={
               isMine
                 ? () => { const o = renewContract(game, detailPlayer.id); if (o.ok) update(o.state); return o; }

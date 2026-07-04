@@ -613,6 +613,15 @@ export function setTrainingFocus(
   return { ...state };
 }
 
+/** 포지션 전환 훈련 대상 지정(해제하려면 undefined). 시즌 경계마다 코칭 지원을 받아 숙련도가 오른다. */
+export function setTrainingPosition(
+  state: GameState, playerId: string, position: import('@soccer-tycoon/engine').Position | undefined,
+): GameState {
+  const p = myClub(state).players.find((pl) => pl.id === playerId);
+  if (p) p.trainingPosition = position;
+  return { ...state };
+}
+
 /** 프리시즌에서 한 시즌 전체를 한 번에 진행(킥오프→전 경기→정산). */
 export function advanceFullSeason(state: GameState): GameState {
   return finishSeason(playRestOfSeason(startSeason(state)));

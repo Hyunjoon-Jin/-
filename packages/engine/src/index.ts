@@ -5,7 +5,7 @@ export { simulateMatch, MATCH_LENGTH, type MatchSetup } from './simulateMatch.js
 export { LiveMatch, HALF_TIME, type LiveStats } from './liveMatch.js';
 export { computeTeamStrength, lineOf } from './teamStrength.js';
 export {
-  playerDerived, currentAbility, isInjured, isSuspended, isAvailable,
+  playerDerived, currentAbility, isInjured, isSuspended, isAvailable, familiarityAt,
   type DerivedRatings,
 } from './derived.js';
 export { applyMatchEffects } from './matchEffects.js';

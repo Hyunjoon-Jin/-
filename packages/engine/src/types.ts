@@ -87,6 +87,8 @@ export interface Player {
   wage: number;
   /** 훈련 포커스 — 성장 시 강조할 능력 그룹. */
   trainingFocus: TrainingFocus;
+  /** 포지션 전환 훈련 대상(선택). 지정하면 시즌 성장 시 해당 포지션 숙련도가 코칭 지원을 받아 오른다. */
+  trainingPosition?: Position;
   /** 고유 특성(0~2개). 경기·성장·부상에 영향. */
   traits: PlayerTrait[];
   /** 국가대표 A매치 출전 캡. 차출로 누적. */
@@ -106,7 +108,7 @@ export type TrainingFocus =
 
 export type PlayerTrait =
   | 'leader' | 'injuryProne' | 'ironMan' | 'wonderkid'
-  | 'poacher' | 'playmaker' | 'hothead' | 'rock';
+  | 'poacher' | 'playmaker' | 'hothead' | 'rock' | 'multiRole';
 
 // ── 전술 ──────────────────────────────────────────────────
 

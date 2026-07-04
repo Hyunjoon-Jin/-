@@ -338,7 +338,10 @@ body {
 }
 .modal-tab:hover { color: var(--text); }
 .modal-tab.active { color: var(--text); border-bottom-color: var(--accent); }
-.pd-fam { font-size: 13px; margin-bottom: 10px; }
+.pd-fam { font-size: 13px; margin-bottom: 16px; }
+.pd-fam h3 { margin: 0 0 10px; }
+.pd-fam .bar-row { margin-bottom: 6px; }
+.pd-fam .bar-label { width: 60px; white-space: nowrap; }
 .pd-form { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
 .form-rating {
   font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 6px;

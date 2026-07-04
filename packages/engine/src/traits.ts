@@ -9,7 +9,7 @@ import type { Rng } from './rng.js';
 
 export const ALL_TRAITS: PlayerTrait[] = [
   'leader', 'injuryProne', 'ironMan', 'wonderkid',
-  'poacher', 'playmaker', 'hothead', 'rock',
+  'poacher', 'playmaker', 'hothead', 'rock', 'multiRole',
 ];
 
 export const TRAIT_LABELS: Record<PlayerTrait, string> = {
@@ -21,6 +21,7 @@ export const TRAIT_LABELS: Record<PlayerTrait, string> = {
   playmaker: '플레이메이커',
   hothead: '다혈질',
   rock: '수비 바위',
+  multiRole: '멀티롤 유망주',
 };
 
 export const TRAIT_DESC: Record<PlayerTrait, string> = {
@@ -32,6 +33,7 @@ export const TRAIT_DESC: Record<PlayerTrait, string> = {
   playmaker: '경기를 조율하는 창출 전력이 높다.',
   hothead: '카드를 자주 받는다.',
   rock: '수비 전력이 단단하다.',
+  multiRole: '새 포지션 숙련도가 더 빠르게 오른다.',
 };
 
 /** 특성 보유 여부. 구세이브·테스트(traits 미설정)에도 안전. */
@@ -52,6 +54,7 @@ export function rollTraits(player: Player, rng: Rng): PlayerTrait[] {
   const add = (t: PlayerTrait, p: number) => { if (rng.roll(p)) out.push(t); };
 
   if (player.age <= 20) add('wonderkid', player.potential >= 150 ? 0.18 : 0.05);
+  if (player.age <= 21) add('multiRole', a.decisions >= 14 ? 0.15 : 0.04);
   if (ATT_POS.has(player.position)) add('poacher', a.finishing >= 14 ? 0.28 : 0.05);
   add('playmaker', a.vision >= 15 && a.passing >= 14 ? 0.25 : 0.03);
   if (DEF_POS.has(player.position)) add('rock', a.tackling >= 14 || a.marking >= 14 ? 0.22 : 0.04);

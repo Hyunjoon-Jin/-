@@ -1,9 +1,9 @@
 import {
-  TECHNICAL_ATTRS, MENTAL_ATTRS, PHYSICAL_ATTRS, GOALKEEPING_ATTRS,
+  TECHNICAL_ATTRS, MENTAL_ATTRS, PHYSICAL_ATTRS, GOALKEEPING_ATTRS, POSITIONS,
   TRAINING_FOCUSES, TRAINING_LABELS, TRAIT_LABELS, TRAIT_DESC,
-  currentAbility, marketValue, playerDerived, isInjured, isSuspended, lineOf,
+  currentAbility, marketValue, playerDerived, isInjured, isSuspended, lineOf, familiarityAt,
   formatMoney, buildScoutingReport,
-  type AttrKey, type Player, type DerivedRatings, type TrainingFocus,
+  type AttrKey, type Player, type DerivedRatings, type TrainingFocus, type Position,
   type PlayerFormEntry, type OverallTier, type PotentialTier, type AgeProfile, type ScoutingReport,
 } from '@soccer-tycoon/engine';
 import { useState } from 'react';
@@ -96,6 +96,8 @@ interface Props {
   onClose: () => void;
   /** 내 선수면 훈련 포커스 설정 가능. */
   onSetFocus?: (focus: TrainingFocus) => void;
+  /** 내 선수면 포지션 전환 훈련 대상 설정 가능(해제는 undefined). */
+  onSetTrainingPosition?: (position: Position | undefined) => void;
   /** 내 선수면 재계약 가능. */
   onRenew?: () => { ok: boolean; message: string };
   /** 진행 중 시즌 최근 폼(평점). live 없거나 미출전이면 빈 배열. */
@@ -117,15 +119,12 @@ const PD_TABS: { key: PdTab; label: string }[] = [
 ];
 
 export function PlayerDetail({
-  player, onClose, onSetFocus, onRenew, recentForm, timeline, ratingHistory, scouting,
+  player, onClose, onSetFocus, onSetTrainingPosition, onRenew, recentForm, timeline, ratingHistory, scouting,
 }: Props) {
   const toast = useResultToast();
   const ca = currentAbility(player);
   const derived = playerDerived(player, player.position);
   const status = statusBadge(player);
-  const fam = Object.entries(player.familiarity)
-    .filter(([, v]) => (v ?? 0) >= 0.5)
-    .map(([pos]) => pos);
   const stability = formStability(ratingHistory ?? []);
   const ref = useModalA11y<HTMLDivElement>(onClose);
   const [tab, setTab] = useState<PdTab>('overview');
@@ -221,7 +220,7 @@ export function PlayerDetail({
               </div>
             )}
             <ScoutingPanel player={player} scouting={scouting} />
-            <div className="pd-fam muted">가능 포지션: {fam.join(', ') || player.position}</div>
+            <PositionFamiliarity player={player} />
 
             <div className="pd-cols">
               <AttrGroup title="기술" attrs={TECHNICAL_ATTRS} player={player} />
@@ -266,6 +265,28 @@ export function PlayerDetail({
                   ))}
                 </select>
                 <span className="muted small">시즌 성장 시 해당 능력 그룹을 강조합니다 (성장 중인 선수).</span>
+              </div>
+            )}
+
+            {onSetTrainingPosition && (
+              <div className="pd-training">
+                <span className="muted">
+                  포지션 전환 훈련:
+                  <InfoTip title="포지션 전환 훈련">
+                    지정한 포지션의 숙련도가 시즌 경계마다 코칭 레벨과 판단력에 비례해 오릅니다.
+                    실전 출전만으로 오르는 것보다 훨씬 빠릅니다.
+                  </InfoTip>
+                </span>
+                <select
+                  value={player.trainingPosition ?? ''}
+                  onChange={(e) => onSetTrainingPosition(e.target.value ? (e.target.value as Position) : undefined)}
+                >
+                  <option value="">지정 안 함</option>
+                  {POSITIONS.filter((p) => p !== player.position).map((p) => (
+                    <option key={p} value={p}>{p}</option>
+                  ))}
+                </select>
+                <span className="muted small">시즌이 끝날 때마다 코칭 지원을 받아 숙련도가 상승합니다.</span>
               </div>
             )}
 
@@ -397,6 +418,44 @@ function CareerTimeline({ entries }: { entries: TimelineEntry[] }) {
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+/** 주 포지션 + 실제로 숙련도가 쌓인(0.3 이상) 부 포지션을 숙련도 막대로 보여준다. */
+function PositionFamiliarity({ player }: { player: Player }) {
+  const secondary = POSITIONS
+    .filter((pos) => pos !== player.position)
+    .map((pos) => ({ pos, v: familiarityAt(player, pos) }))
+    .filter((e) => e.v >= 0.3)
+    .sort((a, b) => b.v - a.v);
+
+  return (
+    <div className="pd-fam">
+      <h3>
+        포지션 숙련도
+        <InfoTip title="포지션 숙련도">
+          주 포지션 이외의 자리는 숙련도가 낮으면 파생 전력이 깎입니다. 실전에서 그 자리를
+          꾸준히 뛰거나(느리게 상승), 개발 탭에서 포지션 전환 훈련을 지정하면(코칭 지원, 더
+          빠르게 상승) 숙련도가 오릅니다.
+        </InfoTip>
+      </h3>
+      <div className="bar-row">
+        <span className="bar-label">{player.position} (주)</span>
+        <div className="bar-track"><div className="bar-fill" style={{ width: '100%' }} /></div>
+        <span className="bar-val">100</span>
+      </div>
+      {secondary.length === 0 ? (
+        <p className="muted small">아직 다른 포지션 경험이 없습니다.</p>
+      ) : (
+        secondary.map(({ pos, v }) => (
+          <div className="bar-row" key={pos}>
+            <span className="bar-label">{pos}</span>
+            <div className="bar-track"><div className="bar-fill" style={{ width: `${v * 100}%` }} /></div>
+            <span className="bar-val">{Math.round(v * 100)}</span>
+          </div>
+        ))
+      )}
     </div>
   );
 }

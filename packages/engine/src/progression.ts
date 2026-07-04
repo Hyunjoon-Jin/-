@@ -82,6 +82,22 @@ function coachingMultiplier(coaching: number): number {
 }
 
 /**
+ * 포지션 전환 훈련(trainingPosition) 시즌 진행.
+ * 판단력(decisions)이 높을수록 새 포지션을 더 빠르게 익히고, 코칭 레벨이 높을수록 더 빠르다.
+ * 숙련도 1.0에 가까워질수록 상승폭이 줄어든다(점근적 수렴).
+ */
+function progressFamiliarity(player: Player, coaching: number): void {
+  const pos = player.trainingPosition;
+  if (!pos || pos === player.position) return;
+  const current = player.familiarity[pos] ?? 0.2;
+  if (current >= 1) return;
+  const decisionsFactor = 0.6 + (player.attributes.decisions / 20) * 0.8;
+  const multiRoleMul = hasTrait(player, 'multiRole') ? 1.3 : 1;
+  const gain = 0.05 * coachingMultiplier(coaching) * decisionsFactor * multiRoleMul * (1 - current);
+  player.familiarity[pos] = clamp(current + gain, 0, 1);
+}
+
+/**
  * 한 선수의 시즌 경계 진행. 객체를 직접 변경한다.
  * @param coaching 구단 코칭 레벨(기본 10=중립).
  */
@@ -107,5 +123,6 @@ export function progressPlayer(player: Player, rng: Rng, coaching = 10): void {
     }
   }
 
+  progressFamiliarity(player, coaching);
   player.wage = weeklyWage(player);
 }
