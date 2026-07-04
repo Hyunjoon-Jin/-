@@ -1,7 +1,7 @@
 import {
   TECHNICAL_ATTRS, MENTAL_ATTRS, PHYSICAL_ATTRS, GOALKEEPING_ATTRS,
   TRAINING_FOCUSES, TRAINING_LABELS, TRAIT_LABELS, TRAIT_DESC,
-  currentAbility, marketValue, playerDerived, isInjured, isSuspended,
+  currentAbility, marketValue, playerDerived, isInjured, isSuspended, lineOf,
   formatMoney, buildScoutingReport,
   type AttrKey, type Player, type DerivedRatings, type TrainingFocus,
   type PlayerFormEntry, type OverallTier, type PotentialTier, type AgeProfile, type ScoutingReport,
@@ -12,6 +12,7 @@ import { useModalA11y } from './useModalA11y.js';
 import { useResultToast } from '../toast.js';
 import { onKeyActivate } from '../a11y.js';
 import { InfoTip } from './InfoTip.js';
+import { flagFor } from '../flags.js';
 
 function moraleLabel(m: number): { text: string; cls: string } {
   if (m >= 0.65) return { text: '😀 만족', cls: 'cond-good' };
@@ -144,7 +145,8 @@ export function PlayerDetail({
           <div>
             <h2>{player.name}</h2>
             <div className="muted pd-sub">
-              {player.position} · {player.age}세 · {player.nationality} · 계약 {player.contractYears}년
+              <span className={`pos-chip pos-${lineOf(player.position).toLowerCase()}`}>{player.position}</span>
+              {' · '}{player.age}세 · {flagFor(player.nationality)} {player.nationality} · 계약 {player.contractYears}년
             </div>
           </div>
           <button className="btn-ghost" onClick={onClose}>닫기 ✕</button>

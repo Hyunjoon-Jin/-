@@ -189,7 +189,7 @@ function TransferMarket({ game, onNegotiate, onBuyAt, onOffers, onAcceptSell, on
                 >
                   <td className="name">{t.player.name}</td>
                   <td className="muted small">{t.clubName}</td>
-                  <td>{t.player.position}</td>
+                  <td><span className={`pos-chip pos-${lineOf(t.player.position).toLowerCase()}`}>{t.player.position}</span></td>
                   <td>{t.player.age}</td>
                   <td><b>{currentAbility(t.player).toFixed(0)}</b></td>
                   <td className="muted">{revealPotential(scouting, t.player.potential)}</td>
@@ -236,7 +236,7 @@ function TransferMarket({ game, onNegotiate, onBuyAt, onOffers, onAcceptSell, on
                   onKeyDown={onKeyActivate(() => onSelect(p))}
                 >
                   <td className="name">{p.name}</td>
-                  <td>{p.position}</td>
+                  <td><span className={`pos-chip pos-${lineOf(p.position).toLowerCase()}`}>{p.position}</span></td>
                   <td>{p.age}</td>
                   <td><b>{currentAbility(p).toFixed(0)}</b></td>
                   <td className="muted">{p.potential.toFixed(0)}</td>

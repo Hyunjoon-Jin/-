@@ -240,7 +240,7 @@ export function App() {
             onCancel={() => setWatching(null)}
           />
         ) : (
-          <>
+          <div key={tab} className="tab-content">
             {tab === 'dashboard' && (
               <Dashboard
                 game={game}
@@ -289,7 +289,7 @@ export function App() {
                 onSelect={setDetailPlayer}
               />
             )}
-          </>
+          </div>
         )}
       </main>
     </div>

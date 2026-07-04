@@ -1,8 +1,10 @@
+import { BarChart3 } from 'lucide-react';
 import {
   liveTopScorers, liveSquadStats, lastSummary, myClub, type GameState,
 } from '../game.js';
 import type { PlayerSeasonStat } from '@soccer-tycoon/engine';
 import { ratingClass } from '../rating.js';
+import { EmptyState } from './EmptyState.js';
 
 export function Stats({ game }: { game: GameState }) {
   // 진행 중이면 라이브 통계, 아니면 지난 시즌 최종 통계
@@ -13,7 +15,13 @@ export function Stats({ game }: { game: GameState }) {
   const heading = live ? `시즌 ${game.season} (진행 중)` : lastSummary(game) ? `시즌 ${lastSummary(game)!.season} 최종` : null;
 
   if (!heading) {
-    return <p className="muted">아직 통계가 없습니다. "경기" 탭에서 시즌을 시작하세요.</p>;
+    return (
+      <EmptyState
+        icon={BarChart3}
+        title="아직 통계가 없습니다"
+        hint={'"경기" 탭에서 시즌을 시작하면 득점 순위·팀 기록이 쌓입니다.'}
+      />
+    );
   }
 
   return (

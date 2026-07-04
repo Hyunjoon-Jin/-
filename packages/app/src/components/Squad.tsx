@@ -5,6 +5,7 @@ import {
 } from '@soccer-tycoon/engine';
 import { onKeyActivate } from '../a11y.js';
 import { SortableTh } from './SortableTh.js';
+import { flagFor } from '../flags.js';
 
 type SortKey = 'ca' | 'age' | 'value' | 'wage' | 'condition';
 type SortDir = 1 | -1;
@@ -130,12 +131,12 @@ export function Squad({ club, onSelect }: { club: Club; onSelect: (p: Player) =>
                 onKeyDown={onKeyActivate(() => onSelect(player))}
               >
                 <td className="name">{player.name}</td>
-                <td>{player.position}</td>
+                <td><span className={`pos-chip pos-${lineOf(player.position).toLowerCase()}`}>{player.position}</span></td>
                 <td>{player.age}</td>
                 <td><b>{ca.toFixed(0)}</b></td>
                 <td className="muted">{player.potential.toFixed(0)}</td>
                 <td><ConditionCell player={player} /></td>
-                <td className="muted">{player.nationality}</td>
+                <td className="muted">{flagFor(player.nationality)} {player.nationality}</td>
                 <td className={player.contractYears <= CONTRACT_SOON ? 'neg' : ''}>{player.contractYears}년</td>
                 <td>{formatMoney(value)}</td>
                 <td className="muted">{formatMoney(player.wage)}</td>

@@ -239,7 +239,7 @@ export function Dashboard({ game, onSignContract, visitedTactics, visitedSquadPr
 
       <div className="cards">
         <Card title="평판" value={`${club.finance.reputation} / 20`} />
-        <Card title="보유 자금" value={formatMoney(club.finance.balance)} />
+        <Card title="보유 자금" value={formatMoney(club.finance.balance)} emphasis />
         <Card title="이적 예산" value={formatMoney(club.finance.transferBudget)} />
         <Card title="주급 총액" value={`${formatMoney(wageBill)} / 주`} />
         <Card title="스쿼드 평균 CA" value={squadAvgCA.toFixed(0)} />
@@ -346,9 +346,9 @@ function OnboardingChecklist({
   );
 }
 
-function Card({ title, value }: { title: string; value: string }) {
+function Card({ title, value, emphasis }: { title: string; value: string; emphasis?: boolean }) {
   return (
-    <div className="stat-card">
+    <div className={emphasis ? 'stat-card emphasis' : 'stat-card'}>
       <div className="stat-title">{title}</div>
       <div className="stat-value">{value}</div>
     </div>

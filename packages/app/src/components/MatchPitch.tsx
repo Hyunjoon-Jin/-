@@ -94,11 +94,14 @@ function draw(ctx: CanvasRenderingContext2D, s: PitchState) {
   const pw = W - m * 2;
   const ph = H - m * 2;
 
-  // 잔디
-  ctx.fillStyle = '#1d6b34';
+  // 잔디 — 중앙에서 가장자리로 은은하게 어두워지는 비네트로 깊이감을 준다.
+  const grassGrad = ctx.createRadialGradient(W / 2, H / 2, 60, W / 2, H / 2, W * 0.68);
+  grassGrad.addColorStop(0, '#1f7a3d');
+  grassGrad.addColorStop(1, '#153f22');
+  ctx.fillStyle = grassGrad;
   ctx.fillRect(0, 0, W, H);
-  // 줄무늬
-  ctx.fillStyle = '#1f7439';
+  // 줄무늬 — 깎은 잔디결처럼 반투명 하이라이트를 얹어(불투명 색 대신) 비네트가 비쳐 보이게 한다.
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
   const stripes = 10;
   for (let i = 0; i < stripes; i += 2) {
     ctx.fillRect(m + (pw / stripes) * i, m, pw / stripes, ph);

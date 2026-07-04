@@ -1,8 +1,10 @@
 import { useState } from 'react';
+import { Landmark } from 'lucide-react';
 import { myClub, rivalClub, DIVISION_LABELS, type GameState } from '../game.js';
 import { careerScorers, type SeasonSquadEntry } from '@soccer-tycoon/engine';
 import { useModalA11y } from './useModalA11y.js';
 import { onKeyActivate } from '../a11y.js';
+import { EmptyState } from './EmptyState.js';
 
 const RESULT_LABEL: Record<'win' | 'draw' | 'loss', string> = { win: '승', draw: '무', loss: '패' };
 
@@ -14,7 +16,13 @@ export function History({ game }: { game: GameState }) {
   const seasons = game.history;
 
   if (seasons.length === 0) {
-    return <p className="muted">아직 완료된 시즌이 없습니다. 시즌을 마치면 역대 기록이 쌓입니다.</p>;
+    return (
+      <EmptyState
+        icon={Landmark}
+        title="아직 완료된 시즌이 없습니다"
+        hint="시즌을 마치면 명예의 전당과 역대 기록이 이곳에 쌓입니다."
+      />
+    );
   }
 
   const myId = game.myClubId;

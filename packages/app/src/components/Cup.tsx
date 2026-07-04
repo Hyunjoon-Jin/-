@@ -1,5 +1,7 @@
+import { Trophy } from 'lucide-react';
 import { isCupOver, cupSurvivors, nextCupPairings, type CupTie } from '@soccer-tycoon/engine';
 import { watchCupSetup, type GameState } from '../game.js';
+import { EmptyState } from './EmptyState.js';
 
 interface Props {
   game: GameState;
@@ -19,7 +21,13 @@ const CUP_FAVORITES_SHOWN = 5;
 export function Cup({ game, onPlayCupRound, onWatchCup }: Props) {
   const cup = game.cup;
   if (!cup) {
-    return <p className="muted">컵대회는 시즌 시작(킥오프) 후 진행됩니다. "경기" 탭에서 시즌을 시작하세요.</p>;
+    return (
+      <EmptyState
+        icon={Trophy}
+        title="컵대회는 시즌 시작 후 진행됩니다"
+        hint={'"경기" 탭에서 시즌을 시작(킥오프)하세요.'}
+      />
+    );
   }
 
   const nameOf = (id: string | null) =>
@@ -70,7 +78,10 @@ export function Cup({ game, onPlayCupRound, onWatchCup }: Props) {
         <div className="cup-favorites">
           <span className="cup-favorites-title">📰 우승 후보</span>
           {favorites.slice(0, CUP_FAVORITES_SHOWN).map((f) => (
-            <span key={f.clubId} className={f.clubId === mine ? 'cup-fav-chip mine' : 'cup-fav-chip'}>
+            <span
+              key={f.clubId}
+              className={`cup-fav-chip rank-${f.predictedPos}${f.clubId === mine ? ' mine' : ''}`}
+            >
               {f.predictedPos}. {f.name}
             </span>
           ))}
