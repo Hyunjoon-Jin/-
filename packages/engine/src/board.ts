@@ -5,6 +5,7 @@
  * 순수 로직만 두어 헤드리스로 검증 가능.
  */
 import { clamp } from './math.js';
+import type { BoardPatience, BoardStyle, BoardPersona } from './types.js';
 
 /** 시작 신뢰도(중립보다 약간 높게). */
 export const START_CONFIDENCE = 55;
@@ -22,17 +23,28 @@ export interface SeasonConfidenceInput {
   netFinance: number;
 }
 
+/** 목표 미달(음수 posDelta) 시 가감 배율 — 인내심 있는 보드는 관대하고, 조급한 보드는 가혹하다. */
+const PATIENCE_UNDERPERFORM_MUL: Record<BoardPatience, number> = { patient: 0.7, impatient: 1.3 };
+/** 재정 결과(finDelta) 가감 배율 — 보수적인 보드는 재정에 민감하고, 공격적인 보드는 성적만 본다. */
+const STYLE_FINANCE_MUL: Record<BoardStyle, number> = { conservative: 1.4, aggressive: 0.6 };
+
 /**
  * 시즌 결과에 따른 신뢰도 변화량.
  * 목표보다 잘하면 +, 못하면 −. 승격·강등·재정이 가감된다.
+ * persona(이사회 성향)가 주어지면 목표 미달 시 가혹함(patience)과 재정 민감도(style)가
+ * 구단마다 다르게 반영된다. 생략하면(하위 호환) 배율 1.0 — 기존 계산과 완전히 동일하다.
  */
-export function confidenceDelta(inp: SeasonConfidenceInput): number {
+export function confidenceDelta(inp: SeasonConfidenceInput, persona?: BoardPersona): number {
   if (inp.promoted && inp.relegated) {
     throw new Error('confidenceDelta: promoted와 relegated가 동시에 참일 수 없습니다(호출자 계산 오류).');
   }
-  const posDelta = clamp((inp.objective - inp.position) * 2.5, -28, 25);
+  const rawPosDelta = (inp.objective - inp.position) * 2.5;
+  const patienceMul = persona ? PATIENCE_UNDERPERFORM_MUL[persona.patience] : 1;
+  // 목표 초과 달성(양수)은 성향과 무관하게 그대로, 미달(음수)만 인내심에 따라 가감.
+  const posDelta = clamp(rawPosDelta < 0 ? rawPosDelta * patienceMul : rawPosDelta, -28, 25);
   const promoDelta = inp.promoted ? 25 : inp.relegated ? -30 : 0;
-  const finDelta = inp.netFinance >= 0 ? 2 : -6;
+  const styleMul = persona ? STYLE_FINANCE_MUL[persona.style] : 1;
+  const finDelta = (inp.netFinance >= 0 ? 2 : -6) * styleMul;
   return Math.round(clamp(posDelta + promoDelta + finDelta, -40, 38));
 }
 

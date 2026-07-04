@@ -17,6 +17,7 @@ import {
   applyPromotionRelegation, clubsInDivision, runInternationalBreak,
   confidenceDelta, applyConfidence, isSacked, START_CONFIDENCE,
   generateDemand, evaluateDemand, demandConfidence, DEMAND_LABEL,
+  generateSponsorGoal, evaluateSponsorGoal, SPONSOR_GOAL_LABEL, type SponsorGoal,
   annualWageBill, wageBudget,
   matchOutcomeKind, mediaToneOptions, shouldTriggerMediaEvent, applyMediaTone,
   MEDIA_TONE_STYLE, classifyPersona,
@@ -123,6 +124,8 @@ export interface GameState {
   sacked?: boolean;
   /** 이번 시즌 이사회 특별 요구(없을 수 있음). */
   demand?: BoardDemand | null;
+  /** 이번 시즌 스폰서 보너스 목표(없을 수 있음). 달성 시 일시불 현금 보너스. */
+  sponsorGoal?: SponsorGoal | null;
   /** 내 구단에서 뛰다 은퇴한 선수 아카이브(레전드). */
   legends: ClubLegend[];
   /** 라이벌 구단 id. 게임 시작 시 1회 고정(같은 부 내 평판이 가장 가까운 구단). */
@@ -262,7 +265,10 @@ export function startGame(seed: number, myClubId: string, difficulty: Difficulty
     difficulty,
     objective,
     boardConfidence: START_CONFIDENCE,
-    demand: generateDemand({ overWages: annualWageBill(mine) > wageBudget(mine) }, new Rng(seed + 4242)),
+    demand: generateDemand(
+      { overWages: annualWageBill(mine) > wageBudget(mine) }, new Rng(seed + 4242), mine.boardPersona?.style,
+    ),
+    sponsorGoal: generateSponsorGoal(new Rng(seed + 5252), mine.finance.reputation),
     legends: [],
     rivalClubId: selectRival(clubs, mine),
     rivalRecord: { wins: 0, draws: 0, losses: 0 },
@@ -423,15 +429,19 @@ export function finishSeason(state: GameState): GameState {
   const otherResult = simulateSeason(otherClubs, seasonSeed(state) + 654_321);
   const otherTable = otherResult.table;
 
-  // 3) 정산 (부별 순위 기준)
+  // 3) 정산 (부별 순위 기준) — 최근 폼(승점 비율)이 매치데이 수익에 반영된다.
   const finance = new Map();
   myTable.forEach((row, pos) => {
     const club = state.clubs.find((c) => c.id === row.clubId)!;
-    finance.set(club.id, settleSeason(club, pos, CLUBS_PER_DIV));
+    const form = recentForm(ss.results, club.id, 5);
+    const formRatio = form.results.length > 0 ? form.points / (form.results.length * 3) : undefined;
+    finance.set(club.id, settleSeason(club, pos, CLUBS_PER_DIV, undefined, formRatio));
   });
   otherTable.forEach((row, pos) => {
     const club = state.clubs.find((c) => c.id === row.clubId)!;
-    finance.set(club.id, settleSeason(club, pos, CLUBS_PER_DIV));
+    const form = recentForm(otherResult.matches, club.id, 5);
+    const formRatio = form.results.length > 0 ? form.points / (form.results.length * 3) : undefined;
+    finance.set(club.id, settleSeason(club, pos, CLUBS_PER_DIV, undefined, formRatio));
   });
 
   // 4) 컵 자동 완료 + 우승 상금 (전 구단)
@@ -504,13 +514,15 @@ export function finishSeason(state: GameState): GameState {
   const relegated = promRel.relegated.includes(state.myClubId);
 
   // 6.5) 이사회 신뢰도 갱신 (이번 시즌 목표 대비 성적 + 승강 + 재정 + 특별 요구)
+  // 이사회 성향(인내심·재정 스타일)이 설정돼 있으면 목표 미달의 가혹함과 재정 민감도가 반영된다.
+  const boardPersona = myClub(state).boardPersona;
   const myPosition = myTable.findIndex((r) => r.clubId === state.myClubId) + 1;
   const preseasonRank = state.live.predictedTable.find((p) => p.clubId === state.myClubId)?.predictedPos;
   const surprise = preseasonRank !== undefined ? classifySurprise(preseasonRank, myPosition) : undefined;
   const myNet = finance.get(state.myClubId)?.net ?? 0;
   const delta = confidenceDelta({
     position: myPosition, objective: state.objective, promoted, relegated, netFinance: myNet,
-  });
+  }, boardPersona);
 
   // 이사회 특별 요구 평가
   const myName = myClub(state).name;
@@ -527,14 +539,31 @@ export function finishSeason(state: GameState): GameState {
     demandResult = { label: DEMAND_LABEL[state.demand.kind], met };
   }
 
+  // 스폰서 보너스 목표 평가 — 신뢰도가 아닌 일시불 현금 보너스로 이어진다.
+  let sponsorGoalResult: { label: string; met: boolean; bonus: number } | undefined;
+  if (state.sponsorGoal) {
+    const met = evaluateSponsorGoal(state.sponsorGoal, {
+      top4Finish: myPosition <= 4,
+      cupWon: cupChampionId === state.myClubId,
+    });
+    if (met) {
+      const me = myClub(state);
+      me.finance.balance += state.sponsorGoal.bonus;
+      me.finance.transferBudget += state.sponsorGoal.bonus;
+    }
+    sponsorGoalResult = { label: SPONSOR_GOAL_LABEL[state.sponsorGoal.kind], met, bonus: state.sponsorGoal.bonus };
+  }
+
   const boardConfidence = applyConfidence(state.boardConfidence, delta + demandDelta);
   const sacked = isSacked(boardConfidence);
 
-  // 다음 시즌 요구 생성(오프시즌 이후 임금 기준 + 장기 계약 누적치만큼 이사회 기대치 상향)
+  // 다음 시즌 요구/스폰서 목표 생성(오프시즌 이후 임금 기준 + 장기 계약 누적치만큼 이사회 기대치 상향)
   const nextDemand = generateDemand(
     { overWages: annualWageBill(myClub(state)) > wageBudget(myClub(state)), ambition: state.ambition },
     new Rng(offseasonSeed(state) + 909),
+    boardPersona?.style,
   );
+  const nextSponsorGoal = generateSponsorGoal(new Rng(offseasonSeed(state) + 1717), myClub(state).finance.reputation);
 
   const champ = myTable[0]!;
   const summary: SeasonSummary = {
@@ -563,6 +592,7 @@ export function finishSeason(state: GameState): GameState {
     surprise,
     youthProspects: myYouthProspects,
     prospectUpdates: myProspectUpdates,
+    sponsorGoal: sponsorGoalResult,
   };
 
   const repaired = repairTactic(myClub(state), myTactic(state));
@@ -576,6 +606,7 @@ export function finishSeason(state: GameState): GameState {
     boardConfidence,
     sacked,
     demand: nextDemand,
+    sponsorGoal: nextSponsorGoal,
     legends: [...state.legends, ...newLegends],
     rivalRecord,
     rivalMeetings: [...state.rivalMeetings, ...newRivalMeetings],

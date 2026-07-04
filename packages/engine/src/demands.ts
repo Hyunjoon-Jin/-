@@ -5,6 +5,7 @@
  */
 import type { Rng } from './rng.js';
 import { clamp } from './math.js';
+import type { BoardStyle } from './types.js';
 
 export type DemandKind = 'cutWages' | 'winCup' | 'clubTopScorer' | 'topHalfFinish';
 
@@ -31,25 +32,40 @@ export interface DemandContext {
   ambition?: number;
 }
 
+/** 이사회 재정 성향에 따른 요구 빈도/강도 가감 — 공격적인 보드는 더 자주, 더 세게 요구하고
+ *  보수적인 보드는 뒤로 물러나 있는다. */
+const STYLE_SKIP_ADJUST: Record<BoardStyle, number> = { conservative: 0.15, aggressive: -0.15 };
+const STYLE_MAGNITUDE_MUL: Record<BoardStyle, number> = { conservative: 0.8, aggressive: 1.3 };
+
 /**
  * 시즌 요구 생성. 임금 초과 시 감축을 강하게 요구(실패 벌점 큼),
  * 아니면 일정 확률로 도전 과제(성공 보상 큼) 또는 요구 없음.
  * ambition(장기 계약 누적치)이 높을수록 요구가 나올 확률과 보상/벌점 폭이 함께 커진다
  * — 장기 프로젝트를 약속한 만큼 이사회도 더 자주, 더 강하게 결과를 요구한다.
+ * boardStyle(이사회 재정 성향)이 주어지면 빈도·강도가 구단마다 다르게 반영된다(생략 시
+ * 하위 호환 — 기존과 동일하게 동작).
  */
-export function generateDemand(ctx: DemandContext, rng: Rng): BoardDemand | null {
+export function generateDemand(ctx: DemandContext, rng: Rng, boardStyle?: BoardStyle): BoardDemand | null {
   // ambition 기여분에 상한을 둔다 — board.ts의 confidenceDelta(시즌 성적 변동)가 이미
   // ±40/38로 명시적으로 클램프돼 있는데, 여기 보상/벌점이 무제한으로 커지면 장기 계약을
   // 여러 번 맺은 뒤 요구 하나로 신뢰도가 한 시즌 만에 100→0까지 급락할 수 있어
   // "시즌당 변동폭을 제한한다"는 원래 의도를 무력화한다.
   const ambition = clamp(ctx.ambition ?? 0, 0, 10);
-  if (ctx.overWages) return { kind: 'cutWages', reward: 8, penalty: 10 + ambition * 2 };
+  const magnitudeMul = boardStyle ? STYLE_MAGNITUDE_MUL[boardStyle] : 1;
+  if (ctx.overWages) {
+    return { kind: 'cutWages', reward: 8, penalty: Math.round((10 + ambition * 2) * magnitudeMul) };
+  }
   // 임금이 건전하면 일정 확률로 상향 도전 과제, 아니면 요구 없음(ambition이 높을수록 스킵 확률↓).
-  const skipChance = clamp(0.55 - ambition * 0.1, 0.15, 0.9);
+  const skipAdjust = boardStyle ? STYLE_SKIP_ADJUST[boardStyle] : 0;
+  const skipChance = clamp(0.55 - ambition * 0.1 + skipAdjust, 0.15, 0.9);
   if (rng.next() < skipChance) return null;
   const kinds: DemandKind[] = ['winCup', 'clubTopScorer', 'topHalfFinish'];
   const kind = kinds[rng.int(0, kinds.length - 1)]!;
-  return { kind, reward: 12 + ambition * 2, penalty: 4 + ambition * 2 };
+  return {
+    kind,
+    reward: Math.round((12 + ambition * 2) * magnitudeMul),
+    penalty: Math.round((4 + ambition * 2) * magnitudeMul),
+  };
 }
 
 /** 요구 평가 입력(시즌 결과). */

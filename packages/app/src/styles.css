@@ -401,6 +401,8 @@ body {
 .bc-fill.shaky { background-color: var(--color-warning); }
 .bc-fill.critical { background-color: var(--color-danger); }
 .bc-warn { margin: 8px 0 0; color: var(--color-danger); font-size: 13px; font-weight: 600; }
+.bc-persona { margin: -4px 0 8px; }
+.finance-breakdown { margin: 2px 0 0; }
 .rival-record { color: var(--muted); }
 .derby-badge { color: var(--color-danger); font-weight: 700; }
 

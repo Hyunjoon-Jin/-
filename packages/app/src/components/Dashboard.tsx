@@ -5,7 +5,8 @@ import {
 } from '../game.js';
 import {
   formatMoney, currentAbility, wageBudget, annualWageBill, inFinancialCrisis,
-  boardStatus, DEMAND_LABEL, type BoardStatus, type ManagerPersona,
+  boardStatus, DEMAND_LABEL, SPONSOR_GOAL_LABEL,
+  type BoardStatus, type ManagerPersona, type BoardPersona,
 } from '@soccer-tycoon/engine';
 import { Landmark } from 'lucide-react';
 import { Banner } from './Banner.js';
@@ -21,6 +22,13 @@ const BOARD_LABEL: Record<BoardStatus, string> = {
 const PERSONA_LABEL: Record<Exclude<ManagerPersona, 'neutral'>, { label: string; desc: string }> = {
   bold: { label: '거침없는 승부사', desc: '자신감 있고 직설적인 인터뷰로 유명합니다.' },
   humble: { label: '신중한 리더', desc: '겸손하고 책임감 있는 인터뷰로 신뢰를 얻고 있습니다.' },
+};
+
+const PATIENCE_LABEL: Record<BoardPersona['patience'], string> = {
+  patient: '인내심 있음', impatient: '조급함',
+};
+const STYLE_LABEL: Record<BoardPersona['style'], string> = {
+  conservative: '재정 보수적', aggressive: '성적 지상주의',
 };
 
 interface Props {
@@ -228,12 +236,19 @@ export function Dashboard({ game, onSignContract, visitedTactics, visitedSquadPr
         </Banner>
       )}
 
-      <BoardConfidence value={game.boardConfidence} />
+      <BoardConfidence value={game.boardConfidence} persona={club.boardPersona} />
 
       {game.demand && (
         <Banner tone="info">
           📋 이사회 특별 요구: <b>{DEMAND_LABEL[game.demand.kind]}</b>
           <span className="muted small"> (달성 시 신뢰도 +{game.demand.reward} · 실패 시 −{game.demand.penalty})</span>
+        </Banner>
+      )}
+
+      {game.sponsorGoal && (
+        <Banner tone="gold">
+          💰 스폰서 보너스 목표: <b>{SPONSOR_GOAL_LABEL[game.sponsorGoal.kind]}</b>
+          <span className="muted small"> (달성 시 {formatMoney(game.sponsorGoal.bonus)} 일시불 지급)</span>
         </Banner>
       )}
 
@@ -286,16 +301,30 @@ export function Dashboard({ game, onSignContract, visitedTactics, visitedSquadPr
                   <span className="muted small"> ({last.demand.label})</span>
                 </>
               )}
+              {last.sponsorGoal && (
+                <> &nbsp;·&nbsp; 💰 스폰서 목표 <span className={last.sponsorGoal.met ? 'pos' : 'neg'}>
+                  {last.sponsorGoal.met ? `달성 ✓ (+${formatMoney(last.sponsorGoal.bonus)})` : '실패 ✕'}
+                </span>
+                  <span className="muted small"> ({last.sponsorGoal.label})</span>
+                </>
+              )}
             </p>
             {myReport && (
-              <p className={myReport.net >= 0 ? 'pos' : 'neg'}>
-                시즌 순수익: {myReport.net >= 0 ? '+' : ''}
-                {formatMoney(myReport.net)}
-                <span className="muted">
-                  {' '}(수입 {formatMoney(myReport.income.total)} · 지출{' '}
-                  {formatMoney(myReport.expense.total)})
-                </span>
-              </p>
+              <>
+                <p className={myReport.net >= 0 ? 'pos' : 'neg'}>
+                  시즌 순수익: {myReport.net >= 0 ? '+' : ''}
+                  {formatMoney(myReport.net)}
+                  <span className="muted">
+                    {' '}(수입 {formatMoney(myReport.income.total)} · 지출{' '}
+                    {formatMoney(myReport.expense.total)})
+                  </span>
+                </p>
+                <p className="muted small finance-breakdown">
+                  중계 {formatMoney(myReport.income.tv)} · 매치데이 {formatMoney(myReport.income.matchday)} ·
+                  스폰서 {formatMoney(myReport.income.sponsor)} · 상금 {formatMoney(myReport.income.prize)}
+                  {' · '}인건비 {formatMoney(myReport.expense.wages)} · 운영비 {formatMoney(myReport.expense.operations)}
+                </p>
+              </>
             )}
           </div>
         ) : (
@@ -355,7 +384,7 @@ function Card({ title, value, emphasis }: { title: string; value: string; emphas
   );
 }
 
-function BoardConfidence({ value }: { value: number }) {
+function BoardConfidence({ value, persona }: { value: number; persona?: BoardPersona }) {
   const status = boardStatus(value);
   return (
     <div className="board-conf">
@@ -366,10 +395,19 @@ function BoardConfidence({ value }: { value: number }) {
             시즌 성적이 목표 순위를 넘으면 오르고, 못 미치면 내려갑니다. 이사회 특별 요구를
             달성/실패해도 오르내립니다. 0에 가까워지면(경질 위기) 이번 시즌 목표를 놓치는 순간
             감독직에서 경질됩니다.
+            {persona && (
+              <> 이 구단의 이사회는 <b>{PATIENCE_LABEL[persona.patience]}</b> ·{' '}
+                <b>{STYLE_LABEL[persona.style]}</b> 성향입니다.</>
+            )}
           </InfoTip>
         </span>
         <b className={`bc-status ${status}`}>{BOARD_LABEL[status]} · {Math.round(value)}</b>
       </div>
+      {persona && (
+        <p className="bc-persona muted small">
+          {PATIENCE_LABEL[persona.patience]} · {STYLE_LABEL[persona.style]}
+        </p>
+      )}
       <div className="bc-bar">
         <div className={`bc-fill ${status}`} style={{ width: `${value}%` }} />
       </div>

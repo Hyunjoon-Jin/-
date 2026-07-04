@@ -15,6 +15,7 @@ import { currentAbility } from './derived.js';
 import { hasTrait } from './traits.js';
 import { lineOf } from './teamStrength.js';
 import { effectiveCoaching, tickStaffContracts } from './staffActions.js';
+import { recentForm } from './form.js';
 import { clamp } from './math.js';
 import {
   summarizeStats, type PlayerSeasonStat, type SeasonAwards, type SeasonSquadEntry,
@@ -100,6 +101,8 @@ export interface SeasonSummary {
   youthProspects?: YouthProspect[];
   /** 과거 시즌 유스 기대주로 소개됐던 선수의 이번 시즌 데뷔/첫 골 소식(앱). */
   prospectUpdates?: YouthProspectUpdate[];
+  /** 스폰서 보너스 목표 결과(앱). */
+  sponsorGoal?: { label: string; met: boolean; bonus: number };
 }
 
 /** 과거 유스 기대주 소개 이후의 후속 소식(데뷔/첫 골). */
@@ -311,11 +314,13 @@ export function advanceSeason(clubs: Club[], season: number, baseSeed: number): 
   const { table, matches } = simulateSeason(clubs, baseSeed + 2);
   const { topScorers, awards } = summarizeStats(matches, 2 * (clubs.length - 1));
 
-  // 3) 재정 정산 (순위별)
+  // 3) 재정 정산 (순위별) — 최근 폼(승점 비율)이 매치데이 수익에 반영된다.
   const finance = new Map<string, SeasonFinanceReport>();
   table.forEach((row, pos) => {
     const club = clubs.find((c) => c.id === row.clubId)!;
-    finance.set(club.id, settleSeason(club, pos, clubs.length));
+    const form = recentForm(matches, club.id, 5);
+    const formRatio = form.results.length > 0 ? form.points / (form.results.length * 3) : undefined;
+    finance.set(club.id, settleSeason(club, pos, clubs.length, undefined, formRatio));
   });
 
   // 4) 오프시즌: 성장/노화 + 은퇴·유스 아카데미

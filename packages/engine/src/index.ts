@@ -44,7 +44,11 @@ export { TUNING } from './tuning.js';
 export { DERIVED_WEIGHTS, type DerivedKey } from './roleWeights.js';
 export { formatMoney, EOK } from './money.js';
 export { marketValue, weeklyWage, agentFee } from './valuation.js';
-export { settleSeason, leaguePrize, type SeasonFinanceReport } from './finance.js';
+export {
+  settleSeason, leaguePrize, attendanceFormFactor,
+  generateSponsorGoal, evaluateSponsorGoal, SPONSOR_GOAL_LABEL,
+  type SeasonFinanceReport, type SponsorGoal, type SponsorGoalKind, type SponsorGoalResult,
+} from './finance.js';
 export { runTransferWindow, type TransferDeal } from './transfer.js';
 export {
   createCup, playCupRound, playCupToEnd, isCupOver, cupSurvivors, nextCupPairings,

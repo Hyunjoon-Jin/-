@@ -4,7 +4,7 @@
  * MVP 데이터 생성기의 축소판 — 추후 packages/data 로 확장.
  */
 import type {
-  AttrKey, Attributes, Club, Player, Position, Tactic,
+  AttrKey, Attributes, BoardPersona, Club, Player, Position, Tactic,
 } from './types.js';
 import { ALL_ATTRS, GOALKEEPING_ATTRS } from './types.js';
 import { Rng } from './rng.js';
@@ -152,7 +152,12 @@ export function generateClub(rng: Rng, id: string, name: string, tier: number, d
     coachDefense: staffLevel(), coachPhysical: staffLevel(),
   };
   staff.members = hireInitialStaffMembers(id, staff);
-  return { id, name, players, finance: { balance, transferBudget, reputation }, staff, division };
+
+  const boardPersona: BoardPersona = {
+    patience: rng.pick(['patient', 'impatient']),
+    style: rng.pick(['conservative', 'aggressive']),
+  };
+  return { id, name, players, finance: { balance, transferBudget, reputation }, staff, division, boardPersona };
 }
 
 /** 유스 신인 1명 생성 (17~19세). 은퇴 선수 대체·유스 유입에 사용. */

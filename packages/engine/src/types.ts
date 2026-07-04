@@ -181,6 +181,16 @@ export interface ClubFinance {
   reputation: number;
 }
 
+/** 이사회의 인내심 성향 — 목표 미달 시 얼마나 가혹하게 반응하는가(board.ts). */
+export type BoardPatience = 'patient' | 'impatient';
+/** 이사회의 재정 성향 — 시즌 순수익 여부·특별 요구 빈도에 얼마나 민감한가(board.ts/demands.ts). */
+export type BoardStyle = 'conservative' | 'aggressive';
+
+export interface BoardPersona {
+  patience: BoardPatience;
+  style: BoardStyle;
+}
+
 export interface Club {
   id: string;
   name: string;
@@ -191,6 +201,8 @@ export interface Club {
   staff: Staff;
   /** 소속 부 (0 = 1부, 1 = 2부). 승강으로 변동. */
   division: number;
+  /** 이사회 성향(인내심·재정 스타일). 구버전 세이브는 없을 수 있어 optional. */
+  boardPersona?: BoardPersona;
 }
 
 // ── 경기 입력/출력 ────────────────────────────────────────

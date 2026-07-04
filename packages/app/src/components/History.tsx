@@ -40,6 +40,8 @@ export function History({ game }: { game: GameState }) {
   const bestFinish = positions.length ? Math.min(...positions) : undefined;
   const demandSeasons = seasons.filter((s) => s.demand);
   const demandsMet = demandSeasons.filter((s) => s.demand!.met).length;
+  const sponsorGoalSeasons = seasons.filter((s) => s.sponsorGoal);
+  const sponsorGoalsMet = sponsorGoalSeasons.filter((s) => s.sponsorGoal!.met).length;
 
   // 리그 우승 순위 (구단별, 부별로 별도 집계 — 같은 구단이 1부·2부 모두 우승한
   // 이력을 하나의 숫자로 합치면 서로 다른 무게의 우승이 뒤섞인다).
@@ -83,6 +85,9 @@ export function History({ game }: { game: GameState }) {
           {demandSeasons.length > 0 && (
             <HonorCard title="이사회 요구 달성" value={`${demandsMet}/${demandSeasons.length}`} />
           )}
+          {sponsorGoalSeasons.length > 0 && (
+            <HonorCard title="스폰서 목표 달성" value={`${sponsorGoalsMet}/${sponsorGoalSeasons.length}`} />
+          )}
         </div>
       </div>
 
@@ -106,7 +111,7 @@ export function History({ game }: { game: GameState }) {
           <h3>역대 시즌</h3>
           <table className="data-table compact">
             <thead>
-              <tr><th>시즌</th><th>부</th><th>리그 우승</th><th>컵 우승</th><th>득점왕</th><th>내 순위</th><th>이사회 요구</th><th></th></tr>
+              <tr><th>시즌</th><th>부</th><th>리그 우승</th><th>컵 우승</th><th>득점왕</th><th>내 순위</th><th>이사회 요구</th><th>스폰서 목표</th><th></th></tr>
             </thead>
             <tbody>
               {[...seasons].reverse().map((s) => {
@@ -130,6 +135,13 @@ export function History({ game }: { game: GameState }) {
                       {s.demand ? (
                         <span className={s.demand.met ? 'pos' : 'neg'} title={s.demand.label}>
                           {s.demand.met ? '달성 ✓' : '실패 ✕'}
+                        </span>
+                      ) : <span className="muted">-</span>}
+                    </td>
+                    <td className="small">
+                      {s.sponsorGoal ? (
+                        <span className={s.sponsorGoal.met ? 'pos' : 'neg'} title={s.sponsorGoal.label}>
+                          {s.sponsorGoal.met ? '달성 ✓' : '실패 ✕'}
                         </span>
                       ) : <span className="muted">-</span>}
                     </td>
