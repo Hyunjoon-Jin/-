@@ -110,7 +110,7 @@ export function History({ game }: { game: GameState }) {
                   <tr key={s.season}>
                     <td>{s.season}</td>
                     <td className="small muted">{s.division !== undefined ? DIVISION_LABELS[s.division] : '-'}</td>
-                    <td className={s.championId === myId ? 'mine name' : 'name'}>{s.championName}</td>
+                    <td className={`champion name${s.championId === myId ? ' mine' : ''}`}>{s.championName}</td>
                     <td className={s.cupChampionId === myId ? 'mine' : 'muted'}>{s.cupChampionName ?? '-'}</td>
                     <td className="small">{s.awards?.topScorer ? `${s.awards.topScorer.name} (${s.awards.topScorer.goals})` : '-'}</td>
                     <td className={pos === 1 ? 'pos' : ''}>
@@ -146,7 +146,7 @@ export function History({ game }: { game: GameState }) {
             <tbody>
               {titleTable.map((t, i) => (
                 <tr key={`${t.name}-${t.division}`} className={t.name === club.name ? 'mine' : ''}>
-                  <td>{i + 1}</td>
+                  <td>{i === 0 ? <span className="rank-gold">🏆 1</span> : i + 1}</td>
                   <td className="name">{t.name}</td>
                   <td className="small muted">{DIVISION_LABELS[t.division] ?? '-'}</td>
                   <td><b>{t.count}</b></td>

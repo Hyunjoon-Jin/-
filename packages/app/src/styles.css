@@ -550,7 +550,7 @@ body {
 /* ── Dashboard ── */
 .cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(172px, 1fr));
   gap: 12px;
   margin-bottom: 20px;
 }
@@ -562,7 +562,7 @@ body {
   box-shadow: var(--shadow-md);
 }
 .stat-title { color: var(--muted); font-size: 12px; margin-bottom: 6px; }
-.stat-value { font-family: var(--font-display); font-size: 21px; font-weight: 600; letter-spacing: 0.2px; }
+.stat-value { font-family: var(--font-display); font-size: 21px; font-weight: 600; letter-spacing: 0.2px; word-break: keep-all; }
 
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; box-shadow: var(--shadow-md); }
 .panel h2 { margin: 0 0 10px; font-size: 16px; }
@@ -580,6 +580,11 @@ body {
 .data-table tbody tr:hover { background: var(--panel); }
 .data-table tr.mine { background: var(--mine); }
 .data-table tr.mine:hover { background: #32472f; }
+/* 우승 구단명 — 그 시즌 리그를 제패했다는 의미 자체를 금색으로 표시하고,
+   그중 내 구단이면(mine) 성공 신호인 accent 초록이 우선한다. */
+.data-table td.champion { color: var(--color-gold); }
+.data-table td.champion.mine { color: var(--accent); }
+.rank-gold { color: var(--color-gold); font-weight: 700; }
 .sortable { cursor: pointer; user-select: none; }
 .sortable.active { color: var(--accent); }
 
