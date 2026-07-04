@@ -24,10 +24,18 @@ interface Props {
 
 type Phase = 'ready' | 'playing' | 'halftime' | 'playing2' | 'fulltime';
 const TICK_MS = 130;
+/** 경기당 자유 교체 허용 횟수(부상 교체도 이 카운트를 함께 소모한다). */
+const SUB_LIMIT = 3;
 
 const OUTCOME: Record<string, string> = {
   GOAL: '⚽ 골!', SAVE: '🧤 선방', OFF_TARGET: '➡️ 빗나감', BLOCKED: '🛡️ 블록',
 };
+
+type QuickTacticValues = Pick<Tactic, 'mentality' | 'tempo' | 'pressing' | 'width' | 'defensiveLine'>;
+/** 뒤지고 있을 때 한 번에 적용하는 공격적 지시. */
+const CHASE_TACTIC: QuickTacticValues = { mentality: 0.75, tempo: 0.8, pressing: 0.75, width: 0.6, defensiveLine: 0.65 };
+/** 앞서고 있을 때 한 번에 적용하는 안정적 지시. */
+const PROTECT_TACTIC: QuickTacticValues = { mentality: 0.3, tempo: 0.35, pressing: 0.35, width: 0.4, defensiveLine: 0.35 };
 
 interface View {
   minute: number;
@@ -64,6 +72,8 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
   const [stats, setStats] = useState<LiveStats>({ possession: [50, 50], shots: [0, 0], shotsOnTarget: [0, 0] });
   const [injuryFeed, setInjuryFeed] = useState<InjuryEvent[]>([]);
   const [activeInjury, setActiveInjury] = useState<InjuryEvent | null>(null);
+  const [subsUsed, setSubsUsed] = useState(0);
+  const [subModalOpen, setSubModalOpen] = useState(false);
 
   // 부상 스케줄은 킥오프 시점에 확정(재현성) — 관전 중 분이 지날 때마다 하나씩 노출.
   const injuryScheduleRef = useRef<InjuryEvent[] | null>(null);
@@ -122,6 +132,7 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
   useEffect(() => {
     if (phase !== 'playing' && phase !== 'playing2') return;
     if (activeInjury) return; // 부상 교체 프롬프트 응답 전에는 진행 정지
+    if (subModalOpen) return; // 자유 교체 창이 열려 있는 동안도 진행 정지
     if (paused) return;
     const id = setInterval(() => {
       const target = Math.min(minuteRef.current + 1, MATCH_LENGTH);
@@ -133,7 +144,7 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
     }, TICK_MS / speed);
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, activeInjury, tactic, paused, speed]);
+  }, [phase, activeInjury, subModalOpen, tactic, paused, speed]);
 
   // 경계(하프타임·풀타임) 전환
   useEffect(() => {
@@ -149,14 +160,33 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
     revealInjuriesUpTo(boundary, tactic, false);
   }
 
-  /** 부상 교체 확정: 라인업을 즉시 교체하고(경기 재개), 하프타임 UI에도 반영. */
-  function confirmSubstitution(outPlayerId: string, inPlayerId: string) {
+  /** 라인업 슬롯 교체를 즉시 엔진에 반영(부상 교체·자유 교체 공통 경로). 교체 카드 1장 소모. */
+  function performSubstitution(outPlayerId: string, inPlayerId: string) {
     const slotIndex = tactic.lineup.findIndex((s) => s.playerId === outPlayerId);
-    if (slotIndex < 0) { setActiveInjury(null); return; }
+    if (slotIndex < 0) return;
     const next = swapPlayer(tactic, slotIndex, inPlayerId);
     setTactic(next);
     live.setTactic(userSide, next);
+    setSubsUsed((n) => n + 1);
+  }
+
+  /** 부상 교체 확정: 라인업을 즉시 교체하고(경기 재개), 하프타임 UI에도 반영. */
+  function confirmSubstitution(outPlayerId: string, inPlayerId: string) {
+    performSubstitution(outPlayerId, inPlayerId);
     setActiveInjury(null);
+  }
+
+  /** 관전 중 자유 교체 확정(부상과 무관하게 언제든). */
+  function confirmFreeSubstitution(outPlayerId: string, inPlayerId: string) {
+    performSubstitution(outPlayerId, inPlayerId);
+    setSubModalOpen(false);
+  }
+
+  /** 스코어라인 기반 빠른 지시: 슬라이더 5개를 한 번에 갈아 끼운다. */
+  function applyQuickTactic(values: QuickTacticValues) {
+    const next = { ...tactic, ...values };
+    setTactic(next);
+    live.setTactic(userSide, next);
   }
 
   function startSecondHalf() {
@@ -170,6 +200,10 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
   const awayTactic = watch.userIsHome ? watch.setup.away.tactic : tactic;
   const homeClub = watch.setup.home.club;
   const awayClub = watch.setup.away.club;
+  const myGoals = watch.userIsHome ? view.score[0] : view.score[1];
+  const oppGoals = watch.userIsHome ? view.score[1] : view.score[0];
+  const userBehind = myGoals < oppGoals;
+  const userAhead = myGoals > oppGoals;
   const pitch: PitchState = {
     homeName, awayName, score: view.score, minute: view.minute,
     ball: view.ball, goalFlash, userIsHome: watch.userIsHome,
@@ -216,6 +250,24 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
                 <button className="btn-ghost" onClick={skip}>
                   빠르게 ▶▶ ({phase === 'playing' ? '하프타임' : '경기 종료'}까지)
                 </button>
+                <button
+                  className="btn-ghost"
+                  onClick={() => setSubModalOpen(true)}
+                  disabled={subsUsed >= SUB_LIMIT}
+                  title={subsUsed >= SUB_LIMIT ? '교체 카드를 모두 사용했습니다' : '선수 교체'}
+                >
+                  🔄 교체 ({subsUsed}/{SUB_LIMIT})
+                </button>
+                {userBehind && (
+                  <button className="btn-ghost quick-tactic chase" onClick={() => applyQuickTactic(CHASE_TACTIC)}>
+                    🔥 추격 모드
+                  </button>
+                )}
+                {userAhead && (
+                  <button className="btn-ghost quick-tactic protect" onClick={() => applyQuickTactic(PROTECT_TACTIC)}>
+                    🛡 리드 지키기
+                  </button>
+                )}
               </>
             )}
             {phase === 'halftime' && (
@@ -265,8 +317,20 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
           injury={activeInjury}
           club={myClub}
           tactic={tactic}
+          subsUsed={subsUsed}
+          subLimit={SUB_LIMIT}
           onConfirm={confirmSubstitution}
           onDismiss={() => setActiveInjury(null)}
+        />
+      )}
+      {subModalOpen && (
+        <FreeSubModal
+          club={myClub}
+          tactic={tactic}
+          subsUsed={subsUsed}
+          subLimit={SUB_LIMIT}
+          onConfirm={confirmFreeSubstitution}
+          onDismiss={() => setSubModalOpen(false)}
         />
       )}
     </div>
@@ -344,13 +408,14 @@ function Feed({
 }
 
 function InjurySubModal({
-  injury, club, tactic, onConfirm, onDismiss,
+  injury, club, tactic, subsUsed, subLimit, onConfirm, onDismiss,
 }: {
-  injury: InjuryEvent; club: Club; tactic: Tactic;
+  injury: InjuryEvent; club: Club; tactic: Tactic; subsUsed: number; subLimit: number;
   onConfirm: (outPlayerId: string, inPlayerId: string) => void;
   onDismiss: () => void;
 }) {
   const slot = tactic.lineup.find((s) => s.playerId === injury.playerId);
+  const subsExhausted = subsUsed >= subLimit;
   const bench = club.players
     .filter((p) => p.id !== injury.playerId && isAvailable(p) && !tactic.lineup.some((s) => s.playerId === p.id))
     .sort((a, b) => currentAbility(b) - currentAbility(a));
@@ -376,7 +441,11 @@ function InjurySubModal({
           이(가) <b>{SEVERITY_LABEL[injury.severity]}</b> 부상({injury.name})을 당했습니다.
           예상 결장 <b>{injury.matches}경기</b>.
         </p>
-        {bench.length === 0 ? (
+        {subsExhausted ? (
+          <p className="muted small">
+            교체 카드를 모두 사용했습니다({subsUsed}/{subLimit}) — 교체 없이 이 자리는 빈 슬롯으로 남습니다.
+          </p>
+        ) : bench.length === 0 ? (
           <p className="muted small">교체 가능한 벤치 선수가 없습니다.</p>
         ) : (
           <>
@@ -392,6 +461,75 @@ function InjurySubModal({
           </>
         )}
         <button className="btn-ghost" onClick={onDismiss}>계속 진행 (교체 안 함)</button>
+      </div>
+    </div>
+  );
+}
+
+/** 부상과 무관하게 관전 중 언제든 선수를 교체하는 모달 — 나갈 선수 → 들어올 선수 2단계 선택. */
+function FreeSubModal({
+  club, tactic, subsUsed, subLimit, onConfirm, onDismiss,
+}: {
+  club: Club; tactic: Tactic; subsUsed: number; subLimit: number;
+  onConfirm: (outPlayerId: string, inPlayerId: string) => void;
+  onDismiss: () => void;
+}) {
+  const [outId, setOutId] = useState<string | null>(null);
+  const outPlayer = outId ? club.players.find((p) => p.id === outId) : null;
+  const bench = club.players
+    .filter((p) => isAvailable(p) && !tactic.lineup.some((s) => s.playerId === p.id))
+    .sort((a, b) => currentAbility(b) - currentAbility(a));
+
+  const ref = useModalA11y<HTMLDivElement>(onDismiss);
+  return (
+    <div className="modal-backdrop" onClick={onDismiss}>
+      <div
+        className="modal injury-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="선수 교체"
+        tabIndex={-1}
+        ref={ref}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="modal-head">
+          <h2>🔄 선수 교체 ({subsUsed}/{subLimit})</h2>
+          <button className="btn-ghost" onClick={onDismiss}>닫기 ✕</button>
+        </div>
+        {!outPlayer ? (
+          <>
+            <p className="muted small">나갈 선수를 선택하세요.</p>
+            <ul className="sub-list">
+              {tactic.lineup.map((slot) => {
+                const p = club.players.find((pl) => pl.id === slot.playerId);
+                if (!p) return null;
+                return (
+                  <li key={slot.playerId}>
+                    <span>{p.name} ({slot.position} · {currentAbility(p).toFixed(0)})</span>
+                    <button className="btn-small" onClick={() => setOutId(p.id)}>선택</button>
+                  </li>
+                );
+              })}
+            </ul>
+          </>
+        ) : (
+          <>
+            <p className="muted small"><b>{outPlayer.name}</b> 대신 들어올 선수를 선택하세요.</p>
+            {bench.length === 0 ? (
+              <p className="muted small">교체 가능한 벤치 선수가 없습니다.</p>
+            ) : (
+              <ul className="sub-list">
+                {bench.slice(0, 10).map((p) => (
+                  <li key={p.id}>
+                    <span>{p.name} ({p.position} · {currentAbility(p).toFixed(0)})</span>
+                    <button className="btn-small" onClick={() => onConfirm(outPlayer.id, p.id)}>교체</button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <button className="btn-ghost" onClick={() => setOutId(null)}>← 다시 선택</button>
+          </>
+        )}
       </div>
     </div>
   );
