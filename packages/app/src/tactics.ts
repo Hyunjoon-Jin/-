@@ -2,16 +2,12 @@
  * 전술/라인업 유틸 (앱 측).
  * 포메이션 프리셋, 자동 베스트 XI, 스쿼드 변동 시 라인업 보정.
  */
-import { currentAbility, isAvailable, type Club, type Player, type Position, type Tactic } from '@soccer-tycoon/engine';
+import {
+  currentAbility, isAvailable, FORMATIONS, FORMATION_NAMES,
+  type Club, type Player, type Position, type Tactic,
+} from '@soccer-tycoon/engine';
 
-export const FORMATIONS: Record<string, Position[]> = {
-  '4-3-3': ['GK', 'DL', 'DC', 'DC', 'DR', 'MC', 'MC', 'MC', 'AML', 'ST', 'AMR'],
-  '4-4-2': ['GK', 'DL', 'DC', 'DC', 'DR', 'ML', 'MC', 'MC', 'MR', 'ST', 'ST'],
-  '4-2-3-1': ['GK', 'DL', 'DC', 'DC', 'DR', 'DM', 'DM', 'AML', 'AMC', 'AMR', 'ST'],
-  '3-5-2': ['GK', 'DC', 'DC', 'DC', 'WBL', 'MC', 'MC', 'MC', 'WBR', 'ST', 'ST'],
-};
-
-export const FORMATION_NAMES = Object.keys(FORMATIONS);
+export { FORMATIONS, FORMATION_NAMES };
 
 function familiarity(p: Player, pos: Position): number {
   if (p.position === pos) return 1;

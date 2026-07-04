@@ -83,8 +83,11 @@ function roundName(survivors: number): string {
 }
 
 type TacticMap = Map<string, Tactic> | undefined;
-function tacticFor(club: Club, tactics: TacticMap): Tactic {
-  return tactics?.get(club.id) ?? defaultTactic(club);
+/** tactics 맵에 없으면 AI 기본 전술 — 상대 전력·홈/원정·결승 여부를 참고한다. */
+function tacticFor(
+  club: Club, opponent: Club, isHome: boolean, isBigMatch: boolean, tactics: TacticMap,
+): Tactic {
+  return tactics?.get(club.id) ?? defaultTactic(club, { opponent, isHome, isBigMatch });
 }
 
 export interface CupPairing {
@@ -156,6 +159,7 @@ export function playCupRound(
   const byId = new Map(clubs.map((c) => [c.id, c]));
   const seedBase = cupSeedBase(cup);
   const ties: CupTie[] = [];
+  const isFinal = roundName(survivors.length) === CUP_FINAL_ROUND_NAME;
 
   if (next.byeId) {
     ties.push({ homeId: next.byeId, awayId: null, homeScore: null, awayScore: null, penalties: false, winnerId: next.byeId });
@@ -164,8 +168,8 @@ export function playCupRound(
   next.pairings.forEach((pr, i) => {
     const home = byId.get(pr.homeId)!;
     const away = byId.get(pr.awayId)!;
-    const homeTactic = tacticFor(home, tactics);
-    const awayTactic = tacticFor(away, tactics);
+    const homeTactic = tacticFor(home, away, true, isFinal, tactics);
+    const awayTactic = tacticFor(away, home, false, isFinal, tactics);
     const result =
       watched && watched.homeClubId === pr.homeId && watched.awayClubId === pr.awayId
         ? watched

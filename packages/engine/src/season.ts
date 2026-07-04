@@ -76,8 +76,10 @@ function clubsById(clubs: Club[]): Map<string, Club> {
 
 type TacticMap = Map<string, Tactic> | undefined;
 
-function tacticFor(club: Club, tactics: TacticMap): Tactic {
-  return tactics?.get(club.id) ?? defaultTactic(club);
+/** tactics 맵에 없으면 AI 기본 전술 — 상대 전력·홈/원정을 참고해 매 경기 새로 짠다
+ *  (예전엔 전 구단이 항상 같은 4-3-3·중립 슬라이더였다). */
+function tacticFor(club: Club, opponent: Club, isHome: boolean, tactics: TacticMap): Tactic {
+  return tactics?.get(club.id) ?? defaultTactic(club, { opponent, isHome });
 }
 
 /** 다음 한 경기 진행. clubs/결과가 변경되고, 선수 상태(피로·부상·사기)가 반영된다. */
@@ -86,8 +88,8 @@ export function playNext(s: SeasonState, tactics?: TacticMap): MatchResult {
   const byId = clubsById(s.clubs);
   const home = byId.get(fx.homeId)!;
   const away = byId.get(fx.awayId)!;
-  const homeTactic = tacticFor(home, tactics);
-  const awayTactic = tacticFor(away, tactics);
+  const homeTactic = tacticFor(home, away, true, tactics);
+  const awayTactic = tacticFor(away, home, false, tactics);
   const result = simulateMatch({
     home: { club: home, tactic: homeTactic },
     away: { club: away, tactic: awayTactic },

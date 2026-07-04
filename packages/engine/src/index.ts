@@ -18,7 +18,10 @@ export {
   type PlayerSeasonStat, type SeasonAwards, type CareerStat, type PlayerFormEntry,
   type SeasonSquadEntry,
 } from './stats.js';
-export { generateClub, generateYouthPlayer, defaultTactic, FORMATION_433 } from './generate.js';
+export {
+  generateClub, generateYouthPlayer, defaultTactic, FORMATION_433, type TacticContext,
+} from './generate.js';
+export { FORMATIONS, FORMATION_NAMES } from './formations.js';
 export { simulateSeason, type SeasonResult } from './league.js';
 export { doubleRoundRobin, type Fixture } from './schedule.js';
 export {

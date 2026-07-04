@@ -13,6 +13,7 @@ import {
   summarizeStats, aggregatePlayerStats, topScorers as engineTopScorers, recentPlayerForm,
   seasonSquadSnapshot,
   createCup, playCupRound as enginePlayCupRound, playCupToEnd, isCupOver, nextCupPairings,
+  CUP_FINAL_ROUND_NAME,
   applyPromotionRelegation, clubsInDivision, runInternationalBreak,
   confidenceDelta, applyConfidence, isSacked, START_CONFIDENCE,
   generateDemand, evaluateDemand, demandConfidence, DEMAND_LABEL,
@@ -1007,12 +1008,20 @@ export function watchSetup(state: GameState): WatchSetup | null {
   const awayClub = clubById(fx.awayId);
   const userIsHome = fx.homeId === state.myClubId;
   const userTactic = myTactic(state);
+  const opponent = userIsHome ? awayClub : homeClub;
+  const isBigMatch = opponent.id === state.rivalClubId;
   const setup: MatchSetup = {
-    home: { club: homeClub, tactic: userIsHome ? userTactic : defaultTactic(homeClub) },
-    away: { club: awayClub, tactic: userIsHome ? defaultTactic(awayClub) : userTactic },
+    home: {
+      club: homeClub,
+      tactic: userIsHome ? userTactic : defaultTactic(homeClub, { opponent: awayClub, isHome: true, isBigMatch }),
+    },
+    away: {
+      club: awayClub,
+      tactic: userIsHome ? defaultTactic(awayClub, { opponent: homeClub, isHome: false, isBigMatch }) : userTactic,
+    },
     seed: live.baseSeed + idx,
   };
-  return { setup, userIsHome, opponent: userIsHome ? awayClub : homeClub };
+  return { setup, userIsHome, opponent };
 }
 
 // ── 경기 프리뷰 (관전 전 스카우팅) ──────────────────────────
@@ -1105,8 +1114,10 @@ export function commitWatchedRound(state: GameState, watched: MatchResult): Game
     const homeClub = clubById(fx.homeId);
     const awayClub = clubById(fx.awayId);
     const isUser = fx.homeId === state.myClubId || fx.awayId === state.myClubId;
-    const homeTactic = fx.homeId === state.myClubId ? userTactic : defaultTactic(homeClub);
-    const awayTactic = fx.awayId === state.myClubId ? userTactic : defaultTactic(awayClub);
+    const homeTactic = fx.homeId === state.myClubId
+      ? userTactic : defaultTactic(homeClub, { opponent: awayClub, isHome: true });
+    const awayTactic = fx.awayId === state.myClubId
+      ? userTactic : defaultTactic(awayClub, { opponent: homeClub, isHome: false });
     const result = isUser
       ? watched
       : simulateMatch({
@@ -1137,13 +1148,21 @@ export function watchCupSetup(state: GameState): WatchSetup | null {
   const awayClub = clubById(pr.awayId);
   const userIsHome = pr.homeId === state.myClubId;
   const userTactic = myTactic(state);
+  const opponent = userIsHome ? awayClub : homeClub;
+  const isBigMatch = opponent.id === state.rivalClubId || next.roundName === CUP_FINAL_ROUND_NAME;
   const setup: MatchSetup = {
-    home: { club: homeClub, tactic: userIsHome ? userTactic : defaultTactic(homeClub) },
-    away: { club: awayClub, tactic: userIsHome ? defaultTactic(awayClub) : userTactic },
+    home: {
+      club: homeClub,
+      tactic: userIsHome ? userTactic : defaultTactic(homeClub, { opponent: awayClub, isHome: true, isBigMatch }),
+    },
+    away: {
+      club: awayClub,
+      tactic: userIsHome ? defaultTactic(awayClub, { opponent: homeClub, isHome: false, isBigMatch }) : userTactic,
+    },
     seed: pr.seed,
   };
   return {
-    setup, userIsHome, opponent: userIsHome ? awayClub : homeClub, cupRoundName: next.roundName,
+    setup, userIsHome, opponent, cupRoundName: next.roundName,
   };
 }
 
