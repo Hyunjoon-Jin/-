@@ -11,7 +11,7 @@ import { Rng } from './rng.js';
 import { clamp } from './math.js';
 import { weeklyWage } from './valuation.js';
 import { currentAbility, isAvailable } from './derived.js';
-import { rollTraits } from './traits.js';
+import { rollTraits, hasTrait } from './traits.js';
 import { FORMATIONS } from './formations.js';
 import { lineOf } from './teamStrength.js';
 
@@ -171,6 +171,8 @@ export interface TacticContext {
   isHome?: boolean;
   /** 라이벌전·컵 결승 등 — 변동폭을 줄여 신중하게 임한다. */
   isBigMatch?: boolean;
+  /** 최근 5경기 승점(0~15). 연패 중(낮음)이면 더 과감하게, 연승 중(높음)이면 소폭 신중해진다. */
+  recentFormPoints?: number;
 }
 
 /** 스쿼드 전력 근사치(가용 선수 평균 CA). 전원 결장이면 전체 평균으로 폴백. */
@@ -215,7 +217,8 @@ const FORMATION_LINE: Record<string, number> = {
 /**
  * AI 공격성향(mentality) 결정 — 예전엔 항상 0.5 고정이었다.
  * 상대 대비 전력 격차(강하면 더 공격적, 약하면 더 수비적), 원정 보정(소폭 수비적),
- * 빅매치 보정(변동폭을 절반으로 눌러 신중하게)을 반영한다.
+ * 최근 폼(연패 중이면 과감하게, 연승 중이면 소폭 신중하게), 빅매치 보정(변동폭을
+ * 절반으로 눌러 신중하게)을 반영한다.
  */
 function computeAiMentality(club: Club, ctx: TacticContext): number {
   let mentality = 0.5;
@@ -224,6 +227,12 @@ function computeAiMentality(club: Club, ctx: TacticContext): number {
     mentality += gap * 0.15;
   }
   if (ctx.isHome === false) mentality -= 0.05;
+  if (ctx.recentFormPoints !== undefined) {
+    // 최근 5경기 기준 중립(7.5점)보다 승점이 낮을수록(연패) 더 과감해지고,
+    // 높을수록(연승) 좋은 흐름을 지키려 소폭 신중해진다.
+    const formBias = clamp((7.5 - ctx.recentFormPoints) / 15, -0.3, 0.3);
+    mentality += formBias * 0.15;
+  }
   if (ctx.isBigMatch) mentality = 0.5 + (mentality - 0.5) * 0.5;
   return clamp(mentality, 0.15, 0.85);
 }
@@ -252,7 +261,12 @@ function computeAiDefensiveLine(formation: string, mentality: number, ctx: Tacti
   return clamp(line, 0.15, 0.85);
 }
 
-/** 라인업(ATT·MID) 중 세트피스 능력치가 가장 높은 선수를 전담자로 자동 지정. */
+/** 세트피스 전담자 선정 점수 — 세트피스 스페셜리스트 특성이 있으면 소폭 가산. */
+function setPieceTakerScore(p: Player): number {
+  return p.attributes.setPiece + (hasTrait(p, 'setPieceSpecialist') ? 3 : 0);
+}
+
+/** 라인업(ATT·MID) 중 세트피스 능력치(특성 가산 포함)가 가장 높은 선수를 전담자로 자동 지정. */
 function pickSetPieceTaker(club: Club, lineup: { position: Position; playerId: string }[]): string | undefined {
   const byId = new Map(club.players.map((p) => [p.id, p]));
   const eligible = lineup
@@ -260,7 +274,7 @@ function pickSetPieceTaker(club: Club, lineup: { position: Position; playerId: s
     .map((s) => byId.get(s.playerId))
     .filter((p): p is Player => p !== undefined);
   if (eligible.length === 0) return undefined;
-  return eligible.sort((a, b) => b.attributes.setPiece - a.attributes.setPiece)[0]!.id;
+  return eligible.sort((a, b) => setPieceTakerScore(b) - setPieceTakerScore(a))[0]!.id;
 }
 
 /**

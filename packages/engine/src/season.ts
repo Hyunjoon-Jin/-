@@ -8,6 +8,7 @@ import { doubleRoundRobin, type Fixture } from './schedule.js';
 import { simulateMatch } from './simulateMatch.js';
 import { defaultTactic } from './generate.js';
 import { applyMatchEffects } from './matchEffects.js';
+import { recentForm } from './form.js';
 import { Rng } from './rng.js';
 
 export interface TableRow {
@@ -76,10 +77,19 @@ function clubsById(clubs: Club[]): Map<string, Club> {
 
 type TacticMap = Map<string, Tactic> | undefined;
 
-/** tactics 맵에 없으면 AI 기본 전술 — 상대 전력·홈/원정을 참고해 매 경기 새로 짠다
+/** tactics 맵에 없으면 AI 기본 전술 — 상대 전력·홈/원정·최근 폼을 참고해 매 경기 새로 짠다
  *  (예전엔 전 구단이 항상 같은 4-3-3·중립 슬라이더였다). */
-function tacticFor(club: Club, opponent: Club, isHome: boolean, tactics: TacticMap): Tactic {
-  return tactics?.get(club.id) ?? defaultTactic(club, { opponent, isHome });
+function tacticFor(
+  club: Club, opponent: Club, isHome: boolean, tactics: TacticMap, results: MatchResult[],
+): Tactic {
+  if (tactics?.has(club.id)) return tactics.get(club.id)!;
+  // 표본이 너무 적으면(시즌 초반) 노이즈만 커지므로, 최소 3경기 이상 쌓였을 때만 반영
+  // (창 크기가 5 미만이면 5경기 기준으로 정규화해 스케일을 맞춘다).
+  const form = recentForm(results, club.id, 5);
+  const recentFormPoints = form.results.length >= 3
+    ? (form.points / form.results.length) * 5
+    : undefined;
+  return defaultTactic(club, { opponent, isHome, recentFormPoints });
 }
 
 /** 다음 한 경기 진행. clubs/결과가 변경되고, 선수 상태(피로·부상·사기)가 반영된다. */
@@ -88,8 +98,8 @@ export function playNext(s: SeasonState, tactics?: TacticMap): MatchResult {
   const byId = clubsById(s.clubs);
   const home = byId.get(fx.homeId)!;
   const away = byId.get(fx.awayId)!;
-  const homeTactic = tacticFor(home, away, true, tactics);
-  const awayTactic = tacticFor(away, home, false, tactics);
+  const homeTactic = tacticFor(home, away, true, tactics, s.results);
+  const awayTactic = tacticFor(away, home, false, tactics, s.results);
   const result = simulateMatch({
     home: { club: home, tactic: homeTactic },
     away: { club: away, tactic: awayTactic },

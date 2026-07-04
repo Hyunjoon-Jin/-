@@ -177,6 +177,7 @@ export function playCupRound(
             home: { club: home, tactic: homeTactic },
             away: { club: away, tactic: awayTactic },
             seed: pr.seed,
+            isBigMatch: isFinal,
           });
     let winnerId: string;
     let penalties = false;

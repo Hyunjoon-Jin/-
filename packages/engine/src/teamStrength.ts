@@ -66,13 +66,13 @@ function combinedLineMean(
  * 라인업의 각 슬롯을 평가.
  * 결번(선수 없음)인 슬롯은 약한 대체값으로 메운다.
  */
-function evalLineup(club: Club, tactic: Tactic): SlotEval[] {
+function evalLineup(club: Club, tactic: Tactic, isBigMatch: boolean): SlotEval[] {
   const byId = new Map(club.players.map((p) => [p.id, p]));
   const out: SlotEval[] = [];
   for (const slot of tactic.lineup) {
     const player = byId.get(slot.playerId);
     if (!player || !isAvailable(player)) continue; // 부상·정지 선수는 출전 불가(빈 슬롯 처리)
-    out.push({ line: lineOf(slot.position), d: playerDerived(player, slot.position) });
+    out.push({ line: lineOf(slot.position), d: playerDerived(player, slot.position, isBigMatch) });
   }
   return out;
 }
@@ -80,9 +80,10 @@ function evalLineup(club: Club, tactic: Tactic): SlotEval[] {
 /**
  * 팀 강도 산출.
  * mentality는 공격/수비 자원 배분을 조정한다(공격적일수록 공격 가중↑, 수비 가중↓).
+ * @param isBigMatch 라이벌전·컵 결승 등 — 빅게임 히어로/새가슴 특성에만 영향.
  */
-export function computeTeamStrength(club: Club, tactic: Tactic): TeamStrength {
-  const slots = evalLineup(club, tactic);
+export function computeTeamStrength(club: Club, tactic: Tactic, isBigMatch = false): TeamStrength {
+  const slots = evalLineup(club, tactic, isBigMatch);
   const slotCounts = lineSlotCounts(tactic);
 
   const gkSlot = slots.find((s) => s.line === 'GK');

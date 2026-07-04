@@ -1029,6 +1029,7 @@ export function watchSetup(state: GameState): WatchSetup | null {
       tactic: userIsHome ? defaultTactic(awayClub, { opponent: homeClub, isHome: false, isBigMatch }) : userTactic,
     },
     seed: live.baseSeed + idx,
+    isBigMatch,
   };
   return { setup, userIsHome, opponent };
 }
@@ -1132,16 +1133,21 @@ export function commitWatchedRound(state: GameState, watched: MatchResult): Game
     const homeClub = clubById(fx.homeId);
     const awayClub = clubById(fx.awayId);
     const isUser = fx.homeId === state.myClubId || fx.awayId === state.myClubId;
+    // 이 라운드의 다른 경기 중 내 라이벌 구단이 낀 대결도 빅매치로 반영(관전 중인
+    // 내 경기와 동일한 기준 — rivalClubId는 내 구단 기준 단일 라이벌이라, 상대측
+    // 관점에서도 완벽하진 않지만 기존 개념을 그대로 확장한 것).
+    const isBigMatch = fx.homeId === state.rivalClubId || fx.awayId === state.rivalClubId;
     const homeTactic = fx.homeId === state.myClubId
-      ? userTactic : defaultTactic(homeClub, { opponent: awayClub, isHome: true });
+      ? userTactic : defaultTactic(homeClub, { opponent: awayClub, isHome: true, isBigMatch });
     const awayTactic = fx.awayId === state.myClubId
-      ? userTactic : defaultTactic(awayClub, { opponent: homeClub, isHome: false });
+      ? userTactic : defaultTactic(awayClub, { opponent: homeClub, isHome: false, isBigMatch });
     const result = isUser
       ? watched
       : simulateMatch({
           home: { club: homeClub, tactic: homeTactic },
           away: { club: awayClub, tactic: awayTactic },
           seed: ss.baseSeed + ss.cursor,
+          isBigMatch,
         });
     // playNext와 동일한 난수 스킴으로 상태 변화 반영(관전/자동 일관성)
     applyMatchEffects(homeClub, homeTactic, awayClub, awayTactic, result,
@@ -1178,6 +1184,7 @@ export function watchCupSetup(state: GameState): WatchSetup | null {
       tactic: userIsHome ? defaultTactic(awayClub, { opponent: homeClub, isHome: false, isBigMatch }) : userTactic,
     },
     seed: pr.seed,
+    isBigMatch,
   };
   return {
     setup, userIsHome, opponent, cupRoundName: next.roundName,

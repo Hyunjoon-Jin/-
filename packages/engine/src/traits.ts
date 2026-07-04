@@ -10,6 +10,7 @@ import type { Rng } from './rng.js';
 export const ALL_TRAITS: PlayerTrait[] = [
   'leader', 'injuryProne', 'ironMan', 'wonderkid',
   'poacher', 'playmaker', 'hothead', 'rock', 'multiRole',
+  'bigGameHero', 'bigGameChoker', 'setPieceSpecialist',
 ];
 
 export const TRAIT_LABELS: Record<PlayerTrait, string> = {
@@ -22,6 +23,9 @@ export const TRAIT_LABELS: Record<PlayerTrait, string> = {
   hothead: '다혈질',
   rock: '수비 바위',
   multiRole: '멀티롤 유망주',
+  bigGameHero: '빅게임 히어로',
+  bigGameChoker: '새가슴',
+  setPieceSpecialist: '세트피스 스페셜리스트',
 };
 
 export const TRAIT_DESC: Record<PlayerTrait, string> = {
@@ -34,6 +38,9 @@ export const TRAIT_DESC: Record<PlayerTrait, string> = {
   hothead: '카드를 자주 받는다.',
   rock: '수비 전력이 단단하다.',
   multiRole: '새 포지션 숙련도가 더 빠르게 오른다.',
+  bigGameHero: '라이벌전·컵 결승 등 큰 경기에서 기량이 오른다.',
+  bigGameChoker: '큰 경기에서 오히려 기량이 떨어진다.',
+  setPieceSpecialist: '세트피스 결정력이 높고, 전담자로 지정되면 더 자주 직접 마무리한다.',
 };
 
 /** 특성 보유 여부. 구세이브·테스트(traits 미설정)에도 안전. */
@@ -62,9 +69,13 @@ export function rollTraits(player: Player, rng: Rng): PlayerTrait[] {
   add('hothead', a.aggression >= 15 ? 0.22 : 0.05);
   add('ironMan', a.naturalFitness >= 15 && a.stamina >= 15 ? 0.15 : 0.03);
   add('injuryProne', a.naturalFitness <= 8 ? 0.15 : 0.04);
+  add('bigGameHero', a.composure >= 15 && a.bravery >= 13 ? 0.20 : 0.05);
+  add('bigGameChoker', a.composure <= 8 ? 0.15 : 0.04);
+  add('setPieceSpecialist', a.setPiece >= 15 ? 0.22 : 0.05);
 
-  // 모순 제거: 철강왕이면 유리몸 배제.
+  // 모순 제거: 철강왕↔유리몸, 빅게임 히어로↔새가슴은 양립 불가.
   let resolved = out.includes('ironMan') ? out.filter((t) => t !== 'injuryProne') : out;
+  resolved = resolved.includes('bigGameHero') ? resolved.filter((t) => t !== 'bigGameChoker') : resolved;
   // 최대 2개 (부여 우선순위 순서 유지).
   return resolved.slice(0, 2);
 }

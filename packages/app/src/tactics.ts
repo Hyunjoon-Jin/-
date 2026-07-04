@@ -3,7 +3,7 @@
  * 포메이션 프리셋, 자동 베스트 XI, 스쿼드 변동 시 라인업 보정.
  */
 import {
-  currentAbility, isAvailable, FORMATIONS, FORMATION_NAMES, lineOf,
+  currentAbility, isAvailable, FORMATIONS, FORMATION_NAMES, lineOf, hasTrait,
   type Club, type Player, type Position, type Tactic,
 } from '@soccer-tycoon/engine';
 
@@ -20,7 +20,12 @@ function slotScore(p: Player, pos: Position): number {
   return familiarity(p, pos) * 1000 + currentAbility(p) - penalty;
 }
 
-/** 라인업(ATT·MID) 중 세트피스 능력치가 가장 높은 선수를 전담자로 자동 지정. */
+/** 세트피스 전담자 선정 점수 — 세트피스 스페셜리스트 특성이 있으면 소폭 가산(엔진 로직과 동일). */
+function setPieceTakerScore(p: Player): number {
+  return p.attributes.setPiece + (hasTrait(p, 'setPieceSpecialist') ? 3 : 0);
+}
+
+/** 라인업(ATT·MID) 중 세트피스 능력치(특성 가산 포함)가 가장 높은 선수를 전담자로 자동 지정. */
 export function pickSetPieceTaker(club: Club, lineup: Tactic['lineup']): string | undefined {
   const byId = new Map(club.players.map((p) => [p.id, p]));
   const eligible = lineup
@@ -28,7 +33,7 @@ export function pickSetPieceTaker(club: Club, lineup: Tactic['lineup']): string 
     .map((s) => byId.get(s.playerId))
     .filter((p): p is Player => p !== undefined);
   if (eligible.length === 0) return undefined;
-  return eligible.sort((a, b) => b.attributes.setPiece - a.attributes.setPiece)[0]!.id;
+  return eligible.sort((a, b) => setPieceTakerScore(b) - setPieceTakerScore(a))[0]!.id;
 }
 
 /** 현재 전담자가 새 라인업의 ATT·MID 슬롯에 더는 없으면(포메이션·스쿼드 변동) 다시 자동 지정. */

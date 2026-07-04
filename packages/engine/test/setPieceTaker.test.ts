@@ -2,8 +2,14 @@ import { describe, it, expect } from 'vitest';
 import { simulateMatch } from '../src/simulateMatch.js';
 import { generateClub, defaultTactic } from '../src/generate.js';
 import { lineOf } from '../src/teamStrength.js';
+import { hasTrait } from '../src/traits.js';
 import { Rng } from '../src/rng.js';
-import type { Club, Tactic } from '../src/types.js';
+import type { Club, Player, Tactic } from '../src/types.js';
+
+/** 전담자 자동 선정 점수 — 세트피스 스페셜리스트 특성이 있으면 가산(엔진 로직과 동일). */
+function setPieceTakerScore(p: Player): number {
+  return p.attributes.setPiece + (hasTrait(p, 'setPieceSpecialist') ? 3 : 0);
+}
 
 /**
  * 세트피스 전담자(Track 5) 회귀 테스트 — 예전엔 세트피스 상황도 다른 슈팅 기회와
@@ -46,7 +52,7 @@ describe('세트피스 전담자: 자동 지정', () => {
     const eligible = tactic.lineup
       .filter((s) => lineOf(s.position) === 'ATT' || lineOf(s.position) === 'MID')
       .map((s) => byId.get(s.playerId)!);
-    const best = [...eligible].sort((a, b) => b.attributes.setPiece - a.attributes.setPiece)[0]!;
+    const best = [...eligible].sort((a, b) => setPieceTakerScore(b) - setPieceTakerScore(a))[0]!;
     expect(tactic.setPieceTakerId).toBe(best.id);
   });
 

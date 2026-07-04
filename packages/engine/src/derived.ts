@@ -72,8 +72,9 @@ export interface DerivedRatings {
 /**
  * 선수의 보정된 파생 능력치.
  * effective = raw × familiarity × condition × morale (engine.md 3장).
+ * @param isBigMatch 라이벌전·컵 결승 등 큰 경기 여부 — 빅게임 히어로/새가슴 특성에만 영향.
  */
-export function playerDerived(player: Player, slot: Position): DerivedRatings {
+export function playerDerived(player: Player, slot: Position, isBigMatch = false): DerivedRatings {
   const fam = familiarityAt(player, slot);
   const cond = conditionFactor(player);
   const mor = moraleFactor(player);
@@ -90,5 +91,13 @@ export function playerDerived(player: Player, slot: Position): DerivedRatings {
   if (hasTrait(player, 'poacher')) out.attack *= 1.08;
   if (hasTrait(player, 'playmaker')) out.creation *= 1.08;
   if (hasTrait(player, 'rock')) out.defense *= 1.08;
+  // 빅게임 히어로/새가슴: 큰 경기에서만 전반적 기량이 오르내린다.
+  if (isBigMatch) {
+    const bigMatchMul = hasTrait(player, 'bigGameHero') ? 1.08
+      : hasTrait(player, 'bigGameChoker') ? 0.92 : 1;
+    if (bigMatchMul !== 1) {
+      for (const k of keys) out[k] *= bigMatchMul;
+    }
+  }
   return out;
 }

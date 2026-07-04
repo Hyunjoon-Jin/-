@@ -108,7 +108,8 @@ export type TrainingFocus =
 
 export type PlayerTrait =
   | 'leader' | 'injuryProne' | 'ironMan' | 'wonderkid'
-  | 'poacher' | 'playmaker' | 'hothead' | 'rock' | 'multiRole';
+  | 'poacher' | 'playmaker' | 'hothead' | 'rock' | 'multiRole'
+  | 'bigGameHero' | 'bigGameChoker' | 'setPieceSpecialist';
 
 // ── 전술 ──────────────────────────────────────────────────
 

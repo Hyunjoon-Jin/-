@@ -23,6 +23,8 @@ export interface MatchSetup {
   home: { club: Club; tactic: Tactic };
   away: { club: Club; tactic: Tactic };
   seed: number;
+  /** 라이벌전·컵 결승 등 — 빅게임 히어로/새가슴 특성이 파생 능력치에 반영된다. */
+  isBigMatch?: boolean;
 }
 
 interface Side {
@@ -36,8 +38,8 @@ interface Side {
   attackers: Player[];
 }
 
-function buildSide(club: Club, tactic: Tactic, isHome: boolean): Side {
-  const strength = computeTeamStrength(club, tactic);
+function buildSide(club: Club, tactic: Tactic, isHome: boolean, isBigMatch: boolean): Side {
+  const strength = computeTeamStrength(club, tactic, isBigMatch);
   if (isHome) {
     // computeTeamStrength가 이미 [0,110]으로 클램프하므로, 이후 배율을 적용한 뒤
     // 다시 클램프해 문서화된 상한을 실제로 넘지 않도록 한다.
@@ -56,13 +58,19 @@ function buildSide(club: Club, tactic: Tactic, isHome: boolean): Side {
  *  다른 선수에게 넘어감 — 100%로 몰아주면 팀 전체 세트피스 위협이 한 선수에 과도하게 종속). */
 const SET_PIECE_TAKER_SHARE = 0.55;
 
+/** 세트피스 스페셜리스트가 전담자면 몫을 더 많이 가져간다(그 외엔 기본 비율). */
+const SET_PIECE_SPECIALIST_SHARE = 0.72;
+
 function pickShooter(side: Side, rng: Rng, chance: ChanceType): Player | null {
   const available = side.club.players.filter(isAvailable);
   const pool = side.attackers.length > 0 ? side.attackers : available;
   if (pool.length === 0) return null;
   if (chance === 'setpiece' && side.tactic.setPieceTakerId) {
     const taker = pool.find((p) => p.id === side.tactic.setPieceTakerId);
-    if (taker && rng.roll(SET_PIECE_TAKER_SHARE)) return taker;
+    if (taker) {
+      const share = hasTrait(taker, 'setPieceSpecialist') ? SET_PIECE_SPECIALIST_SHARE : SET_PIECE_TAKER_SHARE;
+      if (rng.roll(share)) return taker;
+    }
   }
   return pool[rng.int(0, pool.length - 1)]!;
 }
@@ -118,6 +126,8 @@ export interface MatchContext {
    *  집계해야, 전반에 뛰다 하프타임에 교체된 선수도 정당하게 카드·평점 대상이 되고
    *  교체 투입 선수가 풀타임을 다 뛴 것처럼 이중 보정받지 않는다. */
   playedLineups: { home: LineupSlot[]; away: LineupSlot[] };
+  /** 라이벌전·컵 결승 등 — 하프타임 전술 교체로 Side가 재생성돼도 유지된다. */
+  isBigMatch: boolean;
 }
 
 function recomputePossession(ctx: MatchContext): void {
@@ -128,16 +138,18 @@ function recomputePossession(ctx: MatchContext): void {
 }
 
 export function createContext(setup: MatchSetup): MatchContext {
+  const isBigMatch = setup.isBigMatch ?? false;
   const ctx: MatchContext = {
     rng: new Rng(setup.seed),
-    home: buildSide(setup.home.club, setup.home.tactic, true),
-    away: buildSide(setup.away.club, setup.away.tactic, false),
+    home: buildSide(setup.home.club, setup.home.tactic, true, isBigMatch),
+    away: buildSide(setup.away.club, setup.away.tactic, false, isBigMatch),
     events: [],
     statMap: new Map(),
     pPossHome: 0.5,
     seed: setup.seed,
     injuries: [],
     playedLineups: { home: [...setup.home.tactic.lineup], away: [...setup.away.tactic.lineup] },
+    isBigMatch,
   };
   ctx.injuries = generateInjuries(ctx);
   recomputePossession(ctx);
@@ -147,7 +159,7 @@ export function createContext(setup: MatchSetup): MatchContext {
 /** 라이브 경기에서 한 팀의 전술을 교체(하프타임 개입). 전력·점유 확률 재계산. */
 export function applyTactic(ctx: MatchContext, side: 'home' | 'away', tactic: Tactic): void {
   const cur = ctx[side];
-  const next = buildSide(cur.club, tactic, cur.isHome);
+  const next = buildSide(cur.club, tactic, cur.isHome, ctx.isBigMatch);
   // 누적 스코어/슈팅/점유 틱은 유지하고 전력·라인업만 교체
   next.goals = cur.goals;
   next.shots = cur.shots;
@@ -203,10 +215,10 @@ export function stepMinute(ctx: MatchContext, minute: number): MatchEvent | null
   const st = ensureStat(ctx, shooter);
   att.shots++;
   st.shots++;
-  const outcome = resolveShot(
-    att.strength.attack, def.strength.gk, chance, rng,
-    chance === 'setpiece' ? shooter.attributes.setPiece : undefined,
-  );
+  const setPieceSkill = chance === 'setpiece'
+    ? shooter.attributes.setPiece + (hasTrait(shooter, 'setPieceSpecialist') ? 3 : 0)
+    : undefined;
+  const outcome = resolveShot(att.strength.attack, def.strength.gk, chance, rng, setPieceSkill);
 
   if (outcome === 'GOAL') {
     att.goals++;

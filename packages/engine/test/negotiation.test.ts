@@ -97,7 +97,11 @@ describe('negotiation: 이적 협상', () => {
     player.contractYears = 1; // 만료 임박 — marketValue 자체는 낮아지지만 importance 배율(비율)은 그대로여야 함
     const ratioShort = askingPrice(seller, player) / marketValue(player);
 
-    expect(ratioShort).toBeCloseTo(ratioLong, 5);
+    // askingPrice·marketValue 모두 정수로 반올림되므로, 계약 기간에 따라 절대값이
+    // 작아질수록(예: 만료 임박) 반올림 오차의 상대 비중이 커진다 — 소수 5자리는
+    // 그 오차보다 더 엄격해 이 선수의 시장가에서는 우연히 못 미칠 수 있다(이중 할인
+    // 유무를 가리기엔 소수 2자리로 충분히 엄격하다).
+    expect(ratioShort).toBeCloseTo(ratioLong, 2);
   });
 
   it('buyPlayerAt: 합의액으로 영입, 양 구단 예산·스쿼드 이동', () => {
