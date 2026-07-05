@@ -3,6 +3,7 @@ import {
   TRAINING_FOCUSES, TRAINING_LABELS, TRAIT_LABELS, TRAIT_DESC,
   currentAbility, marketValue, playerDerived, isInjured, isSuspended, lineOf, familiarityAt,
   formatMoney, buildScoutingReport, retireChance, RETIRE_MIN_AGE, scoutDispatchCost,
+  loyaltyTier, loyaltyDiscount, LOYALTY_TRUSTED_SEASONS, LOYALTY_LEGEND_SEASONS,
   type AttrKey, type Player, type DerivedRatings, type TrainingFocus, type Position,
   type PlayerFormEntry, type OverallTier, type PotentialTier, type AgeProfile, type ScoutingReport,
 } from '@soccer-tycoon/engine';
@@ -21,6 +22,18 @@ function moraleLabel(m: number): { text: string; cls: string } {
   if (m >= 0.65) return { text: '😀 만족', cls: 'cond-good' };
   if (m >= 0.4) return { text: '😐 보통', cls: '' };
   return { text: '😠 불만', cls: 'injury' };
+}
+
+/** 로열티(신규 개선 항목 10) 등급 배지 — newcomer는 특별히 표시하지 않는다. */
+function loyaltyBadge(seasonsAtClub: number): { text: string; title: string } | null {
+  const tier = loyaltyTier(seasonsAtClub);
+  if (tier === 'legend') {
+    return { text: `🏅 원클럽맨(${seasonsAtClub}시즌)`, title: `${LOYALTY_LEGEND_SEASONS}시즌 이상 한 구단에 머물러 재계약 계약금이 최대로 할인됩니다.` };
+  }
+  if (tier === 'trusted') {
+    return { text: `🤝 신뢰받는 선수(${seasonsAtClub}시즌)`, title: `${LOYALTY_TRUSTED_SEASONS}시즌 이상 한 구단에 머물러 재계약 계약금이 할인됩니다.` };
+  }
+  return null;
 }
 
 function ratingCls(r: number): string {
@@ -149,7 +162,8 @@ function RenewPanel({
 }) {
   const [years, setYears] = useState(4);
   const [signOnBonus, setSignOnBonus] = useState(0);
-  const baseCost = Math.round(player.wage * 20 * (years / 4));
+  const discount = loyaltyDiscount(player.seasonsAtClub ?? 0);
+  const baseCost = Math.round(player.wage * 20 * (years / 4) * (1 - discount));
 
   return (
     <div className="pd-renew-panel">
@@ -170,7 +184,7 @@ function RenewPanel({
         />
       </label>
       <button className="btn-small" onClick={() => toast(onRenew(years, signOnBonus))}>
-        재계약 (계약금 {formatMoney(baseCost + signOnBonus)})
+        재계약 (계약금 {formatMoney(baseCost + signOnBonus)}{discount > 0 ? ` · 로열티 -${Math.round(discount * 100)}%` : ''})
       </button>
     </div>
   );
@@ -252,6 +266,11 @@ export function PlayerDetail({
             <span className="muted" title="이전 시즌까지 통산 기록">통산 {player.careerApps ?? 0}경 {player.careerGoals ?? 0}골</span>
           )}
           {(player.caps ?? 0) > 0 && <span className="pd-caps" title="국가대표 A매치 출전 캡">🎽 A매치 {player.caps}경</span>}
+          {loyaltyBadge(player.seasonsAtClub ?? 0) && (
+            <span className="pd-caps" title={loyaltyBadge(player.seasonsAtClub ?? 0)!.title}>
+              {loyaltyBadge(player.seasonsAtClub ?? 0)!.text}
+            </span>
+          )}
         </div>
 
         <div className="modal-tabs" role="tablist">

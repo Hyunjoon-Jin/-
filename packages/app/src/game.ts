@@ -33,6 +33,7 @@ import {
   type MediaEventKind, type MediaTone, type MediaToneOption, type ManagerPersona,
   upgradeStaff as engineUpgradeStaff, upgradeStadium as engineUpgradeStadium,
   upgradeAcademy as engineUpgradeAcademy, formatMoney,
+  loyaltyDiscount,
   computeTeamStrength, currentAbility, recentForm, buildScoutingReport, lineOf,
   dispatchScout as engineDispatchScout,
   assignMentor as engineAssignMentor, clearMentorPairing as engineClearMentorPairing,
@@ -807,7 +808,9 @@ export function renewContract(
   if (p.contractYears > 2) return { state, ok: false, message: '아직 재계약이 필요하지 않습니다.' };
   const clampedYears = Math.min(RENEWAL_MAX_YEARS, Math.max(RENEWAL_MIN_YEARS, Math.round(years)));
   const bonus = Math.max(0, Math.round(signOnBonus));
-  const baseCost = Math.round(p.wage * 20 * (clampedYears / 4));
+  // 로열티(신규 개선 항목 10) — 이적 없이 오래 남아준 선수는 재계약이 저렴해진다.
+  const discount = loyaltyDiscount(p.seasonsAtClub ?? 0);
+  const baseCost = Math.round(p.wage * 20 * (clampedYears / 4) * (1 - discount));
   const cost = baseCost + bonus;
   if (club.finance.balance < cost) return { state, ok: false, message: '자금이 부족합니다.' };
   club.finance.balance -= cost;
@@ -816,9 +819,10 @@ export function renewContract(
   const bonusMoraleBoost = bonus > 0 ? Math.min(0.15, bonus / (p.wage * 100)) : 0;
   p.morale = Math.min(1, p.morale + 0.15 + bonusMoraleBoost);
   const bonusMsg = bonus > 0 ? ` + 사인온보너스 ${formatMoney(bonus)}` : '';
+  const loyaltyMsg = discount > 0 ? ` (로열티 할인 ${Math.round(discount * 100)}%)` : '';
   return {
     state: { ...state }, ok: true,
-    message: `${p.name} 재계약 완료 (${clampedYears}년 · 계약금 ${formatMoney(baseCost)}${bonusMsg})`,
+    message: `${p.name} 재계약 완료 (${clampedYears}년 · 계약금 ${formatMoney(baseCost)}${bonusMsg}${loyaltyMsg})`,
   };
 }
 

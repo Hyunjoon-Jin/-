@@ -327,6 +327,7 @@ export function buyPlayerAt(clubs: Club[], myClubId: string, playerId: string, f
   player.contractYears = NEW_CONTRACT_YEARS;
   player.wage = weeklyWage(player);
   player.releaseClause = undefined;
+  player.seasonsAtClub = 0; // 새 구단으로 이적(로열티 초기화, 신규 개선 항목 10)
   me.players.push(player);
   reassignSquadNumber(me, player);
   me.agentRelations = clamp(agentRelationsOf(me) + AGENT_RELATIONS_BUY_GAIN, AGENT_RELATIONS_MIN, AGENT_RELATIONS_MAX);
@@ -368,6 +369,7 @@ export function executeRivalSnipe(clubs: Club[], rivalClubId: string, playerId: 
   player.contractYears = NEW_CONTRACT_YEARS;
   player.wage = weeklyWage(player);
   player.releaseClause = undefined;
+  player.seasonsAtClub = 0; // 새 구단으로 이적(로열티 초기화, 신규 개선 항목 10)
   rival.players.push(player);
   reassignSquadNumber(rival, player);
 
@@ -411,6 +413,7 @@ export function buyPlayerViaReleaseClause(clubs: Club[], myClubId: string, playe
   player.contractYears = NEW_CONTRACT_YEARS;
   player.wage = weeklyWage(player);
   player.releaseClause = undefined;
+  player.seasonsAtClub = 0; // 새 구단으로 이적(로열티 초기화, 신규 개선 항목 10)
   me.players.push(player);
   reassignSquadNumber(me, player);
 
@@ -475,6 +478,7 @@ export function sellPlayer(clubs: Club[], myClubId: string, playerId: string): S
   player.contractYears = 4;
   player.wage = weeklyWage(player);
   player.releaseClause = undefined;
+  player.seasonsAtClub = 0; // 새 구단으로 이적(로열티 초기화, 신규 개선 항목 10)
   buyer.players.push(player);
   reassignSquadNumber(buyer, player);
 
@@ -561,6 +565,7 @@ export function acceptSellOffer(
   player.contractYears = 4;
   player.wage = weeklyWage(player);
   player.releaseClause = undefined;
+  player.seasonsAtClub = 0; // 새 구단으로 이적(로열티 초기화, 신규 개선 항목 10)
   player.buybackClause = buybackFee !== undefined
     ? { clubId: myClubId, fee: buybackFee, seasonsRemaining: BUYBACK_MAX_SEASONS }
     : undefined;
@@ -602,6 +607,7 @@ export function exerciseBuyback(clubs: Club[], myClubId: string, playerId: strin
   player.contractYears = 4;
   player.wage = weeklyWage(player);
   player.releaseClause = undefined;
+  player.seasonsAtClub = 0; // 새 구단으로 이적(로열티 초기화, 신규 개선 항목 10)
   me.players.push(player);
   reassignSquadNumber(me, player);
 
@@ -857,6 +863,10 @@ export function swapPlayers(
   else clubA.reserves = (clubA.reserves ?? []).filter((p) => p.id !== playerAId);
   if (bInFirst) clubB.players = clubB.players.filter((p) => p.id !== playerBId);
   else clubB.reserves = (clubB.reserves ?? []).filter((p) => p.id !== playerBId);
+
+  // 새 구단으로 이적(로열티 초기화, 신규 개선 항목 10).
+  playerA.seasonsAtClub = 0;
+  playerB.seasonsAtClub = 0;
 
   if (bInFirst) { clubA.players.push(playerB); reassignSquadNumber(clubA, playerB); } else {
     clubA.reserves = clubA.reserves ?? [];

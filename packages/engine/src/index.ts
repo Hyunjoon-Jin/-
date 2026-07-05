@@ -47,7 +47,12 @@ export {
 export { TUNING } from './tuning.js';
 export { DERIVED_WEIGHTS, type DerivedKey } from './roleWeights.js';
 export { formatMoney, EOK } from './money.js';
-export { marketValue, weeklyWage, agentFee } from './valuation.js';
+export {
+  marketValue, weeklyWage, agentFee,
+  loyaltyTier, loyaltyDiscount,
+  LOYALTY_TRUSTED_SEASONS, LOYALTY_LEGEND_SEASONS, LOYALTY_MAX_DISCOUNT,
+  type LoyaltyTier,
+} from './valuation.js';
 export {
   settleSeason, leaguePrize, attendanceFormFactor,
   generateSponsorGoal, evaluateSponsorGoal, SPONSOR_GOAL_LABEL, sponsorStreakMultiplier,

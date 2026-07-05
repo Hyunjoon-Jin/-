@@ -210,6 +210,8 @@ function progressReserves(club: Club, rng: Rng, firstTeamSize: number): ReserveP
     const hist = p.caHistory ?? (p.caHistory = []);
     hist.push(Math.round(currentAbility(p)));
     if (hist.length > 20) hist.shift();
+    // 로열티(신규 개선 항목 10) — 리저브도 같은 구단 소속이므로 함께 쌓인다.
+    p.seasonsAtClub = (p.seasonsAtClub ?? 0) + 1;
 
     const ready = currentAbility(p) >= p.potential * RESERVE_READY_RATIO;
     const squadCritical = firstTeamSize + promoted.length < SQUAD_CRITICAL_SIZE;
@@ -473,6 +475,12 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
       if (player.buybackClause) {
         player.buybackClause.seasonsRemaining -= 1;
         if (player.buybackClause.seasonsRemaining <= 0) player.buybackClause = undefined;
+      }
+
+      // 로열티(신규 개선 항목 10) — 이적 없이 이 구단에서 시즌을 마쳤으니 1시즌 가산.
+      // 임대 온 선수는 원 소속(loanFromClubId)에 대한 로열티이므로 여기서는 늘리지 않는다.
+      if (player.loanFromClubId === undefined) {
+        player.seasonsAtClub = (player.seasonsAtClub ?? 0) + 1;
       }
 
       const mentorBonus = Math.max(

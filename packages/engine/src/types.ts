@@ -110,6 +110,10 @@ export interface Player {
   careerGoals: number;
   /** 시즌별 CA 스냅샷(성장 곡선). 오프시즌마다 1개 추가. */
   caHistory: number[];
+  /** 현 소속 구단에서 이적 없이 보낸 시즌 수(로열티, 신규 개선 항목 10) — 구단을
+   *  옮기면(영입/판매/스와프/경쟁 입찰 등) 0으로 초기화되고, 오프시즌마다 1씩
+   *  늘어난다. 구버전 세이브는 없을 수 있어 optional(없으면 0 취급). */
+  seasonsAtClub?: number;
   /** 방출(바이아웃) 조항 금액(만원). 설정돼 있으면 협상 없이 이 금액으로 즉시 영입 가능. */
   releaseClause?: number;
   /** 임대 중이면 원 소속 구단 id — 이 선수는 지금 다른 구단(club.players 소속)에서
