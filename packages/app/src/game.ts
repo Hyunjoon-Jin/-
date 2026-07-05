@@ -21,7 +21,7 @@ import {
   createCup, playCupRound as enginePlayCupRound, playCupToEnd, isCupOver, nextCupPairings,
   CUP_FINAL_ROUND_NAME,
   applyPromotionRelegation, clubsInDivision, runInternationalBreak,
-  runInternationalTournament, TOURNAMENT_INTERVAL_SEASONS,
+  runInternationalTournament, TOURNAMENT_INTERVAL_SEASONS, checkInternationalRetirements,
   confidenceDelta, applyConfidence, isSacked, START_CONFIDENCE, boardStatus, boardTierUpgradeBonus,
   type BoardStatus,
   generateDemand, evaluateDemand, demandConfidence, DEMAND_LABEL,
@@ -632,6 +632,10 @@ export function finishSeason(state: GameState): GameState {
     }
   }
 
+  // 5.4) 국가대표 은퇴 판정(신규 개선 항목 19) — 차출 명단 확정 전에 먼저 반영.
+  const myIntlRetirements = checkInternationalRetirements(state.clubs, new Rng(offseasonSeed(state) + 3333))
+    .filter((r) => r.clubId === state.myClubId);
+
   // 5.5) 국가대표 차출 (오프시즌 리셋 이후 — 피로/부상이 새 시즌에 반영)
   // TOURNAMENT_INTERVAL_SEASONS마다는 정기 차출 대신 비정기 국제대회(월드컵/유로급, C15)로 확장.
   const isTournamentSeason = state.season % TOURNAMENT_INTERVAL_SEASONS === 0;
@@ -784,6 +788,7 @@ export function finishSeason(state: GameState): GameState {
     reservePromotions: myReservePromotions,
     staffDepartures: myStaffDepartures,
     staffRetirements: myStaffRetirements,
+    internationalRetirements: myIntlRetirements,
     academyAlumni,
     continentalCupChampionId,
     continentalCupChampionName,

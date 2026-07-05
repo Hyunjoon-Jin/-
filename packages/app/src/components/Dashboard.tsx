@@ -198,6 +198,21 @@ export function Dashboard({ game, onSignContract, visitedTactics, visitedSquadPr
       });
     }
   }
+  if (last?.internationalRetirements !== undefined && last.internationalRetirements.length > 0) {
+    seasonBanners.push({
+      key: 'internationalRetirements', priority: 6.2,
+      node: (
+        <Banner tone="info" title="🏳️ 국가대표 은퇴">
+          {last.internationalRetirements.map((r) => (
+            <p key={r.playerId}>
+              <b>{r.name}</b> 선수가 A매치 {r.caps}캡을 뒤로하고 국가대표에서 은퇴를 선언했습니다.
+              앞으로 구단 커리어에만 집중합니다.
+            </p>
+          ))}
+        </Banner>
+      ),
+    });
+  }
   if (last?.academyAlumni !== undefined && last.academyAlumni.length > 0) {
     const sortedAlumni = [...last.academyAlumni].sort((a, b) => b.seasonGoals - a.seasonGoals);
     seasonBanners.push({

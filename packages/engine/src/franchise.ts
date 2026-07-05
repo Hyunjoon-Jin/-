@@ -13,7 +13,10 @@ import { progressPlayer } from './progression.js';
 import { generateAcademyIntake, generateYouthPlayer, assignSquadNumber } from './generate.js';
 import { applyLoanWageSubsidies, MIN_SQUAD } from './transferActions.js';
 import { enforceFinancialFairPlay } from './financeControl.js';
-import { runInternationalBreak, runInternationalTournament, TOURNAMENT_INTERVAL_SEASONS } from './international.js';
+import {
+  runInternationalBreak, runInternationalTournament, TOURNAMENT_INTERVAL_SEASONS, checkInternationalRetirements,
+  type InternationalRetirementEvent,
+} from './international.js';
 import { simulateReserveSeason, type ReserveTableRow } from './reserveLeague.js';
 import { currentAbility } from './derived.js';
 import { hasTrait } from './traits.js';
@@ -136,6 +139,8 @@ export interface SeasonSummary {
   staffDepartures?: StaffDepartureEvent[];
   /** 이번 오프시즌 고령으로 은퇴한 내 구단 실명 스태프(신규 영입 후임 포함, 신규 개선 항목 17). */
   staffRetirements?: StaffRetirementEvent[];
+  /** 이번 오프시즌 내 구단 선수 중 국가대표 은퇴를 선언한 인원(신규 개선 항목 19). */
+  internationalRetirements?: InternationalRetirementEvent[];
   /** 이번 시즌 비정기 국제대회(월드컵/유로급, C15)가 열렸다면 우승 국가. 참가 자격국 부족 시 null.
    *  값이 undefined면 이번 시즌엔 대회가 열리지 않고 정기 A매치 차출만 있었다는 뜻. */
   internationalTournamentChampion?: string | null;
@@ -684,7 +689,11 @@ export function advanceSeason(clubs: Club[], season: number, baseSeed: number): 
   // 4) 오프시즌: 성장/노화 + 은퇴·유스 아카데미
   const { retirements } = runOffseason(clubs, rng);
 
-  // 5) 국가대표 차출(오프시즌 리셋 이후 — 피로/부상이 새 시즌에 반영)
+  // 5) 국가대표 은퇴 판정(신규 개선 항목 19) — 차출 명단 확정 전에 먼저 반영해야
+  // 이번 시즌부터 즉시 차출 대상에서 제외된다.
+  checkInternationalRetirements(clubs, rng);
+
+  // 5.5) 국가대표 차출(오프시즌 리셋 이후 — 피로/부상이 새 시즌에 반영)
   // TOURNAMENT_INTERVAL_SEASONS마다는 정기 차출 대신 비정기 국제대회(월드컵/유로급)로 확장.
   if (season % TOURNAMENT_INTERVAL_SEASONS === 0) {
     runInternationalTournament(clubs, rng);

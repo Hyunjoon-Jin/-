@@ -102,6 +102,9 @@ export interface Player {
   traits: PlayerTrait[];
   /** 국가대표 A매치 출전 캡. 차출로 누적. */
   caps: number;
+  /** 국가대표 은퇴 선언 여부(신규 개선 항목 19) — true면 이후 차출 대상에서 영구 제외된다.
+   *  구버전 세이브는 없을 수 있어 optional(undefined는 은퇴하지 않은 것과 동일). */
+  internationalRetired?: boolean;
   /** 이번 시즌 득점(리그+컵). 시즌 경계 리셋. */
   seasonGoals: number;
   /** 통산 선발 출전 수(전 시즌 누적). */
