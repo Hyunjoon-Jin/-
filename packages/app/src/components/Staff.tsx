@@ -8,10 +8,11 @@ import {
   STADIUM_MAX, stadiumUpgradeCost, stadiumMatchdayMultiplier,
   ACADEMY_MAX, academyUpgradeCost, academyPotentialBonus, staffTraitSynergyBonus,
   staffRaiseCost, STAFF_RAISE_ELIGIBLE_YEARS, ACADEMY_FOCUS_POTENTIAL_BONUS_PER_LEVEL,
-  STAFF_RETIRE_MIN_AGE,
-  type StaffKind, type SpecialistCoachKind, type NamedStaffKind, type Club, type Line,
+  STAFF_RETIRE_MIN_AGE, buildInjuryRiskReport,
+  type StaffKind, type SpecialistCoachKind, type NamedStaffKind, type Club, type Line, type InjuryRiskTier,
 } from '@soccer-tycoon/engine';
 import { useResultToast } from '../toast.js';
+import { InfoTip } from './InfoTip.js';
 
 interface Props {
   game: GameState;
@@ -51,6 +52,17 @@ function levelOf(staff: Club['staff'], kind: StaffKind): number {
     : (staff[kind as NamedStaffKind] as number);
 }
 
+/** 부상 위험도 등급별 표시(신규 개선 항목 20). */
+const INJURY_RISK_LABEL: Record<InjuryRiskTier, { text: string; cls: string }> = {
+  low: { text: '낮음', cls: 'cond-good' },
+  medium: { text: '보통', cls: '' },
+  high: { text: '높음', cls: 'injury' },
+  veryHigh: { text: '매우 높음', cls: 'injury' },
+};
+
+/** 리포트에 표시할 최대 인원 — 스쿼드 전체가 아니라 위험도 상위만 보여준다. */
+const INJURY_RISK_REPORT_SIZE = 8;
+
 export function Staff({ game, onUpgrade, onUpgradeStadium, onUpgradeAcademy, onNegotiateRaise, onSetAcademyFocus }: Props) {
   const club = myClub(game);
   const toast = useResultToast();
@@ -67,6 +79,8 @@ export function Staff({ game, onUpgrade, onUpgradeStadium, onUpgradeAcademy, onN
   const academyMaxed = academyLevel >= ACADEMY_MAX;
   const academyCost = academyMaxed ? 0 : academyUpgradeCost(academyLevel);
   const academyAfford = club.finance.balance >= academyCost;
+
+  const injuryRiskReport = buildInjuryRiskReport(club).slice(0, INJURY_RISK_REPORT_SIZE);
 
   const synergy = staffTraitSynergyBonus(club.staff);
   const traitedCount = NAMED_KINDS.filter((k) => club.staff.members?.[k]?.trait).length;
@@ -203,6 +217,37 @@ export function Staff({ game, onUpgrade, onUpgradeStadium, onUpgradeAcademy, onN
             {academyMaxed ? '최고 시설' : `증축 (${formatMoney(academyCost)})`}
           </button>
         </div>
+      </div>
+
+      <div className="injury-risk-report">
+        <h3>
+          🩺 의료진 부상 예측 리포트
+          <InfoTip title="부상 예측 리포트">
+            의료 스태프 레벨·선수 특성(부상 잦음/강철 체력)·훈련 포커스·최근 복귀 후 재부상
+            위험 구간을 종합해 다음 경기 부상 발생 확률을 예측합니다. 실제 판정과 같은
+            공식을 그대로 사용하지만, 결과 자체를 바꾸지는 않는 참고용 수치입니다.
+          </InfoTip>
+        </h3>
+        {injuryRiskReport.length === 0 ? (
+          <p className="muted small">현재 위험도를 계산할 수 있는 선수가 없습니다.</p>
+        ) : (
+          injuryRiskReport.map((r) => (
+            <div className="bar-row" key={r.playerId}>
+              <span className="bar-label">
+                {r.name}({r.position})
+                {r.isInjuryProne && ' 🤕'}
+                {r.isIronMan && ' 💪'}
+                {r.reinjuryWindowRemaining > 0 && ' 🔁'}
+              </span>
+              <div className="bar-track">
+                <div className="bar-fill" style={{ width: `${Math.min(100, r.riskPerMatch * 400)}%` }} />
+              </div>
+              <span className={`bar-val ${INJURY_RISK_LABEL[r.tier].cls}`}>
+                {INJURY_RISK_LABEL[r.tier].text}
+              </span>
+            </div>
+          ))
+        )}
       </div>
     </div>
   );

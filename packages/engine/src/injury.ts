@@ -3,8 +3,12 @@
  * 부상 발생 시 경미/중등도/중상 등급과 부위 명칭을 부여한다.
  * 의료 스태프가 높을수록 경미 비중·회복 기간이 줄어 스태프 가치가 커진다.
  */
+import type { Club, Player } from './types.js';
 import type { Rng } from './rng.js';
 import { clamp } from './math.js';
+import { TUNING } from './tuning.js';
+import { hasTrait } from './traits.js';
+import { effectiveMedical } from './staffActions.js';
 
 export type InjurySeverity = 'minor' | 'moderate' | 'serious';
 
@@ -100,4 +104,71 @@ export function rollInjury(rng: Rng, medical: number): Injury {
   const pool = TEMPLATES[severity];
   const template = pool[rng.int(0, pool.length - 1)]!;
   return { matches, severity, name: template.name, bodyPart: template.bodyPart };
+}
+
+// ── 의료진 부상 예측 리포트(신규 개선 항목 20) ───────────────
+
+/** 의료 레벨(1~20) → 부상 발생 확률 배율. simulateMatch.generateInjuries의
+ *  injuryMedicalFactor와 동일한 공식(순수 조회 전용으로 여기 재사용). */
+function injuryRiskMedicalFactor(medical: number): number {
+  return clamp(medicalBias(medical), 0.4, 1.3);
+}
+
+export type InjuryRiskTier = 'low' | 'medium' | 'high' | 'veryHigh';
+
+const INJURY_RISK_MEDIUM = 0.06;
+const INJURY_RISK_HIGH = 0.10;
+const INJURY_RISK_VERY_HIGH = 0.16;
+
+export function injuryRiskTier(riskPerMatch: number): InjuryRiskTier {
+  if (riskPerMatch >= INJURY_RISK_VERY_HIGH) return 'veryHigh';
+  if (riskPerMatch >= INJURY_RISK_HIGH) return 'high';
+  if (riskPerMatch >= INJURY_RISK_MEDIUM) return 'medium';
+  return 'low';
+}
+
+/**
+ * 경기당 부상 발생 확률 예측 — simulateMatch의 실제 부상 판정 공식(generateInjuries)과
+ * 완전히 동일한 요인(의료 레벨·특성·훈련 포커스·재부상 위험 구간)을 그대로 재사용한
+ * 순수 조회 함수다. 부작용 없음(경기 시뮬레이션과 무관하게 언제든 계산 가능).
+ */
+export function predictedInjuryRiskPerMatch(player: Player, medical: number): number {
+  const medFactor = injuryRiskMedicalFactor(medical);
+  const traitMul = hasTrait(player, 'ironMan') ? 0.5 : hasTrait(player, 'injuryProne') ? 1.7 : 1;
+  const trainingMul = player.trainingFocus === 'conditioning' ? 0.85 : 1;
+  const reinjuryMul = reinjuryRiskFactor(player.reinjuryRiskMatches);
+  return TUNING.injuryTriggerChance * medFactor * traitMul * trainingMul * reinjuryMul;
+}
+
+export interface InjuryRiskEntry {
+  playerId: string;
+  name: string;
+  position: Player['position'];
+  riskPerMatch: number;
+  tier: InjuryRiskTier;
+  isInjuryProne: boolean;
+  isIronMan: boolean;
+  isConditioningFocus: boolean;
+  /** 재부상 위험 구간에 남은 경기 수(0이면 해당 없음). */
+  reinjuryWindowRemaining: number;
+}
+
+/** 부상 중이거나 정지 중인 선수는 이번 경기에 뛰지 않으므로 리포트에서 제외한다
+ *  (실제 판정 로직(generateInjuries)이 그런 선수는 건너뛰는 것과 동일). */
+export function buildInjuryRiskReport(club: Club): InjuryRiskEntry[] {
+  const medical = effectiveMedical(club.staff);
+  return club.players
+    .filter((p) => p.injuryMatches <= 0 && p.suspensionMatches <= 0)
+    .map((p) => ({
+      playerId: p.id,
+      name: p.name,
+      position: p.position,
+      riskPerMatch: predictedInjuryRiskPerMatch(p, medical),
+      tier: injuryRiskTier(predictedInjuryRiskPerMatch(p, medical)),
+      isInjuryProne: hasTrait(p, 'injuryProne'),
+      isIronMan: hasTrait(p, 'ironMan'),
+      isConditioningFocus: p.trainingFocus === 'conditioning',
+      reinjuryWindowRemaining: clamp(p.reinjuryRiskMatches ?? 0, 0, REINJURY_RISK_WINDOW),
+    }))
+    .sort((a, b) => b.riskPerMatch - a.riskPerMatch);
 }
