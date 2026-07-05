@@ -44,6 +44,7 @@ export {
   type CareerMilestone, type MilestoneKind, type YouthProspect,
   type DebutEvent, type DebutEventKind, type YouthProspectUpdate, type LoanReturnEvent,
   type LoanObligationEvent, type ReservePromotionEvent, type MentorAssignResult, type AddOnEvent,
+  type AcademyAlumnusUpdate,
 } from './franchise.js';
 export { TUNING } from './tuning.js';
 export { DERIVED_WEIGHTS, type DerivedKey } from './roleWeights.js';

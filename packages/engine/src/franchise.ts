@@ -150,6 +150,23 @@ export interface SeasonSummary {
   addOnPayouts?: AddOnEvent[];
   /** 리저브팀 자체 소규모 리그(가상 매치, 신규 개선 항목 14) 순위표(전 구단 — 앱에서 내 구단 순위를 찾아 표시). */
   reserveLeagueTable?: ReserveTableRow[];
+  /** 과거 내 구단 리저브에서 1군으로 승격했다가 이후 타 구단으로 떠난 "동문"의 이번 시즌
+   *  소식(신규 개선 항목 18, 앱 전용 — 헤드리스엔 미설정). 은퇴·방출로 더는 어디서도
+   *  뛰지 않는 졸업생은 포함되지 않는다(현재 뛰고 있는 구단을 찾을 수 있는 경우만). */
+  academyAlumni?: AcademyAlumnusUpdate[];
+}
+
+/** 유스 졸업생 동문 네트워크(신규 개선 항목 18) — 과거 우리 리저브 출신으로 1군
+ *  승격했다가 지금은 다른 구단에서 뛰고 있는 선수의 이번 시즌 소식. */
+export interface AcademyAlumnusUpdate {
+  playerId: string;
+  name: string;
+  position: Position;
+  /** 현재 소속 구단(리저브 포함) — 내 구단이 아닌 다른 구단. */
+  clubId: string;
+  clubName: string;
+  seasonGoals: number;
+  seasonApps: number;
 }
 
 /** 과거 유스 기대주 소개 이후의 후속 소식(데뷔/첫 골). */

@@ -41,8 +41,8 @@ import {
   type Club, type Tactic, type MatchResult, type MatchSetup, type SeasonSummary,
   type Fixture, type TableRow, type PlayerSeasonStat, type CupState, type StaffKind, type NamedStaffKind,
   type PlayerFormEntry, type Player, type YouthProspect, type YouthProspectUpdate,
-  type TeamStrength, type FormSummary, type ScoutingReport, type Line,
-  type StaffDepartureEvent, type StaffRetirementEvent,
+  type TeamStrength, type FormSummary, type ScoutingReport, type Line, type Position,
+  type StaffDepartureEvent, type StaffRetirementEvent, type AcademyAlumnusUpdate,
   type AddOnEvent,
 } from '@soccer-tycoon/engine';
 import { makeDefaultTactic, repairTactic } from './tactics.js';
@@ -611,6 +611,27 @@ export function finishSeason(state: GameState): GameState {
     .filter((e) => e.clubId === state.myClubId && introducedProspectIds.has(e.playerId))
     .map((e) => ({ playerId: e.playerId, name: e.name, kind: e.kind }));
 
+  // 유스 졸업생 동문 네트워크(신규 개선 항목 18) — 과거 내 구단 리저브에서 1군으로
+  // 승격했던 선수 중 지금은 내 구단이 아닌 다른 구단에서 뛰고 있는 선수를 찾아
+  // 이번 시즌 소식을 전한다(은퇴·방출로 어디서도 찾을 수 없는 졸업생은 제외).
+  const myGraduateIds = new Set(
+    state.history.flatMap((s) => (s.reservePromotions ?? []).map((p) => p.playerId)),
+  );
+  const leagueWidePlayerStats = aggregatePlayerStats([...ss.results, ...otherResult.matches]);
+  const academyAlumni: AcademyAlumnusUpdate[] = [];
+  for (const club of state.clubs) {
+    if (club.id === state.myClubId) continue;
+    for (const p of [...club.players, ...(club.reserves ?? [])]) {
+      if (!myGraduateIds.has(p.id)) continue;
+      const stat = leagueWidePlayerStats.find((s) => s.playerId === p.id);
+      academyAlumni.push({
+        playerId: p.id, name: p.name, position: p.position,
+        clubId: club.id, clubName: club.name,
+        seasonGoals: stat?.goals ?? 0, seasonApps: stat?.apps ?? 0,
+      });
+    }
+  }
+
   // 5.5) 국가대표 차출 (오프시즌 리셋 이후 — 피로/부상이 새 시즌에 반영)
   // TOURNAMENT_INTERVAL_SEASONS마다는 정기 차출 대신 비정기 국제대회(월드컵/유로급, C15)로 확장.
   const isTournamentSeason = state.season % TOURNAMENT_INTERVAL_SEASONS === 0;
@@ -763,6 +784,7 @@ export function finishSeason(state: GameState): GameState {
     reservePromotions: myReservePromotions,
     staffDepartures: myStaffDepartures,
     staffRetirements: myStaffRetirements,
+    academyAlumni,
     continentalCupChampionId,
     continentalCupChampionName,
     qualifiedForContinental: continentalQualifierIds.includes(state.myClubId),

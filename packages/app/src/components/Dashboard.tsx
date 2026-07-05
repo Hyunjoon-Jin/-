@@ -198,6 +198,22 @@ export function Dashboard({ game, onSignContract, visitedTactics, visitedSquadPr
       });
     }
   }
+  if (last?.academyAlumni !== undefined && last.academyAlumni.length > 0) {
+    const sortedAlumni = [...last.academyAlumni].sort((a, b) => b.seasonGoals - a.seasonGoals);
+    seasonBanners.push({
+      key: 'academyAlumni', priority: 5.5,
+      node: (
+        <Banner tone="special" title="🎓 동문 소식">
+          {sortedAlumni.map((a) => (
+            <p key={a.playerId}>
+              우리 유스 출신 <b>{a.name}</b>({a.position}), 현재 <b>{a.clubName}</b> 소속으로
+              이번 시즌 {a.seasonApps}경기 <b>{a.seasonGoals}골</b>을 기록했습니다.
+            </p>
+          ))}
+        </Banner>
+      ),
+    });
+  }
   if (last?.loanReturns !== undefined && last.loanReturns.length > 0) {
     seasonBanners.push({
       key: 'loanReturns', priority: 6,
