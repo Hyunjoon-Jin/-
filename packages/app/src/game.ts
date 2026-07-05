@@ -147,6 +147,10 @@ export interface GameState {
    *  (Item1). 매도 구단이 협상을 접은 채로 곧장 재제안하지 못하게 막아, "다음
    *  시즌에 다시 시도하세요" 안내가 실제로 지켜지도록 한다. */
   negotiationCooldowns?: Record<string, number>;
+  /** 판매한 선수 id → 재영입이 다시 가능해지는 시즌 번호(신규 개선 항목 11). 바이백
+   *  조항 없이 판 선수를 곧바로 되사들여 이적 시스템을 우회하는 것을 막는다 — 정식
+   *  경로는 판매 시 바이백 조항(Item2)을 붙이는 것뿐이다. */
+  soldPlayerCooldowns?: Record<string, number>;
   /** 스폰서 보너스 목표 연속 달성 횟수(C-new2) — 목표가 주어진 시즌에 달성하면 +1,
    *  실패하면 0으로 리셋. 목표가 없는 시즌은 그대로 유지(불이익 없음). 구버전
    *  세이브는 없을 수 있어 optional(없으면 0 취급). */
@@ -874,8 +878,24 @@ function afterSquadChange(state: GameState): GameState {
   return { ...state, tactics: { ...state.tactics, [state.myClubId]: repaired } };
 }
 
+/** 판매 후 재영입 쿨다운 기간(시즌, 신규 개선 항목 11). */
+const SOLD_COOLDOWN_SEASONS = 1;
+
+/** 최근 판매(바이백 조항 없이)한 선수는 이번 쿨다운 동안 어떤 경로로도 재영입할 수
+ *  없다(신규 개선 항목 11) — 판매·재구매를 반복해 이적 시스템을 우회하는 것을 막는다.
+ *  정식 재영입 경로는 판매 시 바이백 조항(Item2)을 붙이는 것뿐이다. */
+function soldCooldownMessage(state: GameState, playerId: string): string | undefined {
+  const cooldownUntil = state.soldPlayerCooldowns?.[playerId];
+  if (cooldownUntil !== undefined && state.season < cooldownUntil) {
+    return `최근에 판매한 선수는 재영입할 수 없습니다(${cooldownUntil}시즌부터 가능 — 판매 시 바이백 조항을 붙이면 즉시 되사올 수 있습니다).`;
+  }
+  return undefined;
+}
+
 export function buy(state: GameState, playerId: string): ActionOutcome {
   if (state.live) return { state, ok: false, message: '이적은 프리시즌에만 가능합니다.' };
+  const blocked = soldCooldownMessage(state, playerId);
+  if (blocked) return { state, ok: false, message: blocked };
   const r = buyPlayer(state.clubs, state.myClubId, playerId);
   if (!r.ok) return { state, ok: false, message: r.reason! };
   return { state: afterSquadChange(state), ok: true, message: `${r.playerName} 영입 완료` };
@@ -895,6 +915,8 @@ export function negotiate(state: GameState, playerId: string, offer: number, rou
       reason: `지난 협상 결렬 여파로 이번 시즌은 재협상을 거절당했습니다(${cooldownUntil}시즌부터 재시도 가능).`,
     };
   }
+  const soldBlocked = soldCooldownMessage(state, playerId);
+  if (soldBlocked) return { ok: false, reason: soldBlocked };
   return evaluateOffer(state.clubs, state.myClubId, playerId, offer, round);
 }
 
@@ -931,6 +953,8 @@ export function resolveRivalSnipe(
  *  수수료가 별도로 잔고에서 차감된다. */
 export function buyAt(state: GameState, playerId: string, fee: number): ActionOutcome {
   if (state.live) return { state, ok: false, message: '이적은 프리시즌에만 가능합니다.' };
+  const blocked = soldCooldownMessage(state, playerId);
+  if (blocked) return { state, ok: false, message: blocked };
   const r = buyPlayerAt(state.clubs, state.myClubId, playerId, fee);
   if (!r.ok) return { state, ok: false, message: r.reason! };
   const feeMsg = `이적료 ${formatMoney(r.fee!)} + 에이전트 수수료 ${formatMoney(r.agentFee!)}`;
@@ -940,6 +964,8 @@ export function buyAt(state: GameState, playerId: string, fee: number): ActionOu
 /** 방출(바이아웃) 조항 이용 즉시 영입 — 협상 없이 조항 금액 그대로 지불한다. */
 export function buyViaReleaseClause(state: GameState, playerId: string): ActionOutcome {
   if (state.live) return { state, ok: false, message: '이적은 프리시즌에만 가능합니다.' };
+  const blocked = soldCooldownMessage(state, playerId);
+  if (blocked) return { state, ok: false, message: blocked };
   const r = buyPlayerViaReleaseClause(state.clubs, state.myClubId, playerId);
   if (!r.ok) return { state, ok: false, message: r.reason! };
   const feeMsg = `방출조항 ${formatMoney(r.fee!)} + 에이전트 수수료 ${formatMoney(r.agentFee!)}`;
@@ -950,6 +976,8 @@ export function buyViaReleaseClause(state: GameState, playerId: string): ActionO
  *  즉시 확정 영입한다. 협상이 결렬되기 직전이거나 더 밀당할 여유가 없을 때 쓴다. */
 export function panicBuyAction(state: GameState, playerId: string): ActionOutcome {
   if (state.live) return { state, ok: false, message: '이적은 프리시즌에만 가능합니다.' };
+  const blocked = soldCooldownMessage(state, playerId);
+  if (blocked) return { state, ok: false, message: blocked };
   const r = enginePanicBuy(state.clubs, state.myClubId, playerId);
   if (!r.ok) return { state, ok: false, message: r.reason! };
   const feeMsg = `패닉 바이 ${formatMoney(r.fee!)}(호가+${Math.round((PANIC_BUY_PREMIUM - 1) * 100)}%) + 에이전트 수수료 ${formatMoney(r.agentFee!)}`;
@@ -960,7 +988,11 @@ export function sell(state: GameState, playerId: string): ActionOutcome {
   if (state.live) return { state, ok: false, message: '이적은 프리시즌에만 가능합니다.' };
   const r = sellPlayer(state.clubs, state.myClubId, playerId);
   if (!r.ok) return { state, ok: false, message: r.reason! };
-  return { state: afterSquadChange(state), ok: true, message: `${r.playerName} → ${r.buyerName} 판매 완료` };
+  const next = afterSquadChange(state);
+  return {
+    state: { ...next, soldPlayerCooldowns: { ...next.soldPlayerCooldowns, [playerId]: state.season + SOLD_COOLDOWN_SEASONS } },
+    ok: true, message: `${r.playerName} → ${r.buyerName} 판매 완료`,
+  };
 }
 
 /** 내 선수에 대한 AI 구단 입찰 목록(상태 변경 없음). */
@@ -978,8 +1010,16 @@ export function acceptSell(
   const r = acceptSellOffer(state.clubs, state.myClubId, playerId, buyerId, buybackFee);
   if (!r.ok) return { state, ok: false, message: r.reason! };
   const buybackMsg = buybackFee !== undefined ? ` · 바이백 ${formatMoney(buybackFee)}` : '';
+  let next = afterSquadChange(state);
+  // 바이백 조항 없이 판 선수만 쿨다운을 건다(신규 개선 항목 11) — 바이백은 이미 정식 재영입 경로다.
+  if (buybackFee === undefined) {
+    next = {
+      ...next,
+      soldPlayerCooldowns: { ...next.soldPlayerCooldowns, [playerId]: state.season + SOLD_COOLDOWN_SEASONS },
+    };
+  }
   return {
-    state: afterSquadChange(state), ok: true,
+    state: next, ok: true,
     message: `${r.playerName} → ${r.buyerName} 판매 완료 (${formatMoney(r.fee!)}${buybackMsg})`,
   };
 }
