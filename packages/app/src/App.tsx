@@ -12,7 +12,7 @@ import {
   recordNegotiationBreakdown,
   upgradeStadiumAction, upgradeAcademyAction,
   loanOut, loanIn, recallLoan, swapDeal,
-  setTrainingFocus, setTrainingPosition, renewContract,
+  setTrainingFocus, setTrainingPosition, renewContract, setAcademyFocus,
   watchSetup, matchPreview, commitWatchedRound,
   watchCupSetup, cupPreview, commitWatchedCupRound,
   playerForm, playerTimeline, playerRatingHistory, respondMedia, dismissMedia, signContract,
@@ -382,6 +382,7 @@ export function App() {
                 onUpgradeStadium={() => runAction(upgradeStadiumAction, undefined)}
                 onUpgradeAcademy={() => runAction(upgradeAcademyAction, undefined)}
                 onNegotiateRaise={(kind) => runAction(negotiateStaffRaiseAction, kind)}
+                onSetAcademyFocus={(focus) => update(setAcademyFocus(game, focus))}
               />
             )}
             {tab === 'history' && <History game={game} />}

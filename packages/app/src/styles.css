@@ -804,6 +804,8 @@ body {
   transition: width var(--dur-slow) var(--ease);
 }
 .staff-effect { font-size: 13px; min-height: 34px; margin-bottom: 12px; }
+.academy-focus { margin-bottom: 12px; }
+.academy-focus-options { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
 .staff-btn { width: 100%; }
 .staff-btn:disabled { opacity: .4; cursor: not-allowed; }
 

@@ -3,6 +3,7 @@ import {
   academyPotentialBonus, academyUpgradeCost, upgradeAcademy, ACADEMY_MAX,
 } from '../src/finance.js';
 import { generateClub, generateAcademyIntake } from '../src/generate.js';
+import { lineOf } from '../src/teamStrength.js';
 import { Rng } from '../src/rng.js';
 
 function makeClub(seed = 1, tier = 12) {
@@ -73,5 +74,60 @@ describe('B11: 아카데미 시설 등급', () => {
     const high = generateAcademyIntake(new Rng(20), 12, 14, 20, ACADEMY_MAX);
     const avgPotential = (arr: { potential: number }[]) => arr.reduce((s, p) => s + p.potential, 0) / arr.length;
     expect(avgPotential(high)).toBeGreaterThan(avgPotential(low));
+  });
+});
+
+describe('신규 개선 항목 13: 유스 아카데미 포지션 특화 슬롯', () => {
+  it('focus를 지정하지 않으면(undefined) 기존과 정확히 동일한 결과다(하위 호환)', () => {
+    const a = generateAcademyIntake(new Rng(30), 12, 20, 20, 5);
+    const b = generateAcademyIntake(new Rng(30), 12, 20, 20, 5, undefined);
+    expect(a).toEqual(b);
+  });
+
+  it('특정 라인을 특화하면 여러 시즌에 걸쳐 그 라인 포지션이 더 자주 배출된다', () => {
+    let focusedLineCount = 0;
+    let total = 0;
+    for (let seed = 1; seed <= 200; seed++) {
+      const intake = generateAcademyIntake(new Rng(seed), 12, 20, 20, 0, 'ATT');
+      for (const p of intake) {
+        total++;
+        if (lineOf(p.position) === 'ATT') focusedLineCount++;
+      }
+    }
+    // 특화 없이 균등 배출이면 ATT 비중은 대략 4/12=33%대 — 특화 시 뚜렷하게 더 높아야 한다.
+    expect(focusedLineCount / total).toBeGreaterThan(0.5);
+  });
+
+  it('특화 라인 소속 유망주는 시설 등급이 높을수록 잠재력이 추가로 더 오른다', () => {
+    // 여러 시드에 걸쳐 특화 라인(ATT) 유망주만 골라 평균 잠재력을 비교한다.
+    function avgFocusPotential(academyLevel: number): number {
+      let sum = 0; let count = 0;
+      for (let seed = 1; seed <= 100; seed++) {
+        const intake = generateAcademyIntake(new Rng(seed), 12, 20, 20, academyLevel, 'ATT');
+        for (const p of intake) {
+          if (lineOf(p.position) === 'ATT') { sum += p.potential; count++; }
+        }
+      }
+      return sum / count;
+    }
+    expect(avgFocusPotential(ACADEMY_MAX)).toBeGreaterThan(avgFocusPotential(0));
+  });
+
+  it('특화하지 않은 다른 라인에는 특화 잠재력 가산이 붙지 않는다(통계적 비교)', () => {
+    // ATT를 특화해도 DEF 유망주의 평균 잠재력은 특화하지 않았을 때와 통계적으로 비슷해야
+    // 한다(가산이 ATT에만 붙으므로) — 여러 시드에 걸쳐 평균을 비교해 우연을 배제한다.
+    function avgLinePotential(focus: 'ATT' | undefined, line: 'DEF'): number {
+      let sum = 0; let count = 0;
+      for (let seed = 1; seed <= 300; seed++) {
+        const intake = generateAcademyIntake(new Rng(seed), 12, 20, 20, ACADEMY_MAX, focus);
+        for (const p of intake) {
+          if (lineOf(p.position) === line) { sum += p.potential; count++; }
+        }
+      }
+      return sum / count;
+    }
+    const withoutFocus = avgLinePotential(undefined, 'DEF');
+    const withAttFocus = avgLinePotential('ATT', 'DEF');
+    expect(Math.abs(withAttFocus - withoutFocus)).toBeLessThan(3);
   });
 });

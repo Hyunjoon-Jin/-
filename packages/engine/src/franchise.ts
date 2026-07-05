@@ -581,7 +581,7 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
     // 유스 아카데미 배출 — 1군이 아닌 리저브로 합류(B9), 승격 전까지는 출전 대상이 아니다.
     const intake = generateAcademyIntake(
       rng, club.finance.reputation, effectiveYouth(club.staff), effectiveScouting(club.staff),
-      club.finance.academyLevel ?? 0,
+      club.finance.academyLevel ?? 0, club.finance.academyFocus,
     );
     const reserves = club.reserves ?? (club.reserves = []);
     reserves.push(...intake);

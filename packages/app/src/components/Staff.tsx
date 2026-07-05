@@ -7,8 +7,8 @@ import {
   upgradeCost, STAFF_MAX, formatMoney, specialistCoachLevel, STAFF_TRAIT_LABEL, STAFF_TRAIT_DESC,
   STADIUM_MAX, stadiumUpgradeCost, stadiumMatchdayMultiplier,
   ACADEMY_MAX, academyUpgradeCost, academyPotentialBonus, staffTraitSynergyBonus,
-  staffRaiseCost, STAFF_RAISE_ELIGIBLE_YEARS,
-  type StaffKind, type SpecialistCoachKind, type NamedStaffKind, type Club,
+  staffRaiseCost, STAFF_RAISE_ELIGIBLE_YEARS, ACADEMY_FOCUS_POTENTIAL_BONUS_PER_LEVEL,
+  type StaffKind, type SpecialistCoachKind, type NamedStaffKind, type Club, type Line,
 } from '@soccer-tycoon/engine';
 import { useResultToast } from '../toast.js';
 
@@ -18,7 +18,15 @@ interface Props {
   onUpgradeStadium: () => ActionOutcome;
   onUpgradeAcademy: () => ActionOutcome;
   onNegotiateRaise: (kind: NamedStaffKind) => ActionOutcome;
+  onSetAcademyFocus: (focus: Line | undefined) => void;
 }
+
+const ACADEMY_FOCUS_OPTIONS: { key: Line; label: string }[] = [
+  { key: 'GK', label: 'GK' },
+  { key: 'DEF', label: '수비' },
+  { key: 'MID', label: '미드' },
+  { key: 'ATT', label: '공격' },
+];
 
 const SPECIALIST_KINDS: SpecialistCoachKind[] = ['coachGk', 'coachAttack', 'coachDefense', 'coachPhysical'];
 const NAMED_KINDS: NamedStaffKind[] = ['coaching', 'medical', 'scouting', 'youth'];
@@ -42,7 +50,7 @@ function levelOf(staff: Club['staff'], kind: StaffKind): number {
     : (staff[kind as NamedStaffKind] as number);
 }
 
-export function Staff({ game, onUpgrade, onUpgradeStadium, onUpgradeAcademy, onNegotiateRaise }: Props) {
+export function Staff({ game, onUpgrade, onUpgradeStadium, onUpgradeAcademy, onNegotiateRaise, onSetAcademyFocus }: Props) {
   const club = myClub(game);
   const toast = useResultToast();
 
@@ -166,6 +174,22 @@ export function Staff({ game, onUpgrade, onUpgradeStadium, onUpgradeAcademy, onN
           <div className="staff-effect muted">
             유스 인테이크 잠재력 +{academyPotentialBonus(academyLevel)} (유스 스태프와 별개)
             {!academyMaxed && ` (다음 단계 +${academyPotentialBonus(academyLevel + 1) - academyPotentialBonus(academyLevel)})`}
+          </div>
+          <div className="academy-focus">
+            <div className="muted small">
+              포지션 특화{club.finance.academyFocus && ` (Lv.${academyLevel} → +${academyLevel * ACADEMY_FOCUS_POTENTIAL_BONUS_PER_LEVEL} 잠재력)`}
+            </div>
+            <div className="academy-focus-options">
+              {ACADEMY_FOCUS_OPTIONS.map((f) => (
+                <button
+                  key={f.key}
+                  className={`chip${club.finance.academyFocus === f.key ? ' active' : ''}`}
+                  onClick={() => onSetAcademyFocus(club.finance.academyFocus === f.key ? undefined : f.key)}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
           </div>
           <button
             className="btn-advance staff-btn"

@@ -22,6 +22,7 @@ export {
 } from './stats.js';
 export {
   generateClub, generateYouthPlayer, defaultTactic, FORMATION_433, type TacticContext,
+  ACADEMY_FOCUS_WEIGHT_MULTIPLIER, ACADEMY_FOCUS_POTENTIAL_BONUS_PER_LEVEL,
 } from './generate.js';
 export { FORMATIONS, FORMATION_NAMES } from './formations.js';
 export { simulateSeason, type SeasonResult } from './league.js';

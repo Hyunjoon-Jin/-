@@ -840,6 +840,12 @@ export function setTrainingFocus(
   return { ...state };
 }
 
+/** 유스 아카데미 포지션 특화 라인 설정(신규 개선 항목 13). undefined를 넘기면 특화를 해제한다. */
+export function setAcademyFocus(state: GameState, focus: import('@soccer-tycoon/engine').Line | undefined): GameState {
+  myClub(state).finance.academyFocus = focus;
+  return { ...state };
+}
+
 /** 포지션 전환 훈련 대상 지정(해제하려면 undefined). 시즌 경계마다 코칭 지원을 받아 숙련도가 오른다. */
 export function setTrainingPosition(
   state: GameState, playerId: string, position: import('@soccer-tycoon/engine').Position | undefined,
