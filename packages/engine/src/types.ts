@@ -5,6 +5,7 @@
 import type { InjurySeverity, BodyPart } from './injury.js';
 import type { PlayerInstruction } from './playerInstructions.js';
 import type { SponsorContract } from './finance.js';
+import type { Weather } from './weather.js';
 
 // ── 능력치 키 ──────────────────────────────────────────────
 
@@ -371,4 +372,6 @@ export interface MatchResult {
   seed: number;
   /** 양 팀 통틀어 평점(동률이면 득점)이 가장 높은 선수 — 맨오브더매치. 출전자가 없으면 미설정. */
   motmPlayerId?: string;
+  /** 경기 날씨(신규 개선 항목 26). 손으로 만든 MatchResult(테스트 등)엔 없을 수 있어 optional. */
+  weather?: Weather;
 }

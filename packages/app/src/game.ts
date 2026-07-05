@@ -30,6 +30,7 @@ import {
   generateSponsorGoal, evaluateSponsorGoal, SPONSOR_GOAL_LABEL, sponsorStreakMultiplier, type SponsorGoal,
   signSponsorContract as engineSignSponsorContract, tickSponsorContracts, SPONSOR_CONTRACT_LABEL,
   type SponsorContractKind,
+  matchWeather, type Weather,
   annualWageBill, wageBudget,
   matchOutcomeKind, mediaToneOptions, shouldTriggerMediaEvent, applyMediaTone,
   MEDIA_TONE_STYLE, classifyPersona,
@@ -1698,6 +1699,8 @@ export interface TeamPreview {
 export interface MatchPreview {
   home: TeamPreview;
   away: TeamPreview;
+  /** 경기 날씨(신규 개선 항목 26) — 킥오프 전에도 미리 확인 가능. */
+  weather: Weather;
 }
 
 /** 선발(전술 라인업) 중 현재 능력 최고 선수. */
@@ -1743,6 +1746,7 @@ function buildPreviewFrom(state: GameState, setup: MatchSetup): MatchPreview | n
   return {
     home: build(setup.home.club, setup.home.tactic, setup.away.tactic.formation),
     away: build(setup.away.club, setup.away.tactic, setup.home.tactic.formation),
+    weather: matchWeather(setup.seed, setup.home.club.id, setup.away.club.id),
   };
 }
 

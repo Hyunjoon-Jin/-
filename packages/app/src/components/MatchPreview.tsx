@@ -1,6 +1,9 @@
 import type { MatchPreview as Preview, TeamPreview } from '../game.js';
-import { formationMatchup, type TeamStrength, type FormResult } from '@soccer-tycoon/engine';
+import { formationMatchup, WEATHER_LABEL, type TeamStrength, type FormResult, type Weather } from '@soccer-tycoon/engine';
 import { ATTR_LABELS } from './PlayerDetail.js';
+
+/** 날씨별 표시 아이콘(신규 개선 항목 26). */
+const WEATHER_ICON: Record<Weather, string> = { clear: '☀️', rain: '🌧️', windy: '🌬️' };
 
 const STRENGTH_LABEL: Record<keyof TeamStrength, string> = {
   attack: '공격', creation: '창출', midfield: '중원', defense: '수비',
@@ -62,7 +65,12 @@ export function MatchPreview({ preview, rivalClubId }: { preview: Preview; rival
   const fInsight = formationInsight(mine, opp);
   return (
     <div className="preview">
-      <h3>경기 프리뷰</h3>
+      <h3>
+        경기 프리뷰
+        <span className="pv-weather muted small" title="경기 날씨(신규 개선 항목 26) — 비/강풍은 양 팀 모두의 전개력을 약간 떨어뜨립니다.">
+          {WEATHER_ICON[preview.weather]} {WEATHER_LABEL[preview.weather]}
+        </span>
+      </h3>
       {isDerby && <div className="derby-banner">🔥 라이벌전</div>}
       <div className="pv-teams">
         <TeamHead team={home} align="left" />
