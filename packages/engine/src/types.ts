@@ -223,6 +223,9 @@ export interface Club {
   division: number;
   /** 이사회 성향(인내심·재정 스타일). 구버전 세이브는 없을 수 있어 optional. */
   boardPersona?: BoardPersona;
+  /** 리저브(2군) 스쿼드 — 유스 인테이크가 1군에 바로 합류하는 대신 여기서 성장하다가
+   *  준비되면 승격된다(B9). 구버전 세이브는 없을 수 있어 optional(없으면 빈 배열 취급). */
+  reserves?: Player[];
 }
 
 // ── 경기 입력/출력 ────────────────────────────────────────

@@ -157,6 +157,36 @@ export function Dashboard({ game, onSignContract, visitedTactics, visitedSquadPr
       ),
     });
   }
+  if (last?.reservePromotions !== undefined && last.reservePromotions.length > 0) {
+    seasonBanners.push({
+      key: 'reservePromotions', priority: 4.5,
+      node: (
+        <Banner tone="success" title="⬆️ 리저브 승격">
+          {last.reservePromotions.map((r) => (
+            <p key={r.playerId}>
+              <b>{r.name}</b>({r.position}) 선수가 리저브에서 1군으로 승격했습니다!
+            </p>
+          ))}
+        </Banner>
+      ),
+    });
+  }
+  if (last?.loanReturns !== undefined && last.loanReturns.length > 0) {
+    seasonBanners.push({
+      key: 'loanReturns', priority: 6,
+      node: (
+        <Banner tone="info" title="🔁 임대 복귀">
+          {last.loanReturns.map((r) => (
+            <p key={r.playerId}>
+              {r.toClubId === game.myClubId
+                ? <><b>{r.name}</b> 선수가 <b>{r.fromClubName}</b> 임대를 마치고 복귀했습니다.</>
+                : <><b>{r.name}</b> 선수가 임대를 마치고 <b>{r.toClubName}</b>(으)로 복귀했습니다.</>}
+            </p>
+          ))}
+        </Banner>
+      ),
+    });
+  }
   seasonBanners.sort((a, b) => a.priority - b.priority);
 
   const [showAllBanners, setShowAllBanners] = useState(false);

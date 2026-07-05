@@ -17,7 +17,7 @@ describe('youthIntake: 유스 아카데미 배출 선수 목록', () => {
     }
   });
 
-  it('배출된 선수는 16~18세이고, 실제로 구단 스쿼드에 남아 있다(스쿼드 상한 정리로 잘리지 않음)', () => {
+  it('배출된 선수는 16~18세이고, 1군이 아닌 리저브에 합류한다(B9)', () => {
     const rng = new Rng(33);
     const clubs: Club[] = [generateClub(rng, 'x', 'X', 14)];
     const { intakePlayersByClub } = runOffseason(clubs, new Rng(44));
@@ -26,7 +26,8 @@ describe('youthIntake: 유스 아카데미 배출 선수 목록', () => {
     for (const p of intake) {
       expect(p.age).toBeGreaterThanOrEqual(16);
       expect(p.age).toBeLessThanOrEqual(18);
-      expect(clubs[0]!.players.some((cp) => cp.id === p.id)).toBe(true);
+      expect(clubs[0]!.players.some((cp) => cp.id === p.id)).toBe(false);
+      expect((clubs[0]!.reserves ?? []).some((cp) => cp.id === p.id)).toBe(true);
     }
   });
 

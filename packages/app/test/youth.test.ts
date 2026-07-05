@@ -12,13 +12,13 @@ describe('시즌 요약: 유스 아카데미 기대주 소개', () => {
     expect(potentials).toEqual([...potentials].sort((a, b) => b - a));
   });
 
-  it('기대주로 소개된 선수는 실제로 내 구단 스쿼드에 있다', () => {
+  it('기대주로 소개된 선수는 실제로 내 구단 리저브에 있다(B9 — 1군엔 승격 후에만 합류)', () => {
     let g = startGame(2026, 'c0');
     g = advanceFullSeason(g);
     const summary = g.history[0]!;
-    const squadIds = new Set(myClub(g).players.map((p) => p.id));
+    const reserveIds = new Set((myClub(g).reserves ?? []).map((p) => p.id));
     for (const p of summary.youthProspects ?? []) {
-      expect(squadIds.has(p.playerId)).toBe(true);
+      expect(reserveIds.has(p.playerId)).toBe(true);
     }
   });
 

@@ -122,6 +122,8 @@ export interface SeasonSummary {
   };
   /** 이번 오프시즌 내 구단 관련 임대 복귀(보낸 임대가 돌아오거나, 데려온 임대가 복귀). */
   loanReturns?: LoanReturnEvent[];
+  /** 이번 오프시즌 리저브에서 1군으로 승격한 선수(내 구단, B9). */
+  reservePromotions?: ReservePromotionEvent[];
 }
 
 /** 과거 유스 기대주 소개 이후의 후속 소식(데뷔/첫 골). */
@@ -157,6 +159,53 @@ function trimSquad(club: Club): void {
   }
 }
 
+/** 리저브 승격 가능 최소 나이 — 이보다 어리면 아직 후보군일 뿐 승격하지 않는다. */
+const RESERVE_PROMOTION_MIN_AGE = 17;
+/** 이 나이까지 승격하지 못하면 잠재력과 무관하게 결론(승격 또는 방출)을 낸다. */
+const RESERVE_RESOLUTION_AGE = 21;
+/** 승격 판단 기준 — 현재 능력이 잠재력의 이 비율 이상이면 "1군에서 통할 준비가 됐다"고 본다. */
+const RESERVE_READY_RATIO = 0.35;
+/** 1군 인원이 이 아래로 떨어지면 준비도와 무관하게 리저브에서 끌어올려 채운다(붕괴 방지). */
+const SQUAD_CRITICAL_SIZE = 18;
+
+interface ReserveProgressResult {
+  promoted: Player[];
+  released: number;
+}
+
+/**
+ * 리저브(2군) 스쿼드의 오프시즌 성장(나이·능력치 진행)과 승격/방출 판정(B9).
+ * 1군과 달리 실전 출전이 없어 사기 수렴 로직은 적용하지 않는다.
+ * @param firstTeamSize 판정 시점의 1군 인원 — 위급하게 적으면 준비도 기준을 무시하고 끌어올린다.
+ */
+function progressReserves(club: Club, rng: Rng, firstTeamSize: number): ReserveProgressResult {
+  const reserves = club.reserves ?? [];
+  const promoted: Player[] = [];
+  const staying: Player[] = [];
+  let released = 0;
+
+  for (const p of reserves) {
+    progressPlayer(p, rng, effectiveCoaching(p.position, club.staff));
+    const hist = p.caHistory ?? (p.caHistory = []);
+    hist.push(Math.round(currentAbility(p)));
+    if (hist.length > 20) hist.shift();
+
+    const ready = currentAbility(p) >= p.potential * RESERVE_READY_RATIO;
+    const squadCritical = firstTeamSize + promoted.length < SQUAD_CRITICAL_SIZE;
+    if (p.age >= RESERVE_RESOLUTION_AGE) {
+      // 이 나이까지 왔으면 리저브에 더 둘 수 없다 — 준비됐으면 승격, 아니면 방출.
+      if (ready) promoted.push(p); else released++;
+    } else if (p.age >= RESERVE_PROMOTION_MIN_AGE && (ready || squadCritical)) {
+      promoted.push(p);
+    } else {
+      staying.push(p);
+    }
+  }
+
+  club.reserves = staying;
+  return { promoted, released };
+}
+
 /** 은퇴 시점 스냅샷(레전드 아카이브용). 은퇴로 선수 객체 자체는 사라지므로 여기 보존. */
 export interface RetiredLegend {
   playerId: string;
@@ -169,6 +218,15 @@ export interface RetiredLegend {
   careerApps: number;
   careerGoals: number;
   caps: number;
+}
+
+/** 리저브(2군) 승격 이벤트(B9) — 오프시즌에 리저브에서 1군으로 승격한 선수. */
+export interface ReservePromotionEvent {
+  playerId: string;
+  name: string;
+  position: Position;
+  clubId: string;
+  clubName: string;
 }
 
 /** 임대 복귀 이벤트(오프시즌에 임대 기간이 끝나 원 소속 구단으로 돌아간 선수). */
@@ -198,6 +256,10 @@ export interface OffseasonResult {
   debutEvents: DebutEvent[];
   /** 이번 오프시즌에 임대 기간이 끝나 원 소속 구단으로 복귀한 선수(전 구단). */
   loanReturns: LoanReturnEvent[];
+  /** 이번 오프시즌 리저브에서 1군으로 승격한 선수(전 구단, B9). */
+  reservePromotions: ReservePromotionEvent[];
+  /** clubId → 리저브에서 방출된 인원(1군 승격 기준 미달 상태로 결론 나이에 도달, B9). */
+  reserveReleasesByClub: Map<string, number>;
 }
 
 /** 멘토링 보너스 배율 — 같은 라인에 리더 특성 보유자나 리더십 높은 베테랑이 있으면 성장 가속. */
@@ -234,6 +296,8 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
   const milestones: CareerMilestone[] = [];
   const debutEvents: DebutEvent[] = [];
   const loanReturns: LoanReturnEvent[] = [];
+  const reservePromotions: ReservePromotionEvent[] = [];
+  const reserveReleasesByClub = new Map<string, number>();
 
   // 임대 복귀: 시즌 카운트다운이 끝난 임대 선수를 원 소속 구단으로 돌려보낸다. 이번
   // 오프시즌의 성장/노화/은퇴 처리를 정상적으로 받도록, 아래 본 루프보다 먼저 처리해
@@ -341,12 +405,25 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
     // 실명 스태프 계약 잔여연수 감소(0이면 조용히 재계약)
     tickStaffContracts(club);
 
-    // 유스 아카데미 배출
+    // 리저브 성장 + 승격/방출 판정 — 승격 인원은 1군에 합류(스쿼드 상한 초과분은 이후
+    // trimSquad가 정리). 이번 시즌 새로 들어올 유스 인테이크보다 먼저 처리해, 갓
+    // 배출된 신인이 배출된 바로 그 시즌에 곧장 승격 판정을 받지 않고 최소 한 시즌은
+    // 리저브를 실제로 거치게 한다.
+    const { promoted, released } = progressReserves(club, rng, club.players.length);
+    for (const p of promoted) {
+      club.players.push(p);
+      assignSquadNumber(rng, club.players, p);
+      reservePromotions.push({ playerId: p.id, name: p.name, position: p.position, clubId: club.id, clubName: club.name });
+    }
+    reserveReleasesByClub.set(club.id, released);
+
+    // 유스 아카데미 배출 — 1군이 아닌 리저브로 합류(B9), 승격 전까지는 출전 대상이 아니다.
     const intake = generateAcademyIntake(
       rng, club.finance.reputation, effectiveYouth(club.staff), effectiveScouting(club.staff),
     );
-    club.players.push(...intake);
-    for (const p of intake) assignSquadNumber(rng, club.players, p);
+    const reserves = club.reserves ?? (club.reserves = []);
+    reserves.push(...intake);
+    for (const p of intake) assignSquadNumber(rng, reserves, p);
     intakeByClub.set(club.id, intake.length);
     intakePlayersByClub.set(club.id, intake);
 
@@ -363,7 +440,7 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
   }
   return {
     retirements, intakeByClub, intakePlayersByClub, fireSalesByClub, retiredPlayers, milestones,
-    debutEvents, loanReturns,
+    debutEvents, loanReturns, reservePromotions, reserveReleasesByClub,
   };
 }
 

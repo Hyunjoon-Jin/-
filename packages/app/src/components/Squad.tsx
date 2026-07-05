@@ -60,13 +60,17 @@ function ConditionCell({ player }: { player: Player }) {
   );
 }
 
+type SquadView = 'first' | 'reserves';
+
 export function Squad({ club, onSelect }: { club: Club; onSelect: (p: Player) => void }) {
+  const [view, setView] = useState<SquadView>('first');
   const [sort, setSort] = useState<SortKey>('ca');
   const [dir, setDir] = useState<SortDir>(-1);
   const [line, setLine] = useState<LineFilter>('ALL');
   const [search, setSearch] = useState('');
   const [troubledOnly, setTroubledOnly] = useState(false);
   const [contractSoonOnly, setContractSoonOnly] = useState(false);
+  const reserves = club.reserves ?? [];
 
   function toggleSort(k: SortKey) {
     if (k === sort) { setDir((d) => (d === 1 ? -1 : 1) as SortDir); return; }
@@ -103,6 +107,50 @@ export function Squad({ club, onSelect }: { club: Club; onSelect: (p: Player) =>
 
   return (
     <div className="squad">
+      <div className="filters squad-view-toggle">
+        <button
+          className={view === 'first' ? 'chip active' : 'chip'}
+          onClick={() => setView('first')}
+        >1군 ({club.players.length})</button>
+        <button
+          className={view === 'reserves' ? 'chip active' : 'chip'}
+          onClick={() => setView('reserves')}
+        >리저브 ({reserves.length})</button>
+      </div>
+
+      {view === 'reserves' ? (
+        reserves.length === 0 ? (
+          <p className="muted">리저브 선수가 없습니다. 유스 아카데미에서 배출되면 여기에 합류합니다.</p>
+        ) : (
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>이름</th><th>포지션</th><th>나이</th><th>CA</th><th>잠재력</th><th>국적</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...reserves].sort((a, b) => currentAbility(b) - currentAbility(a)).map((p) => (
+                <tr
+                  key={p.id}
+                  className="clickable"
+                  onClick={() => onSelect(p)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={onKeyActivate(() => onSelect(p))}
+                >
+                  <td className="name">{p.name}</td>
+                  <td><span className={`pos-chip pos-${lineOf(p.position).toLowerCase()}`}>{p.position}</span></td>
+                  <td>{p.age}</td>
+                  <td><b>{currentAbility(p).toFixed(0)}</b></td>
+                  <td className="muted">{p.potential.toFixed(0)}</td>
+                  <td className="muted">{flagFor(p.nationality)} {p.nationality}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )
+      ) : (
+      <>
       <div className="filters">
         {LINE_FILTERS.map((f) => (
           <button
@@ -174,6 +222,8 @@ export function Squad({ club, onSelect }: { club: Club; onSelect: (p: Player) =>
             ))}
           </tbody>
         </table>
+      )}
+      </>
       )}
     </div>
   );

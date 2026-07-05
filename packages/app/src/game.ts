@@ -486,8 +486,10 @@ export function finishSeason(state: GameState): GameState {
   // 5) 오프시즌 (전 구단)
   const {
     retirements, intakeByClub, intakePlayersByClub, fireSalesByClub, retiredPlayers, milestones, debutEvents,
-    loanReturns,
+    loanReturns, reservePromotions,
   } = runOffseason(state.clubs, new Rng(offseasonSeed(state)));
+  // 내 구단 선수의 이번 시즌 리저브 승격(시즌 요약에 첨부)
+  const myReservePromotions = reservePromotions.filter((r) => r.clubId === state.myClubId);
   // 내 구단이 관련된 임대 복귀(보낸 임대가 돌아오거나, 데려온 임대가 복귀)
   const myLoanReturns: LoanReturnEvent[] = loanReturns.filter(
     (r) => r.fromClubId === state.myClubId || r.toClubId === state.myClubId,
@@ -626,6 +628,7 @@ export function finishSeason(state: GameState): GameState {
     sponsorGoal: sponsorGoalResult,
     promotionPlayoff: promotionPlayoffResult,
     loanReturns: myLoanReturns,
+    reservePromotions: myReservePromotions,
   };
 
   const repaired = repairTactic(myClub(state), myTactic(state));

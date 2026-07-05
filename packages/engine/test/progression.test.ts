@@ -101,17 +101,19 @@ describe('franchise: 멀티시즌 루프', () => {
     }
   });
 
-  it('유스 아카데미·정리로 스쿼드가 상한 내로 유지되고 유망주가 유입된다', () => {
+  it('유스 아카데미·정리로 스쿼드가 상한 내로 유지되고, 리저브를 거쳐 유망주가 유입된다(B9)', () => {
     // 은퇴 + 아카데미 배출 + 상한 정리로 스쿼드는 상한(26) 내에서 유지되고,
-    // 매 시즌 어린 유망주가 유입된다.
+    // 유스 인테이크는 1군이 아닌 리저브로 먼저 합류해 준비되면 승격된다.
     const clubs = makeLeague(22);
     runFranchise(clubs, 6, 700);
+    let anyReserves = false;
     for (const c of clubs) {
       expect(c.players.length).toBeGreaterThanOrEqual(11);
       expect(c.players.length).toBeLessThanOrEqual(26);
-      // 최근 아카데미 유망주(18세 이하)가 스쿼드에 존재
-      expect(c.players.some((p) => p.age <= 18)).toBe(true);
+      if ((c.reserves ?? []).some((p) => p.age <= 20)) anyReserves = true;
     }
+    // 리그 전체로 보면 6시즌 동안 쌓인 유스 인테이크가 아직 승격 전 리저브에 존재한다.
+    expect(anyReserves).toBe(true);
   });
 
   it('한 시즌 뒤 모든 선수의 나이가 1살 많아진다', () => {

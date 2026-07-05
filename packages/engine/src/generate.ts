@@ -157,7 +157,10 @@ export function generateClub(rng: Rng, id: string, name: string, tier: number, d
     patience: rng.pick(['patient', 'impatient']),
     style: rng.pick(['conservative', 'aggressive']),
   };
-  return { id, name, players, finance: { balance, transferBudget, reputation }, staff, division, boardPersona };
+  return {
+    id, name, players, finance: { balance, transferBudget, reputation }, staff, division, boardPersona,
+    reserves: [],
+  };
 }
 
 /** 유스 신인 1명 생성 (17~19세). 은퇴 선수 대체·유스 유입에 사용. */
