@@ -87,6 +87,35 @@ export function upgradeAcademy(club: Club): AcademyUpgradeResult {
   return { ok: true, cost, newLevel: level + 1 };
 }
 
+/** 훈련장(피지컬 트레이닝) 시설 증축 최대 단계(신규 개선 항목 21). */
+export const TRAINING_GROUND_MAX = 10;
+/** 증축 1단계당 부상 확률 배율 감소치(레벨10 = -20%p, 즉 0.8배). */
+const TRAINING_GROUND_INJURY_REDUCTION_PER_LEVEL = 0.02;
+
+/** 훈련장 시설 등급 → 부상 확률 배율(1.0~0.8, 레벨이 오를수록 낮아짐). 의료 스태프
+ *  (인력)의 effectiveMedical 보정과는 별개로, 시설(자본재) 투자분만큼 추가로 곱해진다. */
+export function trainingGroundInjuryFactor(trainingGroundLevel = 0): number {
+  return 1 - clamp(trainingGroundLevel, 0, TRAINING_GROUND_MAX) * TRAINING_GROUND_INJURY_REDUCTION_PER_LEVEL;
+}
+
+/** 다음 단계로 증축하는 비용(만원) — 다른 시설과 같은 자본 투자 곡선. */
+export function trainingGroundUpgradeCost(currentLevel: number): number {
+  return (currentLevel + 1) * (currentLevel + 1) * 30_000;
+}
+
+export interface TrainingGroundUpgradeResult { ok: boolean; cost?: number; newLevel?: number; reason?: string }
+
+/** 훈련장 시설 한 단계 증축. 구단 객체를 직접 변경한다(보유 자금에서 즉시 차감). */
+export function upgradeTrainingGround(club: Club): TrainingGroundUpgradeResult {
+  const level = club.finance.trainingGroundLevel ?? 0;
+  if (level >= TRAINING_GROUND_MAX) return { ok: false, reason: `이미 최대 시설(레벨 ${TRAINING_GROUND_MAX})입니다.` };
+  const cost = trainingGroundUpgradeCost(level);
+  if (club.finance.balance < cost) return { ok: false, reason: '보유 자금이 부족합니다.' };
+  club.finance.balance -= cost;
+  club.finance.trainingGroundLevel = level + 1;
+  return { ok: true, cost, newLevel: level + 1 };
+}
+
 /**
  * 시즌 재정 정산.
  * @param finalPosition 리그 최종 순위 (0-index).

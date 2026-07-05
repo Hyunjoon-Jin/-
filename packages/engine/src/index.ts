@@ -62,8 +62,9 @@ export {
   generateSponsorGoal, evaluateSponsorGoal, SPONSOR_GOAL_LABEL, sponsorStreakMultiplier,
   STADIUM_MAX, stadiumMatchdayMultiplier, stadiumUpgradeCost, upgradeStadium,
   ACADEMY_MAX, academyPotentialBonus, academyUpgradeCost, upgradeAcademy,
+  TRAINING_GROUND_MAX, trainingGroundInjuryFactor, trainingGroundUpgradeCost, upgradeTrainingGround,
   type SeasonFinanceReport, type SponsorGoal, type SponsorGoalKind, type SponsorGoalResult,
-  type StadiumUpgradeResult, type AcademyUpgradeResult,
+  type StadiumUpgradeResult, type AcademyUpgradeResult, type TrainingGroundUpgradeResult,
 } from './finance.js';
 export { runTransferWindow, type TransferDeal } from './transfer.js';
 export {

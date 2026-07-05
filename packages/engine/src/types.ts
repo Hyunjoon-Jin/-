@@ -238,6 +238,10 @@ export interface ClubFinance {
    *  다른 라인은 상대적으로 덜 나온다). 지정하지 않으면(undefined) 기존과 동일하게
    *  라인 편향 없이 균등하게 배출된다. */
   academyFocus?: Line;
+  /** 훈련장(피지컬 트레이닝) 시설 등급(0~TRAINING_GROUND_MAX, 신규 개선 항목 21) — 의료
+   *  스태프(인력)와 별개로 훈련 인프라 자체에 투자하는 자본재. 전 선수의 경기당 부상
+   *  발생 확률을 추가로 낮춘다. 구버전 세이브는 없을 수 있어 optional(없으면 0 = 기본 시설). */
+  trainingGroundLevel?: number;
 }
 
 /** 이사회의 인내심 성향 — 목표 미달 시 얼마나 가혹하게 반응하는가(board.ts). */

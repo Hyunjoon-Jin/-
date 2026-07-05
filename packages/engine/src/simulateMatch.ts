@@ -19,6 +19,7 @@ import { TUNING } from './tuning.js';
 import { hasTrait } from './traits.js';
 import { rollInjury, medicalBias, reinjuryRiskFactor } from './injury.js';
 import { effectiveMedical } from './staffActions.js';
+import { trainingGroundInjuryFactor } from './finance.js';
 import {
   findManMarker, manMarkWeightMultiplier, manMarkXgMultiplier, isValidInstruction,
   CUT_INSIDE_WEIGHT_MUL, CUT_INSIDE_XG_MUL,
@@ -397,6 +398,9 @@ export function generateInjuries(ctx: MatchContext): InjuryEvent[] {
     const byId = new Map(side.club.players.map((p) => [p.id, p]));
     const medical = effectiveMedical(side.club.staff);
     const medFactor = injuryMedicalFactor(medical);
+    // 훈련장(피지컬 트레이닝) 시설 등급(신규 개선 항목 21) — 의료 스태프(인력)와 별개로
+    // 시설(자본재) 투자분만큼 부상 확률을 추가로 낮춘다.
+    const facilityFactor = trainingGroundInjuryFactor(side.club.finance.trainingGroundLevel);
     for (const slot of side.tactic.lineup) {
       const p = byId.get(slot.playerId);
       if (!p || p.injuryMatches > 0 || p.suspensionMatches > 0) continue;
@@ -406,7 +410,7 @@ export function generateInjuries(ctx: MatchContext): InjuryEvent[] {
       // 복귀 직후 재부상 위험 구간(REINJURY_RISK_WINDOW 경기) — 구간이 끝나갈수록 1.0으로 감쇠.
       const reinjuryMul = reinjuryRiskFactor(p.reinjuryRiskMatches);
       const injMul = traitMul * trainingMul * reinjuryMul;
-      if (!rng.roll(TUNING.injuryTriggerChance * medFactor * injMul)) continue;
+      if (!rng.roll(TUNING.injuryTriggerChance * medFactor * facilityFactor * injMul)) continue;
       const inj = rollInjury(rng, medical);
       injuries.push({
         minute: rng.int(1, 90), side: sideKey, playerId: p.id, playerName: p.name,

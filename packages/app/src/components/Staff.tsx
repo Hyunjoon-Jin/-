@@ -1,5 +1,6 @@
 import {
   ClipboardList, Stethoscope, Search, GraduationCap, Hand, Target, Shield, Dumbbell, Landmark, Users, School,
+  Activity,
   type LucideIcon,
 } from 'lucide-react';
 import { myClub, type GameState, type ActionOutcome } from '../game.js';
@@ -9,6 +10,7 @@ import {
   ACADEMY_MAX, academyUpgradeCost, academyPotentialBonus, staffTraitSynergyBonus,
   staffRaiseCost, STAFF_RAISE_ELIGIBLE_YEARS, ACADEMY_FOCUS_POTENTIAL_BONUS_PER_LEVEL,
   STAFF_RETIRE_MIN_AGE, buildInjuryRiskReport,
+  TRAINING_GROUND_MAX, trainingGroundUpgradeCost, trainingGroundInjuryFactor,
   type StaffKind, type SpecialistCoachKind, type NamedStaffKind, type Club, type Line, type InjuryRiskTier,
 } from '@soccer-tycoon/engine';
 import { useResultToast } from '../toast.js';
@@ -19,6 +21,7 @@ interface Props {
   onUpgrade: (kind: StaffKind) => ActionOutcome;
   onUpgradeStadium: () => ActionOutcome;
   onUpgradeAcademy: () => ActionOutcome;
+  onUpgradeTrainingGround: () => ActionOutcome;
   onNegotiateRaise: (kind: NamedStaffKind) => ActionOutcome;
   onSetAcademyFocus: (focus: Line | undefined) => void;
 }
@@ -63,7 +66,9 @@ const INJURY_RISK_LABEL: Record<InjuryRiskTier, { text: string; cls: string }> =
 /** 리포트에 표시할 최대 인원 — 스쿼드 전체가 아니라 위험도 상위만 보여준다. */
 const INJURY_RISK_REPORT_SIZE = 8;
 
-export function Staff({ game, onUpgrade, onUpgradeStadium, onUpgradeAcademy, onNegotiateRaise, onSetAcademyFocus }: Props) {
+export function Staff({
+  game, onUpgrade, onUpgradeStadium, onUpgradeAcademy, onUpgradeTrainingGround, onNegotiateRaise, onSetAcademyFocus,
+}: Props) {
   const club = myClub(game);
   const toast = useResultToast();
 
@@ -79,6 +84,11 @@ export function Staff({ game, onUpgrade, onUpgradeStadium, onUpgradeAcademy, onN
   const academyMaxed = academyLevel >= ACADEMY_MAX;
   const academyCost = academyMaxed ? 0 : academyUpgradeCost(academyLevel);
   const academyAfford = club.finance.balance >= academyCost;
+
+  const trainingGroundLevel = club.finance.trainingGroundLevel ?? 0;
+  const trainingGroundMaxed = trainingGroundLevel >= TRAINING_GROUND_MAX;
+  const trainingGroundCost = trainingGroundMaxed ? 0 : trainingGroundUpgradeCost(trainingGroundLevel);
+  const trainingGroundAfford = club.finance.balance >= trainingGroundCost;
 
   const injuryRiskReport = buildInjuryRiskReport(club).slice(0, INJURY_RISK_REPORT_SIZE);
 
@@ -215,6 +225,29 @@ export function Staff({ game, onUpgrade, onUpgradeStadium, onUpgradeAcademy, onN
             onClick={() => toast(onUpgradeAcademy())}
           >
             {academyMaxed ? '최고 시설' : `증축 (${formatMoney(academyCost)})`}
+          </button>
+        </div>
+
+        <div className="staff-card">
+          <div className="staff-icon"><Activity size={32} strokeWidth={1.75} /></div>
+          <div className="staff-name">훈련장 시설</div>
+          <div className="staff-level">
+            Lv. <b>{trainingGroundLevel}</b> / {TRAINING_GROUND_MAX}
+          </div>
+          <div className="staff-bar">
+            <div className="staff-bar-fill" style={{ width: `${(trainingGroundLevel / TRAINING_GROUND_MAX) * 100}%` }} />
+          </div>
+          <div className="staff-effect muted">
+            경기당 부상 확률 −{Math.round((1 - trainingGroundInjuryFactor(trainingGroundLevel)) * 100)}% (의료 스태프와 별개)
+            {!trainingGroundMaxed &&
+              ` (다음 단계 −${Math.round((trainingGroundInjuryFactor(trainingGroundLevel) - trainingGroundInjuryFactor(trainingGroundLevel + 1)) * 100)}%p)`}
+          </div>
+          <button
+            className="btn-advance staff-btn"
+            disabled={trainingGroundMaxed || !trainingGroundAfford}
+            onClick={() => toast(onUpgradeTrainingGround())}
+          >
+            {trainingGroundMaxed ? '최고 시설' : `증축 (${formatMoney(trainingGroundCost)})`}
           </button>
         </div>
       </div>

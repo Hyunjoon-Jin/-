@@ -32,6 +32,7 @@ import {
   type BoardDemand, type RetiredLegend,
   type MediaEventKind, type MediaTone, type MediaToneOption, type ManagerPersona,
   upgradeStaff as engineUpgradeStaff, upgradeStadium as engineUpgradeStadium,
+  upgradeTrainingGround as engineUpgradeTrainingGround,
   negotiateStaffRaise as engineNegotiateStaffRaise,
   upgradeAcademy as engineUpgradeAcademy, formatMoney,
   loyaltyDiscount,
@@ -1204,6 +1205,18 @@ export function upgradeAcademyAction(state: GameState): ActionOutcome {
   return {
     state: { ...state }, ok: true,
     message: `아카데미 시설 Lv.${r.newLevel} 증축 완료 (−${formatMoney(r.cost!)})`,
+  };
+}
+
+/** 훈련장(피지컬 트레이닝) 시설 한 단계 증축(보유 자금 사용, 신규 개선 항목 21) — 의료
+ *  스태프와 별개로 전 선수의 경기당 부상 발생 확률이 추가로 낮아진다. */
+export function upgradeTrainingGroundAction(state: GameState): ActionOutcome {
+  const club = myClub(state);
+  const r = engineUpgradeTrainingGround(club);
+  if (!r.ok) return { state, ok: false, message: r.reason! };
+  return {
+    state: { ...state }, ok: true,
+    message: `훈련장 시설 Lv.${r.newLevel} 증축 완료 (−${formatMoney(r.cost!)})`,
   };
 }
 

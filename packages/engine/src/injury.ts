@@ -9,6 +9,7 @@ import { clamp } from './math.js';
 import { TUNING } from './tuning.js';
 import { hasTrait } from './traits.js';
 import { effectiveMedical } from './staffActions.js';
+import { trainingGroundInjuryFactor } from './finance.js';
 
 export type InjurySeverity = 'minor' | 'moderate' | 'serious';
 
@@ -129,15 +130,16 @@ export function injuryRiskTier(riskPerMatch: number): InjuryRiskTier {
 
 /**
  * 경기당 부상 발생 확률 예측 — simulateMatch의 실제 부상 판정 공식(generateInjuries)과
- * 완전히 동일한 요인(의료 레벨·특성·훈련 포커스·재부상 위험 구간)을 그대로 재사용한
- * 순수 조회 함수다. 부작용 없음(경기 시뮬레이션과 무관하게 언제든 계산 가능).
+ * 완전히 동일한 요인(의료 레벨·훈련장 시설 등급·특성·훈련 포커스·재부상 위험 구간)을
+ * 그대로 재사용한 순수 조회 함수다. 부작용 없음(경기 시뮬레이션과 무관하게 언제든 계산 가능).
  */
-export function predictedInjuryRiskPerMatch(player: Player, medical: number): number {
+export function predictedInjuryRiskPerMatch(player: Player, medical: number, trainingGroundLevel = 0): number {
   const medFactor = injuryRiskMedicalFactor(medical);
+  const facilityFactor = trainingGroundInjuryFactor(trainingGroundLevel);
   const traitMul = hasTrait(player, 'ironMan') ? 0.5 : hasTrait(player, 'injuryProne') ? 1.7 : 1;
   const trainingMul = player.trainingFocus === 'conditioning' ? 0.85 : 1;
   const reinjuryMul = reinjuryRiskFactor(player.reinjuryRiskMatches);
-  return TUNING.injuryTriggerChance * medFactor * traitMul * trainingMul * reinjuryMul;
+  return TUNING.injuryTriggerChance * medFactor * facilityFactor * traitMul * trainingMul * reinjuryMul;
 }
 
 export interface InjuryRiskEntry {
@@ -157,14 +159,15 @@ export interface InjuryRiskEntry {
  *  (실제 판정 로직(generateInjuries)이 그런 선수는 건너뛰는 것과 동일). */
 export function buildInjuryRiskReport(club: Club): InjuryRiskEntry[] {
   const medical = effectiveMedical(club.staff);
+  const trainingGroundLevel = club.finance.trainingGroundLevel ?? 0;
   return club.players
     .filter((p) => p.injuryMatches <= 0 && p.suspensionMatches <= 0)
     .map((p) => ({
       playerId: p.id,
       name: p.name,
       position: p.position,
-      riskPerMatch: predictedInjuryRiskPerMatch(p, medical),
-      tier: injuryRiskTier(predictedInjuryRiskPerMatch(p, medical)),
+      riskPerMatch: predictedInjuryRiskPerMatch(p, medical, trainingGroundLevel),
+      tier: injuryRiskTier(predictedInjuryRiskPerMatch(p, medical, trainingGroundLevel)),
       isInjuryProne: hasTrait(p, 'injuryProne'),
       isIronMan: hasTrait(p, 'ironMan'),
       isConditioningFocus: p.trainingFocus === 'conditioning',

@@ -10,7 +10,7 @@ import {
   panicBuyAction,
   resolveRivalSnipe,
   recordNegotiationBreakdown,
-  upgradeStadiumAction, upgradeAcademyAction,
+  upgradeStadiumAction, upgradeAcademyAction, upgradeTrainingGroundAction,
   loanOut, loanIn, recallLoan, swapDeal,
   setTrainingFocus, setTrainingPosition, renewContract, setAcademyFocus,
   watchSetup, matchPreview, commitWatchedRound,
@@ -381,6 +381,7 @@ export function App() {
                 onUpgrade={(kind) => runAction(upgradeStaffAction, kind)}
                 onUpgradeStadium={() => runAction(upgradeStadiumAction, undefined)}
                 onUpgradeAcademy={() => runAction(upgradeAcademyAction, undefined)}
+                onUpgradeTrainingGround={() => runAction(upgradeTrainingGroundAction, undefined)}
                 onNegotiateRaise={(kind) => runAction(negotiateStaffRaiseAction, kind)}
                 onSetAcademyFocus={(focus) => update(setAcademyFocus(game, focus))}
               />
