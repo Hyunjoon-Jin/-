@@ -178,6 +178,90 @@ export function settleSeason(
 }
 
 /**
+ * 스폰서 계약(유니폼/스타디움 명명권) — 아래의 성과 기반 시즌 목표 보너스와는 별개로,
+ * 한 번 체결하면 성과와 무관하게 정해진 시즌 동안 고정 수익을 매 시즌 보장하는
+ * 장기 계약(신규 개선 항목 24). 체결 시점의 평판(과 스타디움 명명권의 경우 스타디움
+ * 규모)에 수익이 고정되므로, 평판이 오르기 전에 미리 체결하면 손해, 오른 뒤 체결하면
+ * 이득이라는 타이밍 판단이 생긴다.
+ */
+export type SponsorContractKind = 'kit' | 'stadiumNaming';
+
+export const SPONSOR_CONTRACT_LABEL: Record<SponsorContractKind, string> = {
+  kit: '유니폼 스폰서',
+  stadiumNaming: '스타디움 명명권',
+};
+
+/** 계약 기간(시즌) — 만료되면 재계약(재체결)이 필요하다. */
+export const SPONSOR_CONTRACT_LENGTH_SEASONS = 3;
+
+/** 체결 수수료(에이전트/법무 비용) — 연간 수익의 이 배율만큼 즉시 차감된다. */
+export const SPONSOR_CONTRACT_SIGN_FEE_MULTIPLIER = 1.5;
+
+/** 명명권 계약이 가능한 최소 스타디움 증축 단계 — 이름을 붙일 만한 규모는 돼야 한다. */
+export const SPONSOR_CONTRACT_STADIUM_MIN_LEVEL = 1;
+
+const SPONSOR_CONTRACT_BASE: Record<SponsorContractKind, number> = {
+  kit: 6_000,
+  stadiumNaming: 5_000,
+};
+const SPONSOR_CONTRACT_PER_REP: Record<SponsorContractKind, number> = {
+  kit: 900,
+  stadiumNaming: 700,
+};
+
+/** 계약 체결 시 시즌당 고정 수익(만원) — 스타디움 명명권은 스타디움 규모만큼 추가로 붙는다. */
+export function sponsorContractPayout(kind: SponsorContractKind, reputation: number, stadiumLevel = 0): number {
+  const raw = SPONSOR_CONTRACT_BASE[kind] + reputation * SPONSOR_CONTRACT_PER_REP[kind];
+  return Math.round(kind === 'stadiumNaming' ? raw * stadiumMatchdayMultiplier(stadiumLevel) : raw);
+}
+
+export interface SponsorContract {
+  kind: SponsorContractKind;
+  seasonsRemaining: number;
+  /** 체결 시점에 고정된 시즌당 수익(만원) — 이후 평판이 변해도 갱신 전까지 그대로다. */
+  payoutPerSeason: number;
+}
+
+export interface SponsorContractSignResult { ok: boolean; reason?: string; cost?: number; contract?: SponsorContract }
+
+/** 스폰서 계약 신규 체결 — 같은 종류의 계약이 이미 진행 중이면 만료 전까지 중복 체결 불가. */
+export function signSponsorContract(club: Club, kind: SponsorContractKind): SponsorContractSignResult {
+  const existing = club.finance.sponsorContracts ?? [];
+  if (existing.some((c) => c.kind === kind)) {
+    return { ok: false, reason: `이미 ${SPONSOR_CONTRACT_LABEL[kind]} 계약이 진행 중입니다.` };
+  }
+  if (kind === 'stadiumNaming' && (club.finance.stadiumLevel ?? 0) < SPONSOR_CONTRACT_STADIUM_MIN_LEVEL) {
+    return { ok: false, reason: '스타디움을 먼저 증축해야 명명권 계약을 체결할 수 있습니다.' };
+  }
+  const payoutPerSeason = sponsorContractPayout(kind, club.finance.reputation, club.finance.stadiumLevel);
+  const cost = Math.round(payoutPerSeason * SPONSOR_CONTRACT_SIGN_FEE_MULTIPLIER);
+  if (club.finance.balance < cost) return { ok: false, reason: '체결 수수료를 낼 자금이 부족합니다.' };
+  club.finance.balance -= cost;
+  const contract: SponsorContract = { kind, seasonsRemaining: SPONSOR_CONTRACT_LENGTH_SEASONS, payoutPerSeason };
+  club.finance.sponsorContracts = [...existing, contract];
+  return { ok: true, cost, contract };
+}
+
+export interface SponsorContractTickResult { income: number; expired: SponsorContract[] }
+
+/** 매 시즌 정산 시 호출 — 활성 계약분 수익을 합산하고 잔여 시즌을 차감, 만료된 계약은
+ *  목록에서 제거한다(재계약하지 않으면 그 종류의 수익이 끊긴다). */
+export function tickSponsorContracts(club: Club): SponsorContractTickResult {
+  const contracts = club.finance.sponsorContracts ?? [];
+  let income = 0;
+  const remaining: SponsorContract[] = [];
+  const expired: SponsorContract[] = [];
+  for (const c of contracts) {
+    income += c.payoutPerSeason;
+    const seasonsRemaining = c.seasonsRemaining - 1;
+    if (seasonsRemaining > 0) remaining.push({ ...c, seasonsRemaining });
+    else expired.push(c);
+  }
+  club.finance.sponsorContracts = remaining;
+  return { income, expired };
+}
+
+/**
  * 스폰서 보너스 목표 — 시즌 시작 시 확률적으로 부여되는 별도의 현금 인센티브
  * (demands.ts의 이사회 특별 요구와 같은 보상/페널티 패턴을 재사용하되, 성패가
  * 신뢰도가 아닌 일시불 보너스로 이어진다는 점이 다르다).

@@ -27,6 +27,8 @@ import {
   generateDemand, evaluateDemand, demandConfidence, DEMAND_LABEL,
   renegotiateDemand as engineRenegotiateDemand,
   generateSponsorGoal, evaluateSponsorGoal, SPONSOR_GOAL_LABEL, sponsorStreakMultiplier, type SponsorGoal,
+  signSponsorContract as engineSignSponsorContract, tickSponsorContracts, SPONSOR_CONTRACT_LABEL,
+  type SponsorContractKind,
   annualWageBill, wageBudget,
   matchOutcomeKind, mediaToneOptions, shouldTriggerMediaEvent, applyMediaTone,
   MEDIA_TONE_STYLE, classifyPersona,
@@ -744,6 +746,18 @@ export function finishSeason(state: GameState): GameState {
     sponsorGoalResult = { label: SPONSOR_GOAL_LABEL[state.sponsorGoal.kind], met, bonus: paidBonus };
   }
 
+  // 스폰서 계약(유니폼/스타디움 명명권) 정산 — 성과와 무관하게 체결 시 고정된 금액이
+  // 매 시즌 지급되고, 잔여 시즌이 다하면 만료(재계약 필요, 신규 개선 항목 24).
+  const sponsorContractTick = tickSponsorContracts(myClub(state));
+  if (sponsorContractTick.income > 0) {
+    const me = myClub(state);
+    me.finance.balance += sponsorContractTick.income;
+    me.finance.transferBudget += sponsorContractTick.income;
+  }
+  const sponsorContractExpired = sponsorContractTick.expired.length > 0
+    ? sponsorContractTick.expired.map((c) => c.kind)
+    : undefined;
+
   const boardConfidence = applyConfidence(state.boardConfidence, delta + demandDelta);
   const sacked = isSacked(boardConfidence);
 
@@ -810,6 +824,7 @@ export function finishSeason(state: GameState): GameState {
     boardTierBonus: boardBonusResult,
     addOnPayouts: myAddOnPayouts,
     reserveLeagueTable: reserveLeagueTable.length > 0 ? reserveLeagueTable : undefined,
+    sponsorContractExpired,
   };
 
   const repaired = repairTactic(myClub(state), myTactic(state));
@@ -1231,6 +1246,19 @@ export function upgradeTrainingGroundAction(state: GameState): ActionOutcome {
   return {
     state: { ...state }, ok: true,
     message: `훈련장 시설 Lv.${r.newLevel} 증축 완료 (−${formatMoney(r.cost!)})`,
+  };
+}
+
+/** 스폰서 계약(유니폼/스타디움 명명권) 신규 체결(신규 개선 항목 24) — 체결 수수료를
+ *  즉시 지불하는 대신, 이후 SPONSOR_CONTRACT_LENGTH_SEASONS 시즌 동안 성과와 무관하게
+ *  고정 수익을 매 시즌 지급받는다. */
+export function signSponsorContractAction(state: GameState, kind: SponsorContractKind): ActionOutcome {
+  const club = myClub(state);
+  const r = engineSignSponsorContract(club, kind);
+  if (!r.ok) return { state, ok: false, message: r.reason! };
+  return {
+    state: { ...state }, ok: true,
+    message: `${SPONSOR_CONTRACT_LABEL[kind]} 계약 체결 완료 (−${formatMoney(r.cost!)}, 시즌당 +${formatMoney(r.contract!.payoutPerSeason)})`,
   };
 }
 

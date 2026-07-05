@@ -800,6 +800,12 @@ body {
 .injury-risk-report h3 { margin: 0 0 12px; }
 .injury-risk-report .bar-label { width: 160px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .injury-risk-report .bar-val { width: 70px; text-align: right; font-weight: 700; }
+.sponsor-contracts {
+  margin-top: 22px; padding: 16px 18px; background: var(--panel); border: 1px solid var(--line);
+  border-radius: 12px; box-shadow: var(--shadow-sm);
+}
+.sponsor-contracts h3 { margin: 0 0 12px; display: flex; align-items: center; gap: 8px; }
+.sponsor-contracts .staff-cards { grid-template-columns: repeat(2, 1fr); }
 .staff-card {
   background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
   padding: 20px; text-align: center; box-shadow: var(--shadow-sm);

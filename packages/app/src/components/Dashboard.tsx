@@ -6,7 +6,7 @@ import {
 } from '../game.js';
 import {
   formatMoney, currentAbility, wageBudget, annualWageBill, inFinancialCrisis,
-  boardStatus, DEMAND_LABEL, SPONSOR_GOAL_LABEL, sponsorStreakMultiplier,
+  boardStatus, DEMAND_LABEL, SPONSOR_GOAL_LABEL, sponsorStreakMultiplier, SPONSOR_CONTRACT_LABEL,
   type BoardStatus, type ManagerPersona, type BoardPersona, type Line, type NamedStaffKind,
 } from '@soccer-tycoon/engine';
 import { Landmark } from 'lucide-react';
@@ -290,6 +290,21 @@ export function Dashboard({
             <p key={r.kind}>
               <b>{STAFF_NAMED_KIND_LABEL[r.kind]}</b> {r.name} 코치가 {r.finalAge}세로 은퇴했습니다.
               후임으로 <b>{r.replacementName}</b>을(를) 영입했습니다.
+            </p>
+          ))}
+        </Banner>
+      ),
+    });
+  }
+  if (last?.sponsorContractExpired !== undefined && last.sponsorContractExpired.length > 0) {
+    seasonBanners.push({
+      key: 'sponsorContractExpired', priority: 6.9,
+      node: (
+        <Banner tone="warning" title="🤝 스폰서 계약 만료">
+          {last.sponsorContractExpired.map((kind) => (
+            <p key={kind}>
+              <b>{SPONSOR_CONTRACT_LABEL[kind]}</b> 계약이 만료됐습니다. 재계약하지 않으면 이번
+              시즌부터 해당 고정 수익이 끊깁니다.
             </p>
           ))}
         </Banner>

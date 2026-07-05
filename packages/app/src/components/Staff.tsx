@@ -1,6 +1,6 @@
 import {
   ClipboardList, Stethoscope, Search, GraduationCap, Hand, Target, Shield, Dumbbell, Landmark, Users, School,
-  Activity,
+  Activity, Handshake,
   type LucideIcon,
 } from 'lucide-react';
 import { myClub, type GameState, type ActionOutcome } from '../game.js';
@@ -11,7 +11,10 @@ import {
   staffRaiseCost, STAFF_RAISE_ELIGIBLE_YEARS, ACADEMY_FOCUS_POTENTIAL_BONUS_PER_LEVEL,
   STAFF_RETIRE_MIN_AGE, buildInjuryRiskReport,
   TRAINING_GROUND_MAX, trainingGroundUpgradeCost, trainingGroundInjuryFactor,
+  SPONSOR_CONTRACT_LABEL, SPONSOR_CONTRACT_LENGTH_SEASONS, SPONSOR_CONTRACT_SIGN_FEE_MULTIPLIER,
+  SPONSOR_CONTRACT_STADIUM_MIN_LEVEL, sponsorContractPayout,
   type StaffKind, type SpecialistCoachKind, type NamedStaffKind, type Club, type Line, type InjuryRiskTier,
+  type SponsorContractKind,
 } from '@soccer-tycoon/engine';
 import { useResultToast } from '../toast.js';
 import { InfoTip } from './InfoTip.js';
@@ -24,7 +27,10 @@ interface Props {
   onUpgradeTrainingGround: () => ActionOutcome;
   onNegotiateRaise: (kind: NamedStaffKind) => ActionOutcome;
   onSetAcademyFocus: (focus: Line | undefined) => void;
+  onSignSponsorContract: (kind: SponsorContractKind) => ActionOutcome;
 }
+
+const SPONSOR_CONTRACT_KINDS: SponsorContractKind[] = ['kit', 'stadiumNaming'];
 
 const ACADEMY_FOCUS_OPTIONS: { key: Line; label: string }[] = [
   { key: 'GK', label: 'GK' },
@@ -68,6 +74,7 @@ const INJURY_RISK_REPORT_SIZE = 8;
 
 export function Staff({
   game, onUpgrade, onUpgradeStadium, onUpgradeAcademy, onUpgradeTrainingGround, onNegotiateRaise, onSetAcademyFocus,
+  onSignSponsorContract,
 }: Props) {
   const club = myClub(game);
   const toast = useResultToast();
@@ -91,6 +98,8 @@ export function Staff({
   const trainingGroundAfford = club.finance.balance >= trainingGroundCost;
 
   const injuryRiskReport = buildInjuryRiskReport(club).slice(0, INJURY_RISK_REPORT_SIZE);
+
+  const sponsorContracts = club.finance.sponsorContracts ?? [];
 
   const synergy = staffTraitSynergyBonus(club.staff);
   const traitedCount = NAMED_KINDS.filter((k) => club.staff.members?.[k]?.trait).length;
@@ -281,6 +290,54 @@ export function Staff({
             </div>
           ))
         )}
+      </div>
+
+      <div className="sponsor-contracts">
+        <h3>
+          <Handshake size={18} strokeWidth={1.75} /> 스폰서 계약
+          <InfoTip title="스폰서 계약">
+            체결하면 수수료가 즉시 빠지는 대신, 이후 {SPONSOR_CONTRACT_LENGTH_SEASONS}시즌 동안
+            성적과 무관하게 매 시즌 고정 수익이 들어옵니다. 수익은 체결 시점 평판(스타디움
+            명명권은 스타디움 규모도)에 고정되니, 평판이 더 오를 것 같다면 기다렸다 체결하는
+            편이 유리할 수 있습니다. 만료되면 재계약해야 수익이 이어집니다.
+          </InfoTip>
+        </h3>
+        <div className="staff-cards">
+          {SPONSOR_CONTRACT_KINDS.map((kind) => {
+            const active = sponsorContracts.find((c) => c.kind === kind);
+            const previewPayout = sponsorContractPayout(kind, club.finance.reputation, club.finance.stadiumLevel);
+            const previewCost = Math.round(previewPayout * SPONSOR_CONTRACT_SIGN_FEE_MULTIPLIER);
+            const stadiumTooLow = kind === 'stadiumNaming'
+              && (club.finance.stadiumLevel ?? 0) < SPONSOR_CONTRACT_STADIUM_MIN_LEVEL;
+            const canAfford = club.finance.balance >= previewCost;
+            return (
+              <div className="staff-card" key={kind}>
+                <div className="staff-icon"><Handshake size={32} strokeWidth={1.75} /></div>
+                <div className="staff-name">{SPONSOR_CONTRACT_LABEL[kind]}</div>
+                {active ? (
+                  <div className="staff-effect muted">
+                    계약 중 — 잔여 <b>{active.seasonsRemaining}</b>시즌, 시즌당 +{formatMoney(active.payoutPerSeason)}
+                  </div>
+                ) : stadiumTooLow ? (
+                  <div className="staff-effect muted">
+                    스타디움을 Lv.{SPONSOR_CONTRACT_STADIUM_MIN_LEVEL} 이상 증축해야 체결 가능
+                  </div>
+                ) : (
+                  <div className="staff-effect muted">
+                    체결 시 시즌당 +{formatMoney(previewPayout)} ({SPONSOR_CONTRACT_LENGTH_SEASONS}시즌)
+                  </div>
+                )}
+                <button
+                  className="btn-advance staff-btn"
+                  disabled={!!active || stadiumTooLow || !canAfford}
+                  onClick={() => toast(onSignSponsorContract(kind))}
+                >
+                  {active ? '계약 중' : `체결 (${formatMoney(previewCost)})`}
+                </button>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
