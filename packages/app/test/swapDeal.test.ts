@@ -40,3 +40,37 @@ describe('A2: 스와프 딜 (앱 통합)', () => {
     expect(outcome.ok).toBe(false);
   });
 });
+
+describe('신규 개선 항목 8: 스와프 딜에 유스(리저브) 선수 포함 (앱 통합)', () => {
+  it('내 리저브 선수를 내놓아 상대 1군 선수와 맞교환할 수 있다', () => {
+    const g = startGame(2029, 'c0');
+    const club = myClub(g);
+    const youth = club.players[club.players.length - 1]!;
+    club.players = club.players.filter((p) => p.id !== youth.id);
+    club.reserves = [youth];
+    const otherClub = g.clubs.find((c) => c.id !== g.myClubId)!;
+    const otherPlayer = otherClub.players[otherClub.players.length - 1]!;
+
+    const outcome = swapDeal(g, youth.id, otherClub.id, otherPlayer.id, 0);
+    expect(outcome.ok).toBe(true);
+    const next = myClub(outcome.state);
+    expect((next.reserves ?? []).some((p) => p.id === youth.id)).toBe(false);
+    expect(next.players.some((p) => p.id === otherPlayer.id)).toBe(true);
+  });
+
+  it('상대 구단의 리저브 선수를 받는 크로스티어 딜도 성립한다', () => {
+    const g = startGame(2030, 'c0');
+    const club = myClub(g);
+    const myPlayer = club.players[club.players.length - 1]!;
+    const otherClub = g.clubs.find((c) => c.id !== g.myClubId)!;
+    const theirYouth = otherClub.players[otherClub.players.length - 1]!;
+    otherClub.players = otherClub.players.filter((p) => p.id !== theirYouth.id);
+    otherClub.reserves = [theirYouth];
+
+    const outcome = swapDeal(g, myPlayer.id, otherClub.id, theirYouth.id, 0);
+    expect(outcome.ok).toBe(true);
+    const next = myClub(outcome.state);
+    expect((next.reserves ?? []).some((p) => p.id === theirYouth.id)).toBe(true);
+    expect(next.players.some((p) => p.id === myPlayer.id)).toBe(false);
+  });
+});

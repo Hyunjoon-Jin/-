@@ -524,8 +524,10 @@ function TransferMarket({
       {swapping && (
         <SwapModal
           target={swapping}
-          myPlayers={club.players.filter((p) => p.loanFromClubId === undefined)}
-          onConfirm={(myPlayerId, cashAdjustment) => onSwap(myPlayerId, swapping.clubId, swapping.player.id, cashAdjustment)}
+          myPlayers={[...club.players, ...(club.reserves ?? [])].filter((p) => p.loanFromClubId === undefined)}
+          myReserveIds={new Set((club.reserves ?? []).map((p) => p.id))}
+          theirReserves={game.clubs.find((c) => c.id === swapping.clubId)?.reserves ?? []}
+          onConfirm={(myPlayerId, theirPlayerId, cashAdjustment) => onSwap(myPlayerId, swapping.clubId, theirPlayerId, cashAdjustment)}
           onResult={(m) => { toast(m.text, m.ok); if (m.ok) setSwapping(null); }}
           onClose={() => setSwapping(null)}
         />
@@ -754,25 +756,36 @@ function LoanInModal({
   );
 }
 
-/** 선수+선수 맞교환 제안(A2). 격차 보전용 정산금은 양수(내가 냄)/음수(상대가 냄) 모두 가능. */
+/**
+ * 선수+선수 맞교환 제안(A2, 신규 개선 항목 8로 유스/리저브 선수까지 확장). 격차
+ * 보전용 정산금은 양수(내가 냄)/음수(상대가 냄) 모두 가능. myPlayers에는 1군·리저브
+ * 선수가 함께 담기고(라벨로 구분), theirReserves를 고르면 원래 클릭한 1군 대상 대신
+ * 상대 구단 유스 유망주를 받는 크로스티어 딜로 바꿀 수 있다.
+ */
 function SwapModal({
-  target, myPlayers, onConfirm, onResult, onClose,
+  target, myPlayers, myReserveIds, theirReserves, onConfirm, onResult, onClose,
 }: {
   target: TransferTarget;
   myPlayers: Player[];
-  onConfirm: (myPlayerId: string, cashAdjustment: number) => ActionOutcome;
+  /** myPlayers 중 리저브 소속 선수 id 집합(라벨 표시용). */
+  myReserveIds: Set<string>;
+  theirReserves: Player[];
+  onConfirm: (myPlayerId: string, theirPlayerId: string, cashAdjustment: number) => ActionOutcome;
   onResult: (m: Msg) => void;
   onClose: () => void;
 }) {
   const [myPlayerId, setMyPlayerId] = useState(myPlayers[0]?.id ?? '');
+  const [theirPlayerId, setTheirPlayerId] = useState(target.player.id);
   const [cashAdjustment, setCashAdjustment] = useState(0);
   const ref = useModalA11y<HTMLDivElement>(onClose);
 
+  const theirOptions = [target.player, ...theirReserves];
+  const theirPlayer = theirOptions.find((p) => p.id === theirPlayerId) ?? target.player;
   const myPlayer = myPlayers.find((p) => p.id === myPlayerId);
-  const valueGap = myPlayer ? marketValue(target.player) - marketValue(myPlayer) : 0;
+  const valueGap = myPlayer ? marketValue(theirPlayer) - marketValue(myPlayer) : 0;
 
   function confirm() {
-    const r = onConfirm(myPlayerId, cashAdjustment);
+    const r = onConfirm(myPlayerId, theirPlayerId, cashAdjustment);
     onResult({ text: r.message, ok: r.ok });
   }
 
@@ -784,18 +797,28 @@ function SwapModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="modal-head">
-          <h2>맞교환 제안 — {target.player.name}</h2>
+          <h2>맞교환 제안 — {target.clubName}</h2>
           <button className="btn-ghost" onClick={onClose}>닫기 ✕</button>
         </div>
-        <p className="neg-sub muted">
-          {target.clubName} 소속 · 가치 {formatMoney(marketValue(target.player))}
-        </p>
+        <label className="loan-field">
+          <span>받을 선수</span>
+          <select value={theirPlayerId} onChange={(e) => setTheirPlayerId(e.target.value)}>
+            <option value={target.player.id}>
+              {target.player.name} ({target.player.position} · 1군 · 가치 {formatMoney(marketValue(target.player))})
+            </option>
+            {theirReserves.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name} ({p.position} · 유스 · 가치 {formatMoney(marketValue(p))})
+              </option>
+            ))}
+          </select>
+        </label>
         <label className="loan-field">
           <span>내가 내놓을 선수</span>
           <select value={myPlayerId} onChange={(e) => setMyPlayerId(e.target.value)}>
             {myPlayers.map((p) => (
               <option key={p.id} value={p.id}>
-                {p.name} ({p.position} · 가치 {formatMoney(marketValue(p))})
+                {p.name} ({p.position} · {myReserveIds.has(p.id) ? '유스' : '1군'} · 가치 {formatMoney(marketValue(p))})
               </option>
             ))}
           </select>

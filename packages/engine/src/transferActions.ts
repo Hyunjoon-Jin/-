@@ -713,10 +713,13 @@ export interface SwapResult {
 }
 
 /**
- * 두 구단이 선수를 맞교환한다(A2) — 프리시즌 협상 없이 즉시 실행. 필요하면 격차를
- * 메울 현금(cashAdjustment)을 함께 이체한다: 양수면 clubA→clubB, 음수면 clubB→clubA.
- * 1:1 교환이라 양쪽 스쿼드 인원은 그대로라 MIN/MAX_SQUAD는 걸리지 않지만, 포지션
- * 라인이 바닥나는 교환은 sellerLineDepthOk로 양쪽 모두 막는다.
+ * 두 구단이 선수를 맞교환한다(A2, 신규 개선 항목 8로 리저브/유스 선수까지 확장) —
+ * 프리시즌 협상 없이 즉시 실행. 필요하면 격차를 메울 현금(cashAdjustment)을 함께
+ * 이체한다: 양수면 clubA→clubB, 음수면 clubB→clubA. 1:1 교환이라 양쪽 1군 인원은
+ * 그대로라 MIN/MAX_SQUAD는 걸리지 않지만, 1군 포지션 라인이 바닥나는 교환은
+ * sellerLineDepthOk로 막는다(리저브는 뎁스 제약이 없어 자유롭게 오간다). 각 선수는
+ * 원래 있던 쪽과 같은 급(1군↔1군, 리저브↔리저브)으로 상대 구단에 합류하므로,
+ * 1군 선수를 상대 유스 유망주와 맞바꾸는 크로스티어 딜도 자연히 성립한다.
  */
 export function swapPlayers(
   clubs: Club[], clubAId: string, clubBId: string, playerAId: string, playerBId: string, cashAdjustment = 0,
@@ -727,18 +730,22 @@ export function swapPlayers(
   if (!clubB) return { ok: false, reason: 'B 구단을 찾을 수 없습니다.' };
   if (clubA.id === clubB.id) return { ok: false, reason: '같은 구단끼리는 맞교환할 수 없습니다.' };
 
-  const playerA = clubA.players.find((p) => p.id === playerAId);
+  const aInFirst = clubA.players.find((p) => p.id === playerAId);
+  const aInReserve = (clubA.reserves ?? []).find((p) => p.id === playerAId);
+  const playerA = aInFirst ?? aInReserve;
   if (!playerA) return { ok: false, reason: 'A 선수를 찾을 수 없습니다.' };
-  const playerB = clubB.players.find((p) => p.id === playerBId);
+  const bInFirst = clubB.players.find((p) => p.id === playerBId);
+  const bInReserve = (clubB.reserves ?? []).find((p) => p.id === playerBId);
+  const playerB = bInFirst ?? bInReserve;
   if (!playerB) return { ok: false, reason: 'B 선수를 찾을 수 없습니다.' };
 
   if (playerA.loanFromClubId || playerB.loanFromClubId) {
     return { ok: false, reason: '임대 중인 선수는 맞교환할 수 없습니다.' };
   }
-  if (!sellerLineDepthOk(clubA, playerA)) {
+  if (aInFirst && !sellerLineDepthOk(clubA, playerA)) {
     return { ok: false, reason: 'A 구단이 해당 포지션 자원을 유지하려 합니다.' };
   }
-  if (!sellerLineDepthOk(clubB, playerB)) {
+  if (bInFirst && !sellerLineDepthOk(clubB, playerB)) {
     return { ok: false, reason: 'B 구단이 해당 포지션 자원을 유지하려 합니다.' };
   }
   if (cashAdjustment > 0 && clubA.finance.balance < cashAdjustment) {
@@ -748,12 +755,19 @@ export function swapPlayers(
     return { ok: false, reason: 'B 구단 자금이 부족합니다.' };
   }
 
-  clubA.players = clubA.players.filter((p) => p.id !== playerAId);
-  clubB.players = clubB.players.filter((p) => p.id !== playerBId);
-  clubA.players.push(playerB);
-  clubB.players.push(playerA);
-  reassignSquadNumber(clubA, playerB);
-  reassignSquadNumber(clubB, playerA);
+  if (aInFirst) clubA.players = clubA.players.filter((p) => p.id !== playerAId);
+  else clubA.reserves = (clubA.reserves ?? []).filter((p) => p.id !== playerAId);
+  if (bInFirst) clubB.players = clubB.players.filter((p) => p.id !== playerBId);
+  else clubB.reserves = (clubB.reserves ?? []).filter((p) => p.id !== playerBId);
+
+  if (bInFirst) { clubA.players.push(playerB); reassignSquadNumber(clubA, playerB); } else {
+    clubA.reserves = clubA.reserves ?? [];
+    clubA.reserves.push(playerB);
+  }
+  if (aInFirst) { clubB.players.push(playerA); reassignSquadNumber(clubB, playerA); } else {
+    clubB.reserves = clubB.reserves ?? [];
+    clubB.reserves.push(playerA);
+  }
 
   if (cashAdjustment !== 0) {
     clubA.finance.balance -= cashAdjustment;
