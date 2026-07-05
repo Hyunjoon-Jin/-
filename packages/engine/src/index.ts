@@ -104,8 +104,8 @@ export {
   type FireSaleResult,
 } from './financeControl.js';
 export {
-  buildScoutingReport, academyNationPool,
-  type ScoutingReport, type OverallTier, type PotentialTier, type AgeProfile,
+  buildScoutingReport, academyNationPool, scoutDispatchCost, dispatchScout,
+  type ScoutingReport, type OverallTier, type PotentialTier, type AgeProfile, type ScoutDispatchResult,
 } from './scouting.js';
 export {
   matchOutcomeKind, mediaToneOptions, shouldTriggerMediaEvent, applyMediaTone,

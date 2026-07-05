@@ -28,6 +28,7 @@ import {
   upgradeStaff as engineUpgradeStaff, upgradeStadium as engineUpgradeStadium,
   upgradeAcademy as engineUpgradeAcademy, formatMoney,
   computeTeamStrength, currentAbility, recentForm, buildScoutingReport, lineOf,
+  dispatchScout as engineDispatchScout,
   type Club, type Tactic, type MatchResult, type MatchSetup, type SeasonSummary,
   type Fixture, type TableRow, type PlayerSeasonStat, type CupState, type StaffKind,
   type PlayerFormEntry, type Player, type YouthProspect, type YouthProspectUpdate,
@@ -1223,9 +1224,11 @@ export function formStability(history: SeasonRatingEntry[]): 'steady' | 'volatil
  * 이적 시장(협상 모달)뿐 아니라 선수 상세 화면에서도 공유해서 써야
  * "이름 클릭 한 번으로 스카우팅 안개를 우회"하는 일이 없다 — 내 구단 소속
  * 선수는 항상 안개가 없으므로 호출부에서 scouting=20(만개)을 넘긴다.
+ * scouted=true면(B13, 그 선수를 개별 파견 정찰했음) 구단 전체 스카우팅 레벨과
+ * 무관하게 항상 정확한 값을 보여준다.
  */
-export function revealPotential(scouting: number, potential: number): string {
-  if (scouting >= 15) return potential.toFixed(0);
+export function revealPotential(scouting: number, potential: number, scouted = false): string {
+  if (scouted || scouting >= 15) return potential.toFixed(0);
   if (scouting >= 8) {
     const band = 12 - Math.round((scouting - 8) * 1.2); // 8→12, 14→5 폭
     const lo = Math.max(0, Math.round(potential - band));
@@ -1233,6 +1236,23 @@ export function revealPotential(scouting: number, potential: number): string {
     return `${lo}~${hi}`;
   }
   return '?';
+}
+
+/** 특정 선수를 파견 정찰했는지(B13) — 내 구단 기준. */
+export function isScouted(state: GameState, playerId: string): boolean {
+  return myClub(state).scoutedPlayerIds?.includes(playerId) ?? false;
+}
+
+/** 선수 한 명을 지목해 스카우트 파견(보유 자금 사용, B13) — 성공하면 이후 항상
+ *  정확한 PA를 볼 수 있다(구단 전체 스카우팅 레벨과 무관, 영구 등록). */
+export function dispatchScoutAction(state: GameState, playerId: string): ActionOutcome {
+  const club = myClub(state);
+  const r = engineDispatchScout(club, playerId);
+  if (!r.ok) return { state, ok: false, message: r.reason! };
+  return {
+    state: { ...state }, ok: true,
+    message: `스카우트 파견 완료 — 이제 이 선수의 PA를 정확히 알 수 있습니다 (−${formatMoney(r.cost!)})`,
+  };
 }
 
 /** 진행 중 시즌, 내 구단 선수들의 시즌 통계(평점순). */

@@ -361,6 +361,10 @@ body {
 .growth-ends { display: flex; justify-content: space-between; width: 320px; margin-top: 3px; }
 .pd-caps { color: #6cb6ff; font-weight: 600; }
 .pd-clause { color: var(--accent-2); font-weight: 600; }
+.pd-dispatch-btn {
+  margin-left: 8px; font-size: 12px; padding: 3px 10px; font-weight: 700;
+  border: 1px solid var(--line); border-radius: 6px;
+}
 .pd-form-stability { margin: -8px 0 16px; }
 
 .pd-timeline { margin: 6px 0 16px; }

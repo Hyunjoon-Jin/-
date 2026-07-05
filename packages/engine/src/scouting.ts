@@ -3,7 +3,7 @@
  * 선수의 원시 수치를 등급·프로필로 분류해 서술형 평가의 재료를 만든다.
  * 실제 한국어 문구 조립은 UI(app)에서 담당 — 여기서는 분류만 결정론적으로 산출한다.
  */
-import type { AttrKey, Line, Player, Position } from './types.js';
+import type { AttrKey, Club, Line, Player, Position } from './types.js';
 import { MENTAL_ATTRS, GOALKEEPING_ATTRS } from './types.js';
 import { currentAbility } from './derived.js';
 import { lineOf } from './teamStrength.js';
@@ -110,4 +110,33 @@ export function buildScoutingReport(player: Player, scoutingLevel: number): Scou
     strengths: sorted.slice(0, 3),
     weaknesses: sorted.slice(-3).reverse(),
   };
+}
+
+// ── 스카우트 파견 (B13) ──
+// 스카우팅 스태프의 "안개" 판정(등급 기반)과 별개로, 특정 선수 한 명을 지목해
+// 스카우트를 직접 파견하면 비용을 내고 그 선수만 영구적으로 정확한 PA를 알아낸다.
+// 스카우팅 레벨이 높을수록(이미 갖춰진 네트워크가 넓을수록) 파견 비용이 저렴해진다.
+
+const SCOUT_DISPATCH_BASE_COST = 300;
+const SCOUT_DISPATCH_MIN_COST = 50;
+const SCOUT_DISPATCH_COST_PER_LEVEL = 12;
+
+/** 특정 선수를 파견 정찰하는 데 드는 비용(만원) — 스카우팅 레벨이 높을수록 저렴해진다. */
+export function scoutDispatchCost(scoutingLevel: number): number {
+  return Math.max(SCOUT_DISPATCH_MIN_COST, SCOUT_DISPATCH_BASE_COST - scoutingLevel * SCOUT_DISPATCH_COST_PER_LEVEL);
+}
+
+export interface ScoutDispatchResult { ok: boolean; cost?: number; reason?: string }
+
+/** 선수 한 명을 콕 집어 스카우트를 파견한다. 성공하면 club.scoutedPlayerIds에 영구
+ *  등록되어(세이브에도 남음) 이후 club.staff.scouting 레벨과 무관하게 항상 정확한
+ *  PA를 볼 수 있다. 같은 선수를 다시 파견할 필요는 없다(이미 파견된 선수는 거절). */
+export function dispatchScout(club: Club, playerId: string): ScoutDispatchResult {
+  const scouted = club.scoutedPlayerIds ?? (club.scoutedPlayerIds = []);
+  if (scouted.includes(playerId)) return { ok: false, reason: '이미 파견을 마쳐 정보를 확보한 선수입니다.' };
+  const cost = scoutDispatchCost(club.staff.scouting);
+  if (club.finance.balance < cost) return { ok: false, reason: '보유 자금이 부족합니다.' };
+  club.finance.balance -= cost;
+  scouted.push(playerId);
+  return { ok: true, cost };
 }

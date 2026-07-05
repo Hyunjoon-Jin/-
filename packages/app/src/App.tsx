@@ -9,6 +9,7 @@ import {
   watchSetup, matchPreview, commitWatchedRound,
   watchCupSetup, cupPreview, commitWatchedCupRound,
   playerForm, playerTimeline, playerRatingHistory, respondMedia, dismissMedia, signContract,
+  dispatchScoutAction, isScouted,
   type GameState, type ActionOutcome, type WatchSetup, type Difficulty, type MediaEvent,
 } from './game.js';
 import type { Tactic, MatchResult, LoanTerms } from '@soccer-tycoon/engine';
@@ -244,6 +245,10 @@ export function App() {
             timeline={playerTimeline(game, detailPlayer.id)}
             ratingHistory={playerRatingHistory(game, detailPlayer.id)}
             scouting={isMine ? FULL_SCOUTING : club.staff.scouting}
+            scouted={isMine || isScouted(game, detailPlayer.id)}
+            onDispatchScout={
+              isMine ? undefined : () => runAction(dispatchScoutAction, detailPlayer.id)
+            }
             loanFromClubName={game.clubs.find((c) => c.id === detailPlayer.loanFromClubId)?.name}
           />
         );

@@ -2,7 +2,7 @@ import {
   TECHNICAL_ATTRS, MENTAL_ATTRS, PHYSICAL_ATTRS, GOALKEEPING_ATTRS, POSITIONS,
   TRAINING_FOCUSES, TRAINING_LABELS, TRAIT_LABELS, TRAIT_DESC,
   currentAbility, marketValue, playerDerived, isInjured, isSuspended, lineOf, familiarityAt,
-  formatMoney, buildScoutingReport, retireChance, RETIRE_MIN_AGE,
+  formatMoney, buildScoutingReport, retireChance, RETIRE_MIN_AGE, scoutDispatchCost,
   type AttrKey, type Player, type DerivedRatings, type TrainingFocus, type Position,
   type PlayerFormEntry, type OverallTier, type PotentialTier, type AgeProfile, type ScoutingReport,
 } from '@soccer-tycoon/engine';
@@ -121,6 +121,10 @@ interface Props {
   /** 이 선수에 대한 스카우팅 레벨(PA 공개 정도·강점/약점 리포트에 반영).
    *  내 구단 선수면 FULL_SCOUTING, 아니면 club.staff.scouting을 넘긴다. */
   scouting: number;
+  /** 이 선수를 이미 파견 정찰했는지(B13) — true면 scouting과 무관하게 PA가 정확히 보인다. */
+  scouted?: boolean;
+  /** 내 선수가 아니고 아직 파견 정찰하지 않았으면 파견 버튼을 보여준다. */
+  onDispatchScout?: () => { ok: boolean; message: string };
   /** 임대 중인 선수면 원 소속 구단명(loanFromClubId를 이름으로 미리 변환해 전달). */
   loanFromClubName?: string;
 }
@@ -134,7 +138,7 @@ const PD_TABS: { key: PdTab; label: string }[] = [
 
 export function PlayerDetail({
   player, onClose, onSetFocus, onSetTrainingPosition, onRenew, recentForm, timeline, ratingHistory, scouting,
-  loanFromClubName,
+  scouted, onDispatchScout, loanFromClubName,
 }: Props) {
   const toast = useResultToast();
   const ca = currentAbility(player);
@@ -169,12 +173,22 @@ export function PlayerDetail({
         <div className="pd-meta">
           <span>CA <b>{ca.toFixed(0)}</b></span>
           <span>
-            PA <b>{revealPotential(scouting, player.potential)}</b>
+            PA <b>{revealPotential(scouting, player.potential, scouted)}</b>
             <InfoTip title="CA / PA">
               CA는 현재 실력, PA는 성장했을 때 도달 가능한 최대 실력입니다. 스카우팅 레벨이
               낮으면 PA가 범위("~")로만 표시되며, 스태프의 스카우팅 등급을 올리면 더 정확히
-              드러납니다. 내 구단 선수는 항상 정확한 PA가 보입니다.
+              드러납니다. 내 구단 선수는 항상 정확한 PA가 보입니다. 특정 선수를 파견
+              정찰하면(B13) 구단 전체 스카우팅 레벨과 무관하게 그 선수만 항상 정확히 보입니다.
             </InfoTip>
+            {onDispatchScout && !scouted && (
+              <button
+                className="btn-ghost pd-dispatch-btn"
+                onClick={() => toast(onDispatchScout())}
+                title="이 선수를 파견 정찰해 PA를 정확히 알아냅니다"
+              >
+                🔭 파견 정찰 ({formatMoney(scoutDispatchCost(scouting))})
+              </button>
+            )}
           </span>
           <span>가치 <b>{formatMoney(marketValue(player))}</b></span>
           <span>주급 <b>{formatMoney(player.wage)}</b></span>

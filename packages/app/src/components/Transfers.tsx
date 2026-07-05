@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
-  myClub, lastSummary, revealPotential, myLoanedOutPlayers, type GameState, type ActionOutcome,
+  myClub, lastSummary, revealPotential, myLoanedOutPlayers, isScouted, type GameState, type ActionOutcome,
 } from '../game.js';
 import {
   transferTargets, marketValue, currentAbility, formatMoney, lineOf, buildScoutingReport,
@@ -231,7 +231,7 @@ function TransferMarket({
                   <td><span className={`pos-chip pos-${lineOf(t.player.position).toLowerCase()}`}>{t.player.position}</span></td>
                   <td>{t.player.age}</td>
                   <td><b>{currentAbility(t.player).toFixed(0)}</b></td>
-                  <td className="muted">{revealPotential(scouting, t.player.potential)}</td>
+                  <td className="muted">{revealPotential(scouting, t.player.potential, isScouted(game, t.player.id))}</td>
                   <td>{formatMoney(t.value)}</td>
                   <td className="market-actions">
                     {t.player.loanFromClubId === undefined && (
@@ -376,6 +376,7 @@ function TransferMarket({
           target={negotiating}
           budget={budget}
           scouting={scouting}
+          scouted={isScouted(game, negotiating.player.id)}
           round={roundsUsed[negotiating.player.id] ?? 0}
           onRoundChange={(r) => setRoundsUsed((prev) => ({ ...prev, [negotiating.player.id]: r }))}
           onNegotiate={onNegotiate}
@@ -772,11 +773,12 @@ function SellModal({
 }
 
 function NegotiationModal({
-  target, budget, scouting, round: initialRound, onRoundChange, onNegotiate, onBuyAt, onResult, onClose,
+  target, budget, scouting, scouted, round: initialRound, onRoundChange, onNegotiate, onBuyAt, onResult, onClose,
 }: {
   target: TransferTarget;
   budget: number;
   scouting: number;
+  scouted: boolean;
   /** 이 선수와의 협상에서 지금까지 진행된 역제안 횟수(0-base, 모달을 닫아도 유지). */
   round: number;
   onRoundChange: (round: number) => void;
@@ -832,7 +834,7 @@ function NegotiationModal({
         </div>
         <p className="neg-sub muted">
           {player.position} · {player.age}세 · CA <b>{currentAbility(player).toFixed(0)}</b>
-          {' · '}잠재 {revealPotential(scouting, player.potential)}
+          {' · '}잠재 {revealPotential(scouting, player.potential, scouted)}
           {AGENT_PERSONALITY_LABEL[agentPersonality(player)] && (
             <> · <span className={`agent-badge agent-${agentPersonality(player)}`}>
               {AGENT_PERSONALITY_LABEL[agentPersonality(player)]}
