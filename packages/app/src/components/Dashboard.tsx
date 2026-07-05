@@ -314,6 +314,21 @@ export function Dashboard({
       ),
     });
   }
+  if (last?.watchlistContractAlerts !== undefined && last.watchlistContractAlerts.length > 0) {
+    seasonBanners.push({
+      key: 'watchlistContractAlerts', priority: 6.4,
+      node: (
+        <Banner tone="gold" title="⭐ 관심 선수 소식">
+          {last.watchlistContractAlerts.map((a) => (
+            <p key={a.playerId}>
+              <b>{a.name}</b>({a.clubName})의 계약이 마지막 해로 접어들었습니다 — 다음 시즌 자유
+              이적/저렴한 영입을 노려볼 수 있습니다.
+            </p>
+          ))}
+        </Banner>
+      ),
+    });
+  }
   if (last?.boardTierBonus !== undefined) {
     seasonBanners.push({
       key: 'boardTierBonus', priority: 3,

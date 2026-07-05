@@ -8,6 +8,7 @@ import {
   createSeasonState, playRound as enginePlayRound, playToEnd, computeTable, totalRounds, currentRound,
   commitResult, simulateMatch, simulateSeason, defaultTactic, applyMatchEffects,
   buyPlayer, buyPlayerAt, buyPlayerViaReleaseClause, evaluateOffer, sellPlayer, releasePlayer,
+  transferTargets,
   exerciseBuyback, attachAddOnClause, exerciseLoanBuyOption,
   agentRelationsOf, agentRelationsTier,
   AGENT_RELATIONS_MIN, AGENT_RELATIONS_DEFAULT, AGENT_RELATIONS_BREAKDOWN_PENALTY,
@@ -185,6 +186,9 @@ export interface GameState {
   /** 이번 시즌 공개 선언한 대담한 목표 순위(신규 개선 항목 25) — 시즌 시작 전(첫 경기
    *  전)에만 선언할 수 있고, 다음 시즌 시작 시 초기화된다. 미선언이면 undefined. */
   boldPrediction?: number;
+  /** 이적 관심 목록(신규 개선 항목 27)에 올린 타 구단 선수 id — 시즌을 넘어 유지되며,
+   *  계약 만료가 임박하면 시즌 종료 시 알림이 뜬다. */
+  transferWatchlist?: string[];
 }
 
 /** 선수의 한 시즌 평균 평점 스냅샷. */
@@ -451,6 +455,13 @@ export function playRestOfSeason(state: GameState): GameState {
 export function finishSeason(state: GameState): GameState {
   if (!state.live) return state;
   const myDiv = myDivision(state);
+
+  // 이적 관심 목록(신규 개선 항목 27) 계약 만료 임박 알림 준비 — 오프시즌 처리(계약
+  // 연수 차감 등) 전의 잔여 계약 연수를 캡처해, 이번 시즌에 "새로" 마지막 해에
+  // 접어들었는지(이전엔 아니었는데 지금은 그런지) 비교할 기준으로 삼는다.
+  const watchlistBeforeById = new Map(
+    transferTargets(state.clubs, state.myClubId).map((t) => [t.player.id, t.player.contractYears]),
+  );
 
   // 요구 평가용: 오프시즌 이전(사용자가 운영한 스쿼드)의 임금 건전성 캡처
   const wageUnderBudget = annualWageBill(myClub(state)) <= wageBudget(myClub(state));
@@ -770,6 +781,22 @@ export function finishSeason(state: GameState): GameState {
     ? sponsorContractTick.expired.map((c) => c.kind)
     : undefined;
 
+  // 이적 관심 목록(신규 개선 항목 27) 계약 만료 임박 알림 — 오프시즌 처리 후 잔여 계약
+  // 연수가 1년 이하로 "새로" 접어든 관심 선수만 알린다(매 시즌 같은 선수로 반복 알림 방지).
+  // 이미 팔렸거나 은퇴 등으로 시장에서 사라졌으면 조용히 넘어간다.
+  const watchlistAfterById = new Map(
+    transferTargets(state.clubs, state.myClubId).map((t) => [t.player.id, t]),
+  );
+  const watchlistContractAlerts: { playerId: string; name: string; clubName: string }[] = [];
+  for (const id of state.transferWatchlist ?? []) {
+    const after = watchlistAfterById.get(id);
+    if (!after) continue;
+    const before = watchlistBeforeById.get(id);
+    if (after.player.contractYears <= 1 && (before === undefined || before > 1)) {
+      watchlistContractAlerts.push({ playerId: id, name: after.player.name, clubName: after.clubName });
+    }
+  }
+
   const boardConfidence = applyConfidence(
     state.boardConfidence, delta + demandDelta + (boldPredictionResult?.confidenceAdjust ?? 0),
   );
@@ -840,6 +867,7 @@ export function finishSeason(state: GameState): GameState {
     reserveLeagueTable: reserveLeagueTable.length > 0 ? reserveLeagueTable : undefined,
     sponsorContractExpired,
     boldPrediction: boldPredictionResult,
+    watchlistContractAlerts: watchlistContractAlerts.length > 0 ? watchlistContractAlerts : undefined,
   };
 
   const repaired = repairTactic(myClub(state), myTactic(state));
@@ -1572,6 +1600,51 @@ export function revealPotential(scouting: number, potential: number, scouted = f
 /** 특정 선수를 파견 정찰했는지(B13) — 내 구단 기준. */
 export function isScouted(state: GameState, playerId: string): boolean {
   return myClub(state).scoutedPlayerIds?.includes(playerId) ?? false;
+}
+
+/** 이적 관심 목록(신규 개선 항목 27) 항목 — Transfers 탭 전용 표시용. */
+export interface WatchlistEntry {
+  playerId: string;
+  name: string;
+  clubId: string;
+  clubName: string;
+  position: Position;
+  ca: number;
+  contractYearsLeft: number;
+}
+
+/** 이적 관심 목록에 올린 선수인지. */
+export function isWatchlisted(state: GameState, playerId: string): boolean {
+  return (state.transferWatchlist ?? []).includes(playerId);
+}
+
+/** 이적 관심 목록에 올린 선수 중 아직 다른 구단 소속으로 시장에 남아있는 항목(CA순). */
+export function transferWatchlistEntries(state: GameState): WatchlistEntry[] {
+  const ids = state.transferWatchlist ?? [];
+  if (ids.length === 0) return [];
+  const idSet = new Set(ids);
+  return transferTargets(state.clubs, state.myClubId)
+    .filter((t) => idSet.has(t.player.id))
+    .map((t) => ({
+      playerId: t.player.id, name: t.player.name, clubId: t.clubId, clubName: t.clubName,
+      position: t.player.position, ca: Math.round(currentAbility(t.player)), contractYearsLeft: t.player.contractYears,
+    }))
+    .sort((a, b) => b.ca - a.ca);
+}
+
+/** 이적 관심 목록 토글(추가/제거, 신규 개선 항목 27) — 이미 내 구단 소속이면 대상이 아니다. */
+export function toggleWatchlistAction(state: GameState, playerId: string): ActionOutcome {
+  if (myClub(state).players.some((p) => p.id === playerId)) {
+    return { state, ok: false, message: '이미 우리 구단 소속 선수입니다.' };
+  }
+  const current = state.transferWatchlist ?? [];
+  const already = current.includes(playerId);
+  const next = already ? current.filter((id) => id !== playerId) : [...current, playerId];
+  return {
+    state: { ...state, transferWatchlist: next },
+    ok: true,
+    message: already ? '관심 목록에서 제외했습니다.' : '⭐ 관심 목록에 추가했습니다.',
+  };
 }
 
 /** 이사회 특별 요구 재협상 요청(신규 개선 항목 22) — 시즌당 1회만 시도할 수 있다.

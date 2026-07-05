@@ -11,6 +11,7 @@ import {
   resolveRivalSnipe,
   recordNegotiationBreakdown,
   upgradeStadiumAction, upgradeAcademyAction, upgradeTrainingGroundAction, signSponsorContractAction,
+  toggleWatchlistAction,
   loanOut, loanIn, recallLoan, swapDeal,
   setTrainingFocus, setTrainingPosition, renewContract, setAcademyFocus,
   watchSetup, matchPreview, commitWatchedRound,
@@ -421,6 +422,7 @@ export function App() {
                 onAttachAddOn={handleAttachAddOn}
                 onPanicBuy={handlePanicBuy}
                 onRivalSnipe={handleRivalSnipe}
+                onToggleWatchlist={(id) => runAction(toggleWatchlistAction, id)}
               />
             )}
           </div>

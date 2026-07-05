@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
   myClub, lastSummary, revealPotential, myLoanedOutPlayers, isScouted, myAgentRelations,
+  isWatchlisted,
   type GameState, type ActionOutcome,
 } from '../game.js';
 import {
@@ -39,6 +40,7 @@ interface Props {
   onNegotiationBreakdown: (playerId: string) => void;
   onPanicBuy: (playerId: string) => ActionOutcome;
   onRivalSnipe: (playerId: string, rivalClubId: string, bid: number) => ActionOutcome;
+  onToggleWatchlist: (playerId: string) => ActionOutcome;
 }
 
 type Msg = { text: string; ok: boolean };
@@ -91,7 +93,7 @@ export function Transfers(props: Props) {
 function TransferMarket({
   game, onNegotiate, onBuyAt, onBuyViaReleaseClause, onOffers, onAcceptSell, onRelease,
   onLoanOut, onLoanIn, onRecallLoan, onExerciseBuyOption, onSwap, onSelect, onNegotiationBreakdown,
-  onBuyback, onAttachAddOn, onPanicBuy, onRivalSnipe,
+  onBuyback, onAttachAddOn, onPanicBuy, onRivalSnipe, onToggleWatchlist,
 }: Props) {
   const club = myClub(game);
   const toast = useToast();
@@ -99,6 +101,7 @@ function TransferMarket({
   const [ageFilter, setAgeFilter] = useState<AgeFilter>('ALL');
   const [search, setSearch] = useState('');
   const [affordableOnly, setAffordableOnly] = useState(true);
+  const [watchlistOnly, setWatchlistOnly] = useState(false);
   const [sort, setSort] = useState<MarketSortKey>('ca');
   const [dir, setDir] = useState<SortDir>(-1);
   const [squadSort, setSquadSort] = useState<MarketSortKey>('ca');
@@ -140,6 +143,7 @@ function TransferMarket({
     const ageTest = AGE_FILTERS.find((f) => f.key === ageFilter)!.test;
     list = list.filter((t) => ageTest(t.player.age));
     if (affordableOnly) list = list.filter((t) => t.value <= budget);
+    if (watchlistOnly) list = list.filter((t) => isWatchlisted(game, t.player.id));
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       list = list.filter((t) => t.player.name.toLowerCase().includes(q));
@@ -155,7 +159,7 @@ function TransferMarket({
       return cmp * dir;
     });
     return list.slice(0, 40);
-  }, [game, line, ageFilter, affordableOnly, search, sort, dir, budget]);
+  }, [game, line, ageFilter, affordableOnly, watchlistOnly, search, sort, dir, budget]);
 
   const mySquad = useMemo(() => {
     const list = [...club.players];
@@ -208,6 +212,11 @@ function TransferMarket({
               <input type="checkbox" checked={affordableOnly}
                 onChange={(e) => setAffordableOnly(e.target.checked)} />
               예산 내
+            </label>
+            <label className="afford" title="관심 목록(신규 개선 항목 27)에 올린 선수만 보기">
+              <input type="checkbox" checked={watchlistOnly}
+                onChange={(e) => setWatchlistOnly(e.target.checked)} />
+              ⭐ 관심만
             </label>
           </div>
           <div className="filters">
@@ -271,6 +280,13 @@ function TransferMarket({
                   <td className="muted">{revealPotential(scouting, t.player.potential, isScouted(game, t.player.id))}</td>
                   <td>{formatMoney(t.value)}</td>
                   <td className="market-actions">
+                    <button
+                      className={`btn-small watch-star-btn${isWatchlisted(game, t.player.id) ? ' active' : ''}`}
+                      title={isWatchlisted(game, t.player.id) ? '관심 목록에서 제외' : '관심 목록에 추가 — 계약 만료 임박 시 알려드립니다'}
+                      onClick={(e) => { e.stopPropagation(); act(onToggleWatchlist(t.player.id)); }}
+                    >
+                      {isWatchlisted(game, t.player.id) ? '⭐' : '☆'}
+                    </button>
                     {t.player.loanFromClubId === undefined && (
                       <>
                         <button

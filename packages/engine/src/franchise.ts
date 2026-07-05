@@ -166,6 +166,9 @@ export interface SeasonSummary {
   /** 이번 시즌 공개 선언한 대담한 목표의 결과(신규 개선 항목 25, 앱 전용). 선언하지
    *  않았으면 undefined. */
   boldPrediction?: BoldPredictionResult;
+  /** 이적 관심 목록(신규 개선 항목 27, 앱 전용)에 올린 선수 중 이번 시즌 계약이 마지막
+   *  해로 접어든 선수 알림. */
+  watchlistContractAlerts?: { playerId: string; name: string; clubName: string }[];
 }
 
 /** 유스 졸업생 동문 네트워크(신규 개선 항목 18) — 과거 우리 리저브 출신으로 1군
