@@ -7,6 +7,7 @@ import {
   upgradeCost, STAFF_MAX, formatMoney, specialistCoachLevel, STAFF_TRAIT_LABEL, STAFF_TRAIT_DESC,
   STADIUM_MAX, stadiumUpgradeCost, stadiumMatchdayMultiplier,
   ACADEMY_MAX, academyUpgradeCost, academyPotentialBonus, staffTraitSynergyBonus,
+  staffRaiseCost, STAFF_RAISE_ELIGIBLE_YEARS,
   type StaffKind, type SpecialistCoachKind, type NamedStaffKind, type Club,
 } from '@soccer-tycoon/engine';
 import { useResultToast } from '../toast.js';
@@ -16,6 +17,7 @@ interface Props {
   onUpgrade: (kind: StaffKind) => ActionOutcome;
   onUpgradeStadium: () => ActionOutcome;
   onUpgradeAcademy: () => ActionOutcome;
+  onNegotiateRaise: (kind: NamedStaffKind) => ActionOutcome;
 }
 
 const SPECIALIST_KINDS: SpecialistCoachKind[] = ['coachGk', 'coachAttack', 'coachDefense', 'coachPhysical'];
@@ -40,7 +42,7 @@ function levelOf(staff: Club['staff'], kind: StaffKind): number {
     : (staff[kind as NamedStaffKind] as number);
 }
 
-export function Staff({ game, onUpgrade, onUpgradeStadium, onUpgradeAcademy }: Props) {
+export function Staff({ game, onUpgrade, onUpgradeStadium, onUpgradeAcademy, onNegotiateRaise }: Props) {
   const club = myClub(game);
   const toast = useResultToast();
 
@@ -96,6 +98,20 @@ export function Staff({ game, onUpgrade, onUpgradeStadium, onUpgradeAcademy }: P
                       ✨ {STAFF_TRAIT_LABEL[member.trait]}
                     </span>
                   )}
+                </div>
+              )}
+              {member && member.contractYears <= STAFF_RAISE_ELIGIBLE_YEARS && (
+                <div className="staff-raise">
+                  <p className="muted small">
+                    계약 만료가 임박했습니다. 연봉 인상을 수락하지 않으면 시즌 종료 시 타 구단으로 이탈할 수 있습니다.
+                  </p>
+                  <button
+                    className="btn-small"
+                    disabled={club.finance.balance < staffRaiseCost(level)}
+                    onClick={() => toast(onNegotiateRaise(s.key as NamedStaffKind))}
+                  >
+                    연봉 인상 수락 ({formatMoney(staffRaiseCost(level))})
+                  </button>
                 </div>
               )}
               <div className="staff-level">

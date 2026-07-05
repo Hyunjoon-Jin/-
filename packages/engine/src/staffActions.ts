@@ -193,6 +193,48 @@ export function tickStaffContracts(club: Club, rng: Rng): StaffDepartureEvent[] 
   return departures;
 }
 
+// ── 코치 계약 협상 (연봉 인상 요구, 신규 개선 항목 12) ───────
+
+/** 연봉 인상 협상을 걸 수 있는 기준 — 잔여 계약이 이 값 이하로 남아야 임박한 것으로 본다. */
+export const STAFF_RAISE_ELIGIBLE_YEARS = 1;
+/** 연봉 인상 수락 시 부여되는 새 계약 기간(년). */
+export const STAFF_RAISE_EXTENSION_YEARS = STAFF_CONTRACT_YEARS_MAX;
+
+/** 연봉 인상 협상 비용(만원) — 레벨이 높을수록(몸값이 비쌀수록) 더 많이 요구한다. */
+export function staffRaiseCost(level: number): number {
+  return Math.round(2000 * (1 + level * 0.25));
+}
+
+export interface StaffRaiseResult {
+  ok: boolean;
+  reason?: string;
+  cost?: number;
+  staffName?: string;
+  kind?: NamedStaffKind;
+}
+
+/**
+ * 코치 계약 협상(연봉 인상 요구, 신규 개선 항목 12) — 계약 만료가 임박한(잔여
+ * STAFF_RAISE_ELIGIBLE_YEARS년 이하) 실명 스태프의 연봉을 인상해 계약을 연장한다.
+ * 수락하지 않고 넘어가면 다음 오프시즌 tickStaffContracts의 확률적 이탈 판정을
+ * 그대로 받는다(레벨이 오르는 조합이면 항상 같은 인물이 유지되는 hireStaffMember와
+ * 달리, 이 함수는 이름·나이·특기는 그대로 두고 계약 기간만 갱신한다 — 같은 사람을
+ * 붙잡아두는 것이 협상의 요점이므로).
+ */
+export function negotiateStaffRaise(club: Club, kind: NamedStaffKind): StaffRaiseResult {
+  const member = club.staff.members?.[kind];
+  if (!member) return { ok: false, reason: '해당 직책에 실명 스태프가 없습니다.' };
+  if (member.contractYears > STAFF_RAISE_ELIGIBLE_YEARS) {
+    return { ok: false, reason: '아직 계약 만료가 임박하지 않았습니다.' };
+  }
+  const level = club.staff[kind];
+  const cost = staffRaiseCost(level);
+  if (club.finance.balance < cost) return { ok: false, reason: '보유 자금이 부족합니다.' };
+  club.finance.balance -= cost;
+  member.contractYears = STAFF_RAISE_EXTENSION_YEARS;
+  return { ok: true, cost, staffName: member.name, kind };
+}
+
 /** 현재 레벨에서 다음 레벨로 올리는 비용 (만원). */
 export function upgradeCost(currentLevel: number): number {
   // 레벨 제곱 곡선: 5→3천만, 10→1.2억, 15→2.7억, 19→4.3억

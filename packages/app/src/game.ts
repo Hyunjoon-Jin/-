@@ -32,13 +32,14 @@ import {
   type BoardDemand, type RetiredLegend,
   type MediaEventKind, type MediaTone, type MediaToneOption, type ManagerPersona,
   upgradeStaff as engineUpgradeStaff, upgradeStadium as engineUpgradeStadium,
+  negotiateStaffRaise as engineNegotiateStaffRaise,
   upgradeAcademy as engineUpgradeAcademy, formatMoney,
   loyaltyDiscount,
   computeTeamStrength, currentAbility, recentForm, buildScoutingReport, lineOf,
   dispatchScout as engineDispatchScout,
   assignMentor as engineAssignMentor, clearMentorPairing as engineClearMentorPairing,
   type Club, type Tactic, type MatchResult, type MatchSetup, type SeasonSummary,
-  type Fixture, type TableRow, type PlayerSeasonStat, type CupState, type StaffKind,
+  type Fixture, type TableRow, type PlayerSeasonStat, type CupState, type StaffKind, type NamedStaffKind,
   type PlayerFormEntry, type Player, type YouthProspect, type YouthProspectUpdate,
   type TeamStrength, type FormSummary, type ScoutingReport, type Line, type StaffDepartureEvent,
   type AddOnEvent,
@@ -1128,6 +1129,19 @@ export function upgradeStaffAction(state: GameState, kind: StaffKind): ActionOut
     state: { ...state },
     ok: true,
     message: `${STAFF_LABEL[kind]} Lv.${r.newLevel} (−${formatMoney(r.cost!)})${hireMsg}`,
+  };
+}
+
+/** 코치 계약 협상(연봉 인상 요구, 신규 개선 항목 12) — 계약 만료가 임박한 실명 스태프의
+ *  연봉을 인상해 계약을 연장한다. 거절(호출하지 않음)하면 다음 오프시즌에 기존처럼
+ *  확률적으로 이탈할 수 있다. */
+export function negotiateStaffRaiseAction(state: GameState, kind: NamedStaffKind): ActionOutcome {
+  const club = myClub(state);
+  const r = engineNegotiateStaffRaise(club, kind);
+  if (!r.ok) return { state, ok: false, message: r.reason! };
+  return {
+    state: { ...state }, ok: true,
+    message: `${STAFF_LABEL[kind]} ${r.staffName} 연봉 인상 협상 타결 (−${formatMoney(r.cost!)}, 계약 연장)`,
   };
 }
 

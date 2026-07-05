@@ -107,8 +107,9 @@ export {
   SPECIALIST_COACH_KINDS, NAMED_STAFF_KINDS, specialistCoachLevel, effectiveCoaching,
   effectiveMedical, effectiveScouting, effectiveYouth, effectiveReserveCoaching, staffTraitSynergyBonus,
   STAFF_TRAIT_LABEL, STAFF_TRAIT_DESC, STAFF_TRAIT_BONUS,
+  negotiateStaffRaise, staffRaiseCost, STAFF_RAISE_ELIGIBLE_YEARS, STAFF_RAISE_EXTENSION_YEARS,
   type StaffKind, type UpgradeResult, type SpecialistCoachKind, type NamedStaffKind,
-  type StaffDepartureEvent,
+  type StaffDepartureEvent, type StaffRaiseResult,
 } from './staffActions.js';
 export {
   enforceFinancialFairPlay, inFinancialCrisis, wageBudget, annualWageBill,

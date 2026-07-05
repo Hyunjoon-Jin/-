@@ -3,6 +3,7 @@ import {
   startGame, myClub, myTactic, setMyTactic,
   startSeason, playRound, playRestOfSeason, finishSeason, advanceFullSeason,
   playCupRound, playContinentalCupRound, negotiate, buyAt, buyViaReleaseClause, offersFor, acceptSell, release, upgradeStaffAction,
+  negotiateStaffRaiseAction,
   buyback,
   attachAddOn,
   exerciseBuyOption,
@@ -380,6 +381,7 @@ export function App() {
                 onUpgrade={(kind) => runAction(upgradeStaffAction, kind)}
                 onUpgradeStadium={() => runAction(upgradeStadiumAction, undefined)}
                 onUpgradeAcademy={() => runAction(upgradeAcademyAction, undefined)}
+                onNegotiateRaise={(kind) => runAction(negotiateStaffRaiseAction, kind)}
               />
             )}
             {tab === 'history' && <History game={game} />}
