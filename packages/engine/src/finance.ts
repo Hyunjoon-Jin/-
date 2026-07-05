@@ -181,3 +181,16 @@ export function evaluateSponsorGoal(goal: SponsorGoal, res: SponsorGoalResult): 
     case 'cupWon': return res.cupWon;
   }
 }
+
+/** 연속 달성 1회당 가산 배율. */
+const SPONSOR_STREAK_BONUS_PER_STREAK = 0.1;
+/** 이 이상은 더 쌓여도 배율이 늘지 않는다(무한 인플레이션 방지). */
+const SPONSOR_STREAK_CAP = 5;
+
+/**
+ * 스폰서 보너스 목표를 연속으로 달성할수록 다음 보너스가 커지는 배율(1.0~1.5).
+ * streak는 "이번 목표를 달성하기 직전까지의" 연속 달성 횟수(0부터 시작).
+ */
+export function sponsorStreakMultiplier(streak: number): number {
+  return 1 + Math.min(streak, SPONSOR_STREAK_CAP) * SPONSOR_STREAK_BONUS_PER_STREAK;
+}

@@ -6,7 +6,7 @@ import {
 } from '../game.js';
 import {
   formatMoney, currentAbility, wageBudget, annualWageBill, inFinancialCrisis,
-  boardStatus, DEMAND_LABEL, SPONSOR_GOAL_LABEL,
+  boardStatus, DEMAND_LABEL, SPONSOR_GOAL_LABEL, sponsorStreakMultiplier,
   type BoardStatus, type ManagerPersona, type BoardPersona, type Line, type NamedStaffKind,
 } from '@soccer-tycoon/engine';
 import { Landmark } from 'lucide-react';
@@ -351,12 +351,19 @@ export function Dashboard({ game, onSignContract, visitedTactics, visitedSquadPr
         </Banner>
       )}
 
-      {game.sponsorGoal && (
-        <Banner tone="gold">
-          💰 스폰서 보너스 목표: <b>{SPONSOR_GOAL_LABEL[game.sponsorGoal.kind]}</b>
-          <span className="muted small"> (달성 시 {formatMoney(game.sponsorGoal.bonus)} 일시불 지급)</span>
-        </Banner>
-      )}
+      {game.sponsorGoal && (() => {
+        const streak = game.sponsorStreak ?? 0;
+        const previewBonus = Math.round(game.sponsorGoal.bonus * sponsorStreakMultiplier(streak));
+        return (
+          <Banner tone="gold">
+            💰 스폰서 보너스 목표: <b>{SPONSOR_GOAL_LABEL[game.sponsorGoal.kind]}</b>
+            <span className="muted small"> (달성 시 {formatMoney(previewBonus)} 일시불 지급)</span>
+            {streak > 0 && (
+              <span className="muted small"> · 🔥 연속 달성 {streak}회(배율 ×{sponsorStreakMultiplier(streak).toFixed(1)})</span>
+            )}
+          </Banner>
+        );
+      })()}
 
       <div className="cards">
         <Card title="평판" value={`${club.finance.reputation} / 20`} />

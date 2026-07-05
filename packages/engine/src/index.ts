@@ -50,7 +50,7 @@ export { formatMoney, EOK } from './money.js';
 export { marketValue, weeklyWage, agentFee } from './valuation.js';
 export {
   settleSeason, leaguePrize, attendanceFormFactor,
-  generateSponsorGoal, evaluateSponsorGoal, SPONSOR_GOAL_LABEL,
+  generateSponsorGoal, evaluateSponsorGoal, SPONSOR_GOAL_LABEL, sponsorStreakMultiplier,
   STADIUM_MAX, stadiumMatchdayMultiplier, stadiumUpgradeCost, upgradeStadium,
   ACADEMY_MAX, academyPotentialBonus, academyUpgradeCost, upgradeAcademy,
   type SeasonFinanceReport, type SponsorGoal, type SponsorGoalKind, type SponsorGoalResult,

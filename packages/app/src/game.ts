@@ -20,7 +20,7 @@ import {
   confidenceDelta, applyConfidence, isSacked, START_CONFIDENCE, boardStatus, boardTierUpgradeBonus,
   type BoardStatus,
   generateDemand, evaluateDemand, demandConfidence, DEMAND_LABEL,
-  generateSponsorGoal, evaluateSponsorGoal, SPONSOR_GOAL_LABEL, type SponsorGoal,
+  generateSponsorGoal, evaluateSponsorGoal, SPONSOR_GOAL_LABEL, sponsorStreakMultiplier, type SponsorGoal,
   annualWageBill, wageBudget,
   matchOutcomeKind, mediaToneOptions, shouldTriggerMediaEvent, applyMediaTone,
   MEDIA_TONE_STYLE, classifyPersona,
@@ -136,6 +136,10 @@ export interface GameState {
   demand?: BoardDemand | null;
   /** 이번 시즌 스폰서 보너스 목표(없을 수 있음). 달성 시 일시불 현금 보너스. */
   sponsorGoal?: SponsorGoal | null;
+  /** 스폰서 보너스 목표 연속 달성 횟수(C-new2) — 목표가 주어진 시즌에 달성하면 +1,
+   *  실패하면 0으로 리셋. 목표가 없는 시즌은 그대로 유지(불이익 없음). 구버전
+   *  세이브는 없을 수 있어 optional(없으면 0 취급). */
+  sponsorStreak?: number;
   /** 내 구단에서 뛰다 은퇴한 선수 아카이브(레전드). */
   legends: ClubLegend[];
   /** 라이벌 구단 id. 게임 시작 시 1회 고정(같은 부 내 평판이 가장 가까운 구단). */
@@ -649,19 +653,26 @@ export function finishSeason(state: GameState): GameState {
     demandResult = { label: DEMAND_LABEL[state.demand.kind], met };
   }
 
-  // 스폰서 보너스 목표 평가 — 신뢰도가 아닌 일시불 현금 보너스로 이어진다.
+  // 스폰서 보너스 목표 평가 — 신뢰도가 아닌 일시불 현금 보너스로 이어진다. 연속으로
+  // 달성할수록 스트릭 배율(C-new2)이 다음 보너스에 가산되고, 실패하면 리셋된다.
   let sponsorGoalResult: { label: string; met: boolean; bonus: number } | undefined;
+  let nextSponsorStreak = state.sponsorStreak ?? 0;
   if (state.sponsorGoal) {
     const met = evaluateSponsorGoal(state.sponsorGoal, {
       top4Finish: myPosition <= 4,
       cupWon: cupChampionId === state.myClubId,
     });
+    const streakBefore = state.sponsorStreak ?? 0;
+    const paidBonus = met ? Math.round(state.sponsorGoal.bonus * sponsorStreakMultiplier(streakBefore)) : 0;
     if (met) {
       const me = myClub(state);
-      me.finance.balance += state.sponsorGoal.bonus;
-      me.finance.transferBudget += state.sponsorGoal.bonus;
+      me.finance.balance += paidBonus;
+      me.finance.transferBudget += paidBonus;
+      nextSponsorStreak = streakBefore + 1;
+    } else {
+      nextSponsorStreak = 0;
     }
-    sponsorGoalResult = { label: SPONSOR_GOAL_LABEL[state.sponsorGoal.kind], met, bonus: state.sponsorGoal.bonus };
+    sponsorGoalResult = { label: SPONSOR_GOAL_LABEL[state.sponsorGoal.kind], met, bonus: paidBonus };
   }
 
   const boardConfidence = applyConfidence(state.boardConfidence, delta + demandDelta);
@@ -739,6 +750,7 @@ export function finishSeason(state: GameState): GameState {
     sacked,
     demand: nextDemand,
     sponsorGoal: nextSponsorGoal,
+    sponsorStreak: nextSponsorStreak,
     legends: [...state.legends, ...newLegends],
     rivalRecord,
     rivalMeetings: [...state.rivalMeetings, ...newRivalMeetings],
