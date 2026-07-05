@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   hireInitialStaffMembers, effectiveCoaching, effectiveMedical, effectiveScouting, effectiveYouth,
+  effectiveReserveCoaching, staffTraitSynergyBonus,
   STAFF_TRAIT_BONUS, STAFF_TRAIT_LABEL, upgradeStaff,
 } from '../src/staffActions.js';
 import { generateClub, defaultTactic } from '../src/generate.js';
@@ -83,6 +84,66 @@ describe('A6: 실명 스태프 특기 특성', () => {
       members: { coaching: { name: 'F', age: 40, contractYears: 2, trait: 'developmentGuru' } },
     }));
     expect(currentAbility(withGuru)).toBeGreaterThan(currentAbility(withoutGuru));
+  });
+
+  it('B12: 특기 보유자가 0~1명이면 시너지 보너스가 없다', () => {
+    const base: Staff = { coaching: 10, medical: 10, scouting: 10, youth: 10 };
+    const oneTrait: Staff = { ...base, members: { medical: { name: 'X', age: 40, contractYears: 2, trait: 'rehabSpecialist' } } };
+    expect(staffTraitSynergyBonus(base)).toBe(0);
+    expect(staffTraitSynergyBonus(oneTrait)).toBe(0);
+  });
+
+  it('B12: 특기 보유자가 2명 이상이면 인원수에 비례해 시너지 보너스가 붙고, 4개 유효 함수 모두에 반영된다', () => {
+    const base: Staff = { coaching: 10, medical: 10, scouting: 10, youth: 10 };
+    const twoTraits: Staff = {
+      ...base,
+      members: {
+        coaching: { name: 'A', age: 40, contractYears: 2, trait: 'developmentGuru' },
+        medical: { name: 'B', age: 40, contractYears: 2, trait: 'rehabSpecialist' },
+      },
+    };
+    const threeTraits: Staff = {
+      ...base,
+      members: {
+        ...twoTraits.members,
+        scouting: { name: 'C', age: 40, contractYears: 2, trait: 'eyeForTalent' },
+      },
+    };
+    const fourTraits: Staff = {
+      ...base,
+      members: {
+        ...threeTraits.members,
+        youth: { name: 'D', age: 40, contractYears: 2, trait: 'academyMaestro' },
+      },
+    };
+    expect(staffTraitSynergyBonus(twoTraits)).toBeGreaterThan(0);
+    expect(staffTraitSynergyBonus(threeTraits)).toBeGreaterThan(staffTraitSynergyBonus(twoTraits));
+    expect(staffTraitSynergyBonus(fourTraits)).toBeGreaterThan(staffTraitSynergyBonus(threeTraits));
+
+    const synergy = staffTraitSynergyBonus(twoTraits);
+    expect(effectiveCoaching('MC', twoTraits)).toBe(effectiveCoaching('MC', base) + STAFF_TRAIT_BONUS + synergy);
+    expect(effectiveMedical(twoTraits)).toBe(effectiveMedical(base) + STAFF_TRAIT_BONUS + synergy);
+    expect(effectiveScouting(twoTraits)).toBe(effectiveScouting(base) + synergy);
+    expect(effectiveYouth(twoTraits)).toBe(effectiveYouth(base) + synergy);
+  });
+
+  it('B12: 전담 리저브 코치를 도입한 경우에도 시너지 보너스가 동일하게 반영된다', () => {
+    const withoutReserveCoach: Staff = {
+      coaching: 10, medical: 10, scouting: 10, youth: 10,
+      members: {
+        coaching: { name: 'A', age: 40, contractYears: 2, trait: 'developmentGuru' },
+        medical: { name: 'B', age: 40, contractYears: 2, trait: 'rehabSpecialist' },
+      },
+    };
+    const withReserveCoach: Staff = { ...withoutReserveCoach, reserveCoach: 15 };
+    const synergy = staffTraitSynergyBonus(withoutReserveCoach);
+    expect(synergy).toBeGreaterThan(0);
+    // reserveCoach 미도입 시(폴백) 시너지 포함 effectiveCoaching과 정확히 같다.
+    expect(effectiveReserveCoaching('ST', withoutReserveCoach)).toBe(effectiveCoaching('ST', withoutReserveCoach));
+    // reserveCoach 도입 시에도 시너지가 그대로 더해진다.
+    const posLevel = 10; // 세부 코치 미도입 → 총괄 coaching 레벨로 대체
+    expect(effectiveReserveCoaching('ST', withReserveCoach))
+      .toBeCloseTo(posLevel * 0.3 + 15 * 0.7 + synergy, 6);
   });
 
   it('재활 전문가 의료진이 있으면 같은 조건에서 경기 중 부상이 더 적다(다수 시드 누적)', () => {

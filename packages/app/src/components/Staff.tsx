@@ -6,7 +6,7 @@ import { myClub, type GameState, type ActionOutcome } from '../game.js';
 import {
   upgradeCost, STAFF_MAX, formatMoney, specialistCoachLevel, STAFF_TRAIT_LABEL, STAFF_TRAIT_DESC,
   STADIUM_MAX, stadiumUpgradeCost, stadiumMatchdayMultiplier,
-  ACADEMY_MAX, academyUpgradeCost, academyPotentialBonus,
+  ACADEMY_MAX, academyUpgradeCost, academyPotentialBonus, staffTraitSynergyBonus,
   type StaffKind, type SpecialistCoachKind, type NamedStaffKind, type Club,
 } from '@soccer-tycoon/engine';
 import { useResultToast } from '../toast.js';
@@ -57,6 +57,9 @@ export function Staff({ game, onUpgrade, onUpgradeStadium, onUpgradeAcademy }: P
   const academyCost = academyMaxed ? 0 : academyUpgradeCost(academyLevel);
   const academyAfford = club.finance.balance >= academyCost;
 
+  const synergy = staffTraitSynergyBonus(club.staff);
+  const traitedCount = NAMED_KINDS.filter((k) => club.staff.members?.[k]?.trait).length;
+
   return (
     <div className="staff">
       <div className="staff-head">
@@ -65,6 +68,11 @@ export function Staff({ game, onUpgrade, onUpgradeStadium, onUpgradeAcademy }: P
           <b className="budget">{formatMoney(club.finance.balance)}</b>
           <span className="muted"> · 스태프 연봉 {formatMoney(staffWage)}/시즌</span>
         </div>
+        {synergy > 0 && (
+          <div className="staff-synergy">
+            ✨ 스태프 시너지: 특기 보유 {traitedCount}명 → 전 코칭·의료·스카우팅·유스 유효 레벨 +{synergy}
+          </div>
+        )}
       </div>
 
       <div className="staff-cards">

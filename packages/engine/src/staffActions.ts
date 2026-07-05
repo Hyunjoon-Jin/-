@@ -120,7 +120,7 @@ export function effectiveCoaching(position: Position, staff: Staff): number {
   const physLevel = specialistCoachLevel(staff, 'coachPhysical');
   const base = posLevel * 0.7 + physLevel * 0.3;
   const bonus = staff.members?.coaching?.trait === 'developmentGuru' ? STAFF_TRAIT_BONUS : 0;
-  return base + bonus;
+  return base + bonus + staffTraitSynergyBonus(staff);
 }
 
 /** 리저브(2군) 성장 계산에 쓰이는 유효 코칭 레벨. 전담 리저브 코치를 도입하지 않은
@@ -129,25 +129,34 @@ export function effectiveCoaching(position: Position, staff: Staff): number {
 export function effectiveReserveCoaching(position: Position, staff: Staff): number {
   if (staff.reserveCoach === undefined) return effectiveCoaching(position, staff);
   const posLevel = positionCoachLevel(position, staff);
-  return posLevel * 0.3 + staff.reserveCoach * 0.7;
+  return posLevel * 0.3 + staff.reserveCoach * 0.7 + staffTraitSynergyBonus(staff);
 }
 
 /** 의료 유효 레벨 — 재활 전문가(rehabSpecialist) 특기가 있으면 가산 보너스. */
 export function effectiveMedical(staff: Staff): number {
   const bonus = staff.members?.medical?.trait === 'rehabSpecialist' ? STAFF_TRAIT_BONUS : 0;
-  return staff.medical + bonus;
+  return staff.medical + bonus + staffTraitSynergyBonus(staff);
 }
 
 /** 스카우팅 유효 레벨 — 유망주 안목(eyeForTalent) 특기가 있으면 가산 보너스. */
 export function effectiveScouting(staff: Staff): number {
   const bonus = staff.members?.scouting?.trait === 'eyeForTalent' ? STAFF_TRAIT_BONUS : 0;
-  return staff.scouting + bonus;
+  return staff.scouting + bonus + staffTraitSynergyBonus(staff);
 }
 
 /** 유스 유효 레벨 — 아카데미 명장(academyMaestro) 특기가 있으면 가산 보너스. */
 export function effectiveYouth(staff: Staff): number {
   const bonus = staff.members?.youth?.trait === 'academyMaestro' ? STAFF_TRAIT_BONUS : 0;
-  return staff.youth + bonus;
+  return staff.youth + bonus + staffTraitSynergyBonus(staff);
+}
+
+/** 특기 특성을 가진 실명 스태프 수에 따른 시너지 가산치(B12) — 핵심 스태프진이 여럿
+ *  손발이 맞으면(특기 보유자 2명 이상) 개별 보너스와 별개로 팀 전체에 추가 보너스가
+ *  붙는다. 특기 보유자가 0~1명이면 0(기존과 동일 — 하위 호환). */
+const STAFF_SYNERGY_BONUS_BY_COUNT: Record<number, number> = { 0: 0, 1: 0, 2: 1, 3: 2, 4: 3 };
+export function staffTraitSynergyBonus(staff: Staff): number {
+  const count = NAMED_STAFF_KINDS.reduce((n, kind) => n + (staff.members?.[kind]?.trait ? 1 : 0), 0);
+  return STAFF_SYNERGY_BONUS_BY_COUNT[count] ?? 0;
 }
 
 /** 실명 스태프가 계약 만료 시 이탈할 기준 확률 — 레벨이 높을수록(시장 가치가 높을수록)
