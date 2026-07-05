@@ -778,19 +778,38 @@ export function setMyTactic(state: GameState, tactic: Tactic): GameState {
   return { ...state, tactics: { ...state.tactics, [state.myClubId]: tactic } };
 }
 
-/** 내 선수 재계약 (계약 연장 + 임금 인상 + 사기 상승, 계약금 지출). */
-export function renewContract(state: GameState, playerId: string): ActionOutcome {
+/** 재계약 시 선택 가능한 계약 기간(년) 하한·상한(신규 개선 항목 5). */
+export const RENEWAL_MIN_YEARS = 2;
+export const RENEWAL_MAX_YEARS = 5;
+
+/**
+ * 내 선수 재계약 (계약 연장 + 임금 인상 + 사기 상승, 계약금 지출).
+ * 신규 개선 항목 5(다년 계약 사인온보너스) — years로 계약 기간을 직접 고를 수 있고
+ * (짧을수록/길수록 계약금이 비례해 늘거나 준다), signOnBonus를 얹으면 그만큼 계약금
+ * 위에 추가로 지불하는 대신 사기가 더 크게 오른다(체감 — 무한정 사기를 올리진 않는다).
+ */
+export function renewContract(
+  state: GameState, playerId: string, years = 4, signOnBonus = 0,
+): ActionOutcome {
   const club = myClub(state);
   const p = club.players.find((pl) => pl.id === playerId);
   if (!p) return { state, ok: false, message: '선수를 찾을 수 없습니다.' };
   if (p.contractYears > 2) return { state, ok: false, message: '아직 재계약이 필요하지 않습니다.' };
-  const cost = Math.round(p.wage * 20);
+  const clampedYears = Math.min(RENEWAL_MAX_YEARS, Math.max(RENEWAL_MIN_YEARS, Math.round(years)));
+  const bonus = Math.max(0, Math.round(signOnBonus));
+  const baseCost = Math.round(p.wage * 20 * (clampedYears / 4));
+  const cost = baseCost + bonus;
   if (club.finance.balance < cost) return { state, ok: false, message: '자금이 부족합니다.' };
   club.finance.balance -= cost;
-  p.contractYears = 4;
+  p.contractYears = clampedYears;
   p.wage = Math.round(p.wage * 1.1);
-  p.morale = Math.min(1, p.morale + 0.15);
-  return { state: { ...state }, ok: true, message: `${p.name} 재계약 완료 (계약금 ${formatMoney(cost)})` };
+  const bonusMoraleBoost = bonus > 0 ? Math.min(0.15, bonus / (p.wage * 100)) : 0;
+  p.morale = Math.min(1, p.morale + 0.15 + bonusMoraleBoost);
+  const bonusMsg = bonus > 0 ? ` + 사인온보너스 ${formatMoney(bonus)}` : '';
+  return {
+    state: { ...state }, ok: true,
+    message: `${p.name} 재계약 완료 (${clampedYears}년 · 계약금 ${formatMoney(baseCost)}${bonusMsg})`,
+  };
 }
 
 /** 내 선수의 훈련 포커스 설정. */

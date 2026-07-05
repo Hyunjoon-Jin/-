@@ -7,7 +7,10 @@ import {
   type PlayerFormEntry, type OverallTier, type PotentialTier, type AgeProfile, type ScoutingReport,
 } from '@soccer-tycoon/engine';
 import { useState } from 'react';
-import { formStability, revealPotential, type TimelineEntry, type SeasonRatingEntry } from '../game.js';
+import {
+  formStability, revealPotential, RENEWAL_MIN_YEARS, RENEWAL_MAX_YEARS,
+  type TimelineEntry, type SeasonRatingEntry,
+} from '../game.js';
 import { useModalA11y } from './useModalA11y.js';
 import { useResultToast } from '../toast.js';
 import { onKeyActivate } from '../a11y.js';
@@ -110,8 +113,8 @@ interface Props {
   onSetFocus?: (focus: TrainingFocus) => void;
   /** 내 선수면 포지션 전환 훈련 대상 설정 가능(해제는 undefined). */
   onSetTrainingPosition?: (position: Position | undefined) => void;
-  /** 내 선수면 재계약 가능. */
-  onRenew?: () => { ok: boolean; message: string };
+  /** 내 선수면 재계약 가능. years(계약 기간)·signOnBonus(사인온보너스, 신규 개선 항목 5)를 선택해 넘긴다. */
+  onRenew?: (years: number, signOnBonus: number) => { ok: boolean; message: string };
   /** 진행 중 시즌 최근 폼(평점). live 없거나 미출전이면 빈 배열. */
   recentForm?: PlayerFormEntry[];
   /** 커리어 타임라인(이적·마일스톤·은퇴). 시즌순. */
@@ -135,6 +138,43 @@ const PD_TABS: { key: PdTab; label: string }[] = [
   { key: 'development', label: '성장' },
   { key: 'career', label: '커리어' },
 ];
+
+/** 재계약 시 계약 기간·사인온보너스(신규 개선 항목 5)를 골라 확정하는 인라인 패널. */
+function RenewPanel({
+  player, onRenew, toast,
+}: {
+  player: Player;
+  onRenew: (years: number, signOnBonus: number) => { ok: boolean; message: string };
+  toast: (r: { ok: boolean; message: string }) => void;
+}) {
+  const [years, setYears] = useState(4);
+  const [signOnBonus, setSignOnBonus] = useState(0);
+  const baseCost = Math.round(player.wage * 20 * (years / 4));
+
+  return (
+    <div className="pd-renew-panel">
+      <span className="muted">계약 만료 임박 ({player.contractYears}년)</span>
+      <label className="loan-field">
+        <span>계약 기간</span>
+        <select value={years} onChange={(e) => setYears(Number(e.target.value))}>
+          {Array.from({ length: RENEWAL_MAX_YEARS - RENEWAL_MIN_YEARS + 1 }, (_, i) => RENEWAL_MIN_YEARS + i).map((n) => (
+            <option key={n} value={n}>{n}년</option>
+          ))}
+        </select>
+      </label>
+      <label className="loan-field">
+        <span>사인온보너스(선택)</span>
+        <input
+          type="number" min={0} step={1000} value={signOnBonus}
+          onChange={(e) => setSignOnBonus(Math.max(0, Number(e.target.value)))}
+        />
+      </label>
+      <button className="btn-small" onClick={() => toast(onRenew(years, signOnBonus))}>
+        재계약 (계약금 {formatMoney(baseCost + signOnBonus)})
+      </button>
+    </div>
+  );
+}
 
 export function PlayerDetail({
   player, onClose, onSetFocus, onSetTrainingPosition, onRenew, recentForm, timeline, ratingHistory, scouting,
@@ -245,10 +285,7 @@ export function PlayerDetail({
             {onRenew && (
               <div className="pd-renew">
                 {player.contractYears <= 2 ? (
-                  <>
-                    <span className="muted">계약 만료 임박 ({player.contractYears}년) — </span>
-                    <button className="btn-small" onClick={() => toast(onRenew())}>재계약 (계약금 {formatMoney(player.wage * 20)})</button>
-                  </>
+                  <RenewPanel player={player} onRenew={onRenew} toast={toast} />
                 ) : (
                   <span className="muted small">계약 {player.contractYears}년 남음 — 재계약 불필요.</span>
                 )}

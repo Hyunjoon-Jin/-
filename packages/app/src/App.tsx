@@ -274,7 +274,11 @@ export function App() {
             onSetTrainingPosition={isMine ? (pos) => update(setTrainingPosition(game, detailPlayer.id, pos)) : undefined}
             onRenew={
               isMine
-                ? () => { const o = renewContract(game, detailPlayer.id); if (o.ok) update(o.state); return o; }
+                ? (years, signOnBonus) => {
+                    const o = renewContract(game, detailPlayer.id, years, signOnBonus);
+                    if (o.ok) update(o.state);
+                    return o;
+                  }
                 : undefined
             }
             recentForm={playerForm(game, detailPlayer.id)}
