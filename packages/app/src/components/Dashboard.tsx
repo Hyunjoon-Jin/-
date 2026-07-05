@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import {
   myClub, rivalClub, lastSummary, myLastPosition, managerPersona, contractOptions,
   thinSquadLines, LINE_DEPTH_RECOMMENDED,
-  DIFFICULTIES, DIVISION_LABELS, type GameState,
+  DIFFICULTIES, DIVISION_LABELS, type GameState, type ActionOutcome,
 } from '../game.js';
 import {
   formatMoney, currentAbility, wageBudget, annualWageBill, inFinancialCrisis,
@@ -12,6 +12,7 @@ import {
 import { Landmark } from 'lucide-react';
 import { Banner } from './Banner.js';
 import { InfoTip } from './InfoTip.js';
+import { useResultToast } from '../toast.js';
 
 /** 대시보드에 한 번에 펼쳐 보여줄 시즌 소식 배너 수 — 나머지는 "더 보기"로 접는다. */
 const VISIBLE_SEASON_BANNERS = 2;
@@ -46,13 +47,17 @@ interface Props {
   /** "이적" 또는 "스태프" 탭을 방문했는지 — 첫 시즌 체크리스트 진행 상황 표시용. */
   visitedSquadPrep: boolean;
   onGoToTab: (tab: 'tactics' | 'transfers' | 'match') => void;
+  onRenegotiateDemand: () => ActionOutcome;
 }
 
-export function Dashboard({ game, onSignContract, visitedTactics, visitedSquadPrep, onGoToTab }: Props) {
+export function Dashboard({
+  game, onSignContract, visitedTactics, visitedSquadPrep, onGoToTab, onRenegotiateDemand,
+}: Props) {
   const club = myClub(game);
   const rival = rivalClub(game);
   const last = lastSummary(game);
   const pos = myLastPosition(game);
+  const toast = useResultToast();
 
   const squadAvgCA =
     club.players.reduce((s, p) => s + currentAbility(p), 0) / club.players.length;
@@ -429,6 +434,15 @@ export function Dashboard({ game, onSignContract, visitedTactics, visitedSquadPr
         <Banner tone="info">
           📋 이사회 특별 요구: <b>{DEMAND_LABEL[game.demand.kind]}</b>
           <span className="muted small"> (달성 시 신뢰도 +{game.demand.reward} · 실패 시 −{game.demand.penalty})</span>
+          {!game.demandRenegotiated && (
+            <button
+              className="btn-small demand-renegotiate-btn"
+              onClick={() => toast(onRenegotiateDemand())}
+              title="이사회에 요구 강도 완화를 요청합니다. 신뢰도를 조금 지불하며, 조급한 이사회는 거절할 수 있습니다."
+            >
+              🤝 재협상 요청
+            </button>
+          )}
         </Banner>
       )}
 

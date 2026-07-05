@@ -91,7 +91,8 @@ export {
 } from './board.js';
 export {
   DEMAND_LABEL, generateDemand, evaluateDemand, demandConfidence,
-  type DemandKind, type BoardDemand, type DemandContext, type DemandResult,
+  renegotiateDemand, RENEGOTIATE_BASE_COST, RENEGOTIATE_IMPATIENT_REFUSE_CHANCE, RENEGOTIATE_REDUCTION,
+  type DemandKind, type BoardDemand, type DemandContext, type DemandResult, type RenegotiateResult,
 } from './demands.js';
 export {
   transferTargets, buyPlayer, buyPlayerAt, buyPlayerViaReleaseClause, sellPlayer, releasePlayer,

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
-  generateDemand, evaluateDemand, demandConfidence, type BoardDemand,
+  generateDemand, evaluateDemand, demandConfidence, renegotiateDemand,
+  RENEGOTIATE_BASE_COST, RENEGOTIATE_IMPATIENT_REFUSE_CHANCE, type BoardDemand,
 } from '../src/demands.js';
 import { Rng } from '../src/rng.js';
 
@@ -94,5 +95,58 @@ describe('demands: 이사회 특별 요구', () => {
       if (!generateDemand({ overWages: false, ambition: 1000 }, new Rng(s))) none++;
     }
     expect(none).toBeGreaterThan(0); // 스킵 확률 하한(0.15)이 여전히 적용됨
+  });
+});
+
+describe('신규 개선 항목 22: 이사회 요구 재협상', () => {
+  it('성향이 없거나 참을성 있는 이사회는 재협상을 받아주고 보상·벌점이 절반으로 준다', () => {
+    const demand: BoardDemand = { kind: 'winCup', reward: 12, penalty: 4 };
+    const r = renegotiateDemand(demand, new Rng(1));
+    expect(r.ok).toBe(true);
+    expect(r.newDemand!.reward).toBe(6);
+    expect(r.newDemand!.penalty).toBe(2);
+    expect(r.newDemand!.kind).toBe('winCup');
+    expect(r.confidenceCost).toBe(RENEGOTIATE_BASE_COST);
+  });
+
+  it('조급한(impatient) 이사회는 확률적으로 재협상을 거절하고, 거절 시 비용이 들지 않는다', () => {
+    const demand: BoardDemand = { kind: 'topHalfFinish', reward: 12, penalty: 4 };
+    let refused = false;
+    let accepted = false;
+    for (let seed = 0; seed < 100 && !(refused && accepted); seed++) {
+      const r = renegotiateDemand(demand, new Rng(seed), { patience: 'impatient', style: 'conservative' });
+      if (r.ok) { accepted = true; expect(r.confidenceCost).toBeGreaterThan(0); }
+      else { refused = true; expect(r.confidenceCost).toBe(0); expect(r.reason).toBeDefined(); }
+    }
+    expect(refused).toBe(true);
+    expect(accepted).toBe(true);
+  });
+
+  it('참을성 있는(patient) 이사회는 거절 확률 없이 항상 재협상에 응한다', () => {
+    const demand: BoardDemand = { kind: 'clubTopScorer', reward: 12, penalty: 4 };
+    for (let seed = 0; seed < 30; seed++) {
+      const r = renegotiateDemand(demand, new Rng(seed), { patience: 'patient', style: 'conservative' });
+      expect(r.ok).toBe(true);
+    }
+  });
+
+  it('공격적(aggressive) 성향 이사회는 재협상 비용이 더 비싸다', () => {
+    const demand: BoardDemand = { kind: 'winCup', reward: 12, penalty: 4 };
+    const conservative = renegotiateDemand(demand, new Rng(1), { patience: 'patient', style: 'conservative' });
+    const aggressive = renegotiateDemand(demand, new Rng(1), { patience: 'patient', style: 'aggressive' });
+    expect(aggressive.confidenceCost).toBeGreaterThan(conservative.confidenceCost);
+  });
+
+  it('원래 요구의 종류(kind)는 재협상 후에도 그대로 유지된다', () => {
+    for (const kind of ['cutWages', 'winCup', 'clubTopScorer', 'topHalfFinish'] as const) {
+      const demand: BoardDemand = { kind, reward: 20, penalty: 10 };
+      const r = renegotiateDemand(demand, new Rng(1));
+      expect(r.newDemand!.kind).toBe(kind);
+    }
+  });
+
+  it('불변성 확인용 sanity check — 조급한 이사회의 거절 확률 상수가 0과 1 사이다', () => {
+    expect(RENEGOTIATE_IMPATIENT_REFUSE_CHANCE).toBeGreaterThan(0);
+    expect(RENEGOTIATE_IMPATIENT_REFUSE_CHANCE).toBeLessThan(1);
   });
 });

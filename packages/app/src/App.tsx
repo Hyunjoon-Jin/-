@@ -16,7 +16,7 @@ import {
   watchSetup, matchPreview, commitWatchedRound,
   watchCupSetup, cupPreview, commitWatchedCupRound,
   playerForm, playerTimeline, playerRatingHistory, respondMedia, dismissMedia, signContract,
-  dispatchScoutAction, isScouted, assignMentorAction, clearMentorPairingAction,
+  dispatchScoutAction, isScouted, assignMentorAction, clearMentorPairingAction, renegotiateDemandAction,
   type GameState, type ActionOutcome, type WatchSetup, type Difficulty, type MediaEvent,
 } from './game.js';
 import type { Tactic, MatchResult, LoanTerms } from '@soccer-tycoon/engine';
@@ -161,6 +161,14 @@ export function App() {
   const runAction = <T,>(fn: (s: GameState, id: T) => ActionOutcome, id: T): ActionOutcome => {
     const outcome = fn(game, id);
     if (outcome.ok) update(outcome.state);
+    return outcome;
+  };
+
+  // 재협상 결과(신규 개선 항목 22)는 거절당해도 demandRenegotiated 플래그가 갱신되므로,
+  // runAction과 달리 성공 여부와 무관하게 항상 state를 반영해야 한다.
+  const handleRenegotiateDemand = (): ActionOutcome => {
+    const outcome = renegotiateDemandAction(game);
+    update(outcome.state);
     return outcome;
   };
 
@@ -343,6 +351,7 @@ export function App() {
                 visitedTactics={visitedTactics}
                 visitedSquadPrep={visitedSquadPrep}
                 onGoToTab={setTab}
+                onRenegotiateDemand={handleRenegotiateDemand}
               />
             )}
             {tab === 'squad' && (

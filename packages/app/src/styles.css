@@ -176,6 +176,7 @@ body {
 }
 .btn-small:hover { border-color: var(--accent-2); }
 .btn-small.danger:hover { border-color: var(--color-danger); color: var(--color-danger); }
+.demand-renegotiate-btn { margin-left: 10px; }
 
 .career-archive { margin-bottom: 28px; text-align: left; }
 .career-archive .subtitle { margin-bottom: 12px; }

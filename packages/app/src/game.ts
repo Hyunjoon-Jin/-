@@ -25,6 +25,7 @@ import {
   confidenceDelta, applyConfidence, isSacked, START_CONFIDENCE, boardStatus, boardTierUpgradeBonus,
   type BoardStatus,
   generateDemand, evaluateDemand, demandConfidence, DEMAND_LABEL,
+  renegotiateDemand as engineRenegotiateDemand,
   generateSponsorGoal, evaluateSponsorGoal, SPONSOR_GOAL_LABEL, sponsorStreakMultiplier, type SponsorGoal,
   annualWageBill, wageBudget,
   matchOutcomeKind, mediaToneOptions, shouldTriggerMediaEvent, applyMediaTone,
@@ -144,6 +145,9 @@ export interface GameState {
   sacked?: boolean;
   /** 이번 시즌 이사회 특별 요구(없을 수 있음). */
   demand?: BoardDemand | null;
+  /** 이번 시즌 이사회 요구 재협상을 이미 시도했는가(신규 개선 항목 22, 시즌당 1회 제한).
+   *  다음 시즌 새 요구가 생성될 때 초기화된다. */
+  demandRenegotiated?: boolean;
   /** 이번 시즌 스폰서 보너스 목표(없을 수 있음). 달성 시 일시불 현금 보너스. */
   sponsorGoal?: SponsorGoal | null;
   /** 밀당이 결렬(roundsExhausted)된 선수 id → 재협상이 다시 가능해지는 시즌 번호
@@ -810,6 +814,7 @@ export function finishSeason(state: GameState): GameState {
     boardConfidence,
     sacked,
     demand: nextDemand,
+    demandRenegotiated: false,
     sponsorGoal: nextSponsorGoal,
     sponsorStreak: nextSponsorStreak,
     legends: [...state.legends, ...newLegends],
@@ -1514,6 +1519,25 @@ export function revealPotential(scouting: number, potential: number, scouted = f
 /** 특정 선수를 파견 정찰했는지(B13) — 내 구단 기준. */
 export function isScouted(state: GameState, playerId: string): boolean {
   return myClub(state).scoutedPlayerIds?.includes(playerId) ?? false;
+}
+
+/** 이사회 특별 요구 재협상 요청(신규 개선 항목 22) — 시즌당 1회만 시도할 수 있다.
+ *  받아들여지면 요구 강도(보상·벌점 양쪽)가 즉시 완화되는 대신 신뢰도를 조금 깎인다.
+ *  조급한(impatient) 이사회는 확률적으로 아예 거절할 수 있다(이 경우 비용 없음). */
+export function renegotiateDemandAction(state: GameState): ActionOutcome {
+  if (!state.demand) return { state, ok: false, message: '진행 중인 이사회 특별 요구가 없습니다.' };
+  if (state.demandRenegotiated) return { state, ok: false, message: '이번 시즌에는 이미 재협상을 시도했습니다.' };
+  const persona = myClub(state).boardPersona;
+  const r = engineRenegotiateDemand(state.demand, new Rng(seasonSeed(state) + 6161), persona);
+  if (!r.ok) {
+    return { state: { ...state, demandRenegotiated: true }, ok: false, message: r.reason! };
+  }
+  const boardConfidence = applyConfidence(state.boardConfidence, -r.confidenceCost);
+  return {
+    state: { ...state, demand: r.newDemand, demandRenegotiated: true, boardConfidence },
+    ok: true,
+    message: `이사회가 재협상에 응했습니다 — 요구 강도가 완화됐습니다 (신뢰도 −${r.confidenceCost}).`,
+  };
 }
 
 /** 선수 한 명을 지목해 스카우트 파견(보유 자금 사용, B13) — 성공하면 이후 항상
