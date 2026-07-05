@@ -1,13 +1,14 @@
 import { useMemo, useState } from 'react';
 import {
-  myClub, lastSummary, revealPotential, myLoanedOutPlayers, isScouted, type GameState, type ActionOutcome,
+  myClub, lastSummary, revealPotential, myLoanedOutPlayers, isScouted, myAgentRelations,
+  type GameState, type ActionOutcome,
 } from '../game.js';
 import {
   transferTargets, marketValue, currentAbility, formatMoney, lineOf, buildScoutingReport,
   MAX_NEGOTIATION_ROUNDS, LOAN_MIN_SEASONS, LOAN_MAX_SEASONS,
   LOAN_OBLIGATION_MIN_APPS, LOAN_OBLIGATION_MAX_APPS, agentPersonality, BUYBACK_MAX_SEASONS,
   type Line, type Player, type OfferEvaluation, type TransferTarget, type SellOffer, type LoanTerms,
-  type AgentPersonality,
+  type AgentPersonality, type AgentRelationsTier,
 } from '@soccer-tycoon/engine';
 import { ScoutingSummary } from './PlayerDetail.js';
 import { useModalA11y } from './useModalA11y.js';
@@ -51,6 +52,15 @@ const LINE_FILTERS: { key: LineFilter; label: string }[] = [
 /** 에이전트 개성(A3)별 협상 UI 배지 — 보통(moderate)은 특별히 표시하지 않는다. */
 const AGENT_PERSONALITY_LABEL: Record<AgentPersonality, string | null> = {
   hardliner: '💪 강경파 에이전트', moderate: null, flexible: '🤝 유연한 에이전트',
+};
+
+/** 에이전트 관계 지수(Item6) 등급별 라벨·스타일. */
+const AGENT_RELATIONS_LABEL: Record<AgentRelationsTier, { text: string; cls: string }> = {
+  excellent: { text: '😍 매우 우호적', cls: 'pos' },
+  good: { text: '🙂 우호적', cls: 'pos' },
+  neutral: { text: '😐 보통', cls: 'muted' },
+  poor: { text: '😒 냉랭함', cls: 'injury-risk' },
+  hostile: { text: '😠 적대적', cls: 'injury' },
 };
 
 type AgeFilter = 'ALL' | 'young' | 'prime' | 'veteran';
@@ -107,6 +117,7 @@ function TransferMarket({
 
   const budget = club.finance.transferBudget;
   const scouting = club.staff.scouting;
+  const agentRelations = myAgentRelations(game);
 
   function toggleSquadSort(k: MarketSortKey) {
     if (k === squadSort) { setSquadDir((d) => (d === 1 ? -1 : 1) as SortDir); return; }
@@ -169,6 +180,12 @@ function TransferMarket({
           <span className="muted">이적 예산</span>{' '}
           <b className="budget">{formatMoney(budget)}</b>
           <span className="muted"> · 스쿼드 {club.players.length}명</span>
+          <span
+            className={`market-relations ${AGENT_RELATIONS_LABEL[agentRelations.tier].cls}`}
+            title="에이전트 관계 지수 — 순조로운 영입 협상이 성사될 때마다 조금씩 오르고, 협상이 완전히 결렬되면 크게 깎입니다. 좋을수록 다음 협상의 하한·역제안이 유리해집니다."
+          >
+            {' · '}에이전트 관계 {AGENT_RELATIONS_LABEL[agentRelations.tier].text} ({agentRelations.value.toFixed(0)})
+          </span>
         </div>
       </div>
 

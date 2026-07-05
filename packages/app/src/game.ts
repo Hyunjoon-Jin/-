@@ -9,6 +9,9 @@ import {
   commitResult, simulateMatch, simulateSeason, defaultTactic, applyMatchEffects,
   buyPlayer, buyPlayerAt, buyPlayerViaReleaseClause, evaluateOffer, sellPlayer, releasePlayer,
   exerciseBuyback, attachAddOnClause, exerciseLoanBuyOption,
+  agentRelationsOf, agentRelationsTier,
+  AGENT_RELATIONS_MIN, AGENT_RELATIONS_DEFAULT, AGENT_RELATIONS_BREAKDOWN_PENALTY,
+  type AgentRelationsTier,
   sellOffers, acceptSellOffer,
   loanPlayerOut, recallLoanPlayer, applyLoanWageSubsidies, swapPlayers,
   type OfferEvaluation, type SellOffer, type LoanTerms, type LoanReturnEvent, type LoanObligationEvent,
@@ -309,6 +312,12 @@ export function startGame(seed: number, myClubId: string, difficulty: Difficulty
 
 export function myClub(state: GameState): Club {
   return state.clubs.find((c) => c.id === state.myClubId)!;
+}
+
+/** 내 구단의 현재 에이전트 관계 지수와 등급(Item6, 이적 시장 UI 표시용). */
+export function myAgentRelations(state: GameState): { value: number; tier: AgentRelationsTier } {
+  const value = agentRelationsOf(myClub(state));
+  return { value, tier: agentRelationsTier(value) };
 }
 
 /** 라인별 권장 최소 보유 인원(A5) — 이 아래면 부상·정지가 겹칠 때 그 라인이 통째로 빌 위험. */
@@ -885,8 +894,13 @@ export function negotiate(state: GameState, playerId: string, offer: number, rou
 }
 
 /** 밀당이 완전히 결렬됐을 때(evaluateOffer의 roundsExhausted) 호출 — 다음 시즌까지
- *  이 선수와의 재협상을 막는다(Item1). */
+ *  이 선수와의 재협상을 막고(Item1), 에이전트 관계 지수를 깎는다(Item6). */
 export function recordNegotiationBreakdown(state: GameState, playerId: string): GameState {
+  const club = myClub(state);
+  club.agentRelations = Math.max(
+    AGENT_RELATIONS_MIN,
+    (club.agentRelations ?? AGENT_RELATIONS_DEFAULT) - AGENT_RELATIONS_BREAKDOWN_PENALTY,
+  );
   return {
     ...state,
     negotiationCooldowns: { ...state.negotiationCooldowns, [playerId]: state.season + 1 },

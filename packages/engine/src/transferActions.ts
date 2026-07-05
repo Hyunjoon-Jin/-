@@ -37,6 +37,41 @@ const FLOOR_RATIO: Record<AgentPersonality, number> = { hardliner: 0.9, moderate
 /** 개성별 역제안 시 호가 쪽으로 얼마나 버티는지(1에 가까울수록 거의 양보하지 않음). */
 const COUNTER_RIGIDITY: Record<AgentPersonality, number> = { hardliner: 0.7, moderate: 0.5, flexible: 0.3 };
 
+// ── 에이전트 관계 지수 (신규 개선 항목 6) ──────────────────
+
+export const AGENT_RELATIONS_MIN = 0;
+export const AGENT_RELATIONS_MAX = 100;
+/** 관계 지수가 아직 없는(구버전 세이브 등) 구단의 중립 기준값. */
+export const AGENT_RELATIONS_DEFAULT = 50;
+/** 협상 없이 산 구단(역제안까지 거쳐 타결)이 얻는 관계 상승폭. */
+const AGENT_RELATIONS_BUY_GAIN = 2;
+/** 협상이 완전히 결렬됐을 때(라운드 소진) 잃는 관계 하락폭 — 상승보다 훨씬 크게 잡아
+ *  "관계는 쌓기 어렵고 깨지기 쉽다"는 방향으로 설계한다. */
+export const AGENT_RELATIONS_BREAKDOWN_PENALTY = 8;
+/** 관계 지수 편차(중립 대비) 1점당 하한 비율·역제안 완고함에 주는 보정폭. */
+const AGENT_RELATIONS_ADJ_PER_POINT = 0.001;
+
+/** 구단의 현재 에이전트 관계 지수(없으면 중립값). */
+export function agentRelationsOf(club: Club): number {
+  return clamp(club.agentRelations ?? AGENT_RELATIONS_DEFAULT, AGENT_RELATIONS_MIN, AGENT_RELATIONS_MAX);
+}
+
+/** 관계 지수가 협상에 주는 보정치 — 중립(50)보다 좋으면 양수(하한↓·완고함↓), 나쁘면 음수. */
+function agentRelationsAdjustment(club: Club): number {
+  return (agentRelationsOf(club) - AGENT_RELATIONS_DEFAULT) * AGENT_RELATIONS_ADJ_PER_POINT;
+}
+
+export type AgentRelationsTier = 'excellent' | 'good' | 'neutral' | 'poor' | 'hostile';
+
+/** 관계 지수를 5단계 등급으로 분류(UI 표시용). */
+export function agentRelationsTier(relations: number): AgentRelationsTier {
+  if (relations >= 80) return 'excellent';
+  if (relations >= 60) return 'good';
+  if (relations >= 40) return 'neutral';
+  if (relations >= 20) return 'poor';
+  return 'hostile';
+}
+
 /** 이적으로 새 구단에 합류할 때 등번호 배정 — 기존 번호가 새 구단에서 비어있으면
  *  유지하고, 겹치면 가장 작은 빈 번호로(협상에 무작위성을 추가하지 않기 위해
  *  Rng 없이 결정론적으로 처리). */
@@ -170,7 +205,10 @@ export function evaluateOffer(
   const personality = agentPersonality(player);
   const impatience = 1 + Math.min(round, MAX_NEGOTIATION_ROUNDS) * NEGOTIATION_IMPATIENCE_PER_ROUND;
   const asking = Math.round(askingPrice(seller, player) * impatience);
-  const floor = Math.round(asking * FLOOR_RATIO[personality]);
+  // 관계 지수가 좋을수록(신규 개선 항목 6) 하한이 낮아지고 역제안도 덜 완고해진다.
+  const relationsAdj = agentRelationsAdjustment(me);
+  const floorRatio = clamp(FLOOR_RATIO[personality] - relationsAdj, 0.5, 0.98);
+  const floor = Math.round(asking * floorRatio);
   let outcome: OfferOutcome;
   let counter: number | undefined;
   let roundsExhausted = false;
@@ -182,7 +220,7 @@ export function evaluateOffer(
   } else if (offer >= floor) {
     outcome = 'countered';
     // 강경파일수록 호가에 가깝게, 유연한 편일수록 제안액에 가깝게 역제안한다.
-    const rigidity = COUNTER_RIGIDITY[personality];
+    const rigidity = clamp(COUNTER_RIGIDITY[personality] - relationsAdj, 0.1, 0.9);
     counter = Math.min(asking, Math.round(offer + (asking - offer) * rigidity));
   } else {
     outcome = 'rejected';
@@ -208,9 +246,10 @@ export function buyPlayerAt(clubs: Club[], myClubId: string, playerId: string, f
   }
   if (player.loanFromClubId) return { ok: false, reason: '임대 중인 선수는 거래할 수 없습니다.' };
   if (!(fee > 0)) return { ok: false, reason: '이적료가 올바르지 않습니다.' };
-  // evaluateOffer와 동일한 하한(호가의 82%) — 협상 없이 직접 buyPlayerAt을 호출해도
-  // 헐값에 선수를 사들이지 못하도록 매도 구단 쪽에서 다시 검증한다.
-  const floor = Math.round(askingPrice(seller, player) * 0.82);
+  // evaluateOffer와 동일한 하한(호가의 82%, 관계 지수로 보정) — 협상 없이 직접
+  // buyPlayerAt을 호출해도 헐값에 선수를 사들이지 못하도록 매도 구단 쪽에서 다시 검증한다.
+  const floorRatio = clamp(0.82 - agentRelationsAdjustment(me), 0.5, 0.98);
+  const floor = Math.round(askingPrice(seller, player) * floorRatio);
   if (fee < floor) {
     return { ok: false, reason: '제안액이 너무 낮아 거절당했습니다.' };
   }
@@ -232,6 +271,7 @@ export function buyPlayerAt(clubs: Club[], myClubId: string, playerId: string, f
   player.releaseClause = undefined;
   me.players.push(player);
   reassignSquadNumber(me, player);
+  me.agentRelations = clamp(agentRelationsOf(me) + AGENT_RELATIONS_BUY_GAIN, AGENT_RELATIONS_MIN, AGENT_RELATIONS_MAX);
 
   return { ok: true, fee, agentFee: commission, playerName: player.name };
 }

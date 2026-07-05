@@ -42,11 +42,11 @@ describe('Item1: 에이전트 협상 결렬 블랙리스트', () => {
     expect(r.roundsExhausted && r.reason?.includes('결렬 여파')).toBeFalsy();
   });
 
-  it('myClub에는 부작용이 없다(순수 함수)', () => {
+  it('myClub 선수 명단에는 부작용이 없다(에이전트 관계 지수 하락은 Item6에서 의도된 부작용)', () => {
     const g = startGame(2029, 'c0');
     const club = myClub(g);
-    const before = JSON.stringify(club);
+    const before = JSON.stringify(club.players);
     recordNegotiationBreakdown(g, 'someone');
-    expect(JSON.stringify(myClub(g))).toBe(before);
+    expect(JSON.stringify(myClub(g).players)).toBe(before);
   });
 });
