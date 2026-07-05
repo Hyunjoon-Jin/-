@@ -509,18 +509,27 @@ export function finishSeason(state: GameState): GameState {
   applyLoanWageSubsidies(state.clubs);
 
   // 3) 정산 (부별 순위 기준) — 최근 폼(승점 비율)이 매치데이 수익에 반영된다.
+  // 라이벌전 매치데이 프리미엄(신규 개선 항목 23) — 내 구단이 라이벌을 홈에서 상대한
+  // 경기 수만큼 매치데이 수익에 프리미엄이 붙는다(라이벌이 다른 부에 있어도 잡힌다).
+  const myRivalHomeMatches = state.rivalClubId
+    ? [...ss.results, ...otherResult.matches].filter(
+      (r) => r.homeClubId === state.myClubId && r.awayClubId === state.rivalClubId,
+    ).length
+    : 0;
   const finance = new Map();
   myTable.forEach((row, pos) => {
     const club = state.clubs.find((c) => c.id === row.clubId)!;
     const form = recentForm(ss.results, club.id, 5);
     const formRatio = form.results.length > 0 ? form.points / (form.results.length * 3) : undefined;
-    finance.set(club.id, settleSeason(club, pos, CLUBS_PER_DIV, undefined, formRatio));
+    const rivalHomeMatches = club.id === state.myClubId ? myRivalHomeMatches : 0;
+    finance.set(club.id, settleSeason(club, pos, CLUBS_PER_DIV, undefined, formRatio, rivalHomeMatches));
   });
   otherTable.forEach((row, pos) => {
     const club = state.clubs.find((c) => c.id === row.clubId)!;
     const form = recentForm(otherResult.matches, club.id, 5);
     const formRatio = form.results.length > 0 ? form.points / (form.results.length * 3) : undefined;
-    finance.set(club.id, settleSeason(club, pos, CLUBS_PER_DIV, undefined, formRatio));
+    const rivalHomeMatches = club.id === state.myClubId ? myRivalHomeMatches : 0;
+    finance.set(club.id, settleSeason(club, pos, CLUBS_PER_DIV, undefined, formRatio, rivalHomeMatches));
   });
 
   // 4) 컵 자동 완료 + 우승 상금 (전 구단)

@@ -58,7 +58,7 @@ export {
   type LoyaltyTier,
 } from './valuation.js';
 export {
-  settleSeason, leaguePrize, attendanceFormFactor,
+  settleSeason, leaguePrize, attendanceFormFactor, RIVAL_MATCHDAY_PREMIUM,
   generateSponsorGoal, evaluateSponsorGoal, SPONSOR_GOAL_LABEL, sponsorStreakMultiplier,
   STADIUM_MAX, stadiumMatchdayMultiplier, stadiumUpgradeCost, upgradeStadium,
   ACADEMY_MAX, academyPotentialBonus, academyUpgradeCost, upgradeAcademy,

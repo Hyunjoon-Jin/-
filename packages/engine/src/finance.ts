@@ -10,6 +10,9 @@ export interface SeasonFinanceReport {
   income: { tv: number; matchday: number; sponsor: number; prize: number; total: number };
   expense: { wages: number; operations: number; total: number };
   net: number;
+  /** 라이벌전(더비) 홈 경기 매치데이 프리미엄으로 얻은 추가 수익(신규 개선 항목 23,
+   *  matchday에 이미 합산돼 있음 — 얼마나 붙었는지 확인용). 라이벌전 홈 경기가 없었으면 undefined. */
+  rivalBonus?: number;
 }
 
 /** 리그 최종 순위(0-index)별 상금. 상위일수록 많고, 우승 보너스. */
@@ -116,12 +119,18 @@ export function upgradeTrainingGround(club: Club): TrainingGroundUpgradeResult {
   return { ok: true, cost, newLevel: level + 1 };
 }
 
+/** 라이벌전(더비) 홈 경기 매치데이 프리미엄 배율(신규 개선 항목 23) — 평소보다 열기가
+ *  뜨거워 관중이 몰려, 그 경기만큼은 입장 수입이 이 배율만큼 더 오른다. */
+export const RIVAL_MATCHDAY_PREMIUM = 1.4;
+
 /**
  * 시즌 재정 정산.
  * @param finalPosition 리그 최종 순위 (0-index).
  * @param nClubs 리그 구단 수.
  * @param homeGames 홈 경기 수 (기본: nClubs - 1, 더블 라운드로빈 한 시즌 홈경기).
  * @param recentFormRatio 최근 폼 승점 비율(0~1) — 매치데이 수익에 반영(생략 시 보정 없음).
+ * @param rivalHomeMatches 이번 시즌 라이벌 상대로 치른 홈 경기 수(보통 0 또는 1) — 그만큼
+ *   매치데이 수익에 RIVAL_MATCHDAY_PREMIUM 프리미엄이 추가로 붙는다(신규 개선 항목 23).
  */
 export function settleSeason(
   club: Club,
@@ -129,14 +138,16 @@ export function settleSeason(
   nClubs: number,
   homeGames = nClubs - 1,
   recentFormRatio?: number,
+  rivalHomeMatches = 0,
 ): SeasonFinanceReport {
   const rep = club.finance.reputation;
 
   // 수입 (중계는 균등 분배분 + 평판 비례분 → 약팀도 최소 보장)
   const tv = 45_000 + rep * 48_000;
-  const matchday = Math.round(
-    homeGames * rep * 5_000 * attendanceFormFactor(recentFormRatio) * stadiumMatchdayMultiplier(club.finance.stadiumLevel),
-  ); // 입장 수입
+  const perGameMatchday =
+    rep * 5_000 * attendanceFormFactor(recentFormRatio) * stadiumMatchdayMultiplier(club.finance.stadiumLevel);
+  const rivalBonus = Math.round(perGameMatchday * clamp(rivalHomeMatches, 0, homeGames) * (RIVAL_MATCHDAY_PREMIUM - 1));
+  const matchday = Math.round(perGameMatchday * homeGames) + rivalBonus; // 입장 수입(라이벌전 프리미엄 포함)
   const sponsor = Math.round(Math.pow(rep, 1.5) * 5_500);
   const prize = leaguePrize(finalPosition, nClubs);
   const incomeTotal = tv + matchday + sponsor + prize;
@@ -162,6 +173,7 @@ export function settleSeason(
     income: { tv, matchday, sponsor, prize, total: incomeTotal },
     expense: { wages, operations, total: expenseTotal },
     net,
+    rivalBonus: rivalBonus > 0 ? rivalBonus : undefined,
   };
 }
 

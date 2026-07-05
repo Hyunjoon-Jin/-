@@ -537,7 +537,11 @@ export function Dashboard({
                   </span>
                 </p>
                 <p className="muted small finance-breakdown">
-                  중계 {formatMoney(myReport.income.tv)} · 매치데이 {formatMoney(myReport.income.matchday)} ·
+                  중계 {formatMoney(myReport.income.tv)} · 매치데이 {formatMoney(myReport.income.matchday)}
+                  {myReport.rivalBonus !== undefined && (
+                    <span> (라이벌전 홈경기 프리미엄 +{formatMoney(myReport.rivalBonus)} 포함)</span>
+                  )}
+                  {' · '}
                   스폰서 {formatMoney(myReport.income.sponsor)} · 상금 {formatMoney(myReport.income.prize)}
                   {' · '}인건비 {formatMoney(myReport.expense.wages)} · 운영비 {formatMoney(myReport.expense.operations)}
                 </p>
