@@ -2,7 +2,7 @@ import {
   TECHNICAL_ATTRS, MENTAL_ATTRS, PHYSICAL_ATTRS, GOALKEEPING_ATTRS, POSITIONS,
   TRAINING_FOCUSES, TRAINING_LABELS, TRAIT_LABELS, TRAIT_DESC,
   currentAbility, marketValue, playerDerived, isInjured, isSuspended, lineOf, familiarityAt,
-  formatMoney, buildScoutingReport,
+  formatMoney, buildScoutingReport, retireChance, RETIRE_MIN_AGE,
   type AttrKey, type Player, type DerivedRatings, type TrainingFocus, type Position,
   type PlayerFormEntry, type OverallTier, type PotentialTier, type AgeProfile, type ScoutingReport,
 } from '@soccer-tycoon/engine';
@@ -91,6 +91,18 @@ function statusBadge(p: Player): { text: string; cls: string } {
   return { text: `컨디션 ${Math.round(p.condition * 100)}%`, cls: 'cond-good' };
 }
 
+/** 복귀 직후 재부상 위험/능력치 회복 지연 배지 — 둘 다 없으면 undefined. */
+function recoveryBadges(p: Player): { text: string; cls: string }[] {
+  const badges: { text: string; cls: string }[] = [];
+  if ((p.reinjuryRiskMatches ?? 0) > 0) {
+    badges.push({ text: `⚠️ 재부상 위험 ${p.reinjuryRiskMatches}경기`, cls: 'injury-risk' });
+  }
+  if ((p.recoveryAttrMatches ?? 0) > 0 && p.injuryBodyPart && p.injuryBodyPart !== 'general') {
+    badges.push({ text: `🩹 능력치 회복 지연 ${p.recoveryAttrMatches}경기`, cls: 'recovering' });
+  }
+  return badges;
+}
+
 interface Props {
   player: Player;
   onClose: () => void;
@@ -169,6 +181,9 @@ export function PlayerDetail({
             </span>
           )}
           <span className={status.cls}>{status.text}</span>
+          {recoveryBadges(player).map((b) => (
+            <span key={b.cls} className={b.cls} title="복귀 직후 일정 기간 지속되는 효과입니다">{b.text}</span>
+          ))}
           <span className={moraleLabel(player.morale).cls}>사기 {moraleLabel(player.morale).text}</span>
           <span className="muted">시즌 {player.seasonApps}경 {player.seasonGoals ?? 0}골</span>
           {((player.careerApps ?? 0) > 0 || (player.careerGoals ?? 0) > 0) && (
@@ -296,6 +311,17 @@ export function PlayerDetail({
             )}
 
             <GrowthChart history={player.caHistory ?? []} current={Math.round(ca)} />
+
+            {player.age >= RETIRE_MIN_AGE && (
+              <p className="muted small pd-retirement">
+                🕯️ 은퇴 전망: 시즌 후 은퇴 확률 약{' '}
+                <b>{Math.round(retireChance(player.age, player.attributes.naturalFitness) * 100)}%</b>
+                <InfoTip title="은퇴 확률">
+                  나이와 자연회복 능력치로 정해집니다. 자연회복이 높을수록 만년까지 뛸 확률이
+                  올라갑니다. 42세가 되면 확률과 무관하게 은퇴합니다.
+                </InfoTip>
+              </p>
+            )}
 
             {ratingHistory && ratingHistory.length >= 2 && <RatingChart history={ratingHistory} />}
             {stability && (

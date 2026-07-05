@@ -9,7 +9,7 @@ describe('legends: 은퇴 스냅샷', () => {
     const rng = new Rng(1);
     const club = generateClub(rng, 'c', 'C', 12);
     const veteran = club.players[0]!;
-    veteran.age = 36; // 오프시즌 진행 후 37세 → 은퇴 기준(37) 충족
+    veteran.age = 41; // 오프시즌 진행 후 42세 → 하드컷 은퇴 기준(42) 충족(확률과 무관하게 확정)
     veteran.careerApps = 250;
     veteran.careerGoals = 60;
     veteran.caps = 40;
@@ -20,7 +20,7 @@ describe('legends: 은퇴 스냅샷', () => {
 
     const legend = result.retiredPlayers.find((r) => r.playerId === veteran.id);
     expect(legend).toBeDefined();
-    expect(legend!.finalAge).toBe(37);
+    expect(legend!.finalAge).toBe(42);
     expect(legend!.careerApps).toBe(260); // 250 + 10(이번 시즌 출전 이월)
     expect(legend!.careerGoals).toBe(63); // 60 + 3
     expect(legend!.caps).toBe(40);

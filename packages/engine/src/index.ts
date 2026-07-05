@@ -10,7 +10,8 @@ export {
 } from './derived.js';
 export { applyMatchEffects } from './matchEffects.js';
 export {
-  rollInjury, SEVERITY_LABEL, type Injury, type InjurySeverity,
+  rollInjury, SEVERITY_LABEL, type Injury, type InjurySeverity, type BodyPart,
+  REINJURY_RISK_WINDOW, RECOVERY_ATTR_WINDOW, reinjuryRiskFactor,
 } from './injury.js';
 export {
   aggregatePlayerStats, topScorers, topAssists, playerOfSeason, seasonAwards, summarizeStats,
@@ -35,7 +36,7 @@ export {
   ALL_TRAITS, TRAIT_LABELS, TRAIT_DESC, hasTrait, rollTraits,
 } from './traits.js';
 export {
-  advanceSeason, runFranchise, runOffseason,
+  advanceSeason, runFranchise, runOffseason, retireChance, RETIRE_MIN_AGE,
   type SeasonSummary, type OffseasonResult, type RetiredLegend,
   type CareerMilestone, type MilestoneKind, type YouthProspect,
   type DebutEvent, type DebutEventKind, type YouthProspectUpdate,

@@ -668,6 +668,8 @@ body {
 .cond-low { color: var(--color-caution); }
 .injury { color: var(--color-danger); font-weight: 700; }
 .suspended { color: var(--color-caution); font-weight: 700; }
+.injury-risk { color: var(--color-caution); }
+.recovering { color: var(--color-warning); }
 .slot-injured { background: #2e1c1c; }
 .card-list { list-style: none; padding: 0; margin: 0 0 14px; text-align: left; }
 .card-list li { display: flex; gap: 8px; padding: 4px 0; font-size: 13px; }

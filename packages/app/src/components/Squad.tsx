@@ -24,6 +24,24 @@ const LINE_FILTERS: { key: LineFilter; label: string }[] = [
 /** 재계약 임박 기준(renewContract가 허용하는 문턱과 동일 — 2년 이하). */
 const CONTRACT_SOON = 2;
 
+/** 복귀 직후 재부상 위험/능력치 회복 지연 중이면 작은 배지를 붙인다(공간이 좁은 표 셀용). */
+function RecoveryHint({ player }: { player: Player }) {
+  const risk = (player.reinjuryRiskMatches ?? 0) > 0;
+  const recovering = (player.recoveryAttrMatches ?? 0) > 0
+    && player.injuryBodyPart && player.injuryBodyPart !== 'general';
+  if (!risk && !recovering) return null;
+  return (
+    <>
+      {risk && (
+        <span className="injury-risk" title={`재부상 위험 ${player.reinjuryRiskMatches}경기 남음`}> ⚠️</span>
+      )}
+      {recovering && (
+        <span className="recovering" title={`능력치 회복 지연 ${player.recoveryAttrMatches}경기 남음`}> 🩹</span>
+      )}
+    </>
+  );
+}
+
 /** 컨디션(0~1)을 색상 점 + %로. 부상은 🤕 N, 정지는 🟥 N. */
 function ConditionCell({ player }: { player: Player }) {
   if (isInjured(player)) {
@@ -34,7 +52,12 @@ function ConditionCell({ player }: { player: Player }) {
   }
   const pct = Math.round(player.condition * 100);
   const cls = pct >= 80 ? 'cond-good' : pct >= 55 ? 'cond-mid' : 'cond-low';
-  return <span className={`cond ${cls}`}>{pct}%</span>;
+  return (
+    <span className={`cond ${cls}`}>
+      {pct}%
+      <RecoveryHint player={player} />
+    </span>
+  );
 }
 
 export function Squad({ club, onSelect }: { club: Club; onSelect: (p: Player) => void }) {

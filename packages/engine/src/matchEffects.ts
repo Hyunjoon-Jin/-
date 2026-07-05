@@ -8,6 +8,7 @@ import type { Club, InjuryEvent, MatchResult, Tactic } from './types.js';
 import type { Rng } from './rng.js';
 import { clamp } from './math.js';
 import { hasTrait } from './traits.js';
+import { REINJURY_RISK_WINDOW, RECOVERY_ATTR_WINDOW } from './injury.js';
 
 const TUNING = {
   /** 선발 출전 시 기본 컨디션 하락(스태미너로 경감). */
@@ -57,6 +58,10 @@ function applySide(club: Club, tactic: Tactic, outcome: Outcome, injuries: Injur
       if (p.injuryMatches === 0) {
         p.condition = Math.max(p.condition, TUNING.returnCondition);
         p.injuryName = undefined; // 복귀
+        // 복귀 직후 재부상 위험 구간 시작 + 부상 부위 연관 능력치 회복 지연 시작
+        // (injuryBodyPart는 부상 시점에 이미 설정돼 있어 그대로 유지).
+        p.reinjuryRiskMatches = REINJURY_RISK_WINDOW;
+        p.recoveryAttrMatches = RECOVERY_ATTR_WINDOW;
       }
     } else if (starters.has(p.id)) {
       p.seasonApps++; // 선발 출전 기록(사기·재계약 판단)
@@ -82,16 +87,30 @@ function applySide(club: Club, tactic: Tactic, outcome: Outcome, injuries: Injur
       if (inj) {
         p.injuryMatches = inj.matches;
         p.injuryName = inj.name;
+        p.injuryBodyPart = inj.bodyPart;
         p.condition = inj.severity === 'serious' ? 0.25 : 0.3;
+        // 다시 다쳤으니 이전 회복 지연 구간은 무의미 — 다음 복귀 시 새로 시작한다.
+        p.reinjuryRiskMatches = 0;
+        p.recoveryAttrMatches = 0;
+      } else {
+        tickRecoveryWindows(p);
       }
     } else {
       // 벤치/정지/로테이션: 회복 + 출전정지 카운트다운(미출전으로 1경기 소화)
       const recovery = TUNING.recoveryBase * (0.5 + p.attributes.naturalFitness / 20) * recoveryBonus;
       p.condition = Math.min(1, p.condition + recovery);
       if (p.suspensionMatches > 0) p.suspensionMatches--;
+      tickRecoveryWindows(p);
     }
     p.morale = clamp(p.morale + dMorale - captainPenalty, 0, 1);
   }
+}
+
+/** 재부상 위험·회복 지연 구간을 1경기 소진. 둘 다 끝나면 부상 부위 태그도 정리. */
+function tickRecoveryWindows(p: Club['players'][number]): void {
+  if (p.reinjuryRiskMatches && p.reinjuryRiskMatches > 0) p.reinjuryRiskMatches--;
+  if (p.recoveryAttrMatches && p.recoveryAttrMatches > 0) p.recoveryAttrMatches--;
+  if (!p.reinjuryRiskMatches && !p.recoveryAttrMatches) p.injuryBodyPart = undefined;
 }
 
 /** 이번 경기 득점 → 선수 시즌 득점 누적(통산 집계의 소스). */

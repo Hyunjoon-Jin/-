@@ -3,11 +3,12 @@
  * 36개 원시 능력치(1~20) → 역할별 가중 평균 → 0~100 정규화.
  * 컨디션·사기·포지션 숙련도 보정까지 포함.
  */
-import type { Player, Position } from './types.js';
+import type { Attributes, AttrKey, Player, Position } from './types.js';
 import { ALL_ATTRS } from './types.js';
 import { DERIVED_WEIGHTS, type DerivedKey, type Weights } from './roleWeights.js';
 import { clamp, weightedMean } from './math.js';
 import { hasTrait } from './traits.js';
+import { RECOVERY_ATTR_WINDOW, type BodyPart } from './injury.js';
 
 /** 부상 여부. */
 export function isInjured(player: Player): boolean {
@@ -34,13 +35,37 @@ export function currentAbility(player: Player): number {
 }
 
 /** 원시 능력치(1~20) 가중평균을 0~100으로 정규화. */
-function derivedRaw(player: Player, weights: Weights): number {
+function derivedRaw(attrs: Attributes, weights: Weights): number {
   const mean = weightedMean(
-    player.attributes as unknown as Record<string, number>,
+    attrs as unknown as Record<string, number>,
     weights as Record<string, number>,
   );
   // 1~20 → 0~100. (값-1)/19*100.
   return clamp(((mean - 1) / 19) * 100, 0, 100);
+}
+
+/** 부상 부위별 회복 지연 대상 능력치. */
+const BODY_PART_ATTRS: Record<BodyPart, AttrKey[]> = {
+  hamstring: ['pace', 'acceleration'],
+  knee: ['agility', 'balance'],
+  ankle: ['agility', 'balance'],
+  general: [],
+};
+/** 복귀 직후 최대 감쇠율(구간이 끝나갈수록 0으로 선형 수렴). */
+const RECOVERY_ATTR_PENALTY_MAX = 0.25;
+
+/** 부상 부위 연관 능력치에 회복 지연 페널티를 적용한 능력치 사본(없으면 원본 그대로). */
+function withRecoveryPenalty(player: Player): Attributes {
+  const remaining = player.recoveryAttrMatches ?? 0;
+  const bodyPart = player.injuryBodyPart;
+  if (remaining <= 0 || !bodyPart) return player.attributes;
+  const keys = BODY_PART_ATTRS[bodyPart];
+  if (keys.length === 0) return player.attributes;
+  const ratio = clamp(remaining / RECOVERY_ATTR_WINDOW, 0, 1);
+  const mul = 1 - RECOVERY_ATTR_PENALTY_MAX * ratio;
+  const adjusted = { ...player.attributes };
+  for (const k of keys) adjusted[k] = clamp(adjusted[k] * mul, 1, 20);
+  return adjusted;
 }
 
 /** 컨디션 보정 (0.6~1.0). engine.md 3장. */
@@ -79,13 +104,14 @@ export function playerDerived(player: Player, slot: Position, isBigMatch = false
   const cond = conditionFactor(player);
   const mor = moraleFactor(player);
   const adj = fam * cond * mor;
+  const attrs = withRecoveryPenalty(player);
 
   const keys: DerivedKey[] = [
     'attack', 'creation', 'midfield', 'defense', 'physical', 'aerial', 'gk',
   ];
   const out = {} as DerivedRatings;
   for (const k of keys) {
-    out[k] = derivedRaw(player, DERIVED_WEIGHTS[k]) * adj;
+    out[k] = derivedRaw(attrs, DERIVED_WEIGHTS[k]) * adj;
   }
   // 특성 보정: 골잡이(공격)·플레이메이커(창출)·수비 바위(수비).
   if (hasTrait(player, 'poacher')) out.attack *= 1.08;

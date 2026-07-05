@@ -2,7 +2,7 @@
  * 도메인 타입 정의.
  * engine.md 1장(능력치 36종) / 2장(포지션) 사양을 코드로 옮긴 것.
  */
-import type { InjurySeverity } from './injury.js';
+import type { InjurySeverity, BodyPart } from './injury.js';
 
 // ── 능력치 키 ──────────────────────────────────────────────
 
@@ -79,6 +79,12 @@ export interface Player {
   injuryMatches: number;
   /** 현재 부상 명칭(부상 중일 때만). 회복 시 해제. */
   injuryName?: string;
+  /** 부상 부위(부상 중이거나 회복 지연 중일 때 설정). 회복 지연 종료 시 해제. */
+  injuryBodyPart?: BodyPart;
+  /** 복귀 직후 재부상 위험이 남은 경기 수. 0 = 위험 없음. */
+  reinjuryRiskMatches?: number;
+  /** 부상 부위 연관 능력치가 완전히 회복될 때까지 남은 경기 수. 0 = 정상. */
+  recoveryAttrMatches?: number;
   /** 시즌 누적 경고. 일정 수마다 출전 정지. */
   yellowCards: number;
   /** 남은 출전 정지 경기 수. 0 = 정상. >0 이면 출전 불가. */
@@ -263,6 +269,7 @@ export interface InjuryEvent {
   severity: InjurySeverity;
   /** 부위/부상 명칭. */
   name: string;
+  bodyPart: BodyPart;
   /** 결장 경기 수. */
   matches: number;
 }

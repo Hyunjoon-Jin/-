@@ -25,8 +25,18 @@ import { Rng } from './rng.js';
 /** 스쿼드 상한(오프시즌 정리 목표). MAX_SQUAD보다 낮게 유지. */
 const SOFT_CAP = 26;
 
-/** 이 나이 이상이면 시즌 후 은퇴. */
-const RETIRE_AGE = 37;
+/** 이 나이부터 확률적 은퇴 곡선이 시작된다(자연회복력이 높을수록 은퇴 확률이 줄어든다). */
+export const RETIRE_MIN_AGE = 33;
+/** 이 나이 이상이면 무조건 은퇴(하드컷) — 만년 레전드도 여기서는 끝난다. */
+const RETIRE_HARD_AGE = 42;
+
+/** 나이·자연회복력에 따른 시즌 후 은퇴 확률(33세=6%, 37세=30%, 41세=54% 기준, 자연회복력으로 최대 40% 경감). */
+export function retireChance(age: number, naturalFitness: number): number {
+  if (age < RETIRE_MIN_AGE) return 0;
+  const base = (age - RETIRE_MIN_AGE + 1) * 0.06;
+  const fitnessRelief = (naturalFitness / 20) * 0.4;
+  return clamp(base * (1 - fitnessRelief), 0, 0.95);
+}
 
 /** 통산 마일스톤 임계값(출전/득점). 이 값을 이번 시즌에 처음 넘으면 기록. */
 const MILESTONE_APPS = [50, 100, 150, 200, 250, 300];
@@ -258,6 +268,9 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
       player.condition = 1;
       player.injuryMatches = 0;
       player.injuryName = undefined;
+      player.injuryBodyPart = undefined;
+      player.reinjuryRiskMatches = 0;
+      player.recoveryAttrMatches = 0;
       player.yellowCards = 0;
       player.suspensionMatches = 0;
       player.seasonApps = 0;
@@ -266,7 +279,7 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
 
     // 은퇴 (스냅샷 보존 후 제거 — 통산 기록은 은퇴와 함께 사라지므로 여기서 캡처)
     club.players = club.players.filter((p) => {
-      if (p.age >= RETIRE_AGE) {
+      if (p.age >= RETIRE_HARD_AGE || rng.roll(retireChance(p.age, p.attributes.naturalFitness))) {
         retirements++;
         retiredPlayers.push({
           playerId: p.id, name: p.name, position: p.position,

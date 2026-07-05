@@ -17,7 +17,7 @@ import { Rng } from './rng.js';
 import { clamp, logistic } from './math.js';
 import { TUNING } from './tuning.js';
 import { hasTrait } from './traits.js';
-import { rollInjury, medicalBias } from './injury.js';
+import { rollInjury, medicalBias, reinjuryRiskFactor } from './injury.js';
 
 export interface MatchSetup {
   home: { club: Club; tactic: Tactic };
@@ -357,12 +357,14 @@ export function generateInjuries(ctx: MatchContext): InjuryEvent[] {
       const traitMul = hasTrait(p, 'ironMan') ? 0.5 : hasTrait(p, 'injuryProne') ? 1.7 : 1;
       // 훈련 포커스를 부상방지로 맞추면(다른 능력 성장 강조는 포기하는 대가로) 부상 확률이 더 낮아진다.
       const trainingMul = p.trainingFocus === 'conditioning' ? 0.85 : 1;
-      const injMul = traitMul * trainingMul;
+      // 복귀 직후 재부상 위험 구간(REINJURY_RISK_WINDOW 경기) — 구간이 끝나갈수록 1.0으로 감쇠.
+      const reinjuryMul = reinjuryRiskFactor(p.reinjuryRiskMatches);
+      const injMul = traitMul * trainingMul * reinjuryMul;
       if (!rng.roll(TUNING.injuryTriggerChance * medFactor * injMul)) continue;
       const inj = rollInjury(rng, side.club.staff.medical);
       injuries.push({
         minute: rng.int(1, 90), side: sideKey, playerId: p.id, playerName: p.name,
-        severity: inj.severity, name: inj.name, matches: inj.matches,
+        severity: inj.severity, name: inj.name, bodyPart: inj.bodyPart, matches: inj.matches,
       });
     }
   };
