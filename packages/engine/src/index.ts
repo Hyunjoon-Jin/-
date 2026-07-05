@@ -42,7 +42,7 @@ export {
   type SeasonSummary, type OffseasonResult, type RetiredLegend,
   type CareerMilestone, type MilestoneKind, type YouthProspect,
   type DebutEvent, type DebutEventKind, type YouthProspectUpdate, type LoanReturnEvent,
-  type LoanObligationEvent, type ReservePromotionEvent, type MentorAssignResult,
+  type LoanObligationEvent, type ReservePromotionEvent, type MentorAssignResult, type AddOnEvent,
 } from './franchise.js';
 export { TUNING } from './tuning.js';
 export { DERIVED_WEIGHTS, type DerivedKey } from './roleWeights.js';
@@ -86,12 +86,13 @@ export {
   transferTargets, buyPlayer, buyPlayerAt, buyPlayerViaReleaseClause, sellPlayer, releasePlayer,
   askingPrice, evaluateOffer, sellOffers, acceptSellOffer,
   loanPlayerOut, recallLoanPlayer, applyLoanWageSubsidies, swapPlayers, agentPersonality,
-  exerciseBuyback, BUYBACK_MAX_SEASONS,
+  exerciseBuyback, BUYBACK_MAX_SEASONS, attachAddOnClause,
   MIN_SQUAD, MAX_SQUAD, MAX_NEGOTIATION_ROUNDS, LOAN_MIN_SEASONS, LOAN_MAX_SEASONS,
   LOAN_OBLIGATION_MIN_APPS, LOAN_OBLIGATION_MAX_APPS,
   type TransferTarget, type BuyResult, type SellResult,
   type OfferOutcome, type OfferEvaluation, type SellOffer,
   type LoanTerms, type LoanResult, type SwapResult, type AgentPersonality, type BuybackResult,
+  type AddOnAttachResult,
 } from './transferActions.js';
 export {
   upgradeStaff, upgradeCost, STAFF_KINDS, STAFF_MAX,

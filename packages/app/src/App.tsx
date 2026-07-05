@@ -4,6 +4,7 @@ import {
   startSeason, playRound, playRestOfSeason, finishSeason, advanceFullSeason,
   playCupRound, playContinentalCupRound, negotiate, buyAt, buyViaReleaseClause, offersFor, acceptSell, release, upgradeStaffAction,
   buyback,
+  attachAddOn,
   recordNegotiationBreakdown,
   upgradeStadiumAction, upgradeAcademyAction,
   loanOut, loanIn, recallLoan, swapDeal,
@@ -179,6 +180,14 @@ export function App() {
 
   const handleBuyback = (id: string): ActionOutcome => {
     const outcome = buyback(game, id);
+    if (outcome.ok) update(outcome.state);
+    return outcome;
+  };
+
+  const handleAttachAddOn = (
+    id: string, appearances: number | undefined, goals: number | undefined, fee: number,
+  ): ActionOutcome => {
+    const outcome = attachAddOn(game, id, appearances, goals, fee);
     if (outcome.ok) update(outcome.state);
     return outcome;
   };
@@ -367,6 +376,7 @@ export function App() {
                 onSelect={setDetailPlayer}
                 onNegotiationBreakdown={(id) => update(recordNegotiationBreakdown(game, id))}
                 onBuyback={handleBuyback}
+                onAttachAddOn={handleAttachAddOn}
               />
             )}
           </div>

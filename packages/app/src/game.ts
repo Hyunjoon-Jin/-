@@ -8,7 +8,7 @@ import {
   createSeasonState, playRound as enginePlayRound, playToEnd, computeTable, totalRounds, currentRound,
   commitResult, simulateMatch, simulateSeason, defaultTactic, applyMatchEffects,
   buyPlayer, buyPlayerAt, buyPlayerViaReleaseClause, evaluateOffer, sellPlayer, releasePlayer,
-  exerciseBuyback,
+  exerciseBuyback, attachAddOnClause,
   sellOffers, acceptSellOffer,
   loanPlayerOut, recallLoanPlayer, applyLoanWageSubsidies, swapPlayers,
   type OfferEvaluation, type SellOffer, type LoanTerms, type LoanReturnEvent, type LoanObligationEvent,
@@ -36,6 +36,7 @@ import {
   type Fixture, type TableRow, type PlayerSeasonStat, type CupState, type StaffKind,
   type PlayerFormEntry, type Player, type YouthProspect, type YouthProspectUpdate,
   type TeamStrength, type FormSummary, type ScoutingReport, type Line, type StaffDepartureEvent,
+  type AddOnEvent,
 } from '@soccer-tycoon/engine';
 import { makeDefaultTactic, repairTactic } from './tactics.js';
 
@@ -554,7 +555,7 @@ export function finishSeason(state: GameState): GameState {
   // 5) 오프시즌 (전 구단)
   const {
     retirements, intakeByClub, intakePlayersByClub, fireSalesByClub, retiredPlayers, milestones, debutEvents,
-    loanReturns, loanObligations, reservePromotions, staffDepartures,
+    loanReturns, loanObligations, reservePromotions, staffDepartures, addOnPayouts,
   } = runOffseason(state.clubs, new Rng(offseasonSeed(state)));
   // 내 구단 선수의 이번 시즌 리저브 승격(시즌 요약에 첨부)
   const myReservePromotions = reservePromotions.filter((r) => r.clubId === state.myClubId);
@@ -568,6 +569,10 @@ export function finishSeason(state: GameState): GameState {
   );
   // 내 구단에서 계약 만료로 이탈해 후임이 영입된 실명 스태프(시즌 요약에 첨부)
   const myStaffDepartures: StaffDepartureEvent[] = staffDepartures.filter((d) => d.clubId === state.myClubId);
+  // 내 구단이 관련된 성과 기반 후불 이적료(Add-on) 발동(신규 개선 항목 3)
+  const myAddOnPayouts: AddOnEvent[] = addOnPayouts.filter(
+    (a) => a.fromClubId === state.myClubId || a.toClubId === state.myClubId,
+  );
   // 내 구단에서 은퇴한 선수는 레전드 아카이브에 영구 보존
   const newLegends: ClubLegend[] = retiredPlayers
     .filter((r) => r.clubId === state.myClubId)
@@ -741,6 +746,7 @@ export function finishSeason(state: GameState): GameState {
     continentalCupChampionName,
     qualifiedForContinental: continentalQualifierIds.includes(state.myClubId),
     boardTierBonus: boardBonusResult,
+    addOnPayouts: myAddOnPayouts,
   };
 
   const repaired = repairTactic(myClub(state), myTactic(state));
@@ -924,6 +930,16 @@ export function buyback(state: GameState, playerId: string): ActionOutcome {
     state: afterSquadChange(state), ok: true,
     message: `${r.playerName} 바이백 완료 (${r.sellerName} → 우리 구단, ${formatMoney(r.fee!)})`,
   };
+}
+
+/** 방금 판매한 선수에게 성과 기반 후불 이적료(Add-on) 조항을 붙인다(신규 개선 항목 3) —
+ *  판매(acceptSell) 직후 별도로 호출해 조건을 지정한다. */
+export function attachAddOn(
+  state: GameState, playerId: string, appearances: number | undefined, goals: number | undefined, fee: number,
+): ActionOutcome {
+  const r = attachAddOnClause(state.clubs, playerId, state.myClubId, appearances, goals, fee);
+  if (!r.ok) return { state, ok: false, message: r.reason! };
+  return { state: { ...state }, ok: true, message: '성과 기반 후불 이적료 조항을 추가했습니다.' };
 }
 
 export function release(state: GameState, playerId: string): ActionOutcome {

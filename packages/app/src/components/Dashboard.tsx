@@ -237,6 +237,22 @@ export function Dashboard({ game, onSignContract, visitedTactics, visitedSquadPr
       ),
     });
   }
+  if (last?.addOnPayouts !== undefined && last.addOnPayouts.length > 0) {
+    seasonBanners.push({
+      key: 'addOnPayouts', priority: 6.7,
+      node: (
+        <Banner tone="warning" title="💰 성과 기반 후불 이적료 발동">
+          {last.addOnPayouts.map((a) => (
+            <p key={a.playerId}>
+              {a.fromClubId === game.myClubId
+                ? <><b>{a.name}</b> 선수가 조건을 달성해 <b>{a.toClubName}</b>에 추가 이적료 <b>{formatMoney(a.fee)}</b>을(를) 지급했습니다.</>
+                : <><b>{a.name}</b> 선수가 <b>{a.fromClubName}</b>에서 조건을 달성해 추가 이적료 <b>{formatMoney(a.fee)}</b>을(를) 받았습니다.</>}
+            </p>
+          ))}
+        </Banner>
+      ),
+    });
+  }
   seasonBanners.sort((a, b) => a.priority - b.priority);
 
   const [showAllBanners, setShowAllBanners] = useState(false);

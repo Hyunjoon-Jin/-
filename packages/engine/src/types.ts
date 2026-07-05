@@ -127,6 +127,10 @@ export interface Player {
   /** 바이백 조항(신규 개선 항목 2) — 판매 시 원 소속 구단이 향후 정해진 금액으로
    *  되사올 수 있는 권리를 남긴다. seasonsRemaining이 0이 되면 자동 소멸. */
   buybackClause?: { clubId: string; fee: number; seasonsRemaining: number };
+  /** 성과 기반 후불 이적료(Add-on, 신규 개선 항목 3) — 새 구단에서 이번 시즌 출전
+   *  또는 득점이 조건에 도달하면 원 소속 구단에 추가 이적료를 지급하고 소멸한다.
+   *  두 조건 중 하나만 있어도 되며, 있는 조건 중 하나라도 달성하면 발동한다. */
+  addOnClause?: { sellerClubId: string; appearances?: number; goals?: number; fee: number };
 }
 
 export type TrainingFocus =

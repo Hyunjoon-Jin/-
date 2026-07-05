@@ -143,6 +143,8 @@ export interface SeasonSummary {
   qualifiedForContinental?: boolean;
   /** 이사회 신뢰 등급이 이번 시즌 실제로 올라 지급된 일회성 투자 예산 승인(내 구단, 앱). */
   boardTierBonus?: { fromStatus: BoardStatus; toStatus: BoardStatus; amount: number };
+  /** 이번 시즌 내 구단이 관련된 성과 기반 후불 이적료(Add-on) 발동(신규 개선 항목 3). */
+  addOnPayouts?: AddOnEvent[];
 }
 
 /** 과거 유스 기대주 소개 이후의 후속 소식(데뷔/첫 골). */
@@ -273,6 +275,20 @@ export interface LoanObligationEvent {
   fee: number;
 }
 
+/** 성과 기반 후불 이적료(Add-on) 발동 이벤트(신규 개선 항목 3). */
+export interface AddOnEvent {
+  playerId: string;
+  name: string;
+  position: Position;
+  /** 지금 이 선수가 뛰고 있는 구단(이적료를 지불하는 쪽). */
+  fromClubId: string;
+  fromClubName: string;
+  /** 원 소속(이적료를 받는 쪽). */
+  toClubId: string;
+  toClubName: string;
+  fee: number;
+}
+
 export interface OffseasonResult {
   retirements: number;
   /** clubId → 유스 아카데미 배출 인원. */
@@ -297,6 +313,8 @@ export interface OffseasonResult {
   reserveReleasesByClub: Map<string, number>;
   /** 이번 오프시즌 계약 만료로 타 구단에 스카우트되어 이탈한 실명 스태프(전 구단, clubId 포함). */
   staffDepartures: (StaffDepartureEvent & { clubId: string; clubName: string })[];
+  /** 이번 오프시즌 성과 기반 후불 이적료(Add-on)가 발동한 선수(전 구단, 신규 개선 항목 3). */
+  addOnPayouts: AddOnEvent[];
 }
 
 /** 멘토링 보너스 배율 — 같은 라인에 리더 특성 보유자나 리더십 높은 베테랑이 있으면 성장 가속. */
@@ -379,6 +397,7 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
   const reservePromotions: ReservePromotionEvent[] = [];
   const reserveReleasesByClub = new Map<string, number>();
   const staffDepartures: (StaffDepartureEvent & { clubId: string; clubName: string })[] = [];
+  const addOnPayouts: AddOnEvent[] = [];
 
   // 임대 복귀: 시즌 카운트다운이 끝난 임대 선수를 원 소속 구단으로 돌려보낸다. 이번
   // 오프시즌의 성장/노화/은퇴 처리를 정상적으로 받도록, 아래 본 루프보다 먼저 처리해
@@ -481,6 +500,27 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
       if (beforeGoals === 0 && (player.seasonGoals ?? 0) > 0) {
         debutEvents.push({ playerId: player.id, name: player.name, clubId: club.id, clubName: club.name, kind: 'firstGoal' });
       }
+      // 성과 기반 후불 이적료(Add-on, 신규 개선 항목 3) — 이번 시즌 출전·득점 중 지정된
+      // 조건에 하나라도 도달하면 원 소속 구단에 즉시 지급하고 조항을 소멸시킨다.
+      if (player.addOnClause) {
+        const clause = player.addOnClause;
+        const appsHit = clause.appearances !== undefined && player.seasonApps >= clause.appearances;
+        const goalsHit = clause.goals !== undefined && (player.seasonGoals ?? 0) >= clause.goals;
+        if (appsHit || goalsHit) {
+          const seller = clubById.get(clause.sellerClubId);
+          if (seller) {
+            club.finance.balance -= clause.fee;
+            seller.finance.balance += clause.fee;
+            seller.finance.transferBudget += clause.fee;
+            addOnPayouts.push({
+              playerId: player.id, name: player.name, position: player.position,
+              fromClubId: club.id, fromClubName: club.name, toClubId: seller.id, toClubName: seller.name,
+              fee: clause.fee,
+            });
+          }
+          player.addOnClause = undefined;
+        }
+      }
       // 새 시즌은 풀 컨디션·부상/징계 리셋으로 시작
       player.condition = 1;
       player.injuryMatches = 0;
@@ -570,6 +610,7 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
   return {
     retirements, intakeByClub, intakePlayersByClub, fireSalesByClub, retiredPlayers, milestones,
     debutEvents, loanReturns, loanObligations, reservePromotions, reserveReleasesByClub, staffDepartures,
+    addOnPayouts,
   };
 }
 

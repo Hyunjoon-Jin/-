@@ -24,6 +24,9 @@ interface Props {
   onOffers: (playerId: string) => SellOffer[];
   onAcceptSell: (playerId: string, buyerId: string, buybackFee?: number) => ActionOutcome;
   onBuyback: (playerId: string) => ActionOutcome;
+  onAttachAddOn: (
+    playerId: string, appearances: number | undefined, goals: number | undefined, fee: number,
+  ) => ActionOutcome;
   onRelease: (playerId: string) => ActionOutcome;
   onLoanOut: (playerId: string, toClubId: string, terms: LoanTerms) => ActionOutcome;
   onLoanIn: (playerId: string, fromClubId: string, terms: LoanTerms) => ActionOutcome;
@@ -73,7 +76,7 @@ export function Transfers(props: Props) {
 
 function TransferMarket({
   game, onNegotiate, onBuyAt, onBuyViaReleaseClause, onOffers, onAcceptSell, onRelease,
-  onLoanOut, onLoanIn, onRecallLoan, onSwap, onSelect, onNegotiationBreakdown, onBuyback,
+  onLoanOut, onLoanIn, onRecallLoan, onSwap, onSelect, onNegotiationBreakdown, onBuyback, onAttachAddOn,
 }: Props) {
   const club = myClub(game);
   const toast = useToast();
@@ -420,6 +423,7 @@ function TransferMarket({
           player={selling}
           offers={onOffers(selling.id)}
           onAcceptSell={onAcceptSell}
+          onAttachAddOn={onAttachAddOn}
           onResult={(m) => { toast(m.text, m.ok); if (m.ok) setSelling(null); }}
           onClose={() => setSelling(null)}
         />
@@ -732,11 +736,14 @@ function SwapModal({
 }
 
 function SellModal({
-  player, offers, onAcceptSell, onResult, onClose,
+  player, offers, onAcceptSell, onAttachAddOn, onResult, onClose,
 }: {
   player: Player;
   offers: SellOffer[];
   onAcceptSell: (playerId: string, buyerId: string, buybackFee?: number) => ActionOutcome;
+  onAttachAddOn: (
+    playerId: string, appearances: number | undefined, goals: number | undefined, fee: number,
+  ) => ActionOutcome;
   onResult: (m: Msg) => void;
   onClose: () => void;
 }) {
@@ -744,8 +751,22 @@ function SellModal({
   const [buybackEnabled, setBuybackEnabled] = useState(false);
   const value = marketValue(player);
   const [buybackFee, setBuybackFee] = useState(() => Math.round(value * 1.15));
+  const [addOnEnabled, setAddOnEnabled] = useState(false);
+  const [addOnAppsEnabled, setAddOnAppsEnabled] = useState(true);
+  const [addOnApps, setAddOnApps] = useState(15);
+  const [addOnGoalsEnabled, setAddOnGoalsEnabled] = useState(false);
+  const [addOnGoals, setAddOnGoals] = useState(10);
+  const [addOnFee, setAddOnFee] = useState(() => Math.round(value * 0.2));
+  const addOnValid = !addOnEnabled || addOnAppsEnabled || addOnGoalsEnabled;
   const accept = (buyerId: string) => {
     const r = onAcceptSell(player.id, buyerId, buybackEnabled ? buybackFee : undefined);
+    if (r.ok && addOnEnabled && (addOnAppsEnabled || addOnGoalsEnabled)) {
+      const a = onAttachAddOn(
+        player.id, addOnAppsEnabled ? addOnApps : undefined, addOnGoalsEnabled ? addOnGoals : undefined, addOnFee,
+      );
+      onResult({ text: a.ok ? `${r.message} · ${a.message}` : `${r.message} (Add-on 조항 실패: ${a.message})`, ok: r.ok });
+      return;
+    }
     onResult({ text: r.message, ok: r.ok });
   };
   const ref = useModalA11y<HTMLDivElement>(onClose);
@@ -789,6 +810,50 @@ function SellModal({
                 만원
               </label>
             )}
+            <label className="loan-field">
+              <input
+                type="checkbox" checked={addOnEnabled}
+                onChange={(e) => setAddOnEnabled(e.target.checked)}
+              />
+              성과 기반 후불 이적료(Add-on) 조항 추가(출전/득점 조건 달성 시 추가 이적료 수령)
+            </label>
+            {addOnEnabled && (
+              <>
+                <label className="loan-field">
+                  <input
+                    type="checkbox" checked={addOnAppsEnabled}
+                    onChange={(e) => setAddOnAppsEnabled(e.target.checked)}
+                  />
+                  출전 조건
+                  <input
+                    type="number" min={1} value={addOnApps} disabled={!addOnAppsEnabled}
+                    onChange={(e) => setAddOnApps(Math.max(1, Number(e.target.value)))}
+                  />
+                  경기
+                </label>
+                <label className="loan-field">
+                  <input
+                    type="checkbox" checked={addOnGoalsEnabled}
+                    onChange={(e) => setAddOnGoalsEnabled(e.target.checked)}
+                  />
+                  득점 조건
+                  <input
+                    type="number" min={1} value={addOnGoals} disabled={!addOnGoalsEnabled}
+                    onChange={(e) => setAddOnGoals(Math.max(1, Number(e.target.value)))}
+                  />
+                  골
+                </label>
+                <label className="loan-field">
+                  추가 이적료
+                  <input
+                    type="number" min={0} step={1000} value={addOnFee}
+                    onChange={(e) => setAddOnFee(Number(e.target.value))}
+                  />
+                  만원
+                </label>
+                {!addOnValid && <p className="toast err">출전 또는 득점 조건 중 하나는 선택해야 합니다.</p>}
+              </>
+            )}
             <p className="muted small">{offers.length}개 구단이 입찰했습니다. 원하는 제안을 수락하세요.</p>
             <table className="data-table compact">
               <thead><tr><th>구단</th><th>입찰액</th><th></th></tr></thead>
@@ -799,7 +864,9 @@ function SellModal({
                     <td><b>{formatMoney(o.bid)}</b>
                       {o.bid >= value ? <span className="pos small"> (가치↑)</span> : <span className="muted small"> ({Math.round((o.bid / value) * 100)}%)</span>}
                     </td>
-                    <td><button className="btn-small" onClick={() => setConfirming(o)}>수락</button></td>
+                    <td>
+                      <button className="btn-small" disabled={!addOnValid} onClick={() => setConfirming(o)}>수락</button>
+                    </td>
                   </tr>
                 ))}
               </tbody>

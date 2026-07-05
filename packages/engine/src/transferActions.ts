@@ -452,6 +452,33 @@ export function exerciseBuyback(clubs: Club[], myClubId: string, playerId: strin
   return { ok: true, fee, sellerName: currentClub.name, playerName: player.name };
 }
 
+// ── 성과 기반 후불 이적료 (Add-on, 신규 개선 항목 3) ──────────
+
+export interface AddOnAttachResult { ok: boolean; reason?: string }
+
+/**
+ * 방금 판매한 선수에게 성과 기반 후불 이적료(Add-on) 조항을 붙인다 — 이번 시즌 새
+ * 소속 구단에서 출전 또는 득점이 지정한 조건에 처음 도달하면 원 소속 구단에 추가
+ * 이적료가 지급된다(오프시즌 경계에 정산, franchise.ts 참고). 판매 자체(이적료
+ * 정산)와 분리된 별도 호출이라 acceptSellOffer/buyPlayerAt 등 어떤 영입 경로
+ * 뒤에도 붙일 수 있다.
+ */
+export function attachAddOnClause(
+  clubs: Club[], playerId: string, sellerClubId: string,
+  appearances: number | undefined, goals: number | undefined, fee: number,
+): AddOnAttachResult {
+  if (appearances === undefined && goals === undefined) {
+    return { ok: false, reason: '출전 또는 득점 조건 중 하나는 지정해야 합니다.' };
+  }
+  if (!(fee > 0)) return { ok: false, reason: '금액이 올바르지 않습니다.' };
+  const club = clubs.find((c) => c.players.some((p) => p.id === playerId));
+  if (!club) return { ok: false, reason: '선수를 찾을 수 없습니다.' };
+  if (club.id === sellerClubId) return { ok: false, reason: '같은 구단에는 조항을 붙일 수 없습니다.' };
+  const player = club.players.find((p) => p.id === playerId)!;
+  player.addOnClause = { sellerClubId, appearances, goals, fee };
+  return { ok: true };
+}
+
 /** 선수 방출 (수입 없음, 인건비 절감). */
 export function releasePlayer(
   clubs: Club[], myClubId: string, playerId: string,
