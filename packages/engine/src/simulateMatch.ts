@@ -19,6 +19,10 @@ import { TUNING } from './tuning.js';
 import { hasTrait } from './traits.js';
 import { rollInjury, medicalBias, reinjuryRiskFactor } from './injury.js';
 import { effectiveMedical } from './staffActions.js';
+import {
+  findManMarker, manMarkWeightMultiplier, manMarkXgMultiplier, isValidInstruction,
+  CUT_INSIDE_WEIGHT_MUL, CUT_INSIDE_XG_MUL,
+} from './playerInstructions.js';
 
 export interface MatchSetup {
   home: { club: Club; tactic: Tactic };
@@ -64,18 +68,54 @@ const SET_PIECE_TAKER_SHARE = 0.55;
 /** 세트피스 스페셜리스트가 전담자면 몫을 더 많이 가져간다(그 외엔 기본 비율). */
 const SET_PIECE_SPECIALIST_SHARE = 0.72;
 
-function pickShooter(side: Side, rng: Rng, chance: ChanceType): Player | null {
-  const available = side.club.players.filter(isAvailable);
-  const pool = side.attackers.length > 0 ? side.attackers : available;
+/**
+ * 개인 지시(F10)에 따른 슛 관여도(선택 가중치) 배수 — 좁혀 들어오기는 관여도를 높이고,
+ * 전담마크에 걸리면 관여도가 줄어든다(마크맨의 marking 대 공격수의 dribbling 격차로 조정).
+ */
+function shooterWeight(p: Player, att: Side, def: Side): number {
+  let w = 1;
+  const slot = att.tactic.lineup.find((s) => s.playerId === p.id);
+  if (slot?.instruction?.kind === 'cutInside' && isValidInstruction(slot.position, slot.instruction)) {
+    w *= CUT_INSIDE_WEIGHT_MUL;
+  }
+  const marker = findManMarker(p.id, att.tactic, def.tactic, def.club.players);
+  if (marker) w *= manMarkWeightMultiplier(marker, p);
+  return w;
+}
+
+function pickShooter(att: Side, def: Side, rng: Rng, chance: ChanceType): Player | null {
+  const available = att.club.players.filter(isAvailable);
+  const pool = att.attackers.length > 0 ? att.attackers : available;
   if (pool.length === 0) return null;
-  if (chance === 'setpiece' && side.tactic.setPieceTakerId) {
-    const taker = pool.find((p) => p.id === side.tactic.setPieceTakerId);
+  if (chance === 'setpiece' && att.tactic.setPieceTakerId) {
+    const taker = pool.find((p) => p.id === att.tactic.setPieceTakerId);
     if (taker) {
       const share = hasTrait(taker, 'setPieceSpecialist') ? SET_PIECE_SPECIALIST_SHARE : SET_PIECE_TAKER_SHARE;
       if (rng.roll(share)) return taker;
     }
   }
-  return pool[rng.int(0, pool.length - 1)]!;
+  // 지시가 전혀 걸려있지 않으면(대다수 경기) 기존과 동일한 균등 분포·RNG 소비를 그대로 유지한다.
+  const weights = pool.map((p) => shooterWeight(p, att, def));
+  if (weights.every((w) => w === 1)) return pool[rng.int(0, pool.length - 1)]!;
+  const total = weights.reduce((s, w) => s + w, 0);
+  let r = rng.next() * total;
+  for (let i = 0; i < pool.length; i++) {
+    r -= weights[i]!;
+    if (r <= 0) return pool[i]!;
+  }
+  return pool[pool.length - 1]!;
+}
+
+/** 개인 지시(F10)에 따른 득점 확률 배수 — 좁혀 들어오기는 각도 개선으로 소폭 상승, 전담마크는 억제. */
+function individualXgMultiplier(shooter: Player, att: Side, def: Side): number {
+  let mul = 1;
+  const slot = att.tactic.lineup.find((s) => s.playerId === shooter.id);
+  if (slot?.instruction?.kind === 'cutInside' && isValidInstruction(slot.position, slot.instruction)) {
+    mul *= CUT_INSIDE_XG_MUL;
+  }
+  const marker = findManMarker(shooter.id, att.tactic, def.tactic, def.club.players);
+  if (marker) mul *= manMarkXgMultiplier(marker, shooter);
+  return mul;
 }
 
 function pickChanceType(tactic: Tactic, rng: Rng): ChanceType {
@@ -91,10 +131,10 @@ function pickChanceType(tactic: Tactic, rng: Rng): ChanceType {
  *   코너·프리킥 득점력이 오르도록 한다(이전엔 이 능력치가 시뮬에 전혀 반영되지 않았음).
  */
 function resolveShot(
-  attack: number, gk: number, chance: ChanceType, rng: Rng, setPieceSkill?: number,
+  attack: number, gk: number, chance: ChanceType, rng: Rng, setPieceSkill?: number, individualMul = 1,
 ): ShotOutcome {
   const base = TUNING.baseXg[chance];
-  let finishMul = 1 + (attack - 50) * TUNING.finishK;
+  let finishMul = (1 + (attack - 50) * TUNING.finishK) * individualMul;
   if (chance === 'setpiece' && setPieceSkill !== undefined) {
     finishMul *= 1 + (setPieceSkill - 10) * 0.025;
   }
@@ -244,7 +284,7 @@ export function stepMinute(ctx: MatchContext, minute: number): MatchEvent | null
   );
   if (!rng.roll(pShot)) return null;
 
-  const shooter = pickShooter(att, rng, chance);
+  const shooter = pickShooter(att, def, rng, chance);
   if (!shooter) return null; // 가용 선수가 전무(전원 부상·정지)한 극단적 상황 — 이번 틱은 무산
   const st = ensureStat(ctx, shooter);
   att.shots++;
@@ -252,7 +292,8 @@ export function stepMinute(ctx: MatchContext, minute: number): MatchEvent | null
   const setPieceSkill = chance === 'setpiece'
     ? shooter.attributes.setPiece + (hasTrait(shooter, 'setPieceSpecialist') ? 3 : 0)
     : undefined;
-  const outcome = resolveShot(att.strength.attack, def.strength.gk, chance, rng, setPieceSkill);
+  const individualMul = individualXgMultiplier(shooter, att, def);
+  const outcome = resolveShot(att.strength.attack, def.strength.gk, chance, rng, setPieceSkill, individualMul);
 
   let assister: Player | null = null;
   if (outcome === 'GOAL') {

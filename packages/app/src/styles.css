@@ -819,6 +819,9 @@ h3 { font-size: 14px; margin: 0 0 10px; color: var(--muted); text-transform: upp
 }
 .lineup-table .slot-pos { font-weight: 700; color: var(--accent); width: 56px; }
 .lineup-table td.slot-player { text-align: left; }
+.lineup-table td.slot-instruction { display: flex; gap: 4px; align-items: center; min-width: 150px; }
+.lineup-table .instruction-select { min-width: 88px; }
+.lineup-table .instruction-target-select { min-width: 58px; }
 .tactics-right { display: flex; flex-direction: column; gap: 14px; }
 
 .slider { margin-bottom: 14px; }

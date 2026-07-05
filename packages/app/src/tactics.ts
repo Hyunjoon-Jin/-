@@ -3,8 +3,8 @@
  * 포메이션 프리셋, 자동 베스트 XI, 스쿼드 변동 시 라인업 보정.
  */
 import {
-  currentAbility, isAvailable, FORMATIONS, FORMATION_NAMES, lineOf, hasTrait,
-  type Club, type Player, type Position, type Tactic,
+  currentAbility, isAvailable, FORMATIONS, FORMATION_NAMES, lineOf, hasTrait, isValidInstruction,
+  type Club, type Player, type Position, type Tactic, type PlayerInstruction,
 } from '@soccer-tycoon/engine';
 
 export { FORMATIONS, FORMATION_NAMES };
@@ -108,7 +108,9 @@ export function repairTactic(club: Club, tactic: Tactic): Tactic {
     const prev = tactic.lineup[i];
     if (prev && valid.has(prev.playerId) && !used.has(prev.playerId)) {
       used.add(prev.playerId);
-      return { position: pos, playerId: prev.playerId };
+      // 포메이션이 바뀌어 이 인덱스의 포지션이 달라졌다면(F10) 낡은 지시는 함께 버린다.
+      const instruction = isValidInstruction(pos, prev.instruction) ? prev.instruction : undefined;
+      return { position: pos, playerId: prev.playerId, instruction };
     }
     return null;
   });
@@ -144,5 +146,14 @@ export function swapPlayer(tactic: Tactic, slotIndex: number, playerId: string):
     lineup[existing]!.playerId = lineup[slotIndex]!.playerId;
   }
   lineup[slotIndex]!.playerId = playerId;
+  return { ...tactic, lineup };
+}
+
+/** 슬롯에 개인 지시(F10)를 지정·해제한다(undefined면 해제). */
+export function setPlayerInstruction(
+  tactic: Tactic, slotIndex: number, instruction: PlayerInstruction | undefined,
+): Tactic {
+  if (slotIndex < 0 || slotIndex >= tactic.lineup.length) return tactic;
+  const lineup = tactic.lineup.map((s, i) => (i === slotIndex ? { ...s, instruction } : s));
   return { ...tactic, lineup };
 }

@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
 import {
   computeTeamStrength, currentAbility, isInjured, isSuspended, isAvailable, lineOf, hasTrait,
-  type Club, type Tactic, type TeamStrength,
+  eligibleInstructionKinds, POSITIONS,
+  type Club, type Tactic, type TeamStrength, type PlayerInstructionKind, type Position,
 } from '@soccer-tycoon/engine';
 import {
   FORMATION_NAMES, autoPickLineup, swapPlayer, pickSetPieceTaker, ensureSetPieceTaker,
-  pickCaptain, ensureCaptain,
+  pickCaptain, ensureCaptain, setPlayerInstruction,
 } from '../tactics.js';
 import { loadCustomPresets, saveCustomPreset, deleteCustomPreset, type CustomPreset } from '../customPresets.js';
 
@@ -26,6 +27,12 @@ const STRENGTH_LABELS: { key: keyof TeamStrength; label: string }[] = [
 ];
 
 type SliderKey = 'mentality' | 'tempo' | 'pressing' | 'width' | 'defensiveLine';
+
+const INSTRUCTION_LABEL: Record<PlayerInstructionKind, string> = {
+  manMark: '전담마크', cutInside: '좁혀 들어오기',
+};
+/** 전담마크 대상으로 지정 가능한 상대 포지션(GK 제외). */
+const MARK_TARGET_POSITIONS: Position[] = POSITIONS.filter((p) => p !== 'GK');
 
 /** 슬라이더 5개 조합 한 번에 적용하는 전술 스타일 프리셋. */
 const PRESETS: { key: string; label: string; desc: string; values: Pick<Tactic, SliderKey> }[] = [
@@ -123,7 +130,7 @@ export function Tactics({ club, tactic, onChange, disabled }: Props) {
 
         <table className="data-table lineup-table">
           <thead>
-            <tr><th>슬롯</th><th>선수</th><th>CA</th></tr>
+            <tr><th>슬롯</th><th>선수</th><th>CA</th><th>개인 지시</th></tr>
           </thead>
           <tbody>
             {tactic.lineup.map((slot, i) => {
@@ -131,6 +138,7 @@ export function Tactics({ club, tactic, onChange, disabled }: Props) {
               const unavailable = p ? !isAvailable(p) : false;
               const mark = (pl: typeof club.players[number]) =>
                 isInjured(pl) ? '🤕 ' : isSuspended(pl) ? '🟥 ' : '';
+              const kinds = eligibleInstructionKinds(slot.position);
               return (
                 <tr key={i} className={unavailable ? 'slot-injured' : ''}>
                   <td className="slot-pos">{slot.position}</td>
@@ -158,6 +166,43 @@ export function Tactics({ club, tactic, onChange, disabled }: Props) {
                     {p && isInjured(p) ? <span className="injury">🤕{p.injuryMatches}</span>
                       : p && isSuspended(p) ? <span className="suspended">🟥{p.suspensionMatches}</span>
                       : p ? currentAbility(p).toFixed(0) : '-'}
+                  </td>
+                  <td className="slot-instruction">
+                    {kinds.length === 0 ? (
+                      <span className="muted small">—</span>
+                    ) : (
+                      <>
+                        <select
+                          className="instruction-select"
+                          disabled={disabled}
+                          value={slot.instruction?.kind ?? ''}
+                          onChange={(e) => {
+                            const kind = e.target.value as PlayerInstructionKind | '';
+                            if (kind === '') { onChange(setPlayerInstruction(tactic, i, undefined)); return; }
+                            if (kind === 'manMark') {
+                              onChange(setPlayerInstruction(tactic, i, { kind, targetPosition: MARK_TARGET_POSITIONS[0] }));
+                            } else {
+                              onChange(setPlayerInstruction(tactic, i, { kind }));
+                            }
+                          }}
+                        >
+                          <option value="">지시 없음</option>
+                          {kinds.map((k) => <option key={k} value={k}>{INSTRUCTION_LABEL[k]}</option>)}
+                        </select>
+                        {slot.instruction?.kind === 'manMark' && (
+                          <select
+                            className="instruction-target-select"
+                            disabled={disabled}
+                            value={slot.instruction.targetPosition ?? ''}
+                            onChange={(e) => onChange(setPlayerInstruction(
+                              tactic, i, { kind: 'manMark', targetPosition: e.target.value as Position },
+                            ))}
+                          >
+                            {MARK_TARGET_POSITIONS.map((pos) => <option key={pos} value={pos}>{pos}</option>)}
+                          </select>
+                        )}
+                      </>
+                    )}
                   </td>
                 </tr>
               );

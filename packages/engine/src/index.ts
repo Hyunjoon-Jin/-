@@ -109,3 +109,9 @@ export {
   MEDIA_TONE_STYLE, classifyPersona,
   type MediaEventKind, type MediaTone, type MediaToneOption, type MediaStyle, type ManagerPersona,
 } from './media.js';
+export {
+  eligibleInstructionKinds, isValidInstruction, findManMarker,
+  manMarkWeightMultiplier, manMarkXgMultiplier,
+  MAN_MARK_POSITIONS, CUT_INSIDE_POSITIONS, CUT_INSIDE_WEIGHT_MUL, CUT_INSIDE_XG_MUL,
+  type PlayerInstruction, type PlayerInstructionKind,
+} from './playerInstructions.js';

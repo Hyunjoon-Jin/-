@@ -3,6 +3,7 @@
  * engine.md 1장(능력치 36종) / 2장(포지션) 사양을 코드로 옮긴 것.
  */
 import type { InjurySeverity, BodyPart } from './injury.js';
+import type { PlayerInstruction } from './playerInstructions.js';
 
 // ── 능력치 키 ──────────────────────────────────────────────
 
@@ -135,8 +136,8 @@ export type PlayerTrait =
 export interface Tactic {
   /** 포메이션 이름 (예: '4-4-2') */
   formation: string;
-  /** 라인업: 슬롯 포지션 → 선수 id */
-  lineup: { position: Position; playerId: string }[];
+  /** 라인업: 슬롯 포지션 → 선수 id (개인 지시(F10)는 슬롯에 부착 — 선수 교체 시 그대로 유지된다) */
+  lineup: { position: Position; playerId: string; instruction?: PlayerInstruction }[];
   /** 0(매우 수비적) ~ 1(매우 공격적). 0.5를 넘어서면 역습 실점 위험이 비선형으로 커진다. */
   mentality: number;
   /** 0(낮은 템포) ~ 1(빠른 템포). 압박과 함께 체력 소모에 영향을 준다. */
