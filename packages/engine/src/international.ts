@@ -71,6 +71,7 @@ export function runInternationalBreak(clubs: Club[], rng: Rng): InternationalRes
     const injP = clamp(0.08 - (p.attributes.naturalFitness - 10) * 0.004, 0.02, 0.12);
     if (rng.roll(injP)) {
       p.injuryMatches = rng.int(1, 3);
+      p.injuryTotalMatches = p.injuryMatches; // 회복 진행률(신규 개선 항목 28) 계산 기준
       p.injuryName = '대표팀 차출 중 부상';
       p.condition = 0.6;
       injuries++;
@@ -285,6 +286,7 @@ export function runInternationalTournament(clubs: Club[], rng: Rng): Internation
         const injP = clamp(0.05 - (p.attributes.naturalFitness - 10) * 0.002, 0.015, 0.08);
         if (rng.roll(injP)) {
           p.injuryMatches = Math.max(p.injuryMatches, rng.int(1, 4));
+          p.injuryTotalMatches = p.injuryMatches; // 회복 진행률(신규 개선 항목 28) 계산 기준
           p.injuryName = '국제대회 중 부상';
           p.condition = Math.min(p.condition, 0.55);
           injuries++;

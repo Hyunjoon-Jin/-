@@ -175,3 +175,42 @@ export function buildInjuryRiskReport(club: Club): InjuryRiskEntry[] {
     }))
     .sort((a, b) => b.riskPerMatch - a.riskPerMatch);
 }
+
+/** 부상 회복 진행 현황 한 명분(신규 개선 항목 28). */
+export interface InjuryRecoveryStatus {
+  playerId: string;
+  name: string;
+  position: Player['position'];
+  injuryName: string;
+  bodyPart?: BodyPart;
+  /** 이번 부상의 최초 총 결장 경기 수. */
+  totalMatches: number;
+  /** 남은 결장 경기 수. */
+  remainingMatches: number;
+  /** 회복 진행률(0~1). */
+  progress: number;
+}
+
+/**
+ * 현재 부상 중인 선수의 회복 진행 현황(구단 전체, 회복 임박한 순).
+ * totalMatches를 모르는 구버전 세이브 선수는 총 기간=잔여 기간으로 보아(진행률 0%) 표시한다.
+ */
+export function buildInjuryRecoveryReport(club: Club): InjuryRecoveryStatus[] {
+  return club.players
+    .filter((p) => p.injuryMatches > 0)
+    .map((p) => {
+      const total = p.injuryTotalMatches ?? p.injuryMatches;
+      const progress = total > 0 ? clamp(1 - p.injuryMatches / total, 0, 1) : 1;
+      return {
+        playerId: p.id,
+        name: p.name,
+        position: p.position,
+        injuryName: p.injuryName ?? '부상',
+        bodyPart: p.injuryBodyPart,
+        totalMatches: total,
+        remainingMatches: p.injuryMatches,
+        progress,
+      };
+    })
+    .sort((a, b) => b.progress - a.progress);
+}

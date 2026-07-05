@@ -17,7 +17,8 @@ export {
   rollInjury, SEVERITY_LABEL, type Injury, type InjurySeverity, type BodyPart,
   REINJURY_RISK_WINDOW, RECOVERY_ATTR_WINDOW, reinjuryRiskFactor,
   predictedInjuryRiskPerMatch, buildInjuryRiskReport, injuryRiskTier,
-  type InjuryRiskTier, type InjuryRiskEntry,
+  buildInjuryRecoveryReport,
+  type InjuryRiskTier, type InjuryRiskEntry, type InjuryRecoveryStatus,
 } from './injury.js';
 export {
   aggregatePlayerStats, topScorers, topAssists, playerOfSeason, seasonAwards, summarizeStats,

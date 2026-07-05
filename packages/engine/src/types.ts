@@ -84,6 +84,9 @@ export interface Player {
   injuryName?: string;
   /** 부상 부위(부상 중이거나 회복 지연 중일 때 설정). 회복 지연 종료 시 해제. */
   injuryBodyPart?: BodyPart;
+  /** 이번 부상의 최초 총 결장 경기 수(부상 시점에 고정, 신규 개선 항목 28) — injuryMatches(잔여)와
+   *  비교해 회복 진행률을 계산하는 데 쓰인다. 회복 시 해제. 구버전 세이브는 없을 수 있어 optional. */
+  injuryTotalMatches?: number;
   /** 복귀 직후 재부상 위험이 남은 경기 수. 0 = 위험 없음. */
   reinjuryRiskMatches?: number;
   /** 부상 부위 연관 능력치가 완전히 회복될 때까지 남은 경기 수. 0 = 정상. */

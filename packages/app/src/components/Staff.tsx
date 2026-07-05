@@ -9,7 +9,7 @@ import {
   STADIUM_MAX, stadiumUpgradeCost, stadiumMatchdayMultiplier,
   ACADEMY_MAX, academyUpgradeCost, academyPotentialBonus, staffTraitSynergyBonus,
   staffRaiseCost, STAFF_RAISE_ELIGIBLE_YEARS, ACADEMY_FOCUS_POTENTIAL_BONUS_PER_LEVEL,
-  STAFF_RETIRE_MIN_AGE, buildInjuryRiskReport,
+  STAFF_RETIRE_MIN_AGE, buildInjuryRiskReport, buildInjuryRecoveryReport,
   TRAINING_GROUND_MAX, trainingGroundUpgradeCost, trainingGroundInjuryFactor,
   SPONSOR_CONTRACT_LABEL, SPONSOR_CONTRACT_LENGTH_SEASONS, SPONSOR_CONTRACT_SIGN_FEE_MULTIPLIER,
   SPONSOR_CONTRACT_STADIUM_MIN_LEVEL, sponsorContractPayout,
@@ -98,6 +98,7 @@ export function Staff({
   const trainingGroundAfford = club.finance.balance >= trainingGroundCost;
 
   const injuryRiskReport = buildInjuryRiskReport(club).slice(0, INJURY_RISK_REPORT_SIZE);
+  const injuryRecoveryReport = buildInjuryRecoveryReport(club);
 
   const sponsorContracts = club.finance.sponsorContracts ?? [];
 
@@ -286,6 +287,32 @@ export function Staff({
               </div>
               <span className={`bar-val ${INJURY_RISK_LABEL[r.tier].cls}`}>
                 {INJURY_RISK_LABEL[r.tier].text}
+              </span>
+            </div>
+          ))
+        )}
+      </div>
+
+      <div className="injury-recovery-report">
+        <h3>
+          🩹 부상자 명단
+          <InfoTip title="부상 회복 진행 현황">
+            현재 부상으로 결장 중인 선수의 회복 진행률입니다(신규 개선 항목 28). 부상 발생
+            시점의 총 결장 경기 수 대비 얼마나 회복됐는지를 보여주며, 실제 복귀 시점을
+            바꾸지는 않는 참고용 수치입니다.
+          </InfoTip>
+        </h3>
+        {injuryRecoveryReport.length === 0 ? (
+          <p className="muted small">현재 부상 중인 선수가 없습니다.</p>
+        ) : (
+          injuryRecoveryReport.map((r) => (
+            <div className="bar-row" key={r.playerId}>
+              <span className="bar-label" title={r.injuryName}>{r.name}({r.position})</span>
+              <div className="bar-track">
+                <div className="bar-fill" style={{ width: `${Math.round(r.progress * 100)}%` }} />
+              </div>
+              <span className="bar-val">
+                {r.remainingMatches}/{r.totalMatches}경기 남음
               </span>
             </div>
           ))

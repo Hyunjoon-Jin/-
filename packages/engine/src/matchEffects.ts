@@ -59,6 +59,7 @@ function applySide(club: Club, tactic: Tactic, outcome: Outcome, injuries: Injur
       if (p.injuryMatches === 0) {
         p.condition = Math.max(p.condition, TUNING.returnCondition);
         p.injuryName = undefined; // 복귀
+        p.injuryTotalMatches = undefined; // 회복 진행률 계산용 총 기간도 함께 해제
         // 복귀 직후 재부상 위험 구간 시작 + 부상 부위 연관 능력치 회복 지연 시작
         // (injuryBodyPart는 부상 시점에 이미 설정돼 있어 그대로 유지).
         p.reinjuryRiskMatches = REINJURY_RISK_WINDOW;
@@ -87,6 +88,7 @@ function applySide(club: Club, tactic: Tactic, outcome: Outcome, injuries: Injur
       const inj = injuryByPlayer.get(p.id);
       if (inj) {
         p.injuryMatches = inj.matches;
+        p.injuryTotalMatches = inj.matches; // 회복 진행률(신규 개선 항목 28) 계산 기준
         p.injuryName = inj.name;
         p.injuryBodyPart = inj.bodyPart;
         p.condition = inj.severity === 'serious' ? 0.25 : 0.3;
