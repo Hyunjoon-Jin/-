@@ -17,6 +17,7 @@ import { lineOf } from './teamStrength.js';
 import { FIRST, LAST } from './names.js';
 import { academyNationPool } from './scouting.js';
 import { hireInitialStaffMembers } from './staffActions.js';
+import { academyPotentialBonus } from './finance.js';
 
 const NATIONS = ['KOR', 'JPN', 'BRA', 'ITA', 'GER', 'ESP', 'FRA', 'ENG', 'NED', 'ARG'];
 
@@ -176,9 +177,11 @@ const ACADEMY_POSITIONS: Position[] = [
  * 유스 아카데미 유망주 배출 (매 시즌).
  * 유스 레벨이 높을수록 배출 인원↑·잠재력↑. scoutingLevel이 높을수록 해외 스카우팅
  * 네트워크가 넓어져 더 다양한 국적의 유망주가 나온다(academyNationPool).
+ * academyLevel(시설 등급, B11)은 유스 스태프(인력)와 별개로 잠재력에 추가 가산된다
+ * — 생략하면(0) 기존과 정확히 동일한 결과(하위 호환).
  */
 export function generateAcademyIntake(
-  rng: Rng, tier: number, youthLevel: number, scoutingLevel = 20,
+  rng: Rng, tier: number, youthLevel: number, scoutingLevel = 20, academyLevel = 0,
 ): Player[] {
   const count = 1 + Math.floor(youthLevel / 8); // 1~7:1명, 8~15:2명, 16~20:3명
   const nationPool = academyNationPool(scoutingLevel);
@@ -186,8 +189,8 @@ export function generateAcademyIntake(
   for (let i = 0; i < count; i++) {
     const pos = ACADEMY_POSITIONS[rng.int(0, ACADEMY_POSITIONS.length - 1)]!;
     const p = genPlayer(rng, pos, tier - 2, rng.int(16, 18));
-    // 아카데미 수준에 따른 잠재력 보너스(유스 8=중립)
-    const bonus = Math.max(0, youthLevel - 8) * 2;
+    // 아카데미 수준에 따른 잠재력 보너스(유스 8=중립) + 시설 등급 가산(B11)
+    const bonus = Math.max(0, youthLevel - 8) * 2 + academyPotentialBonus(academyLevel);
     p.potential = clamp(p.potential + bonus, 0, 200);
     p.nationality = rng.pick(nationPool);
     out.push(p);

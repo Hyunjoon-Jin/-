@@ -211,6 +211,10 @@ export interface ClubFinance {
   /** 스타디움 증축 단계(0~STADIUM_MAX) — 매치데이 수익 상한을 다시즌에 걸쳐 회수하는
    *  구조로 높인다(C8). 구버전 세이브는 없을 수 있어 optional(없으면 0 = 기본 규모). */
   stadiumLevel?: number;
+  /** 아카데미 시설 등급(0~ACADEMY_MAX) — 유스 스태프(인력)와 별개로 훈련장·시설
+   *  자체에 투자하는 자본재. 유스 인테이크 잠재력에 가산 보너스로 반영된다(B11).
+   *  구버전 세이브는 없을 수 있어 optional(없으면 0 = 기본 시설). */
+  academyLevel?: number;
 }
 
 /** 이사회의 인내심 성향 — 목표 미달 시 얼마나 가혹하게 반응하는가(board.ts). */

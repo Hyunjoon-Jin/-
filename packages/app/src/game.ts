@@ -25,7 +25,8 @@ import {
   MEDIA_TONE_STYLE, classifyPersona,
   type BoardDemand, type RetiredLegend,
   type MediaEventKind, type MediaTone, type MediaToneOption, type ManagerPersona,
-  upgradeStaff as engineUpgradeStaff, upgradeStadium as engineUpgradeStadium, formatMoney,
+  upgradeStaff as engineUpgradeStaff, upgradeStadium as engineUpgradeStadium,
+  upgradeAcademy as engineUpgradeAcademy, formatMoney,
   computeTeamStrength, currentAbility, recentForm, buildScoutingReport, lineOf,
   type Club, type Tactic, type MatchResult, type MatchSetup, type SeasonSummary,
   type Fixture, type TableRow, type PlayerSeasonStat, type CupState, type StaffKind,
@@ -930,6 +931,18 @@ export function upgradeStadiumAction(state: GameState): ActionOutcome {
   return {
     state: { ...state }, ok: true,
     message: `스타디움 Lv.${r.newLevel} 증축 완료 (−${formatMoney(r.cost!)})`,
+  };
+}
+
+/** 아카데미 시설 한 단계 증축(보유 자금 사용, B11) — 유스 스태프와 별개로 유스 인테이크
+ *  잠재력에 추가 보너스가 여러 시즌에 걸쳐 쌓인다. */
+export function upgradeAcademyAction(state: GameState): ActionOutcome {
+  const club = myClub(state);
+  const r = engineUpgradeAcademy(club);
+  if (!r.ok) return { state, ok: false, message: r.reason! };
+  return {
+    state: { ...state }, ok: true,
+    message: `아카데미 시설 Lv.${r.newLevel} 증축 완료 (−${formatMoney(r.cost!)})`,
   };
 }
 

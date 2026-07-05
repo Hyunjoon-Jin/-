@@ -1,11 +1,12 @@
 import {
-  ClipboardList, Stethoscope, Search, GraduationCap, Hand, Target, Shield, Dumbbell, Landmark, Users,
+  ClipboardList, Stethoscope, Search, GraduationCap, Hand, Target, Shield, Dumbbell, Landmark, Users, School,
   type LucideIcon,
 } from 'lucide-react';
 import { myClub, type GameState, type ActionOutcome } from '../game.js';
 import {
   upgradeCost, STAFF_MAX, formatMoney, specialistCoachLevel, STAFF_TRAIT_LABEL, STAFF_TRAIT_DESC,
   STADIUM_MAX, stadiumUpgradeCost, stadiumMatchdayMultiplier,
+  ACADEMY_MAX, academyUpgradeCost, academyPotentialBonus,
   type StaffKind, type SpecialistCoachKind, type NamedStaffKind, type Club,
 } from '@soccer-tycoon/engine';
 import { useResultToast } from '../toast.js';
@@ -14,6 +15,7 @@ interface Props {
   game: GameState;
   onUpgrade: (kind: StaffKind) => ActionOutcome;
   onUpgradeStadium: () => ActionOutcome;
+  onUpgradeAcademy: () => ActionOutcome;
 }
 
 const SPECIALIST_KINDS: SpecialistCoachKind[] = ['coachGk', 'coachAttack', 'coachDefense', 'coachPhysical'];
@@ -38,7 +40,7 @@ function levelOf(staff: Club['staff'], kind: StaffKind): number {
     : (staff[kind as NamedStaffKind] as number);
 }
 
-export function Staff({ game, onUpgrade, onUpgradeStadium }: Props) {
+export function Staff({ game, onUpgrade, onUpgradeStadium, onUpgradeAcademy }: Props) {
   const club = myClub(game);
   const toast = useResultToast();
 
@@ -49,6 +51,11 @@ export function Staff({ game, onUpgrade, onUpgradeStadium }: Props) {
   const stadiumMaxed = stadiumLevel >= STADIUM_MAX;
   const stadiumCost = stadiumMaxed ? 0 : stadiumUpgradeCost(stadiumLevel);
   const stadiumAfford = club.finance.balance >= stadiumCost;
+
+  const academyLevel = club.finance.academyLevel ?? 0;
+  const academyMaxed = academyLevel >= ACADEMY_MAX;
+  const academyCost = academyMaxed ? 0 : academyUpgradeCost(academyLevel);
+  const academyAfford = club.finance.balance >= academyCost;
 
   return (
     <div className="staff">
@@ -120,6 +127,28 @@ export function Staff({ game, onUpgrade, onUpgradeStadium }: Props) {
             onClick={() => toast(onUpgradeStadium())}
           >
             {stadiumMaxed ? '최고 규모' : `증축 (${formatMoney(stadiumCost)})`}
+          </button>
+        </div>
+
+        <div className="staff-card">
+          <div className="staff-icon"><School size={32} strokeWidth={1.75} /></div>
+          <div className="staff-name">아카데미 시설</div>
+          <div className="staff-level">
+            Lv. <b>{academyLevel}</b> / {ACADEMY_MAX}
+          </div>
+          <div className="staff-bar">
+            <div className="staff-bar-fill" style={{ width: `${(academyLevel / ACADEMY_MAX) * 100}%` }} />
+          </div>
+          <div className="staff-effect muted">
+            유스 인테이크 잠재력 +{academyPotentialBonus(academyLevel)} (유스 스태프와 별개)
+            {!academyMaxed && ` (다음 단계 +${academyPotentialBonus(academyLevel + 1) - academyPotentialBonus(academyLevel)})`}
+          </div>
+          <button
+            className="btn-advance staff-btn"
+            disabled={academyMaxed || !academyAfford}
+            onClick={() => toast(onUpgradeAcademy())}
+          >
+            {academyMaxed ? '최고 시설' : `증축 (${formatMoney(academyCost)})`}
           </button>
         </div>
       </div>

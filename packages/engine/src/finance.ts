@@ -58,6 +58,35 @@ export function upgradeStadium(club: Club): StadiumUpgradeResult {
   return { ok: true, cost, newLevel: level + 1 };
 }
 
+/** 아카데미 시설 증축 최대 단계. */
+export const ACADEMY_MAX = 10;
+/** 증축 1단계당 유스 인테이크 잠재력 가산치. */
+const ACADEMY_POTENTIAL_BONUS_PER_LEVEL = 3;
+
+/** 아카데미 시설 등급 → 유스 인테이크 잠재력 가산 보너스. 유스 스태프(인력)의
+ *  effectiveYouth 보너스와는 별개로, 시설(자본재) 투자분만큼 추가로 더해진다. */
+export function academyPotentialBonus(academyLevel = 0): number {
+  return clamp(academyLevel, 0, ACADEMY_MAX) * ACADEMY_POTENTIAL_BONUS_PER_LEVEL;
+}
+
+/** 다음 단계로 증축하는 비용(만원) — 스타디움과 같은 자본 투자 곡선. */
+export function academyUpgradeCost(currentLevel: number): number {
+  return (currentLevel + 1) * (currentLevel + 1) * 30_000;
+}
+
+export interface AcademyUpgradeResult { ok: boolean; cost?: number; newLevel?: number; reason?: string }
+
+/** 아카데미 시설 한 단계 증축. 구단 객체를 직접 변경한다(보유 자금에서 즉시 차감). */
+export function upgradeAcademy(club: Club): AcademyUpgradeResult {
+  const level = club.finance.academyLevel ?? 0;
+  if (level >= ACADEMY_MAX) return { ok: false, reason: `이미 최대 시설(레벨 ${ACADEMY_MAX})입니다.` };
+  const cost = academyUpgradeCost(level);
+  if (club.finance.balance < cost) return { ok: false, reason: '보유 자금이 부족합니다.' };
+  club.finance.balance -= cost;
+  club.finance.academyLevel = level + 1;
+  return { ok: true, cost, newLevel: level + 1 };
+}
+
 /**
  * 시즌 재정 정산.
  * @param finalPosition 리그 최종 순위 (0-index).

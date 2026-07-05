@@ -51,8 +51,9 @@ export {
   settleSeason, leaguePrize, attendanceFormFactor,
   generateSponsorGoal, evaluateSponsorGoal, SPONSOR_GOAL_LABEL,
   STADIUM_MAX, stadiumMatchdayMultiplier, stadiumUpgradeCost, upgradeStadium,
+  ACADEMY_MAX, academyPotentialBonus, academyUpgradeCost, upgradeAcademy,
   type SeasonFinanceReport, type SponsorGoal, type SponsorGoalKind, type SponsorGoalResult,
-  type StadiumUpgradeResult,
+  type StadiumUpgradeResult, type AcademyUpgradeResult,
 } from './finance.js';
 export { runTransferWindow, type TransferDeal } from './transfer.js';
 export {
