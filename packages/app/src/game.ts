@@ -24,7 +24,7 @@ import {
   MEDIA_TONE_STYLE, classifyPersona,
   type BoardDemand, type RetiredLegend,
   type MediaEventKind, type MediaTone, type MediaToneOption, type ManagerPersona,
-  upgradeStaff as engineUpgradeStaff, formatMoney,
+  upgradeStaff as engineUpgradeStaff, upgradeStadium as engineUpgradeStadium, formatMoney,
   computeTeamStrength, currentAbility, recentForm, buildScoutingReport,
   type Club, type Tactic, type MatchResult, type MatchSetup, type SeasonSummary,
   type Fixture, type TableRow, type PlayerSeasonStat, type CupState, type StaffKind,
@@ -824,6 +824,17 @@ export function upgradeStaffAction(state: GameState, kind: StaffKind): ActionOut
     state: { ...state },
     ok: true,
     message: `${STAFF_LABEL[kind]} Lv.${r.newLevel} (−${formatMoney(r.cost!)})${hireMsg}`,
+  };
+}
+
+/** 스타디움 한 단계 증축(보유 자금 사용) — 매치데이 수익 상한이 여러 시즌에 걸쳐 오른다. */
+export function upgradeStadiumAction(state: GameState): ActionOutcome {
+  const club = myClub(state);
+  const r = engineUpgradeStadium(club);
+  if (!r.ok) return { state, ok: false, message: r.reason! };
+  return {
+    state: { ...state }, ok: true,
+    message: `스타디움 Lv.${r.newLevel} 증축 완료 (−${formatMoney(r.cost!)})`,
   };
 }
 

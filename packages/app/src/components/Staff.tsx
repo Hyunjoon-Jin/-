@@ -1,10 +1,11 @@
 import {
-  ClipboardList, Stethoscope, Search, GraduationCap, Hand, Target, Shield, Dumbbell,
+  ClipboardList, Stethoscope, Search, GraduationCap, Hand, Target, Shield, Dumbbell, Landmark,
   type LucideIcon,
 } from 'lucide-react';
 import { myClub, type GameState, type ActionOutcome } from '../game.js';
 import {
   upgradeCost, STAFF_MAX, formatMoney, specialistCoachLevel, STAFF_TRAIT_LABEL, STAFF_TRAIT_DESC,
+  STADIUM_MAX, stadiumUpgradeCost, stadiumMatchdayMultiplier,
   type StaffKind, type SpecialistCoachKind, type NamedStaffKind, type Club,
 } from '@soccer-tycoon/engine';
 import { useResultToast } from '../toast.js';
@@ -12,6 +13,7 @@ import { useResultToast } from '../toast.js';
 interface Props {
   game: GameState;
   onUpgrade: (kind: StaffKind) => ActionOutcome;
+  onUpgradeStadium: () => ActionOutcome;
 }
 
 const SPECIALIST_KINDS: SpecialistCoachKind[] = ['coachGk', 'coachAttack', 'coachDefense', 'coachPhysical'];
@@ -34,12 +36,17 @@ function levelOf(staff: Club['staff'], kind: StaffKind): number {
     : (staff[kind as NamedStaffKind] as number);
 }
 
-export function Staff({ game, onUpgrade }: Props) {
+export function Staff({ game, onUpgrade, onUpgradeStadium }: Props) {
   const club = myClub(game);
   const toast = useResultToast();
 
   const staffWage =
     (club.staff.coaching + club.staff.medical + club.staff.scouting + club.staff.youth) * 600;
+
+  const stadiumLevel = club.finance.stadiumLevel ?? 0;
+  const stadiumMaxed = stadiumLevel >= STADIUM_MAX;
+  const stadiumCost = stadiumMaxed ? 0 : stadiumUpgradeCost(stadiumLevel);
+  const stadiumAfford = club.finance.balance >= stadiumCost;
 
   return (
     <div className="staff">
@@ -91,6 +98,28 @@ export function Staff({ game, onUpgrade }: Props) {
             </div>
           );
         })}
+
+        <div className="staff-card">
+          <div className="staff-icon"><Landmark size={32} strokeWidth={1.75} /></div>
+          <div className="staff-name">스타디움</div>
+          <div className="staff-level">
+            Lv. <b>{stadiumLevel}</b> / {STADIUM_MAX}
+          </div>
+          <div className="staff-bar">
+            <div className="staff-bar-fill" style={{ width: `${(stadiumLevel / STADIUM_MAX) * 100}%` }} />
+          </div>
+          <div className="staff-effect muted">
+            매치데이 수익 상한 +{Math.round((stadiumMatchdayMultiplier(stadiumLevel) - 1) * 100)}%
+            {!stadiumMaxed && ' (다음 단계 +5%p)'}
+          </div>
+          <button
+            className="btn-advance staff-btn"
+            disabled={stadiumMaxed || !stadiumAfford}
+            onClick={() => toast(onUpgradeStadium())}
+          >
+            {stadiumMaxed ? '최고 규모' : `증축 (${formatMoney(stadiumCost)})`}
+          </button>
+        </div>
       </div>
     </div>
   );

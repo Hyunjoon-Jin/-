@@ -199,6 +199,9 @@ export interface ClubFinance {
   transferBudget: number;
   /** 평판 (1~20). 수입 규모에 영향. */
   reputation: number;
+  /** 스타디움 증축 단계(0~STADIUM_MAX) — 매치데이 수익 상한을 다시즌에 걸쳐 회수하는
+   *  구조로 높인다(C8). 구버전 세이브는 없을 수 있어 optional(없으면 0 = 기본 규모). */
+  stadiumLevel?: number;
 }
 
 /** 이사회의 인내심 성향 — 목표 미달 시 얼마나 가혹하게 반응하는가(board.ts). */

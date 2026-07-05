@@ -29,6 +29,35 @@ export function attendanceFormFactor(recentFormRatio?: number): number {
   return clamp(0.7 + recentFormRatio * 0.6, 0.7, 1.3);
 }
 
+/** 스타디움 증축 최대 단계. */
+export const STADIUM_MAX = 10;
+/** 증축 1단계당 매치데이 수익 상한 가산치(레벨10 = +50%). */
+const STADIUM_MATCHDAY_BONUS_PER_LEVEL = 0.05;
+
+/** 스타디움 증축 단계 → 매치데이 수익 배율(1.0~1.5). */
+export function stadiumMatchdayMultiplier(stadiumLevel = 0): number {
+  return 1 + clamp(stadiumLevel, 0, STADIUM_MAX) * STADIUM_MATCHDAY_BONUS_PER_LEVEL;
+}
+
+/** 다음 단계로 증축하는 비용(만원) — 레벨이 오를수록 가파르게 증가해 여러 시즌에 걸쳐
+ *  회수하는 자본 투자 성격을 띤다. */
+export function stadiumUpgradeCost(currentLevel: number): number {
+  return (currentLevel + 1) * (currentLevel + 1) * 40_000;
+}
+
+export interface StadiumUpgradeResult { ok: boolean; cost?: number; newLevel?: number; reason?: string }
+
+/** 스타디움 한 단계 증축. 구단 객체를 직접 변경한다(보유 자금에서 즉시 차감). */
+export function upgradeStadium(club: Club): StadiumUpgradeResult {
+  const level = club.finance.stadiumLevel ?? 0;
+  if (level >= STADIUM_MAX) return { ok: false, reason: `이미 최대 규모(레벨 ${STADIUM_MAX})입니다.` };
+  const cost = stadiumUpgradeCost(level);
+  if (club.finance.balance < cost) return { ok: false, reason: '보유 자금이 부족합니다.' };
+  club.finance.balance -= cost;
+  club.finance.stadiumLevel = level + 1;
+  return { ok: true, cost, newLevel: level + 1 };
+}
+
 /**
  * 시즌 재정 정산.
  * @param finalPosition 리그 최종 순위 (0-index).
@@ -47,7 +76,9 @@ export function settleSeason(
 
   // 수입 (중계는 균등 분배분 + 평판 비례분 → 약팀도 최소 보장)
   const tv = 45_000 + rep * 48_000;
-  const matchday = Math.round(homeGames * rep * 5_000 * attendanceFormFactor(recentFormRatio)); // 입장 수입
+  const matchday = Math.round(
+    homeGames * rep * 5_000 * attendanceFormFactor(recentFormRatio) * stadiumMatchdayMultiplier(club.finance.stadiumLevel),
+  ); // 입장 수입
   const sponsor = Math.round(Math.pow(rep, 1.5) * 5_500);
   const prize = leaguePrize(finalPosition, nClubs);
   const incomeTotal = tv + matchday + sponsor + prize;

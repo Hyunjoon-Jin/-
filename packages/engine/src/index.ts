@@ -50,7 +50,9 @@ export { marketValue, weeklyWage, agentFee } from './valuation.js';
 export {
   settleSeason, leaguePrize, attendanceFormFactor,
   generateSponsorGoal, evaluateSponsorGoal, SPONSOR_GOAL_LABEL,
+  STADIUM_MAX, stadiumMatchdayMultiplier, stadiumUpgradeCost, upgradeStadium,
   type SeasonFinanceReport, type SponsorGoal, type SponsorGoalKind, type SponsorGoalResult,
+  type StadiumUpgradeResult,
 } from './finance.js';
 export { runTransferWindow, type TransferDeal } from './transfer.js';
 export {
