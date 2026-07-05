@@ -38,6 +38,7 @@ interface Props {
   onSelect: (p: Player) => void;
   onNegotiationBreakdown: (playerId: string) => void;
   onPanicBuy: (playerId: string) => ActionOutcome;
+  onRivalSnipe: (playerId: string, rivalClubId: string, bid: number) => ActionOutcome;
 }
 
 type Msg = { text: string; ok: boolean };
@@ -90,7 +91,7 @@ export function Transfers(props: Props) {
 function TransferMarket({
   game, onNegotiate, onBuyAt, onBuyViaReleaseClause, onOffers, onAcceptSell, onRelease,
   onLoanOut, onLoanIn, onRecallLoan, onExerciseBuyOption, onSwap, onSelect, onNegotiationBreakdown,
-  onBuyback, onAttachAddOn, onPanicBuy,
+  onBuyback, onAttachAddOn, onPanicBuy, onRivalSnipe,
 }: Props) {
   const club = myClub(game);
   const toast = useToast();
@@ -446,6 +447,7 @@ function TransferMarket({
           onClose={() => setNegotiating(null)}
           onNegotiationBreakdown={onNegotiationBreakdown}
           onPanicBuy={onPanicBuy}
+          onRivalSnipe={onRivalSnipe}
         />
       )}
       {buyingViaClause && (
@@ -998,7 +1000,7 @@ function SellModal({
 
 function NegotiationModal({
   target, budget, scouting, scouted, round: initialRound, onRoundChange, onNegotiate, onBuyAt, onResult, onClose,
-  onNegotiationBreakdown, onPanicBuy,
+  onNegotiationBreakdown, onPanicBuy, onRivalSnipe,
 }: {
   target: TransferTarget;
   budget: number;
@@ -1013,6 +1015,7 @@ function NegotiationModal({
   onClose: () => void;
   onNegotiationBreakdown: (playerId: string) => void;
   onPanicBuy: (playerId: string) => ActionOutcome;
+  onRivalSnipe: (playerId: string, rivalClubId: string, bid: number) => ActionOutcome;
 }) {
   const { player, value } = target;
   const [ev, setEv] = useState<OfferEvaluation | null>(null);
@@ -1023,6 +1026,12 @@ function NegotiationModal({
     if (r.ok && r.outcome === 'accepted') {
       const bought = onBuyAt(player.id, amount);
       onResult({ text: bought.message, ok: bought.ok });
+      return;
+    }
+    if (r.outcome === 'lostToRival' && r.rivalClubId !== undefined && r.rivalBid !== undefined) {
+      const sniped = onRivalSnipe(player.id, r.rivalClubId, r.rivalBid);
+      onResult({ text: sniped.message, ok: false });
+      onClose();
       return;
     }
     if (r.roundsExhausted) onNegotiationBreakdown(player.id);

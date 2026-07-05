@@ -89,13 +89,13 @@ export {
   exerciseBuyback, BUYBACK_MAX_SEASONS, attachAddOnClause, exerciseLoanBuyOption,
   agentRelationsOf, agentRelationsTier,
   AGENT_RELATIONS_MIN, AGENT_RELATIONS_MAX, AGENT_RELATIONS_DEFAULT, AGENT_RELATIONS_BREAKDOWN_PENALTY,
-  panicBuy, PANIC_BUY_PREMIUM,
+  panicBuy, PANIC_BUY_PREMIUM, executeRivalSnipe,
   MIN_SQUAD, MAX_SQUAD, MAX_NEGOTIATION_ROUNDS, LOAN_MIN_SEASONS, LOAN_MAX_SEASONS,
   LOAN_OBLIGATION_MIN_APPS, LOAN_OBLIGATION_MAX_APPS,
   type TransferTarget, type BuyResult, type SellResult,
   type OfferOutcome, type OfferEvaluation, type SellOffer,
   type LoanTerms, type LoanResult, type SwapResult, type AgentPersonality, type BuybackResult,
-  type AddOnAttachResult, type LoanBuyOptionResult, type AgentRelationsTier,
+  type AddOnAttachResult, type LoanBuyOptionResult, type AgentRelationsTier, type RivalSnipeResult,
 } from './transferActions.js';
 export {
   upgradeStaff, upgradeCost, STAFF_KINDS, STAFF_MAX,

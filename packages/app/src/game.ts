@@ -11,7 +11,7 @@ import {
   exerciseBuyback, attachAddOnClause, exerciseLoanBuyOption,
   agentRelationsOf, agentRelationsTier,
   AGENT_RELATIONS_MIN, AGENT_RELATIONS_DEFAULT, AGENT_RELATIONS_BREAKDOWN_PENALTY,
-  panicBuy as enginePanicBuy, PANIC_BUY_PREMIUM,
+  panicBuy as enginePanicBuy, PANIC_BUY_PREMIUM, executeRivalSnipe,
   type AgentRelationsTier,
   sellOffers, acceptSellOffer,
   loanPlayerOut, recallLoanPlayer, applyLoanWageSubsidies, swapPlayers,
@@ -905,6 +905,21 @@ export function recordNegotiationBreakdown(state: GameState, playerId: string): 
   return {
     ...state,
     negotiationCooldowns: { ...state.negotiationCooldowns, [playerId]: state.season + 1 },
+  };
+}
+
+/** 경쟁 입찰(신규 개선 항목 9)로 협상 중이던 선수를 라이벌 구단에 빼앗겼을 때 실제로
+ *  그 이적을 확정한다. negotiate()가 outcome:'lostToRival'을 반환하면, 화면에 결과를
+ *  보여준 뒤 이 액션을 호출해 evaluateOffer가 계산한 rivalClubId·rivalBid로 이적을 집행한다. */
+export function resolveRivalSnipe(
+  state: GameState, playerId: string, rivalClubId: string, bid: number,
+): ActionOutcome {
+  if (state.live) return { state, ok: false, message: '이적은 프리시즌에만 가능합니다.' };
+  const r = executeRivalSnipe(state.clubs, rivalClubId, playerId, bid);
+  if (!r.ok) return { state, ok: false, message: r.reason! };
+  return {
+    state: { ...state }, ok: true,
+    message: `${r.playerName} 선수를 ${r.rivalClubName} 구단이 ${formatMoney(r.fee!)}에 채갔습니다.`,
   };
 }
 

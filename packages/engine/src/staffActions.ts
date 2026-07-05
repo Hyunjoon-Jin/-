@@ -9,6 +9,7 @@ import type { Club, Position, Staff, StaffMember, StaffTrait } from './types.js'
 import { FIRST, LAST } from './names.js';
 import { lineOf } from './teamStrength.js';
 import type { Rng } from './rng.js';
+import { hashSeed } from './math.js';
 
 /** 세부 코치 4종 — GK/공격/수비/피지컬. 미도입(undefined) 시 총괄 coaching 레벨로 대체된다. */
 export type SpecialistCoachKind = 'coachGk' | 'coachAttack' | 'coachDefense' | 'coachPhysical';
@@ -51,13 +52,6 @@ export const STAFF_TRAIT_DESC: Record<StaffTrait, string> = {
 const STAFF_TRAIT_CHANCE = 0.45;
 /** 특기 특성이 주는 유효 레벨 가산치. */
 export const STAFF_TRAIT_BONUS = 2;
-
-/** 문자열 → 32비트 해시(결정론적, RNG 불필요 — 유저 액션(업그레이드)엔 Rng 컨텍스트가 없다). */
-function hashSeed(s: string): number {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
-  return h;
-}
 
 /** clubId·직책·레벨을 시드로 결정론적인 "새 인물"을 뽑는다 — 같은 조합이면 항상 같은 사람. */
 function hireStaffMember(clubId: string, kind: NamedStaffKind, level: number): StaffMember {

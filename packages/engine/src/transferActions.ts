@@ -6,7 +6,7 @@ import type { Club, Line, Player } from './types.js';
 import { lineOf } from './teamStrength.js';
 import { currentAbility } from './derived.js';
 import { marketValue, weeklyWage, agentFee } from './valuation.js';
-import { clamp } from './math.js';
+import { clamp, hashSeed } from './math.js';
 import { hasTrait } from './traits.js';
 
 // ── 에이전트 개성 (A3) ────────────────────────────────────
@@ -151,7 +151,7 @@ export function askingPrice(seller: Club, player: Player): number {
   return Math.round(marketValue(player) * importance * ASKING_PREMIUM[agentPersonality(player)]);
 }
 
-export type OfferOutcome = 'accepted' | 'countered' | 'rejected';
+export type OfferOutcome = 'accepted' | 'countered' | 'rejected' | 'lostToRival';
 
 export interface OfferEvaluation {
   /** 협상 자체가 성립하는지(스쿼드·예산·매물 유효성). */
@@ -167,12 +167,37 @@ export interface OfferEvaluation {
   round?: number;
   /** 라운드 상한 소진으로 협상이 완전히 결렬됐는지(재역제안 없이 거절). */
   roundsExhausted?: boolean;
+  /** 경쟁 입찰(신규 개선 항목 9)로 다른 구단에 선수를 빼앗겼을 때만(outcome==='lostToRival') 채워진다. */
+  rivalClubId?: string;
+  rivalClubName?: string;
+  rivalBid?: number;
 }
 
 /** 밀당 가능한 최대 라운드 수 — 이 이상 역제안이 반복되면 매도 구단이 협상을 접는다. */
 export const MAX_NEGOTIATION_ROUNDS = 3;
 /** 라운드가 진행될수록(=계속 낮은 제안이 반복될수록) 매도 구단이 조급해하며 호가에 얹는 가산율. */
 const NEGOTIATION_IMPATIENCE_PER_ROUND = 0.03;
+
+// ── 경쟁 입찰 (신규 개선 항목 9) ────────────────────────────
+
+/** 경쟁 입찰이 발동할 수 있는 최소 라운드 — 첫 제안(0라운드)은 안전하게 보장한다. */
+const RIVAL_BID_MIN_ROUND = 1;
+/** 경쟁 입찰 발동 기준 확률(RIVAL_BID_MIN_ROUND일 때) — 라운드가 늘수록 가산돼 상한까지 커진다. */
+const RIVAL_BID_BASE_CHANCE = 0.12;
+const RIVAL_BID_PER_ROUND = 0.06;
+const RIVAL_BID_MAX_CHANCE = 0.35;
+
+/**
+ * 매도 구단·나를 제외한 구단 중 호가를 감당할 수 있는(transferBudget 충분) 곳 가운데
+ * 예산이 가장 큰 곳을 라이벌 입찰자로 고른다 — RNG 없이 결정론적이라 같은 상황이면
+ * 항상 같은 구단이 나선다.
+ */
+function pickRivalBidder(clubs: Club[], myClubId: string, sellerClubId: string, asking: number): Club | undefined {
+  const candidates = clubs
+    .filter((c) => c.id !== myClubId && c.id !== sellerClubId && c.finance.transferBudget >= asking)
+    .sort((a, b) => b.finance.transferBudget - a.finance.transferBudget || a.id.localeCompare(b.id));
+  return candidates[0];
+}
 
 /**
  * 제안액에 대한 매도 구단의 반응(순수 함수 — 구단을 변경하지 않음).
@@ -212,20 +237,53 @@ export function evaluateOffer(
   let outcome: OfferOutcome;
   let counter: number | undefined;
   let roundsExhausted = false;
+  let rivalClubId: string | undefined;
+  let rivalClubName: string | undefined;
+  let rivalBid: number | undefined;
+
   if (offer >= asking) {
     outcome = 'accepted';
-  } else if (round >= MAX_NEGOTIATION_ROUNDS) {
-    outcome = 'rejected';
-    roundsExhausted = true;
-  } else if (offer >= floor) {
-    outcome = 'countered';
-    // 강경파일수록 호가에 가깝게, 유연한 편일수록 제안액에 가깝게 역제안한다.
-    const rigidity = clamp(COUNTER_RIGIDITY[personality] - relationsAdj, 0.1, 0.9);
-    counter = Math.min(asking, Math.round(offer + (asking - offer) * rigidity));
   } else {
-    outcome = 'rejected';
+    // 경쟁 입찰(신규 개선 항목 9) — 밀당이 길어질수록 다른 구단이 끼어들 확률이 오른다.
+    // 내 제안이 라이벌의 입찰액 이상이면 아무리 확률이 맞아도 안전(=충분히 세게 불렀다).
+    if (round >= RIVAL_BID_MIN_ROUND) {
+      const roll = hashSeed(`${playerId}:${round}:rival`) / 0xFFFFFFFF;
+      const chance = Math.min(
+        RIVAL_BID_MAX_CHANCE,
+        RIVAL_BID_BASE_CHANCE + (round - RIVAL_BID_MIN_ROUND) * RIVAL_BID_PER_ROUND,
+      );
+      if (roll < chance) {
+        const rival = pickRivalBidder(clubs, myClubId, seller.id, asking);
+        if (rival) {
+          const premiumRoll = hashSeed(`${playerId}:${round}:rivalPremium`) % 15;
+          const bid = Math.round(asking * (1 + premiumRoll / 100));
+          if (offer < bid) {
+            rivalClubId = rival.id;
+            rivalClubName = rival.name;
+            rivalBid = bid;
+          }
+        }
+      }
+    }
+
+    if (rivalClubId) {
+      outcome = 'lostToRival';
+    } else if (round >= MAX_NEGOTIATION_ROUNDS) {
+      outcome = 'rejected';
+      roundsExhausted = true;
+    } else if (offer >= floor) {
+      outcome = 'countered';
+      // 강경파일수록 호가에 가깝게, 유연한 편일수록 제안액에 가깝게 역제안한다.
+      const rigidity = clamp(COUNTER_RIGIDITY[personality] - relationsAdj, 0.1, 0.9);
+      counter = Math.min(asking, Math.round(offer + (asking - offer) * rigidity));
+    } else {
+      outcome = 'rejected';
+    }
   }
-  return { ok: true, outcome, asking, counter, playerName: player.name, round, roundsExhausted };
+  return {
+    ok: true, outcome, asking, counter, playerName: player.name, round, roundsExhausted,
+    rivalClubId, rivalClubName, rivalBid,
+  };
 }
 
 /** 지정 이적료로 영입 실행 (협상 타결분). 예산·스쿼드 제약 검증. */
@@ -274,6 +332,46 @@ export function buyPlayerAt(clubs: Club[], myClubId: string, playerId: string, f
   me.agentRelations = clamp(agentRelationsOf(me) + AGENT_RELATIONS_BUY_GAIN, AGENT_RELATIONS_MIN, AGENT_RELATIONS_MAX);
 
   return { ok: true, fee, agentFee: commission, playerName: player.name };
+}
+
+export interface RivalSnipeResult {
+  ok: boolean;
+  reason?: string;
+  playerName?: string;
+  rivalClubName?: string;
+  fee?: number;
+}
+
+/**
+ * 경쟁 입찰(신규 개선 항목 9)로 놓친 선수를 실제로 라이벌 구단에 이적시킨다.
+ * evaluateOffer 자체는 순수 함수라 상태를 바꾸지 않으므로, UI가 outcome==='lostToRival'
+ * 결과를 받은 뒤 그 결과에 실린 rivalClubId·rivalBid를 그대로 넘겨 별도로 호출해야
+ * 실제 이적이 확정된다(재계산 없이 협상 시점의 입찰액을 그대로 집행).
+ */
+export function executeRivalSnipe(clubs: Club[], rivalClubId: string, playerId: string, bid: number): RivalSnipeResult {
+  const rival = clubs.find((c) => c.id === rivalClubId);
+  if (!rival) return { ok: false, reason: '라이벌 구단을 찾을 수 없습니다.' };
+  const seller = clubs.find((c) => c.id !== rivalClubId && c.players.some((p) => p.id === playerId));
+  if (!seller) return { ok: false, reason: '해당 선수를 찾을 수 없습니다.' };
+  const player = seller.players.find((p) => p.id === playerId)!;
+  if (player.loanFromClubId) return { ok: false, reason: '임대 중인 선수는 거래할 수 없습니다.' };
+  if (rival.players.length >= MAX_SQUAD) return { ok: false, reason: '라이벌 구단 스쿼드가 가득 찼습니다.' };
+  if (seller.players.length - 1 < MIN_SQUAD) {
+    return { ok: false, reason: '매도 구단이 최소 스쿼드 인원을 유지하려 합니다.' };
+  }
+
+  rival.finance.transferBudget -= bid;
+  rival.finance.balance -= bid;
+  seller.finance.balance += bid;
+  seller.finance.transferBudget += bid;
+  seller.players = seller.players.filter((p) => p.id !== playerId);
+  player.contractYears = NEW_CONTRACT_YEARS;
+  player.wage = weeklyWage(player);
+  player.releaseClause = undefined;
+  rival.players.push(player);
+  reassignSquadNumber(rival, player);
+
+  return { ok: true, playerName: player.name, rivalClubName: rival.name, fee: bid };
 }
 
 /**
