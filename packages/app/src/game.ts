@@ -29,6 +29,7 @@ import {
   upgradeAcademy as engineUpgradeAcademy, formatMoney,
   computeTeamStrength, currentAbility, recentForm, buildScoutingReport, lineOf,
   dispatchScout as engineDispatchScout,
+  assignMentor as engineAssignMentor, clearMentorPairing as engineClearMentorPairing,
   type Club, type Tactic, type MatchResult, type MatchSetup, type SeasonSummary,
   type Fixture, type TableRow, type PlayerSeasonStat, type CupState, type StaffKind,
   type PlayerFormEntry, type Player, type YouthProspect, type YouthProspectUpdate,
@@ -771,6 +772,21 @@ export function setTrainingPosition(
   const p = myClub(state).players.find((pl) => pl.id === playerId);
   if (p) p.trainingPosition = position;
   return { ...state };
+}
+
+/** 멘토-멘티 페어링 직접 지정(B14) — 자동(같은 라인) 멘토링보다 강한 성장 보너스를 준다. */
+export function assignMentorAction(state: GameState, mentorId: string, menteeId: string): ActionOutcome {
+  const club = myClub(state);
+  const r = engineAssignMentor(club, mentorId, menteeId);
+  if (!r.ok) return { state, ok: false, message: r.reason! };
+  return { state: { ...state }, ok: true, message: '멘토 페어링을 지정했습니다.' };
+}
+
+/** 지정된 멘토 페어링 해제(B14). */
+export function clearMentorPairingAction(state: GameState, menteeId: string): ActionOutcome {
+  const club = myClub(state);
+  engineClearMentorPairing(club, menteeId);
+  return { state: { ...state }, ok: true, message: '멘토 페어링을 해제했습니다.' };
 }
 
 /** 프리시즌에서 한 시즌 전체를 한 번에 진행(킥오프→전 경기→정산). */

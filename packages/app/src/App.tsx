@@ -9,7 +9,7 @@ import {
   watchSetup, matchPreview, commitWatchedRound,
   watchCupSetup, cupPreview, commitWatchedCupRound,
   playerForm, playerTimeline, playerRatingHistory, respondMedia, dismissMedia, signContract,
-  dispatchScoutAction, isScouted,
+  dispatchScoutAction, isScouted, assignMentorAction, clearMentorPairingAction,
   type GameState, type ActionOutcome, type WatchSetup, type Difficulty, type MediaEvent,
 } from './game.js';
 import type { Tactic, MatchResult, LoanTerms } from '@soccer-tycoon/engine';
@@ -199,6 +199,18 @@ export function App() {
     return outcome;
   };
 
+  const handleAssignMentor = (mentorId: string, menteeId: string): ActionOutcome => {
+    const outcome = assignMentorAction(game, mentorId, menteeId);
+    if (outcome.ok) update(outcome.state);
+    return outcome;
+  };
+
+  const handleClearMentor = (menteeId: string): ActionOutcome => {
+    const outcome = clearMentorPairingAction(game, menteeId);
+    if (outcome.ok) update(outcome.state);
+    return outcome;
+  };
+
   const handleWatch = () => {
     const ws = watchSetup(game);
     if (ws) { setWatchKind('league'); setWatching(ws); }
@@ -290,7 +302,12 @@ export function App() {
                 onGoToTab={setTab}
               />
             )}
-            {tab === 'squad' && <Squad key={slotId} club={club} onSelect={setDetailPlayer} />}
+            {tab === 'squad' && (
+              <Squad
+                key={slotId} club={club} onSelect={setDetailPlayer}
+                onAssignMentor={handleAssignMentor} onClearMentor={handleClearMentor}
+              />
+            )}
             {tab === 'tactics' && (
               <Tactics club={club} tactic={myTactic(game)} onChange={handleTacticChange} />
             )}

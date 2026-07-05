@@ -321,6 +321,48 @@ function hasMentor(club: Club, player: Player): boolean {
   });
 }
 
+/** 유저 지정 멘토 페어링(B14) 최대 동시 개수 — 유한한 자원으로 만들어 실제 선택이 되게 한다. */
+export const MENTOR_PAIRING_MAX = 3;
+/** 직접 지정한 멘토링은 자동(같은 라인) 멘토링보다 더 큰 성장 보너스를 준다. */
+const DESIGNATED_MENTOR_GROWTH_MUL = 1.25;
+
+export interface MentorAssignResult { ok: boolean; reason?: string }
+
+/** 유저가 직접 멘토-멘티를 지정한다. 멘토는 멘티보다 나이가 많아야 하고, 멘티는
+ *  아직 성장 중(23세 이하)이어야 한다. 이미 그 멘티에게 지정된 멘토가 있으면
+ *  교체로 취급해(상한 소모 없이) 갱신한다. */
+export function assignMentor(club: Club, mentorId: string, menteeId: string): MentorAssignResult {
+  if (mentorId === menteeId) return { ok: false, reason: '같은 선수를 멘토와 멘티로 지정할 수 없습니다.' };
+  const mentor = club.players.find((p) => p.id === mentorId);
+  const mentee = club.players.find((p) => p.id === menteeId);
+  if (!mentor || !mentee) return { ok: false, reason: '선수를 찾을 수 없습니다.' };
+  if (mentee.age > MENTEE_MAX_AGE) return { ok: false, reason: `멘티는 ${MENTEE_MAX_AGE}세 이하 유망주만 가능합니다.` };
+  if (mentor.age <= mentee.age) return { ok: false, reason: '멘토는 멘티보다 나이가 많아야 합니다.' };
+  const pairings = club.mentorPairings ?? (club.mentorPairings = []);
+  const existingForMentee = pairings.find((m) => m.menteeId === menteeId);
+  if (existingForMentee) { existingForMentee.mentorId = mentorId; return { ok: true }; }
+  if (pairings.length >= MENTOR_PAIRING_MAX) {
+    return { ok: false, reason: `동시에 최대 ${MENTOR_PAIRING_MAX}쌍까지만 지정할 수 있습니다.` };
+  }
+  pairings.push({ mentorId, menteeId });
+  return { ok: true };
+}
+
+/** 지정된 멘토 페어링을 해제한다(멘티 기준). */
+export function clearMentorPairing(club: Club, menteeId: string): void {
+  if (!club.mentorPairings) return;
+  club.mentorPairings = club.mentorPairings.filter((m) => m.menteeId !== menteeId);
+}
+
+/** 멘티에게 유저 지정 멘토가 배정돼 있고 그 멘토가 여전히 스쿼드에 있으면 강화된
+ *  성장 배율을, 아니면 1을 반환한다(자동 멘토링과 별개 — 더 큰 쪽을 적용). */
+function designatedMentorBonus(club: Club, player: Player): number {
+  const pairing = club.mentorPairings?.find((m) => m.menteeId === player.id);
+  if (!pairing) return 1;
+  const mentorStillHere = club.players.some((p) => p.id === pairing.mentorId);
+  return mentorStillHere ? DESIGNATED_MENTOR_GROWTH_MUL : 1;
+}
+
 export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
   let retirements = 0;
   const intakeByClub = new Map<string, number>();
@@ -403,7 +445,10 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
       else if (ratio < 0.25) target = 0.5;
       player.morale = clamp(moraleRetention * player.morale + (1 - moraleRetention) * (target + leaderBonus), 0, 1);
 
-      const mentorBonus = hasMentor(club, player) ? MENTOR_GROWTH_MUL : 1;
+      const mentorBonus = Math.max(
+        hasMentor(club, player) ? MENTOR_GROWTH_MUL : 1,
+        designatedMentorBonus(club, player),
+      );
       progressPlayer(player, rng, effectiveCoaching(player.position, club.staff), mentorBonus);
       // 성장 곡선: 이번 시즌 종료 시점 CA 스냅샷(최근 20시즌 유지)
       const hist = player.caHistory ?? (player.caHistory = []);
@@ -504,6 +549,14 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
 
     // 스쿼드 상한 정리
     trimSquad(club);
+
+    // 멘토·멘티 중 한쪽이라도 스쿼드를 떠났으면(은퇴·매각·이적 등) 페어링을 정리한다
+    // (세이브 파일에 죽은 페어링이 계속 쌓이는 것을 방지 — 성장 계산은 어차피
+    // designatedMentorBonus에서 매번 재검증하므로 정합성에는 영향 없음).
+    if (club.mentorPairings) {
+      const ids = new Set(club.players.map((p) => p.id));
+      club.mentorPairings = club.mentorPairings.filter((m) => ids.has(m.mentorId) && ids.has(m.menteeId));
+    }
   }
   return {
     retirements, intakeByClub, intakePlayersByClub, fireSalesByClub, retiredPlayers, milestones,

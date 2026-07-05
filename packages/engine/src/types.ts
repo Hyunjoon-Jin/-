@@ -245,6 +245,15 @@ export interface Club {
   /** 파견 정찰을 마쳐 PA를 영구적으로 정확히 알고 있는 선수 id 목록(B13). 구버전
    *  세이브는 없을 수 있어 optional(없으면 파견한 선수 없음 취급). */
   scoutedPlayerIds?: string[];
+  /** 유저가 직접 지정한 멘토-멘티 쌍(B14) — 같은 라인 자동 멘토링보다 강한 성장
+   *  보너스를 준다(상한 인원 제한). 구버전 세이브는 없을 수 있어 optional. */
+  mentorPairings?: MentorPairing[];
+}
+
+/** 유저가 직접 지정한 멘토-멘티 쌍(B14). */
+export interface MentorPairing {
+  mentorId: string;
+  menteeId: string;
 }
 
 // ── 경기 입력/출력 ────────────────────────────────────────

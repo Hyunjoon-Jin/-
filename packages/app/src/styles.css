@@ -940,6 +940,22 @@ h3 { font-size: 14px; margin: 0 0 10px; color: var(--muted); text-transform: upp
 .market-cols { display: grid; grid-template-columns: 1.25fr 1fr; gap: 18px; }
 .market-panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
 .filters { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+.mentor-panel {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  padding: 14px; margin-bottom: 14px;
+}
+.mentor-panel h3 { margin: 0 0 8px; font-size: 15px; }
+.mentor-list { list-style: none; margin: 0 0 10px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.mentor-list li {
+  display: flex; align-items: center; gap: 8px; font-size: 13px;
+  background: var(--panel-2); border-radius: 6px; padding: 5px 10px;
+}
+.mentor-clear-btn { margin-left: auto; font-size: 12px; padding: 2px 8px; }
+.mentor-form { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.mentor-form select {
+  background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+  border-radius: 6px; padding: 6px 8px; font-size: 13px;
+}
 .afford { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 4px; margin-left: auto; }
 .search {
   width: 100%; box-sizing: border-box; margin-bottom: 8px;

@@ -1,11 +1,72 @@
 import { useMemo, useState } from 'react';
 import {
-  formatMoney, currentAbility, marketValue, isInjured, isSuspended, lineOf,
+  formatMoney, currentAbility, marketValue, isInjured, isSuspended, lineOf, MENTOR_PAIRING_MAX,
   type Club, type Player, type Line,
 } from '@soccer-tycoon/engine';
 import { onKeyActivate } from '../a11y.js';
 import { SortableTh } from './SortableTh.js';
 import { flagFor } from '../flags.js';
+import { useResultToast } from '../toast.js';
+import type { ActionOutcome } from '../game.js';
+
+/** 멘토링 대상은 아직 성장 중인 유망주(엔진 MENTEE_MAX_AGE와 동일 기준)만. */
+const MENTEE_MAX_AGE = 23;
+
+function MentorPanel({ club, onAssignMentor, onClearMentor }: {
+  club: Club;
+  onAssignMentor: (mentorId: string, menteeId: string) => ActionOutcome;
+  onClearMentor: (menteeId: string) => ActionOutcome;
+}) {
+  const toast = useResultToast();
+  const pairings = club.mentorPairings ?? [];
+  const mentees = club.players.filter((p) => p.age <= MENTEE_MAX_AGE);
+  const [menteeId, setMenteeId] = useState('');
+  const [mentorId, setMentorId] = useState('');
+  const mentee = mentees.find((p) => p.id === menteeId);
+  const mentorOptions = mentee ? club.players.filter((p) => p.id !== mentee.id && p.age > mentee.age) : [];
+  const nameOf = (id: string) => club.players.find((p) => p.id === id)?.name ?? '(이적/방출됨)';
+
+  return (
+    <div className="mentor-panel">
+      <h3>🧑‍🏫 멘토 페어링 <span className="muted small">({pairings.length}/{MENTOR_PAIRING_MAX})</span></h3>
+      {pairings.length > 0 && (
+        <ul className="mentor-list">
+          {pairings.map((m) => (
+            <li key={m.menteeId}>
+              <b>{nameOf(m.mentorId)}</b> → {nameOf(m.menteeId)}
+              <button className="btn-ghost mentor-clear-btn" onClick={() => toast(onClearMentor(m.menteeId))}>해제</button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="mentor-form">
+        <select value={menteeId} onChange={(e) => { setMenteeId(e.target.value); setMentorId(''); }}>
+          <option value="">멘티(유망주) 선택…</option>
+          {mentees.map((p) => <option key={p.id} value={p.id}>{p.name} ({p.age}세, {p.position})</option>)}
+        </select>
+        <select value={mentorId} onChange={(e) => setMentorId(e.target.value)} disabled={!mentee}>
+          <option value="">멘토 선택…</option>
+          {mentorOptions.map((p) => <option key={p.id} value={p.id}>{p.name} ({p.age}세, {p.position})</option>)}
+        </select>
+        <button
+          className="btn-advance"
+          disabled={!mentee || !mentorId}
+          onClick={() => {
+            const r = onAssignMentor(mentorId, menteeId);
+            toast(r);
+            if (r.ok) { setMenteeId(''); setMentorId(''); }
+          }}
+        >
+          지정
+        </button>
+      </div>
+      <p className="muted small">
+        지정한 멘토는 같은 라인 자동 멘토링보다 성장 보너스가 더 큽니다. 멘토가 멘티보다 나이가
+        많아야 하며, 동시에 최대 {MENTOR_PAIRING_MAX}쌍까지 지정할 수 있습니다.
+      </p>
+    </div>
+  );
+}
 
 type SortKey = 'ca' | 'age' | 'value' | 'wage' | 'condition';
 type SortDir = 1 | -1;
@@ -62,7 +123,14 @@ function ConditionCell({ player }: { player: Player }) {
 
 type SquadView = 'first' | 'reserves';
 
-export function Squad({ club, onSelect }: { club: Club; onSelect: (p: Player) => void }) {
+interface SquadProps {
+  club: Club;
+  onSelect: (p: Player) => void;
+  onAssignMentor: (mentorId: string, menteeId: string) => ActionOutcome;
+  onClearMentor: (menteeId: string) => ActionOutcome;
+}
+
+export function Squad({ club, onSelect, onAssignMentor, onClearMentor }: SquadProps) {
   const [view, setView] = useState<SquadView>('first');
   const [sort, setSort] = useState<SortKey>('ca');
   const [dir, setDir] = useState<SortDir>(-1);
@@ -151,6 +219,7 @@ export function Squad({ club, onSelect }: { club: Club; onSelect: (p: Player) =>
         )
       ) : (
       <>
+      <MentorPanel club={club} onAssignMentor={onAssignMentor} onClearMentor={onClearMentor} />
       <div className="filters">
         {LINE_FILTERS.map((f) => (
           <button
