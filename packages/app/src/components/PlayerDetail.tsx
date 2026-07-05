@@ -121,6 +121,8 @@ interface Props {
   /** 이 선수에 대한 스카우팅 레벨(PA 공개 정도·강점/약점 리포트에 반영).
    *  내 구단 선수면 FULL_SCOUTING, 아니면 club.staff.scouting을 넘긴다. */
   scouting: number;
+  /** 임대 중인 선수면 원 소속 구단명(loanFromClubId를 이름으로 미리 변환해 전달). */
+  loanFromClubName?: string;
 }
 
 type PdTab = 'overview' | 'development' | 'career';
@@ -132,6 +134,7 @@ const PD_TABS: { key: PdTab; label: string }[] = [
 
 export function PlayerDetail({
   player, onClose, onSetFocus, onSetTrainingPosition, onRenew, recentForm, timeline, ratingHistory, scouting,
+  loanFromClubName,
 }: Props) {
   const toast = useResultToast();
   const ca = currentAbility(player);
@@ -178,6 +181,11 @@ export function PlayerDetail({
           {player.releaseClause !== undefined && (
             <span className="pd-clause" title="협상 없이 이 금액으로 즉시 영입 가능">
               🔓 방출조항 <b>{formatMoney(player.releaseClause)}</b>
+            </span>
+          )}
+          {player.loanFromClubId !== undefined && (
+            <span className="loan-badge" title="다른 구단에서 임대로 데려온 선수 — 임대 기간이 끝나면 원 소속으로 복귀">
+              🔁 임대{loanFromClubName ? ` (원 소속: ${loanFromClubName})` : ''} · 복귀까지 {player.loanSeasonsRemaining ?? 1}시즌
             </span>
           )}
           <span className={status.cls}>{status.text}</span>

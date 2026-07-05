@@ -9,6 +9,7 @@ import { settleSeason, type SeasonFinanceReport } from './finance.js';
 import { runTransferWindow, type TransferDeal } from './transfer.js';
 import { progressPlayer } from './progression.js';
 import { generateAcademyIntake, generateYouthPlayer, assignSquadNumber } from './generate.js';
+import { applyLoanWageSubsidies } from './transferActions.js';
 import { enforceFinancialFairPlay } from './financeControl.js';
 import { runInternationalBreak } from './international.js';
 import { currentAbility } from './derived.js';
@@ -119,6 +120,8 @@ export interface SeasonSummary {
     championId: string;
     championName: string;
   };
+  /** 이번 오프시즌 내 구단 관련 임대 복귀(보낸 임대가 돌아오거나, 데려온 임대가 복귀). */
+  loanReturns?: LoanReturnEvent[];
 }
 
 /** 과거 유스 기대주 소개 이후의 후속 소식(데뷔/첫 골). */
@@ -168,6 +171,17 @@ export interface RetiredLegend {
   caps: number;
 }
 
+/** 임대 복귀 이벤트(오프시즌에 임대 기간이 끝나 원 소속 구단으로 돌아간 선수). */
+export interface LoanReturnEvent {
+  playerId: string;
+  name: string;
+  position: Position;
+  fromClubId: string;
+  fromClubName: string;
+  toClubId: string;
+  toClubName: string;
+}
+
 export interface OffseasonResult {
   retirements: number;
   /** clubId → 유스 아카데미 배출 인원. */
@@ -182,6 +196,8 @@ export interface OffseasonResult {
   milestones: CareerMilestone[];
   /** 이번 오프시즌에 처음 데뷔(첫 출전)하거나 첫 골을 기록한 선수(전 구단). */
   debutEvents: DebutEvent[];
+  /** 이번 오프시즌에 임대 기간이 끝나 원 소속 구단으로 복귀한 선수(전 구단). */
+  loanReturns: LoanReturnEvent[];
 }
 
 /** 멘토링 보너스 배율 — 같은 라인에 리더 특성 보유자나 리더십 높은 베테랑이 있으면 성장 가속. */
@@ -217,6 +233,33 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
   const retiredPlayers: RetiredLegend[] = [];
   const milestones: CareerMilestone[] = [];
   const debutEvents: DebutEvent[] = [];
+  const loanReturns: LoanReturnEvent[] = [];
+
+  // 임대 복귀: 시즌 카운트다운이 끝난 임대 선수를 원 소속 구단으로 돌려보낸다. 이번
+  // 오프시즌의 성장/노화/은퇴 처리를 정상적으로 받도록, 아래 본 루프보다 먼저 처리해
+  // 복귀 시점에 이미 원 소속 구단 스쿼드에 합류돼 있게 한다.
+  const clubById = new Map(clubs.map((c) => [c.id, c]));
+  for (const club of clubs) {
+    const staying: Player[] = [];
+    for (const player of club.players) {
+      if (player.loanFromClubId === undefined) { staying.push(player); continue; }
+      player.loanSeasonsRemaining = (player.loanSeasonsRemaining ?? 1) - 1;
+      if (player.loanSeasonsRemaining > 0) { staying.push(player); continue; }
+      const parent = clubById.get(player.loanFromClubId);
+      if (!parent) { staying.push(player); continue; } // 원 소속 구단이 사라진 극단적 경우 현 구단에 잔류
+      loanReturns.push({
+        playerId: player.id, name: player.name, position: player.position,
+        fromClubId: club.id, fromClubName: club.name, toClubId: parent.id, toClubName: parent.name,
+      });
+      player.loanFromClubId = undefined;
+      player.loanSeasonsRemaining = undefined;
+      player.loanWageShareByParent = undefined;
+      parent.players.push(player);
+      assignSquadNumber(rng, parent.players, player);
+    }
+    club.players = staying;
+  }
+
   const expectedMatches = 2 * (clubs.length - 1); // 리그 기준 기대 출전
   for (const club of clubs) {
     // 스쿼드 중간 능력(주전 기대치 판단용)
@@ -316,7 +359,10 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
     // 스쿼드 상한 정리
     trimSquad(club);
   }
-  return { retirements, intakeByClub, intakePlayersByClub, fireSalesByClub, retiredPlayers, milestones, debutEvents };
+  return {
+    retirements, intakeByClub, intakePlayersByClub, fireSalesByClub, retiredPlayers, milestones,
+    debutEvents, loanReturns,
+  };
 }
 
 /**

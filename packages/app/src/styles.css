@@ -935,6 +935,16 @@ h3 { font-size: 14px; margin: 0 0 10px; color: var(--muted); text-transform: upp
 .clause-badge { margin-left: 5px; font-size: 12px; cursor: help; }
 .clause-buy { border-color: var(--accent-2); color: var(--accent-2); }
 .clause-buy:hover { background: var(--accent-2); color: #06203f; }
+.loan-badge {
+  margin-left: 5px; font-size: 11px; color: var(--color-warning); cursor: help;
+  border: 1px solid var(--color-warning); border-radius: 5px; padding: 1px 5px;
+}
+.loaned-out-panel { margin-top: 14px; }
+.loan-field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; font-size: 13px; }
+.loan-field select, .loan-field input[type="number"] {
+  background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+  border-radius: 6px; padding: 6px 8px; font-size: 13px;
+}
 
 /* ── Watch match (2D) ── */
 .watch-topbar { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }

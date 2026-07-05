@@ -111,6 +111,14 @@ export interface Player {
   caHistory: number[];
   /** 방출(바이아웃) 조항 금액(만원). 설정돼 있으면 협상 없이 이 금액으로 즉시 영입 가능. */
   releaseClause?: number;
+  /** 임대 중이면 원 소속 구단 id — 이 선수는 지금 다른 구단(club.players 소속)에서
+   *  뛰고 있지만, 임대가 끝나면 이 구단으로 돌아간다. */
+  loanFromClubId?: string;
+  /** 임대 복귀까지 남은 시즌 수. 오프시즌마다 1 감소하며, 0이 되면 원 소속 구단으로
+   *  자동 복귀한다(loanFromClubId도 함께 해제). */
+  loanSeasonsRemaining?: number;
+  /** 임대 기간 중 주급을 원 소속 구단이 분담하는 비율(0~1) — 나머지는 임대 구단이 부담. */
+  loanWageShareByParent?: number;
 }
 
 export type TrainingFocus =

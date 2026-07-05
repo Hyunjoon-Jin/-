@@ -3,13 +3,14 @@ import {
   startGame, myClub, myTactic, setMyTactic,
   startSeason, playRound, playRestOfSeason, finishSeason, advanceFullSeason,
   playCupRound, negotiate, buyAt, buyViaReleaseClause, offersFor, acceptSell, release, upgradeStaffAction,
+  loanOut, loanIn, recallLoan,
   setTrainingFocus, setTrainingPosition, renewContract,
   watchSetup, matchPreview, commitWatchedRound,
   watchCupSetup, cupPreview, commitWatchedCupRound,
   playerForm, playerTimeline, playerRatingHistory, respondMedia, dismissMedia, signContract,
   type GameState, type ActionOutcome, type WatchSetup, type Difficulty, type MediaEvent,
 } from './game.js';
-import type { Tactic, MatchResult } from '@soccer-tycoon/engine';
+import type { Tactic, MatchResult, LoanTerms } from '@soccer-tycoon/engine';
 import { createSaveStore } from './storage.js';
 import { recordSackedStint } from './career.js';
 import { StartScreen } from './components/StartScreen.js';
@@ -172,6 +173,24 @@ export function App() {
     return outcome;
   };
 
+  const handleLoanOut = (id: string, toClubId: string, terms: LoanTerms): ActionOutcome => {
+    const outcome = loanOut(game, id, toClubId, terms);
+    if (outcome.ok) update(outcome.state);
+    return outcome;
+  };
+
+  const handleLoanIn = (id: string, fromClubId: string, terms: LoanTerms): ActionOutcome => {
+    const outcome = loanIn(game, id, fromClubId, terms);
+    if (outcome.ok) update(outcome.state);
+    return outcome;
+  };
+
+  const handleRecallLoan = (id: string): ActionOutcome => {
+    const outcome = recallLoan(game, id);
+    if (outcome.ok) update(outcome.state);
+    return outcome;
+  };
+
   const handleWatch = () => {
     const ws = watchSetup(game);
     if (ws) { setWatchKind('league'); setWatching(ws); }
@@ -218,6 +237,7 @@ export function App() {
             timeline={playerTimeline(game, detailPlayer.id)}
             ratingHistory={playerRatingHistory(game, detailPlayer.id)}
             scouting={isMine ? FULL_SCOUTING : club.staff.scouting}
+            loanFromClubName={game.clubs.find((c) => c.id === detailPlayer.loanFromClubId)?.name}
           />
         );
       })()}
@@ -295,6 +315,9 @@ export function App() {
                 onOffers={(id) => offersFor(game, id)}
                 onAcceptSell={handleAcceptSell}
                 onRelease={(id) => runAction(release, id)}
+                onLoanOut={handleLoanOut}
+                onLoanIn={handleLoanIn}
+                onRecallLoan={handleRecallLoan}
                 onSelect={setDetailPlayer}
               />
             )}

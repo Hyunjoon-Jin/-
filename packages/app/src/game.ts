@@ -9,7 +9,8 @@ import {
   commitResult, simulateMatch, simulateSeason, defaultTactic, applyMatchEffects,
   buyPlayer, buyPlayerAt, buyPlayerViaReleaseClause, evaluateOffer, sellPlayer, releasePlayer,
   sellOffers, acceptSellOffer,
-  type OfferEvaluation, type SellOffer,
+  loanPlayerOut, recallLoanPlayer, applyLoanWageSubsidies,
+  type OfferEvaluation, type SellOffer, type LoanTerms, type LoanReturnEvent,
   summarizeStats, aggregatePlayerStats, topScorers as engineTopScorers, recentPlayerForm,
   seasonSquadSnapshot,
   createCup, playCupRound as enginePlayCupRound, playCupToEnd, isCupOver, nextCupPairings,
@@ -429,6 +430,9 @@ export function finishSeason(state: GameState): GameState {
   const otherResult = simulateSeason(otherClubs, seasonSeed(state) + 654_321);
   const otherTable = otherResult.table;
 
+  // 2.5) 임대 주급 분담 정산 — 원 소속 구단이 임대 구단에 분담분을 이체(정산 전 잔고 조정).
+  applyLoanWageSubsidies(state.clubs);
+
   // 3) 정산 (부별 순위 기준) — 최근 폼(승점 비율)이 매치데이 수익에 반영된다.
   const finance = new Map();
   myTable.forEach((row, pos) => {
@@ -482,7 +486,12 @@ export function finishSeason(state: GameState): GameState {
   // 5) 오프시즌 (전 구단)
   const {
     retirements, intakeByClub, intakePlayersByClub, fireSalesByClub, retiredPlayers, milestones, debutEvents,
+    loanReturns,
   } = runOffseason(state.clubs, new Rng(offseasonSeed(state)));
+  // 내 구단이 관련된 임대 복귀(보낸 임대가 돌아오거나, 데려온 임대가 복귀)
+  const myLoanReturns: LoanReturnEvent[] = loanReturns.filter(
+    (r) => r.fromClubId === state.myClubId || r.toClubId === state.myClubId,
+  );
   // 내 구단에서 은퇴한 선수는 레전드 아카이브에 영구 보존
   const newLegends: ClubLegend[] = retiredPlayers
     .filter((r) => r.clubId === state.myClubId)
@@ -616,6 +625,7 @@ export function finishSeason(state: GameState): GameState {
     prospectUpdates: myProspectUpdates,
     sponsorGoal: sponsorGoalResult,
     promotionPlayoff: promotionPlayoffResult,
+    loanReturns: myLoanReturns,
   };
 
   const repaired = repairTactic(myClub(state), myTactic(state));
@@ -755,6 +765,42 @@ export function release(state: GameState, playerId: string): ActionOutcome {
   const r = releasePlayer(state.clubs, state.myClubId, playerId);
   if (!r.ok) return { state, ok: false, message: r.reason! };
   return { state: afterSquadChange(state), ok: true, message: `${r.playerName} 방출 완료` };
+}
+
+/** 내 선수를 다른 구단으로 임대 보낸다(원 소속은 유지, 실제 출전은 상대 구단에서). */
+export function loanOut(state: GameState, playerId: string, toClubId: string, terms: LoanTerms): ActionOutcome {
+  if (state.live) return { state, ok: false, message: '이적은 프리시즌에만 가능합니다.' };
+  const r = loanPlayerOut(state.clubs, state.myClubId, toClubId, playerId, terms);
+  if (!r.ok) return { state, ok: false, message: r.reason! };
+  return { state: afterSquadChange(state), ok: true, message: `${r.playerName} 임대 완료 (${terms.seasons}시즌)` };
+}
+
+/** 다른 구단 선수를 내 구단으로 임대 데려온다. */
+export function loanIn(state: GameState, playerId: string, fromClubId: string, terms: LoanTerms): ActionOutcome {
+  if (state.live) return { state, ok: false, message: '이적은 프리시즌에만 가능합니다.' };
+  const r = loanPlayerOut(state.clubs, fromClubId, state.myClubId, playerId, terms);
+  if (!r.ok) return { state, ok: false, message: r.reason! };
+  return { state: afterSquadChange(state), ok: true, message: `${r.playerName} 임대 영입 완료 (${terms.seasons}시즌)` };
+}
+
+/** 내가 임대 보낸 선수를 즉시 회수한다(콜백 조항). */
+export function recallLoan(state: GameState, playerId: string): ActionOutcome {
+  if (state.live) return { state, ok: false, message: '이적은 프리시즌에만 가능합니다.' };
+  const r = recallLoanPlayer(state.clubs, playerId);
+  if (!r.ok) return { state, ok: false, message: r.reason! };
+  return { state: afterSquadChange(state), ok: true, message: `${r.playerName} 임대 회수 완료` };
+}
+
+/** 내가 임대 보낸 선수 목록 — 실제로는 다른 구단 스쿼드에서 뛰고 있다. */
+export function myLoanedOutPlayers(state: GameState): { player: Player; loanClubId: string; loanClubName: string }[] {
+  const out: { player: Player; loanClubId: string; loanClubName: string }[] = [];
+  for (const club of state.clubs) {
+    if (club.id === state.myClubId) continue;
+    for (const p of club.players) {
+      if (p.loanFromClubId === state.myClubId) out.push({ player: p, loanClubId: club.id, loanClubName: club.name });
+    }
+  }
+  return out;
 }
 
 const STAFF_LABEL: Record<string, string> = {

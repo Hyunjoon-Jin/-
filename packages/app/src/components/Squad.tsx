@@ -155,7 +155,12 @@ export function Squad({ club, onSelect }: { club: Club; onSelect: (p: Player) =>
                 onKeyDown={onKeyActivate(() => onSelect(player))}
               >
                 <td className="squad-number muted">{player.squadNumber ?? '-'}</td>
-                <td className="name">{player.name}</td>
+                <td className="name">
+                  {player.name}
+                  {player.loanFromClubId !== undefined && (
+                    <span className="loan-badge" title="다른 구단에서 임대로 데려온 선수">🔁</span>
+                  )}
+                </td>
                 <td><span className={`pos-chip pos-${lineOf(player.position).toLowerCase()}`}>{player.position}</span></td>
                 <td>{player.age}</td>
                 <td><b>{ca.toFixed(0)}</b></td>

@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react';
-import { myClub, lastSummary, revealPotential, type GameState, type ActionOutcome } from '../game.js';
+import {
+  myClub, lastSummary, revealPotential, myLoanedOutPlayers, type GameState, type ActionOutcome,
+} from '../game.js';
 import {
   transferTargets, marketValue, currentAbility, formatMoney, lineOf, buildScoutingReport,
-  MAX_NEGOTIATION_ROUNDS,
-  type Line, type Player, type OfferEvaluation, type TransferTarget, type SellOffer,
+  MAX_NEGOTIATION_ROUNDS, LOAN_MIN_SEASONS, LOAN_MAX_SEASONS,
+  type Line, type Player, type OfferEvaluation, type TransferTarget, type SellOffer, type LoanTerms,
 } from '@soccer-tycoon/engine';
 import { ScoutingSummary } from './PlayerDetail.js';
 import { useModalA11y } from './useModalA11y.js';
@@ -20,6 +22,9 @@ interface Props {
   onOffers: (playerId: string) => SellOffer[];
   onAcceptSell: (playerId: string, buyerId: string) => ActionOutcome;
   onRelease: (playerId: string) => ActionOutcome;
+  onLoanOut: (playerId: string, toClubId: string, terms: LoanTerms) => ActionOutcome;
+  onLoanIn: (playerId: string, fromClubId: string, terms: LoanTerms) => ActionOutcome;
+  onRecallLoan: (playerId: string) => ActionOutcome;
   onSelect: (p: Player) => void;
 }
 
@@ -57,7 +62,8 @@ export function Transfers(props: Props) {
 }
 
 function TransferMarket({
-  game, onNegotiate, onBuyAt, onBuyViaReleaseClause, onOffers, onAcceptSell, onRelease, onSelect,
+  game, onNegotiate, onBuyAt, onBuyViaReleaseClause, onOffers, onAcceptSell, onRelease,
+  onLoanOut, onLoanIn, onRecallLoan, onSelect,
 }: Props) {
   const club = myClub(game);
   const toast = useToast();
@@ -73,6 +79,11 @@ function TransferMarket({
   const [selling, setSelling] = useState<Player | null>(null);
   const [releasing, setReleasing] = useState<Player | null>(null);
   const [buyingViaClause, setBuyingViaClause] = useState<TransferTarget | null>(null);
+  const [loaningOut, setLoaningOut] = useState<Player | null>(null);
+  const [loaningIn, setLoaningIn] = useState<TransferTarget | null>(null);
+  const [recallingId, setRecallingId] = useState<string | null>(null);
+
+  const loanedOut = useMemo(() => myLoanedOutPlayers(game), [game]);
   // 협상 중 진행된 라운드 수 — 선수별로 유지해, 모달을 닫았다 다시 열어도 조급증이 리셋되지 않는다.
   const [roundsUsed, setRoundsUsed] = useState<Record<string, number>>({});
 
@@ -203,6 +214,9 @@ function TransferMarket({
                         🔓
                       </span>
                     )}
+                    {t.player.loanFromClubId !== undefined && (
+                      <span className="loan-badge" title="다른 구단에서 임대 중인 선수 — 거래 불가">🔁 임대 중</span>
+                    )}
                   </td>
                   <td className="muted small">{t.clubName}</td>
                   <td><span className={`pos-chip pos-${lineOf(t.player.position).toLowerCase()}`}>{t.player.position}</span></td>
@@ -211,20 +225,31 @@ function TransferMarket({
                   <td className="muted">{revealPotential(scouting, t.player.potential)}</td>
                   <td>{formatMoney(t.value)}</td>
                   <td className="market-actions">
-                    <button
-                      className="btn-small"
-                      onClick={(e) => { e.stopPropagation(); setNegotiating(t); }}
-                    >
-                      협상
-                    </button>
-                    {t.player.releaseClause !== undefined && (
-                      <button
-                        className="btn-small clause-buy"
-                        title={`방출조항 ${formatMoney(t.player.releaseClause)}로 즉시 영입`}
-                        onClick={(e) => { e.stopPropagation(); setBuyingViaClause(t); }}
-                      >
-                        즉시영입
-                      </button>
+                    {t.player.loanFromClubId === undefined && (
+                      <>
+                        <button
+                          className="btn-small"
+                          onClick={(e) => { e.stopPropagation(); setNegotiating(t); }}
+                        >
+                          협상
+                        </button>
+                        {t.player.releaseClause !== undefined && (
+                          <button
+                            className="btn-small clause-buy"
+                            title={`방출조항 ${formatMoney(t.player.releaseClause)}로 즉시 영입`}
+                            onClick={(e) => { e.stopPropagation(); setBuyingViaClause(t); }}
+                          >
+                            즉시영입
+                          </button>
+                        )}
+                        <button
+                          className="btn-small"
+                          title="정해진 기간만 임대로 데려오기"
+                          onClick={(e) => { e.stopPropagation(); setLoaningIn(t); }}
+                        >
+                          임대영입
+                        </button>
+                      </>
                     )}
                   </td>
                 </tr>
@@ -260,20 +285,36 @@ function TransferMarket({
                   tabIndex={0}
                   onKeyDown={onKeyActivate(() => onSelect(p))}
                 >
-                  <td className="name">{p.name}</td>
+                  <td className="name">
+                    {p.name}
+                    {p.loanFromClubId !== undefined && (
+                      <span className="loan-badge" title="다른 구단에서 임대로 데려온 선수 — 거래 불가">🔁 임대</span>
+                    )}
+                  </td>
                   <td><span className={`pos-chip pos-${lineOf(p.position).toLowerCase()}`}>{p.position}</span></td>
                   <td>{p.age}</td>
                   <td><b>{currentAbility(p).toFixed(0)}</b></td>
                   <td className="muted">{p.potential.toFixed(0)}</td>
                   <td>{formatMoney(marketValue(p))}</td>
                   <td className="sell-actions">
-                    <button className="btn-small" onClick={(e) => { e.stopPropagation(); setSelling(p); }}>판매</button>
-                    <button
-                      className="btn-small danger"
-                      onClick={(e) => { e.stopPropagation(); setReleasing(p); }}
-                    >
-                      방출
-                    </button>
+                    {p.loanFromClubId === undefined && (
+                      <>
+                        <button className="btn-small" onClick={(e) => { e.stopPropagation(); setSelling(p); }}>판매</button>
+                        <button
+                          className="btn-small danger"
+                          onClick={(e) => { e.stopPropagation(); setReleasing(p); }}
+                        >
+                          방출
+                        </button>
+                        <button
+                          className="btn-small"
+                          title="정해진 기간만 다른 구단으로 임대 보내기"
+                          onClick={(e) => { e.stopPropagation(); setLoaningOut(p); }}
+                        >
+                          임대보내기
+                        </button>
+                      </>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -281,6 +322,33 @@ function TransferMarket({
           </table>
         </div>
       </div>
+
+      {loanedOut.length > 0 && (
+        <div className="market-panel loaned-out-panel">
+          <h3>임대 보낸 선수 ({loanedOut.length})</h3>
+          <table className="data-table compact">
+            <thead>
+              <tr><th>선수</th><th>P</th><th>현재 소속</th><th>복귀까지</th><th></th></tr>
+            </thead>
+            <tbody>
+              {loanedOut.map(({ player: p, loanClubName }) => (
+                <tr key={p.id} className="clickable" onClick={() => onSelect(p)}
+                  role="button" tabIndex={0} onKeyDown={onKeyActivate(() => onSelect(p))}>
+                  <td className="name">{p.name}</td>
+                  <td><span className={`pos-chip pos-${lineOf(p.position).toLowerCase()}`}>{p.position}</span></td>
+                  <td className="muted small">{loanClubName}</td>
+                  <td className="muted small">{p.loanSeasonsRemaining ?? 1}시즌 후</td>
+                  <td>
+                    <button className="btn-small danger" onClick={(e) => { e.stopPropagation(); setRecallingId(p.id); }}>
+                      회수
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {negotiating && (
         <NegotiationModal
@@ -323,6 +391,160 @@ function TransferMarket({
           onCancel={() => setReleasing(null)}
         />
       )}
+      {loaningOut && (
+        <LoanOutModal
+          player={loaningOut}
+          clubs={game.clubs.filter((c) => c.id !== game.myClubId)}
+          onConfirm={(toClubId, terms) => onLoanOut(loaningOut.id, toClubId, terms)}
+          onResult={(m) => { toast(m.text, m.ok); if (m.ok) setLoaningOut(null); }}
+          onClose={() => setLoaningOut(null)}
+        />
+      )}
+      {loaningIn && (
+        <LoanInModal
+          target={loaningIn}
+          onConfirm={(terms) => onLoanIn(loaningIn.player.id, loaningIn.clubId, terms)}
+          onResult={(m) => { toast(m.text, m.ok); if (m.ok) setLoaningIn(null); }}
+          onClose={() => setLoaningIn(null)}
+        />
+      )}
+      {recallingId && (
+        <ConfirmDialog
+          title="임대 회수"
+          message="이 선수를 즉시 회수해 원 소속 구단 스쿼드로 복귀시키겠습니까?"
+          confirmLabel="회수"
+          onConfirm={() => { act(onRecallLoan(recallingId)); setRecallingId(null); }}
+          onCancel={() => setRecallingId(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+/** 임대 기간·임대료·주급 분담 비율 입력 필드(보내기/데려오기 공통). */
+function LoanTermsFields({
+  seasons, setSeasons, fee, setFee, wageSharePct, setWageSharePct, feeLabel, wageLabel,
+}: {
+  seasons: number; setSeasons: (n: number) => void;
+  fee: number; setFee: (n: number) => void;
+  wageSharePct: number; setWageSharePct: (n: number) => void;
+  feeLabel: string; wageLabel: string;
+}) {
+  return (
+    <>
+      <label className="loan-field">
+        <span>임대 기간</span>
+        <select value={seasons} onChange={(e) => setSeasons(Number(e.target.value))}>
+          {Array.from({ length: LOAN_MAX_SEASONS - LOAN_MIN_SEASONS + 1 }, (_, i) => LOAN_MIN_SEASONS + i).map((n) => (
+            <option key={n} value={n}>{n}시즌</option>
+          ))}
+        </select>
+      </label>
+      <label className="loan-field">
+        <span>{feeLabel}</span>
+        <input
+          type="number" min={0} step={100} value={fee}
+          onChange={(e) => setFee(Math.max(0, Number(e.target.value)))}
+        />
+      </label>
+      <label className="loan-field">
+        <span>{wageLabel} <b>{wageSharePct}%</b></span>
+        <input
+          type="range" min={0} max={100} step={5} value={wageSharePct}
+          onChange={(e) => setWageSharePct(Number(e.target.value))}
+        />
+      </label>
+    </>
+  );
+}
+
+function LoanOutModal({
+  player, clubs, onConfirm, onResult, onClose,
+}: {
+  player: Player;
+  clubs: { id: string; name: string }[];
+  onConfirm: (toClubId: string, terms: LoanTerms) => ActionOutcome;
+  onResult: (m: Msg) => void;
+  onClose: () => void;
+}) {
+  const [toClubId, setToClubId] = useState(clubs[0]?.id ?? '');
+  const [seasons, setSeasons] = useState(LOAN_MIN_SEASONS);
+  const [fee, setFee] = useState(0);
+  const [wageSharePct, setWageSharePct] = useState(50);
+  const ref = useModalA11y<HTMLDivElement>(onClose);
+
+  function confirm() {
+    const r = onConfirm(toClubId, { seasons, fee, wageShareByParent: wageSharePct / 100 });
+    onResult({ text: r.message, ok: r.ok });
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div
+        className="modal negotiate" role="dialog" aria-modal="true"
+        aria-label={`임대 보내기 — ${player.name}`} tabIndex={-1} ref={ref}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="modal-head">
+          <h2>임대 보내기 — {player.name}</h2>
+          <button className="btn-ghost" onClick={onClose}>닫기 ✕</button>
+        </div>
+        <label className="loan-field">
+          <span>임대 구단</span>
+          <select value={toClubId} onChange={(e) => setToClubId(e.target.value)}>
+            {clubs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        </label>
+        <LoanTermsFields
+          seasons={seasons} setSeasons={setSeasons}
+          fee={fee} setFee={setFee}
+          wageSharePct={wageSharePct} setWageSharePct={setWageSharePct}
+          feeLabel="임대료(받을 금액)" wageLabel="내가 분담할 주급 비율"
+        />
+        <button className="btn-advance" onClick={confirm} disabled={!toClubId}>임대 확정</button>
+      </div>
+    </div>
+  );
+}
+
+function LoanInModal({
+  target, onConfirm, onResult, onClose,
+}: {
+  target: TransferTarget;
+  onConfirm: (terms: LoanTerms) => ActionOutcome;
+  onResult: (m: Msg) => void;
+  onClose: () => void;
+}) {
+  const [seasons, setSeasons] = useState(LOAN_MIN_SEASONS);
+  const [fee, setFee] = useState(0);
+  const [wageSharePct, setWageSharePct] = useState(0);
+  const ref = useModalA11y<HTMLDivElement>(onClose);
+
+  function confirm() {
+    const r = onConfirm({ seasons, fee, wageShareByParent: wageSharePct / 100 });
+    onResult({ text: r.message, ok: r.ok });
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div
+        className="modal negotiate" role="dialog" aria-modal="true"
+        aria-label={`임대로 데려오기 — ${target.player.name}`} tabIndex={-1} ref={ref}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="modal-head">
+          <h2>임대로 데려오기 — {target.player.name}</h2>
+          <button className="btn-ghost" onClick={onClose}>닫기 ✕</button>
+        </div>
+        <p className="neg-sub muted">원 소속: {target.clubName}</p>
+        <LoanTermsFields
+          seasons={seasons} setSeasons={setSeasons}
+          fee={fee} setFee={setFee}
+          wageSharePct={wageSharePct} setWageSharePct={setWageSharePct}
+          feeLabel="임대료(내가 지불할 금액)" wageLabel="상대(원 소속)가 분담할 주급 비율"
+        />
+        <button className="btn-advance" onClick={confirm}>임대 확정</button>
+      </div>
     </div>
   );
 }
