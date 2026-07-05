@@ -851,6 +851,7 @@ h3 { font-size: 14px; margin: 0 0 10px; color: var(--muted); text-transform: upp
   font-size: 12px; padding: 4px 6px 4px 10px;
 }
 .custom-preset-apply:hover { color: var(--accent-2); }
+.custom-preset-apply.active { color: var(--accent-2); font-weight: 700; }
 .preset-delete {
   background: none; border: none; border-left: 1px solid var(--line); color: var(--muted);
   cursor: pointer; font-size: 13px; padding: 4px 8px; line-height: 1;
@@ -950,9 +951,26 @@ h3 { font-size: 14px; margin: 0 0 10px; color: var(--muted); text-transform: upp
 }
 .loaned-out-panel { margin-top: 14px; }
 .loan-field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; font-size: 13px; }
-.loan-field select, .loan-field input[type="number"] {
+.loan-field select, .loan-field input[type="number"], .loan-field input[type="text"] {
   background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
   border-radius: 6px; padding: 6px 8px; font-size: 13px;
+}
+
+/* ── 커스텀 포메이션 에디터(F14) ── */
+.modal.formation-editor-modal { max-width: 560px; }
+.formation-editor-warning { color: var(--color-warning); margin: -4px 0 10px; }
+.formation-editor-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 16px;
+}
+.formation-slot { display: flex; flex-direction: column; gap: 4px; }
+.formation-slot-label { font-size: 11px; color: var(--muted); }
+.formation-slot-fixed {
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px;
+  padding: 6px 8px; font-size: 13px; font-weight: 700; color: var(--accent);
+}
+.formation-slot select {
+  background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+  border-radius: 6px; padding: 6px 8px; font-size: 13px; width: 100%;
 }
 
 /* ── Watch match (2D) ── */

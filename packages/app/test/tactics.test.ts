@@ -53,8 +53,8 @@ describe('tactics: setPlayerInstruction', () => {
   });
 });
 
-describe('tactics: repairTactic — 개인 지시(F10) 승계·무효화', () => {
-  it('포메이션이 그대로면 기존 슬롯의 지시가 보존된다', () => {
+describe('tactics: repairTactic — 개인 지시(F10) 승계·무효화 + 커스텀 포메이션(F14) 지원', () => {
+  it('기존 슬롯의 지시가 보존된다', () => {
     const g = startGame(2030, 'c0');
     const tactic = myTactic(g);
     const drIndex = tactic.lineup.findIndex((s) => s.position === 'DR');
@@ -64,17 +64,26 @@ describe('tactics: repairTactic — 개인 지시(F10) 승계·무효화', () =>
     expect(drSlot?.instruction).toEqual({ kind: 'manMark', targetPosition: 'AML' });
   });
 
-  it('포메이션이 바뀌어 같은 인덱스의 포지션이 지시 자격을 잃으면 낡은 지시는 버려진다', () => {
+  it('포지션은 engine의 FORMATIONS 테이블이 아니라 기존 라인업 슬롯 자체에서 온다(F14 커스텀 포메이션 지원) — 정상 경로에선 낡은 지시가 생기지 않는다', () => {
     const g = startGame(2031, 'c0');
-    const tactic = myTactic(g); // 4-3-3: 인덱스 8 = AML(좁혀 들어오기 자격)
-    const amlIndex = tactic.lineup.findIndex((s) => s.position === 'AML');
-    const withInstruction = setPlayerInstruction(tactic, amlIndex, { kind: 'cutInside' });
-    // 3-5-2로 전환하면 같은 인덱스가 WBR(전담마크 자격만 있고 좁혀 들어오기 자격은 없음)이 된다.
-    const switched = { ...withInstruction, formation: '3-5-2' };
-    const repaired = repairTactic(myClub(g), switched);
-    expect(repaired.lineup[amlIndex]!.position).toBe('WBR');
-    expect(repaired.lineup[amlIndex]!.instruction).toBeUndefined();
-    // 결과 라인업 전체가 항상 유효성 규칙을 만족한다(일반화된 불변식 확인).
+    const tactic = myTactic(g);
+    // engine의 FORMATIONS엔 등록돼 있지 않은 이름이어도, 라인업 슬롯 자체의 포지션만으로 복원된다.
+    const customNamedTactic = { ...tactic, formation: '나만의 포메이션' };
+    const repaired = repairTactic(myClub(g), customNamedTactic);
+    expect(repaired.lineup.map((s) => s.position)).toEqual(tactic.lineup.map((s) => s.position));
+  });
+
+  it('슬롯에 손상된(포지션과 맞지 않는) 지시가 남아있으면 방어적으로 제거한다', () => {
+    const g = startGame(2032, 'c0');
+    const tactic = myTactic(g);
+    const dcIndex = tactic.lineup.findIndex((s) => s.position === 'DC');
+    // 정상 경로로는 나올 수 없는 상태(DC에 좁혀 들어오기)를 직접 주입해 방어 로직을 검증.
+    const corrupted = {
+      ...tactic,
+      lineup: tactic.lineup.map((s, i) => (i === dcIndex ? { ...s, instruction: { kind: 'cutInside' as const } } : s)),
+    };
+    const repaired = repairTactic(myClub(g), corrupted);
+    expect(repaired.lineup[dcIndex]!.instruction).toBeUndefined();
     for (const slot of repaired.lineup) {
       expect(isValidInstruction(slot.position, slot.instruction)).toBe(true);
     }

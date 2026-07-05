@@ -63,9 +63,13 @@ export function ensureCaptain(club: Club, lineup: Tactic['lineup'], currentId?: 
   return pickCaptain(club, lineup);
 }
 
-/** 포메이션에 맞춰 자동으로 베스트 XI를 뽑는다. */
-export function autoPickLineup(club: Club, formation: string): Tactic['lineup'] {
-  const positions = FORMATIONS[formation] ?? FORMATIONS['4-3-3']!;
+/**
+ * 포메이션에 맞춰 자동으로 베스트 XI를 뽑는다.
+ * @param customPositions 커스텀 포메이션(F14)의 슬롯 배열 — 넘기면 이름 대신 이걸 그대로 쓴다
+ *   (커스텀 포메이션은 기본 4종과 달리 engine의 FORMATIONS에 등록돼 있지 않다).
+ */
+export function autoPickLineup(club: Club, formation: string, customPositions?: Position[]): Tactic['lineup'] {
+  const positions = customPositions ?? FORMATIONS[formation] ?? FORMATIONS['4-3-3']!;
   const used = new Set<string>();
   const lineup: Tactic['lineup'] = [];
   for (const pos of positions) {
@@ -99,16 +103,19 @@ export function makeDefaultTactic(club: Club): Tactic {
 /**
  * 스쿼드 변동(이적·은퇴·유스) 후 라인업 보정.
  * 유효한 기존 배치는 슬롯 위치별로 유지하고, 빠진 자리는 베스트로 채운다.
+ * 포지션은 기존 라인업 슬롯에 이미 기록된 값을 그대로 쓴다(포메이션 이름으로 다시 찾지
+ * 않음) — 커스텀 포메이션(F14)은 engine의 FORMATIONS 테이블에 등록돼 있지 않아, 이름
+ * 기반 조회로는 커스텀 포메이션의 슬롯 구성을 복원할 수 없기 때문이다.
  */
 export function repairTactic(club: Club, tactic: Tactic): Tactic {
-  const positions = FORMATIONS[tactic.formation] ?? FORMATIONS['4-3-3']!;
+  const positions = tactic.lineup.map((s) => s.position);
   const valid = new Set(club.players.map((p) => p.id));
   const used = new Set<string>();
   const slots: (Tactic['lineup'][number] | null)[] = positions.map((pos, i) => {
     const prev = tactic.lineup[i];
     if (prev && valid.has(prev.playerId) && !used.has(prev.playerId)) {
       used.add(prev.playerId);
-      // 포메이션이 바뀌어 이 인덱스의 포지션이 달라졌다면(F10) 낡은 지시는 함께 버린다.
+      // 방어적 재검증(F10) — 정상 경로로는 항상 유효하지만, 상태가 손상됐을 가능성에 대비.
       const instruction = isValidInstruction(pos, prev.instruction) ? prev.instruction : undefined;
       return { position: pos, playerId: prev.playerId, instruction };
     }
