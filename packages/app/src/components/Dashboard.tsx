@@ -1,12 +1,13 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import {
   myClub, rivalClub, lastSummary, myLastPosition, managerPersona, contractOptions,
+  thinSquadLines, LINE_DEPTH_RECOMMENDED,
   DIFFICULTIES, DIVISION_LABELS, type GameState,
 } from '../game.js';
 import {
   formatMoney, currentAbility, wageBudget, annualWageBill, inFinancialCrisis,
   boardStatus, DEMAND_LABEL, SPONSOR_GOAL_LABEL,
-  type BoardStatus, type ManagerPersona, type BoardPersona,
+  type BoardStatus, type ManagerPersona, type BoardPersona, type Line,
 } from '@soccer-tycoon/engine';
 import { Landmark } from 'lucide-react';
 import { Banner } from './Banner.js';
@@ -30,6 +31,8 @@ const PATIENCE_LABEL: Record<BoardPersona['patience'], string> = {
 const STYLE_LABEL: Record<BoardPersona['style'], string> = {
   conservative: '재정 보수적', aggressive: '성적 지상주의',
 };
+
+const LINE_LABEL: Record<Line, string> = { GK: 'GK', DEF: '수비', MID: '미드필드', ATT: '공격' };
 
 interface Props {
   game: GameState;
@@ -56,6 +59,7 @@ export function Dashboard({ game, onSignContract, visitedTactics, visitedSquadPr
 
   const crisis = inFinancialCrisis(club);
   const overWages = annualWageBill(club) > wageBudget(club);
+  const thinLines = thinSquadLines(game);
   const retiredThisSeason = last ? game.legends.filter((l) => l.season === last.season) : [];
   const persona = managerPersona(game);
   const contract = contractOptions(game);
@@ -242,6 +246,14 @@ export function Dashboard({ game, onSignContract, visitedTactics, visitedSquadPr
           ⚠ 임금 과다 — 임금 총액이 지속가능 수준을 넘었습니다. 장기 재정에 주의하세요.
         </Banner>
       ) : null}
+
+      {thinLines.length > 0 && (
+        <Banner tone="warning">
+          ⚠ 스쿼드 뎁스 부족 — {thinLines.map(({ line, count }) => (
+            `${LINE_LABEL[line]}(${count}/${LINE_DEPTH_RECOMMENDED[line]}명)`
+          )).join(', ')}. 부상·정지가 겹치면 라인이 통째로 빌 수 있습니다. 이적 시장에서 보강을 고려하세요.
+        </Banner>
+      )}
 
       <div className="objective">
         <b className="div-badge">{DIVISION_LABELS[club.division]}</b>{' '}

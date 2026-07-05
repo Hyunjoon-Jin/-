@@ -26,11 +26,11 @@ import {
   type BoardDemand, type RetiredLegend,
   type MediaEventKind, type MediaTone, type MediaToneOption, type ManagerPersona,
   upgradeStaff as engineUpgradeStaff, upgradeStadium as engineUpgradeStadium, formatMoney,
-  computeTeamStrength, currentAbility, recentForm, buildScoutingReport,
+  computeTeamStrength, currentAbility, recentForm, buildScoutingReport, lineOf,
   type Club, type Tactic, type MatchResult, type MatchSetup, type SeasonSummary,
   type Fixture, type TableRow, type PlayerSeasonStat, type CupState, type StaffKind,
   type PlayerFormEntry, type Player, type YouthProspect, type YouthProspectUpdate,
-  type TeamStrength, type FormSummary, type ScoutingReport,
+  type TeamStrength, type FormSummary, type ScoutingReport, type Line,
 } from '@soccer-tycoon/engine';
 import { makeDefaultTactic, repairTactic } from './tactics.js';
 
@@ -295,6 +295,17 @@ export function startGame(seed: number, myClubId: string, difficulty: Difficulty
 
 export function myClub(state: GameState): Club {
   return state.clubs.find((c) => c.id === state.myClubId)!;
+}
+
+/** 라인별 권장 최소 보유 인원(A5) — 이 아래면 부상·정지가 겹칠 때 그 라인이 통째로 빌 위험. */
+export const LINE_DEPTH_RECOMMENDED: Record<Line, number> = { GK: 2, DEF: 5, MID: 5, ATT: 3 };
+
+/** 내 구단 라인 중 권장 보유 인원에 못 미치는 라인 목록(뎁스 경고 배너용). */
+export function thinSquadLines(state: GameState): { line: Line; count: number }[] {
+  const club = myClub(state);
+  return (Object.keys(LINE_DEPTH_RECOMMENDED) as Line[])
+    .map((line) => ({ line, count: club.players.filter((p) => lineOf(p.position) === line).length }))
+    .filter(({ line, count }) => count < LINE_DEPTH_RECOMMENDED[line]);
 }
 
 export function rivalClub(state: GameState): Club {
