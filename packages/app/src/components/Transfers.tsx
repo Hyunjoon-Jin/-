@@ -5,8 +5,9 @@ import {
 import {
   transferTargets, marketValue, currentAbility, formatMoney, lineOf, buildScoutingReport,
   MAX_NEGOTIATION_ROUNDS, LOAN_MIN_SEASONS, LOAN_MAX_SEASONS,
-  LOAN_OBLIGATION_MIN_APPS, LOAN_OBLIGATION_MAX_APPS,
+  LOAN_OBLIGATION_MIN_APPS, LOAN_OBLIGATION_MAX_APPS, agentPersonality,
   type Line, type Player, type OfferEvaluation, type TransferTarget, type SellOffer, type LoanTerms,
+  type AgentPersonality,
 } from '@soccer-tycoon/engine';
 import { ScoutingSummary } from './PlayerDetail.js';
 import { useModalA11y } from './useModalA11y.js';
@@ -40,6 +41,11 @@ const LINE_FILTERS: { key: LineFilter; label: string }[] = [
   { key: 'MID', label: '미드' },
   { key: 'ATT', label: '공격' },
 ];
+
+/** 에이전트 개성(A3)별 협상 UI 배지 — 보통(moderate)은 특별히 표시하지 않는다. */
+const AGENT_PERSONALITY_LABEL: Record<AgentPersonality, string | null> = {
+  hardliner: '💪 강경파 에이전트', moderate: null, flexible: '🤝 유연한 에이전트',
+};
 
 type AgeFilter = 'ALL' | 'young' | 'prime' | 'veteran';
 const AGE_FILTERS: { key: AgeFilter; label: string; test: (age: number) => boolean }[] = [
@@ -827,6 +833,11 @@ function NegotiationModal({
         <p className="neg-sub muted">
           {player.position} · {player.age}세 · CA <b>{currentAbility(player).toFixed(0)}</b>
           {' · '}잠재 {revealPotential(scouting, player.potential)}
+          {AGENT_PERSONALITY_LABEL[agentPersonality(player)] && (
+            <> · <span className={`agent-badge agent-${agentPersonality(player)}`}>
+              {AGENT_PERSONALITY_LABEL[agentPersonality(player)]}
+            </span></>
+          )}
         </p>
         <ScoutingSummary report={buildScoutingReport(player, scouting)} title="🔎 스카우팅 평가" />
         <div className="neg-facts">

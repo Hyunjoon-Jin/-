@@ -83,12 +83,12 @@ export {
 export {
   transferTargets, buyPlayer, buyPlayerAt, buyPlayerViaReleaseClause, sellPlayer, releasePlayer,
   askingPrice, evaluateOffer, sellOffers, acceptSellOffer,
-  loanPlayerOut, recallLoanPlayer, applyLoanWageSubsidies, swapPlayers,
+  loanPlayerOut, recallLoanPlayer, applyLoanWageSubsidies, swapPlayers, agentPersonality,
   MIN_SQUAD, MAX_SQUAD, MAX_NEGOTIATION_ROUNDS, LOAN_MIN_SEASONS, LOAN_MAX_SEASONS,
   LOAN_OBLIGATION_MIN_APPS, LOAN_OBLIGATION_MAX_APPS,
   type TransferTarget, type BuyResult, type SellResult,
   type OfferOutcome, type OfferEvaluation, type SellOffer,
-  type LoanTerms, type LoanResult, type SwapResult,
+  type LoanTerms, type LoanResult, type SwapResult, type AgentPersonality,
 } from './transferActions.js';
 export {
   upgradeStaff, upgradeCost, STAFF_KINDS, STAFF_MAX,

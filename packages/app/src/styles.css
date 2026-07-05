@@ -950,6 +950,9 @@ h3 { font-size: 14px; margin: 0 0 10px; color: var(--muted); text-transform: upp
   border: 1px solid var(--color-warning); border-radius: 5px; padding: 1px 5px;
 }
 .loaned-out-panel { margin-top: 14px; }
+.agent-badge { font-size: 11px; border-radius: 5px; padding: 1px 5px; }
+.agent-badge.agent-hardliner { color: var(--color-danger); border: 1px solid var(--color-danger); }
+.agent-badge.agent-flexible { color: var(--accent); border: 1px solid var(--accent); }
 .loan-field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; font-size: 13px; }
 .loan-field select, .loan-field input[type="number"], .loan-field input[type="text"] {
   background: var(--panel-2); color: var(--text); border: 1px solid var(--line);

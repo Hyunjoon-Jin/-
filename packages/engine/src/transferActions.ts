@@ -7,6 +7,35 @@ import { lineOf } from './teamStrength.js';
 import { currentAbility } from './derived.js';
 import { marketValue, weeklyWage, agentFee } from './valuation.js';
 import { clamp } from './math.js';
+import { hasTrait } from './traits.js';
+
+// ── 에이전트 개성 (A3) ────────────────────────────────────
+
+export type AgentPersonality = 'hardliner' | 'moderate' | 'flexible';
+
+/** 강경파로 분류되는 현재 능력(CA) 기준 — 이 이상이면 에이전트가 배짱을 부린다. */
+const HARDLINER_CA_THRESHOLD = 165;
+/** 유연한 편으로 분류되는 나이·능력 상한 — 둘 다 충족해야 한다(무명 유망주). */
+const FLEXIBLE_MAX_AGE = 20;
+const FLEXIBLE_CA_THRESHOLD = 120;
+
+/**
+ * 에이전트 개성 — 별도 저장 필드 없이 선수 프로필에서 결정론적으로 파생한다(신규 RNG
+ * 소비가 없어 기존 세이브와도 완전히 호환). 다혈질 특성 보유자나 CA 상위 선수는 에이전트도
+ * 강경하게 협상하는 경향, 반대로 어리고 무명인 유망주는 에이전트도 유연한 편이다.
+ */
+export function agentPersonality(player: Player): AgentPersonality {
+  if (hasTrait(player, 'hothead') || currentAbility(player) >= HARDLINER_CA_THRESHOLD) return 'hardliner';
+  if (player.age <= FLEXIBLE_MAX_AGE && currentAbility(player) < FLEXIBLE_CA_THRESHOLD) return 'flexible';
+  return 'moderate';
+}
+
+/** 개성별 호가 프리미엄 배율. */
+const ASKING_PREMIUM: Record<AgentPersonality, number> = { hardliner: 1.06, moderate: 1.0, flexible: 0.96 };
+/** 개성별 협상 하한 비율(호가 대비) — 이 미만 제안은 거절. */
+const FLOOR_RATIO: Record<AgentPersonality, number> = { hardliner: 0.9, moderate: 0.82, flexible: 0.72 };
+/** 개성별 역제안 시 호가 쪽으로 얼마나 버티는지(1에 가까울수록 거의 양보하지 않음). */
+const COUNTER_RIGIDITY: Record<AgentPersonality, number> = { hardliner: 0.7, moderate: 0.5, flexible: 0.3 };
 
 /** 이적으로 새 구단에 합류할 때 등번호 배정 — 기존 번호가 새 구단에서 비어있으면
  *  유지하고, 겹치면 가장 작은 빈 번호로(협상에 무작위성을 추가하지 않기 위해
@@ -84,7 +113,7 @@ export function askingPrice(seller: Club, player: Player): number {
   else if (rank === 1) importance = 1.15; // 준주전
   if (depth >= 4 && rank >= 2) importance *= 0.9; // 뎁스 여유 → 할인
 
-  return Math.round(marketValue(player) * importance);
+  return Math.round(marketValue(player) * importance * ASKING_PREMIUM[agentPersonality(player)]);
 }
 
 export type OfferOutcome = 'accepted' | 'countered' | 'rejected';
@@ -138,9 +167,10 @@ export function evaluateOffer(
   if (offer > me.finance.transferBudget) return { ok: false, reason: '이적 예산을 초과했습니다.' };
   if (offer > me.finance.balance) return { ok: false, reason: '보유 자금이 부족합니다.' };
 
+  const personality = agentPersonality(player);
   const impatience = 1 + Math.min(round, MAX_NEGOTIATION_ROUNDS) * NEGOTIATION_IMPATIENCE_PER_ROUND;
   const asking = Math.round(askingPrice(seller, player) * impatience);
-  const floor = Math.round(asking * 0.82);
+  const floor = Math.round(asking * FLOOR_RATIO[personality]);
   let outcome: OfferOutcome;
   let counter: number | undefined;
   let roundsExhausted = false;
@@ -151,7 +181,9 @@ export function evaluateOffer(
     roundsExhausted = true;
   } else if (offer >= floor) {
     outcome = 'countered';
-    counter = Math.min(asking, Math.round((asking + offer) / 2));
+    // 강경파일수록 호가에 가깝게, 유연한 편일수록 제안액에 가깝게 역제안한다.
+    const rigidity = COUNTER_RIGIDITY[personality];
+    counter = Math.min(asking, Math.round(offer + (asking - offer) * rigidity));
   } else {
     outcome = 'rejected';
   }
