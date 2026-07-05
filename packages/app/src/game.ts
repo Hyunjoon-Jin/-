@@ -116,6 +116,10 @@ export interface GameState {
   live: LiveSeason | null;
   /** 병행 컵대회. null = 미진행. */
   cup: CupState | null;
+  /** 병행 대륙컵(D17) — 지난 시즌 1부 상위 성적 구단만 참가. null = 미진행(자격 구단 2개 미만 등). */
+  continentalCup?: CupState | null;
+  /** 다음 시즌 대륙컵에 참가할 구단 id(이번 시즌 1부 최종 순위 기준). */
+  continentalQualifierIds?: string[];
   /** 난이도. */
   difficulty: Difficulty;
   /** 보드진 시즌 목표(리그 최종 순위, 1-index). 이 순위 이내면 성공. */
@@ -188,6 +192,11 @@ export interface RivalRecord {
 
 /** 컵 우승 상금 (만원). */
 const CUP_PRIZE = 30_000;
+
+/** 대륙컵 진출 구단 수(D17) — 매 시즌 1부 최종 순위 상위 이만큼이 다음 시즌 참가. */
+const CONTINENTAL_QUALIFY_COUNT = 6;
+/** 대륙컵 우승 상금(만원) — 국내컵보다 큰 무대라 상금도 더 크다. */
+const CONTINENTAL_CUP_PRIZE = 60_000;
 
 const NAMES = [
   // 1부
@@ -264,6 +273,8 @@ export function startGame(seed: number, myClubId: string, difficulty: Difficulty
     tactics: { [myClubId]: makeDefaultTactic(mine) },
     live: null,
     cup: null,
+    continentalCup: null,
+    continentalQualifierIds: [],
     difficulty,
     objective,
     boardConfidence: START_CONFIDENCE,
@@ -327,6 +338,14 @@ export function startSeason(state: GameState): GameState {
   const ss = createSeasonState(myDivClubs, seasonSeed(state));
   // 컵은 전 구단 참가
   const cup = createCup(state.clubs, state.seed + state.season * 1000 + 4);
+  // 대륙컵(D17): 지난 시즌 1부 최종 순위 상위 구단만 참가(자격 구단 2개 미만이면 미개최).
+  const continentalQualifierIds = state.continentalQualifierIds ?? [];
+  const continentalCup = continentalQualifierIds.length >= 2
+    ? createCup(
+        continentalQualifierIds.map((id) => state.clubs.find((c) => c.id === id)!),
+        state.seed + state.season * 1000 + 8,
+      )
+    : null;
   // 이적 창 마감 직후 스쿼드 기준 언론 예상 순위(시즌 내내 고정).
   const predictedTable = preseasonPrediction(myDivClubs, state.myClubId, repaired);
   // 컵 우승 후보 예측(전 참가 구단 전력 랭킹, 리그 예상 순위와 같은 방식으로 산정).
@@ -340,7 +359,15 @@ export function startSeason(state: GameState): GameState {
       predictedTable, cupFavorites,
     },
     cup,
+    continentalCup,
   };
+}
+
+/** 대륙컵 다음 라운드 진행(D17, 선수 상태도 변동). 국내컵과 달리 참가 자격이 없으면 null. */
+export function playContinentalCupRound(state: GameState): GameState {
+  if (!state.continentalCup || isCupOver(state.continentalCup)) return state;
+  const continentalCup = enginePlayCupRound(state.continentalCup, state.clubs, tacticMap(state));
+  return { ...state, continentalCup };
 }
 
 /** 컵 다음 라운드 진행 (선수 상태도 변동). */
@@ -484,6 +511,22 @@ export function finishSeason(state: GameState): GameState {
     }
   }
 
+  // 4.5) 대륙컵 자동 완료 + 우승 상금(D17 — 국내컵과 별개로, 참가 자격 구단만 대상).
+  let continentalCupChampionId: string | undefined;
+  let continentalCupChampionName: string | undefined;
+  if (state.continentalCup) {
+    const finishedContinental = playCupToEnd(state.continentalCup, state.clubs, tacticMap(state));
+    if (finishedContinental.championId) {
+      continentalCupChampionId = finishedContinental.championId;
+      const champClub = state.clubs.find((c) => c.id === finishedContinental.championId);
+      continentalCupChampionName = champClub?.name;
+      if (champClub) {
+        champClub.finance.balance += CONTINENTAL_CUP_PRIZE;
+        champClub.finance.transferBudget += CONTINENTAL_CUP_PRIZE;
+      }
+    }
+  }
+
   // 5) 오프시즌 (전 구단)
   const {
     retirements, intakeByClub, intakePlayersByClub, fireSalesByClub, retiredPlayers, milestones, debutEvents,
@@ -533,6 +576,8 @@ export function finishSeason(state: GameState): GameState {
   // 그대로 유지해 승강 총원의 균형을 지킨다.
   const d1Table = myDiv === 0 ? myTable : otherTable;
   const d2Table = myDiv === 1 ? myTable : otherTable;
+  // 다음 시즌 대륙컵 참가 구단(D17) — 이번 시즌 1부 최종 순위 상위 CONTINENTAL_QUALIFY_COUNT개.
+  const continentalQualifierIds = d1Table.slice(0, CONTINENTAL_QUALIFY_COUNT).map((r) => r.clubId);
   const AUTO_PROMOTE_COUNT = 2;
   const promRel = applyPromotionRelegation(state.clubs, d1Table, d2Table, AUTO_PROMOTE_COUNT, PROMOTE_COUNT);
 
@@ -641,6 +686,9 @@ export function finishSeason(state: GameState): GameState {
     promotionPlayoff: promotionPlayoffResult,
     loanReturns: myLoanReturns,
     reservePromotions: myReservePromotions,
+    continentalCupChampionId,
+    continentalCupChampionName,
+    qualifiedForContinental: continentalQualifierIds.includes(state.myClubId),
   };
 
   const repaired = repairTactic(myClub(state), myTactic(state));
@@ -662,6 +710,8 @@ export function finishSeason(state: GameState): GameState {
     ratingHistory,
     live: null,
     cup: null,
+    continentalCup: null,
+    continentalQualifierIds,
   };
 }
 

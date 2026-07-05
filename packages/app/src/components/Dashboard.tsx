@@ -331,6 +331,12 @@ export function Dashboard({ game, onSignContract, visitedTactics, visitedSquadPr
               {last.cupChampionName && (
                 <> &nbsp;·&nbsp; 컵 우승: <b>{last.cupChampionName}</b></>
               )}
+              {last.continentalCupChampionName && (
+                <> &nbsp;·&nbsp; 🌍 대륙컵 우승: <b>{last.continentalCupChampionName}</b></>
+              )}
+              {last.qualifiedForContinental && (
+                <> &nbsp;·&nbsp; <span className="pos">🎟️ 다음 시즌 대륙컵 진출 확정!</span></>
+              )}
               {last.youthPromotions !== undefined && last.youthPromotions > 0 && (
                 <> &nbsp;·&nbsp; 🎓 유스 승격: <b>{last.youthPromotions}명</b></>
               )}

@@ -127,6 +127,11 @@ export interface SeasonSummary {
   /** 이번 시즌 비정기 국제대회(월드컵/유로급, C15)가 열렸다면 우승 국가. 참가 자격국 부족 시 null.
    *  값이 undefined면 이번 시즌엔 대회가 열리지 않고 정기 A매치 차출만 있었다는 뜻. */
   internationalTournamentChampion?: string | null;
+  /** 대륙컵 우승 구단(D17, 병행 대회 — 1부 상위 성적 구단만 참가). 앱 전용, 헤드리스엔 미설정. */
+  continentalCupChampionId?: string;
+  continentalCupChampionName?: string;
+  /** 이번 시즌 성적으로 다음 시즌 대륙컵 진출권을 획득했는지(내 구단 기준, 앱). */
+  qualifiedForContinental?: boolean;
 }
 
 /** 과거 유스 기대주 소개 이후의 후속 소식(데뷔/첫 골). */

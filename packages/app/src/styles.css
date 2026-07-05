@@ -699,6 +699,9 @@ body {
 .honors { margin-bottom: 18px; }
 .honors h2 { margin: 0 0 12px; }
 /* ── Cup ── */
+.cup-bracket-section + .cup-bracket-section {
+  margin-top: 32px; padding-top: 24px; border-top: 1px solid var(--line);
+}
 .cup-head { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
 .cup-head h2 { margin: 0; }
 .cup-status { font-size: 13px; padding: 3px 10px; border-radius: 14px; }

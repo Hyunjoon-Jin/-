@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   startGame, myClub, myTactic, setMyTactic,
   startSeason, playRound, playRestOfSeason, finishSeason, advanceFullSeason,
-  playCupRound, negotiate, buyAt, buyViaReleaseClause, offersFor, acceptSell, release, upgradeStaffAction,
+  playCupRound, playContinentalCupRound, negotiate, buyAt, buyViaReleaseClause, offersFor, acceptSell, release, upgradeStaffAction,
   upgradeStadiumAction,
   loanOut, loanIn, recallLoan,
   setTrainingFocus, setTrainingPosition, renewContract,
@@ -301,6 +301,7 @@ export function App() {
                 game={game}
                 onPlayCupRound={() => update(playCupRound(game))}
                 onWatchCup={handleWatchCup}
+                onPlayContinentalCupRound={() => update(playContinentalCupRound(game))}
               />
             )}
             {tab === 'staff' && (
