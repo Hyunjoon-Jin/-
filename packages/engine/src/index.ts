@@ -90,7 +90,9 @@ export {
 export {
   START_CONFIDENCE, SACK_THRESHOLD, confidenceDelta, applyConfidence,
   boardStatus, isSacked, boardTierUpgradeBonus,
-  type SeasonConfidenceInput, type BoardStatus,
+  BOLD_PREDICTION_MARGIN, BOLD_PREDICTION_BONUS_CONFIDENCE, BOLD_PREDICTION_PENALTY_CONFIDENCE,
+  boldPredictionTarget, evaluateBoldPrediction,
+  type SeasonConfidenceInput, type BoardStatus, type BoldPredictionResult,
 } from './board.js';
 export {
   DEMAND_LABEL, generateDemand, evaluateDemand, demandConfidence,

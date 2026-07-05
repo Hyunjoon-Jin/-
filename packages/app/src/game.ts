@@ -23,6 +23,7 @@ import {
   applyPromotionRelegation, clubsInDivision, runInternationalBreak,
   runInternationalTournament, TOURNAMENT_INTERVAL_SEASONS, checkInternationalRetirements,
   confidenceDelta, applyConfidence, isSacked, START_CONFIDENCE, boardStatus, boardTierUpgradeBonus,
+  boldPredictionTarget, evaluateBoldPrediction, type BoldPredictionResult,
   type BoardStatus,
   generateDemand, evaluateDemand, demandConfidence, DEMAND_LABEL,
   renegotiateDemand as engineRenegotiateDemand,
@@ -180,6 +181,9 @@ export interface GameState {
   ambition: number;
   /** playerId → 내 구단 소속으로 뛴 시즌의 평균 평점 이력(최근 20시즌). 출전이 없던 시즌은 기록되지 않는다. */
   ratingHistory: Record<string, SeasonRatingEntry[]>;
+  /** 이번 시즌 공개 선언한 대담한 목표 순위(신규 개선 항목 25) — 시즌 시작 전(첫 경기
+   *  전)에만 선언할 수 있고, 다음 시즌 시작 시 초기화된다. 미선언이면 undefined. */
+  boldPrediction?: number;
 }
 
 /** 선수의 한 시즌 평균 평점 스냅샷. */
@@ -709,6 +713,13 @@ export function finishSeason(state: GameState): GameState {
     position: myPosition, objective: state.objective, promoted, relegated, netFinance: myNet,
   }, boardPersona);
 
+  // 대담한 목표 공개 선언 평가(신규 개선 항목 25) — 선언했었다면 신뢰도 가감치가
+  // 이사회 신뢰도 갱신에 그대로 더해진다.
+  let boldPredictionResult: BoldPredictionResult | undefined;
+  if (state.boldPrediction !== undefined) {
+    boldPredictionResult = evaluateBoldPrediction(state.boldPrediction, myPosition, state.objective);
+  }
+
   // 이사회 특별 요구 평가
   const myName = myClub(state).name;
   let demandResult: { label: string; met: boolean } | undefined;
@@ -758,7 +769,9 @@ export function finishSeason(state: GameState): GameState {
     ? sponsorContractTick.expired.map((c) => c.kind)
     : undefined;
 
-  const boardConfidence = applyConfidence(state.boardConfidence, delta + demandDelta);
+  const boardConfidence = applyConfidence(
+    state.boardConfidence, delta + demandDelta + (boldPredictionResult?.confidenceAdjust ?? 0),
+  );
   const sacked = isSacked(boardConfidence);
 
   // 이사회 신뢰 등급이 이번 시즌 실제로 올랐으면(예: 불안정→안정) 일회성 투자 예산 승인(C-new1).
@@ -825,6 +838,7 @@ export function finishSeason(state: GameState): GameState {
     addOnPayouts: myAddOnPayouts,
     reserveLeagueTable: reserveLeagueTable.length > 0 ? reserveLeagueTable : undefined,
     sponsorContractExpired,
+    boldPrediction: boldPredictionResult,
   };
 
   const repaired = repairTactic(myClub(state), myTactic(state));
@@ -839,6 +853,7 @@ export function finishSeason(state: GameState): GameState {
     sacked,
     demand: nextDemand,
     demandRenegotiated: false,
+    boldPrediction: undefined,
     sponsorGoal: nextSponsorGoal,
     sponsorStreak: nextSponsorStreak,
     legends: [...state.legends, ...newLegends],
@@ -1574,6 +1589,24 @@ export function renegotiateDemandAction(state: GameState): ActionOutcome {
     state: { ...state, demand: r.newDemand, demandRenegotiated: true, boardConfidence },
     ok: true,
     message: `이사회가 재협상에 응했습니다 — 요구 강도가 완화됐습니다 (신뢰도 −${r.confidenceCost}).`,
+  };
+}
+
+/** 대담한 목표 공개 선언(신규 개선 항목 25) — 이사회 목표보다 더 높은 순위를 언론에
+ *  공개 선언한다. 시즌 시작 전(첫 경기 전)에만, 시즌당 1회만 선언할 수 있다. 달성하면
+ *  추가 신뢰도 보너스, 원래 이사회 목표조차 놓치면 추가 페널티가 시즌 종료 시 붙는다. */
+export function declareBoldPredictionAction(state: GameState): ActionOutcome {
+  if (state.boldPrediction !== undefined) {
+    return { state, ok: false, message: '이미 이번 시즌 목표를 선언했습니다.' };
+  }
+  if (!state.live || state.live.results.length > 0) {
+    return { state, ok: false, message: '시즌 시작 전(첫 경기 전)에만 선언할 수 있습니다.' };
+  }
+  const target = boldPredictionTarget(state.objective);
+  return {
+    state: { ...state, boldPrediction: target }, ok: true,
+    message: `대담한 목표를 선언했습니다 — 리그 ${target}위 이내. 달성하면 이사회 신뢰도 보너스, `
+      + `원래 목표(${state.objective}위)조차 놓치면 추가 페널티가 있습니다.`,
   };
 }
 

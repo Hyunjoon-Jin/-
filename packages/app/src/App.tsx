@@ -17,6 +17,7 @@ import {
   watchCupSetup, cupPreview, commitWatchedCupRound,
   playerForm, playerTimeline, playerRatingHistory, respondMedia, dismissMedia, signContract,
   dispatchScoutAction, isScouted, assignMentorAction, clearMentorPairingAction, renegotiateDemandAction,
+  declareBoldPredictionAction,
   type GameState, type ActionOutcome, type WatchSetup, type Difficulty, type MediaEvent,
 } from './game.js';
 import type { Tactic, MatchResult, LoanTerms } from '@soccer-tycoon/engine';
@@ -352,6 +353,7 @@ export function App() {
                 visitedSquadPrep={visitedSquadPrep}
                 onGoToTab={setTab}
                 onRenegotiateDemand={handleRenegotiateDemand}
+                onDeclareBoldPrediction={() => runAction(declareBoldPredictionAction, undefined)}
               />
             )}
             {tab === 'squad' && (

@@ -7,6 +7,7 @@ import {
 import {
   formatMoney, currentAbility, wageBudget, annualWageBill, inFinancialCrisis,
   boardStatus, DEMAND_LABEL, SPONSOR_GOAL_LABEL, sponsorStreakMultiplier, SPONSOR_CONTRACT_LABEL,
+  boldPredictionTarget,
   type BoardStatus, type ManagerPersona, type BoardPersona, type Line, type NamedStaffKind,
 } from '@soccer-tycoon/engine';
 import { Landmark } from 'lucide-react';
@@ -48,10 +49,12 @@ interface Props {
   visitedSquadPrep: boolean;
   onGoToTab: (tab: 'tactics' | 'transfers' | 'match') => void;
   onRenegotiateDemand: () => ActionOutcome;
+  onDeclareBoldPrediction: () => ActionOutcome;
 }
 
 export function Dashboard({
   game, onSignContract, visitedTactics, visitedSquadPrep, onGoToTab, onRenegotiateDemand,
+  onDeclareBoldPrediction,
 }: Props) {
   const club = myClub(game);
   const rival = rivalClub(game);
@@ -475,6 +478,25 @@ export function Dashboard({
         );
       })()}
 
+      {game.live && game.live.results.length === 0 && game.boldPrediction === undefined && (
+        <Banner tone="info">
+          🎤 대담한 목표를 공개 선언하시겠습니까? 선언하면 목표가 <b>{boldPredictionTarget(game.objective)}위</b> 이내로
+          상향되고, 달성 시 이사회 신뢰도 보너스를, 원래 목표(<b>{game.objective}위</b>)조차 놓치면 추가 페널티를 받습니다.
+          <button
+            className="btn-small"
+            onClick={() => toast(onDeclareBoldPrediction())}
+            title="시즌 시작 전(첫 경기 전)에만, 시즌당 1회만 선언할 수 있습니다."
+          >
+            🎤 선언하기
+          </button>
+        </Banner>
+      )}
+      {game.boldPrediction !== undefined && (
+        <Banner tone="warning">
+          🎤 대담한 목표 선언 중 — 리그 <b>{game.boldPrediction}위</b> 이내
+        </Banner>
+      )}
+
       <div className="cards">
         <Card title="평판" value={`${club.finance.reputation} / 20`} />
         <Card title="보유 자금" value={formatMoney(club.finance.balance)} emphasis />
@@ -531,6 +553,13 @@ export function Dashboard({
               {last.demand && (
                 <> &nbsp;·&nbsp; 📋 요구 <span className={last.demand.met ? 'pos' : 'neg'}>{last.demand.met ? '달성 ✓' : '실패 ✕'}</span>
                   <span className="muted small"> ({last.demand.label})</span>
+                </>
+              )}
+              {last.boldPrediction && (
+                <> &nbsp;·&nbsp; 🎤 대담한 목표(<b>{last.boldPrediction.declaredTarget}위</b>){' '}
+                  <span className={last.boldPrediction.met ? 'pos' : last.boldPrediction.missedObjective ? 'neg' : ''}>
+                    {last.boldPrediction.met ? '달성 ✓' : last.boldPrediction.missedObjective ? '실패(목표 미달) ✕' : '미달성'}
+                  </span>
                 </>
               )}
               {last.sponsorGoal && (

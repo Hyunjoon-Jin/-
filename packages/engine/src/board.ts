@@ -82,3 +82,45 @@ export function boardTierUpgradeBonus(prevStatus: BoardStatus, newStatus: BoardS
   if (tiersGained <= 0) return 0;
   return Math.round(tiersGained * BOARD_UPGRADE_BONUS_PER_TIER * (1 + reputation / 20));
 }
+
+/**
+ * 대담한 목표 공개 선언(신규 개선 항목 25) — 시즌 시작 전(첫 경기 전), 이사회 목표
+ * (objective)보다 더 높은 순위를 언론에 공개 선언할 수 있다. 실제로 그 목표까지
+ * 달성하면 초과 달성 이상의 추가 신뢰 보너스가 붙고, 반대로 원래 목표조차 놓치면
+ * 공개 선언에 대한 추가 페널티가 붙는다. 목표는 넘었지만 선언한 목표엔 못 미친
+ * 경우엔 선언하지 않은 것과 동일(추가 효과 없음) — 순전히 상방과 하방이 비대칭인
+ * 하이 리스크·하이 리턴 도박이다.
+ */
+export const BOLD_PREDICTION_MARGIN = 3;
+export const BOLD_PREDICTION_BONUS_CONFIDENCE = 12;
+export const BOLD_PREDICTION_PENALTY_CONFIDENCE = 14;
+
+/** 선언 가능한 목표 순위 — 이사회 목표보다 BOLD_PREDICTION_MARGIN만큼 더 높다(최소 1위). */
+export function boldPredictionTarget(objective: number): number {
+  return Math.max(1, objective - BOLD_PREDICTION_MARGIN);
+}
+
+export interface BoldPredictionResult {
+  declaredTarget: number;
+  /** 선언한 목표까지 실제로 달성했는지. */
+  met: boolean;
+  /** 선언한 목표는커녕 원래 이사회 목표(objective)조차 놓쳤는지. */
+  missedObjective: boolean;
+  /** boardConfidence 계산에 그대로 더해지는 가감치(+BOLD_PREDICTION_BONUS_CONFIDENCE /
+   *  -BOLD_PREDICTION_PENALTY_CONFIDENCE / 0). */
+  confidenceAdjust: number;
+}
+
+/** 대담한 목표 선언 결과 평가. finalPosition은 1-index 리그 최종 순위. */
+export function evaluateBoldPrediction(
+  declaredTarget: number,
+  finalPosition: number,
+  objective: number,
+): BoldPredictionResult {
+  const met = finalPosition <= declaredTarget;
+  const missedObjective = finalPosition > objective;
+  const confidenceAdjust = met
+    ? BOLD_PREDICTION_BONUS_CONFIDENCE
+    : missedObjective ? -BOLD_PREDICTION_PENALTY_CONFIDENCE : 0;
+  return { declaredTarget, met, missedObjective, confidenceAdjust };
+}

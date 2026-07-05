@@ -8,6 +8,7 @@ import type { BoardStatus } from './board.js';
 import { POSITIONS } from './types.js';
 import { simulateSeason, type TableRow } from './league.js';
 import { settleSeason, type SeasonFinanceReport, type SponsorContractKind } from './finance.js';
+import type { BoldPredictionResult } from './board.js';
 import { runTransferWindow, type TransferDeal } from './transfer.js';
 import { progressPlayer } from './progression.js';
 import { generateAcademyIntake, generateYouthPlayer, assignSquadNumber } from './generate.js';
@@ -162,6 +163,9 @@ export interface SeasonSummary {
   /** 이번 시즌 만료된 내 구단 스폰서 계약 종류(신규 개선 항목 24, 앱 전용) — 재계약하지
    *  않으면 다음 시즌부터 해당 계약 수익이 끊긴다는 알림용. */
   sponsorContractExpired?: SponsorContractKind[];
+  /** 이번 시즌 공개 선언한 대담한 목표의 결과(신규 개선 항목 25, 앱 전용). 선언하지
+   *  않았으면 undefined. */
+  boldPrediction?: BoldPredictionResult;
 }
 
 /** 유스 졸업생 동문 네트워크(신규 개선 항목 18) — 과거 우리 리저브 출신으로 1군
