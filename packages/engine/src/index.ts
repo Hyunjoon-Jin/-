@@ -88,6 +88,8 @@ export {
 export {
   upgradeStaff, upgradeCost, STAFF_KINDS, STAFF_MAX,
   SPECIALIST_COACH_KINDS, NAMED_STAFF_KINDS, specialistCoachLevel, effectiveCoaching,
+  effectiveMedical, effectiveScouting, effectiveYouth,
+  STAFF_TRAIT_LABEL, STAFF_TRAIT_DESC, STAFF_TRAIT_BONUS,
   type StaffKind, type UpgradeResult, type SpecialistCoachKind, type NamedStaffKind,
 } from './staffActions.js';
 export {

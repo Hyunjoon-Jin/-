@@ -15,7 +15,7 @@ import { runInternationalBreak } from './international.js';
 import { currentAbility } from './derived.js';
 import { hasTrait } from './traits.js';
 import { lineOf } from './teamStrength.js';
-import { effectiveCoaching, tickStaffContracts } from './staffActions.js';
+import { effectiveCoaching, effectiveYouth, effectiveScouting, tickStaffContracts } from './staffActions.js';
 import { recentForm } from './form.js';
 import { clamp } from './math.js';
 import {
@@ -342,7 +342,9 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
     tickStaffContracts(club);
 
     // 유스 아카데미 배출
-    const intake = generateAcademyIntake(rng, club.finance.reputation, club.staff.youth, club.staff.scouting);
+    const intake = generateAcademyIntake(
+      rng, club.finance.reputation, effectiveYouth(club.staff), effectiveScouting(club.staff),
+    );
     club.players.push(...intake);
     for (const p of intake) assignSquadNumber(rng, club.players, p);
     intakeByClub.set(club.id, intake.length);

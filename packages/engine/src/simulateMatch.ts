@@ -18,6 +18,7 @@ import { clamp, logistic } from './math.js';
 import { TUNING } from './tuning.js';
 import { hasTrait } from './traits.js';
 import { rollInjury, medicalBias, reinjuryRiskFactor } from './injury.js';
+import { effectiveMedical } from './staffActions.js';
 
 export interface MatchSetup {
   home: { club: Club; tactic: Tactic };
@@ -353,7 +354,8 @@ export function generateInjuries(ctx: MatchContext): InjuryEvent[] {
   const rng = new Rng(ctx.seed * 11 + 24680);
   const roll = (side: Side, sideKey: 'home' | 'away') => {
     const byId = new Map(side.club.players.map((p) => [p.id, p]));
-    const medFactor = injuryMedicalFactor(side.club.staff.medical);
+    const medical = effectiveMedical(side.club.staff);
+    const medFactor = injuryMedicalFactor(medical);
     for (const slot of side.tactic.lineup) {
       const p = byId.get(slot.playerId);
       if (!p || p.injuryMatches > 0 || p.suspensionMatches > 0) continue;
@@ -364,7 +366,7 @@ export function generateInjuries(ctx: MatchContext): InjuryEvent[] {
       const reinjuryMul = reinjuryRiskFactor(p.reinjuryRiskMatches);
       const injMul = traitMul * trainingMul * reinjuryMul;
       if (!rng.roll(TUNING.injuryTriggerChance * medFactor * injMul)) continue;
-      const inj = rollInjury(rng, side.club.staff.medical);
+      const inj = rollInjury(rng, medical);
       injuries.push({
         minute: rng.int(1, 90), side: sideKey, playerId: p.id, playerName: p.name,
         severity: inj.severity, name: inj.name, bodyPart: inj.bodyPart, matches: inj.matches,

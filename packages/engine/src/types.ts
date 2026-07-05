@@ -156,14 +156,20 @@ export interface Tactic {
 
 // ── 구단 ──────────────────────────────────────────────────
 
+/** 실명 스태프의 특기 특성 — 직책별 하나씩, 보유 시 해당 직책의 유효 레벨에 가산 보너스를 준다. */
+export type StaffTrait = 'developmentGuru' | 'rehabSpecialist' | 'eyeForTalent' | 'academyMaestro';
+
 /** 스태프 능력 (1~20). 경영으로 업그레이드. */
-/** 스태프 직책에 배정된 실명 인물(이름·나이·계약기간). 구버전 세이브·미도입 구단은
- *  Staff.members 자체가 없을 수 있어 항상 optional로 다룬다. */
+/** 스태프 직책에 배정된 실명 인물(이름·나이·계약기간·특기 특성). 구버전 세이브·미도입
+ *  구단은 Staff.members 자체가 없을 수 있어 항상 optional로 다룬다. */
 export interface StaffMember {
   name: string;
   age: number;
   /** 잔여 계약 연수. 0이 되면 시즌 경계에 조용히 재계약된다(교체 드라마는 후속 확장 몫). */
   contractYears: number;
+  /** 특기 특성(있을 수도, 없을 수도). 스태프 업그레이드로 새 인물을 영입할 때만 새로 판정되고,
+   *  같은 인물의 단순 재계약(계약 만료 시 잔류)으로는 바뀌지 않는다. */
+  trait?: StaffTrait;
 }
 
 export interface Staff {

@@ -780,6 +780,9 @@ body {
 .staff-icon { display: flex; justify-content: center; color: var(--accent); margin-bottom: 4px; }
 .staff-name { font-size: 18px; font-weight: 800; margin: 6px 0; }
 .staff-member { margin: -2px 0 8px; }
+.staff-trait {
+  display: block; margin-top: 3px; color: var(--accent-2); font-weight: 600; cursor: help;
+}
 .staff-level { font-size: 14px; color: var(--muted); margin-bottom: 8px; }
 .staff-level b { color: var(--text); font-size: 18px; }
 .staff-bar { height: 8px; background: var(--panel-2); border-radius: 4px; overflow: hidden; margin-bottom: 12px; }

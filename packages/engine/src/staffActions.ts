@@ -5,7 +5,7 @@
  * 직책은 새 인물을 영입하는 것으로 취급해 이름·나이·계약기간이 함께 갱신된다.
  * 비용은 레벨에 따라 증가.
  */
-import type { Club, Position, Staff, StaffMember } from './types.js';
+import type { Club, Position, Staff, StaffMember, StaffTrait } from './types.js';
 import { FIRST, LAST } from './names.js';
 import { lineOf } from './teamStrength.js';
 
@@ -27,6 +27,28 @@ const STAFF_CONTRACT_YEARS_MAX = 4;
 const STAFF_AGE_MIN = 32;
 const STAFF_AGE_RANGE = 28; // 32~59세
 
+/** 직책별로 나올 수 있는 특기 특성 — 한 직책당 하나씩(A6). */
+const STAFF_TRAIT_BY_KIND: Record<NamedStaffKind, StaffTrait> = {
+  coaching: 'developmentGuru', medical: 'rehabSpecialist', scouting: 'eyeForTalent', youth: 'academyMaestro',
+};
+
+export const STAFF_TRAIT_LABEL: Record<StaffTrait, string> = {
+  developmentGuru: '성장 전문가', rehabSpecialist: '재활 전문가',
+  eyeForTalent: '유망주 안목', academyMaestro: '아카데미 명장',
+};
+
+export const STAFF_TRAIT_DESC: Record<StaffTrait, string> = {
+  developmentGuru: '지도받는 선수들의 시즌 성장 속도가 더 빠릅니다.',
+  rehabSpecialist: '부상 회복 기간과 재부상 위험이 한층 더 줄어듭니다.',
+  eyeForTalent: '유스 인테이크의 국적 다양성과 스카우팅 정확도가 더 넓어집니다.',
+  academyMaestro: '아카데미가 배출하는 유망주의 잠재력이 한층 더 높아집니다.',
+};
+
+/** 새로 영입된 인물이 특기 특성을 가질 확률(같은 조합이면 항상 같은 결과 — 결정론적). */
+const STAFF_TRAIT_CHANCE = 0.45;
+/** 특기 특성이 주는 유효 레벨 가산치. */
+export const STAFF_TRAIT_BONUS = 2;
+
 /** 문자열 → 32비트 해시(결정론적, RNG 불필요 — 유저 액션(업그레이드)엔 Rng 컨텍스트가 없다). */
 function hashSeed(s: string): number {
   let h = 0;
@@ -41,7 +63,10 @@ function hireStaffMember(clubId: string, kind: NamedStaffKind, level: number): S
   const last = LAST[Math.floor(seed / FIRST.length) % LAST.length]!;
   const age = STAFF_AGE_MIN + (seed % STAFF_AGE_RANGE);
   const contractYears = 1 + (seed % STAFF_CONTRACT_YEARS_MAX);
-  return { name: `${first} ${last}`, age, contractYears };
+  // 특기 특성 — 이름/나이와 별개 해시로 판정(같은 조합이면 항상 같은 결과).
+  const traitRoll = hashSeed(`${clubId}:${kind}:${level}:trait`) / 0xFFFFFFFF;
+  const trait = traitRoll < STAFF_TRAIT_CHANCE ? STAFF_TRAIT_BY_KIND[kind] : undefined;
+  return { name: `${first} ${last}`, age, contractYears, trait };
 }
 
 /** 구단 생성 시 4대 실명 스태프를 초기 레벨 그대로 배정. */
@@ -74,7 +99,27 @@ function positionCoachLevel(position: Position, staff: Staff): number {
 export function effectiveCoaching(position: Position, staff: Staff): number {
   const posLevel = positionCoachLevel(position, staff);
   const physLevel = specialistCoachLevel(staff, 'coachPhysical');
-  return posLevel * 0.7 + physLevel * 0.3;
+  const base = posLevel * 0.7 + physLevel * 0.3;
+  const bonus = staff.members?.coaching?.trait === 'developmentGuru' ? STAFF_TRAIT_BONUS : 0;
+  return base + bonus;
+}
+
+/** 의료 유효 레벨 — 재활 전문가(rehabSpecialist) 특기가 있으면 가산 보너스. */
+export function effectiveMedical(staff: Staff): number {
+  const bonus = staff.members?.medical?.trait === 'rehabSpecialist' ? STAFF_TRAIT_BONUS : 0;
+  return staff.medical + bonus;
+}
+
+/** 스카우팅 유효 레벨 — 유망주 안목(eyeForTalent) 특기가 있으면 가산 보너스. */
+export function effectiveScouting(staff: Staff): number {
+  const bonus = staff.members?.scouting?.trait === 'eyeForTalent' ? STAFF_TRAIT_BONUS : 0;
+  return staff.scouting + bonus;
+}
+
+/** 유스 유효 레벨 — 아카데미 명장(academyMaestro) 특기가 있으면 가산 보너스. */
+export function effectiveYouth(staff: Staff): number {
+  const bonus = staff.members?.youth?.trait === 'academyMaestro' ? STAFF_TRAIT_BONUS : 0;
+  return staff.youth + bonus;
 }
 
 /** 오프시즌 경계에 실명 스태프의 잔여 계약을 1년 감소시키고, 0이 되면 조용히 재계약한다

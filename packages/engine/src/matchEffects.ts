@@ -9,6 +9,7 @@ import type { Rng } from './rng.js';
 import { clamp } from './math.js';
 import { hasTrait } from './traits.js';
 import { REINJURY_RISK_WINDOW, RECOVERY_ATTR_WINDOW } from './injury.js';
+import { effectiveMedical } from './staffActions.js';
 
 const TUNING = {
   /** 선발 출전 시 기본 컨디션 하락(스태미너로 경감). */
@@ -47,7 +48,7 @@ function applySide(club: Club, tactic: Tactic, outcome: Outcome, injuries: Injur
   const captainMissing = tactic.captainId !== undefined && !starters.has(tactic.captainId);
   const captainPenalty = captainMissing ? TUNING.captainMissingPenalty : 0;
   // 의료 레벨이 높을수록 회복 보너스 (0.9~1.15배, 의료 20에서만 상한 도달)
-  const recoveryBonus = clamp(0.9 + (club.staff.medical / 20) * 0.25, 0.9, 1.15);
+  const recoveryBonus = clamp(0.9 + (effectiveMedical(club.staff) / 20) * 0.25, 0.9, 1.15);
   const injuryByPlayer = new Map(injuries.map((e) => [e.playerId, e]));
   const fatigueMul = tacticFatigueMul(tactic);
 

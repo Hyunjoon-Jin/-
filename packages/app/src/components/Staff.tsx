@@ -4,7 +4,7 @@ import {
 } from 'lucide-react';
 import { myClub, type GameState, type ActionOutcome } from '../game.js';
 import {
-  upgradeCost, STAFF_MAX, formatMoney, specialistCoachLevel,
+  upgradeCost, STAFF_MAX, formatMoney, specialistCoachLevel, STAFF_TRAIT_LABEL, STAFF_TRAIT_DESC,
   type StaffKind, type SpecialistCoachKind, type NamedStaffKind, type Club,
 } from '@soccer-tycoon/engine';
 import { useResultToast } from '../toast.js';
@@ -67,6 +67,11 @@ export function Staff({ game, onUpgrade }: Props) {
               {member && (
                 <div className="staff-member muted small">
                   {member.name} · {member.age}세 · 계약 {member.contractYears}년
+                  {member.trait && (
+                    <span className="staff-trait" title={STAFF_TRAIT_DESC[member.trait]}>
+                      ✨ {STAFF_TRAIT_LABEL[member.trait]}
+                    </span>
+                  )}
                 </div>
               )}
               <div className="staff-level">
