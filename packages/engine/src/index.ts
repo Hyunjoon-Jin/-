@@ -75,7 +75,7 @@ export {
 } from './international.js';
 export {
   START_CONFIDENCE, SACK_THRESHOLD, confidenceDelta, applyConfidence,
-  boardStatus, isSacked,
+  boardStatus, isSacked, boardTierUpgradeBonus,
   type SeasonConfidenceInput, type BoardStatus,
 } from './board.js';
 export {

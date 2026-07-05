@@ -4,6 +4,7 @@
  * 게임의 시간축을 닫는 핵심 루프.
  */
 import type { Club, Player, Position } from './types.js';
+import type { BoardStatus } from './board.js';
 import { POSITIONS } from './types.js';
 import { simulateSeason, type TableRow } from './league.js';
 import { settleSeason, type SeasonFinanceReport } from './finance.js';
@@ -140,6 +141,8 @@ export interface SeasonSummary {
   continentalCupChampionName?: string;
   /** 이번 시즌 성적으로 다음 시즌 대륙컵 진출권을 획득했는지(내 구단 기준, 앱). */
   qualifiedForContinental?: boolean;
+  /** 이사회 신뢰 등급이 이번 시즌 실제로 올라 지급된 일회성 투자 예산 승인(내 구단, 앱). */
+  boardTierBonus?: { fromStatus: BoardStatus; toStatus: BoardStatus; amount: number };
 }
 
 /** 과거 유스 기대주 소개 이후의 후속 소식(데뷔/첫 골). */

@@ -17,7 +17,8 @@ import {
   CUP_FINAL_ROUND_NAME,
   applyPromotionRelegation, clubsInDivision, runInternationalBreak,
   runInternationalTournament, TOURNAMENT_INTERVAL_SEASONS,
-  confidenceDelta, applyConfidence, isSacked, START_CONFIDENCE,
+  confidenceDelta, applyConfidence, isSacked, START_CONFIDENCE, boardStatus, boardTierUpgradeBonus,
+  type BoardStatus,
   generateDemand, evaluateDemand, demandConfidence, DEMAND_LABEL,
   generateSponsorGoal, evaluateSponsorGoal, SPONSOR_GOAL_LABEL, type SponsorGoal,
   annualWageBill, wageBudget,
@@ -666,6 +667,18 @@ export function finishSeason(state: GameState): GameState {
   const boardConfidence = applyConfidence(state.boardConfidence, delta + demandDelta);
   const sacked = isSacked(boardConfidence);
 
+  // 이사회 신뢰 등급이 이번 시즌 실제로 올랐으면(예: 불안정→안정) 일회성 투자 예산 승인(C-new1).
+  const prevBoardStatus = boardStatus(state.boardConfidence);
+  const newBoardStatus = boardStatus(boardConfidence);
+  const boardTierBonus = boardTierUpgradeBonus(prevBoardStatus, newBoardStatus, myClub(state).finance.reputation);
+  let boardBonusResult: { fromStatus: BoardStatus; toStatus: BoardStatus; amount: number } | undefined;
+  if (boardTierBonus > 0) {
+    const me = myClub(state);
+    me.finance.balance += boardTierBonus;
+    me.finance.transferBudget += boardTierBonus;
+    boardBonusResult = { fromStatus: prevBoardStatus, toStatus: newBoardStatus, amount: boardTierBonus };
+  }
+
   // 다음 시즌 요구/스폰서 목표 생성(오프시즌 이후 임금 기준 + 장기 계약 누적치만큼 이사회 기대치 상향)
   const nextDemand = generateDemand(
     { overWages: annualWageBill(myClub(state)) > wageBudget(myClub(state)), ambition: state.ambition },
@@ -711,6 +724,7 @@ export function finishSeason(state: GameState): GameState {
     continentalCupChampionId,
     continentalCupChampionName,
     qualifiedForContinental: continentalQualifierIds.includes(state.myClubId),
+    boardTierBonus: boardBonusResult,
   };
 
   const repaired = repairTactic(myClub(state), myTactic(state));

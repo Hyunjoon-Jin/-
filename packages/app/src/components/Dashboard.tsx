@@ -226,6 +226,17 @@ export function Dashboard({ game, onSignContract, visitedTactics, visitedSquadPr
       ),
     });
   }
+  if (last?.boardTierBonus !== undefined) {
+    seasonBanners.push({
+      key: 'boardTierBonus', priority: 3,
+      node: (
+        <Banner tone="success" title="💼 이사회 투자 예산 승인">
+          이사회 신뢰도가 <b>{BOARD_LABEL[last.boardTierBonus.fromStatus]}</b> → <b>{BOARD_LABEL[last.boardTierBonus.toStatus]}</b>(으)로
+          상승해, 추가 투자 예산 <b>{formatMoney(last.boardTierBonus.amount)}</b>을(를) 승인했습니다.
+        </Banner>
+      ),
+    });
+  }
   seasonBanners.sort((a, b) => a.priority - b.priority);
 
   const [showAllBanners, setShowAllBanners] = useState(false);

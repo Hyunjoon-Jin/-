@@ -67,3 +67,18 @@ export function boardStatus(confidence: number): BoardStatus {
 export function isSacked(confidence: number): boolean {
   return confidence < SACK_THRESHOLD;
 }
+
+const BOARD_STATUS_RANK: Record<BoardStatus, number> = { critical: 0, shaky: 1, stable: 2, secure: 3 };
+/** 신뢰 등급 한 단계 상승당 지급되는 기본 투자 보너스(만원) — 평판이 높을수록 가산된다. */
+const BOARD_UPGRADE_BONUS_PER_TIER = 8_000;
+
+/**
+ * 이사회 신뢰 등급이 이번 시즌에 실제로 한 단계 이상 올랐을 때만 지급되는 일회성
+ * 투자 예산 승인 보너스. 매 시즌 반복되는 소득이 아니라 "등급 상승 달성"에 대한
+ * 보상이라, 이미 최고 등급(secure)을 유지만 하는 구단에는 지급되지 않는다.
+ */
+export function boardTierUpgradeBonus(prevStatus: BoardStatus, newStatus: BoardStatus, reputation: number): number {
+  const tiersGained = BOARD_STATUS_RANK[newStatus] - BOARD_STATUS_RANK[prevStatus];
+  if (tiersGained <= 0) return 0;
+  return Math.round(tiersGained * BOARD_UPGRADE_BONUS_PER_TIER * (1 + reputation / 20));
+}
