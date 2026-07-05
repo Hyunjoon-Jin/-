@@ -5,6 +5,7 @@ import {
   playCupRound, playContinentalCupRound, negotiate, buyAt, buyViaReleaseClause, offersFor, acceptSell, release, upgradeStaffAction,
   buyback,
   attachAddOn,
+  exerciseBuyOption,
   recordNegotiationBreakdown,
   upgradeStadiumAction, upgradeAcademyAction,
   loanOut, loanIn, recallLoan, swapDeal,
@@ -210,6 +211,12 @@ export function App() {
     return outcome;
   };
 
+  const handleExerciseBuyOption = (id: string): ActionOutcome => {
+    const outcome = exerciseBuyOption(game, id);
+    if (outcome.ok) update(outcome.state);
+    return outcome;
+  };
+
   const handleSwap = (myPlayerId: string, otherClubId: string, otherPlayerId: string, cashAdjustment: number): ActionOutcome => {
     const outcome = swapDeal(game, myPlayerId, otherClubId, otherPlayerId, cashAdjustment);
     if (outcome.ok) update(outcome.state);
@@ -372,6 +379,7 @@ export function App() {
                 onLoanOut={handleLoanOut}
                 onLoanIn={handleLoanIn}
                 onRecallLoan={handleRecallLoan}
+                onExerciseBuyOption={handleExerciseBuyOption}
                 onSwap={handleSwap}
                 onSelect={setDetailPlayer}
                 onNegotiationBreakdown={(id) => update(recordNegotiationBreakdown(game, id))}

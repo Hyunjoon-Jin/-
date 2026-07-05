@@ -124,6 +124,10 @@ export interface Player {
    *  잔여 기간과 무관하게 시즌 종료 시 이 이적료로 완전 이적 전환(계약상 의무이므로
    *  자금 부족과 무관하게 강제 집행 — 이후 재정 위기 로직이 필요 시 뒷수습한다). */
   loanBuyObligation?: { appearances: number; fee: number };
+  /** 임대 우선매수옵션(OTB, 신규 개선 항목 4) — 임대 구단이 임대 기간 중 언제든
+   *  정해진 금액으로 완전 영입할 수 있는 "권리"(의무완전이적과 달리 강제되지 않는다).
+   *  행사하지 않고 임대가 끝나면 그대로 소멸한다. */
+  loanBuyOption?: { fee: number };
   /** 바이백 조항(신규 개선 항목 2) — 판매 시 원 소속 구단이 향후 정해진 금액으로
    *  되사올 수 있는 권리를 남긴다. seasonsRemaining이 0이 되면 자동 소멸. */
   buybackClause?: { clubId: string; fee: number; seasonsRemaining: number };

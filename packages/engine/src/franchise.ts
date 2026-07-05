@@ -424,6 +424,7 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
         player.loanSeasonsRemaining = undefined;
         player.loanWageShareByParent = undefined;
         player.loanBuyObligation = undefined;
+        player.loanBuyOption = undefined;
         staying.push(player); // 완전 이적이라 현 구단(임대 갔던 구단)에 그대로 남는다.
         continue;
       }
@@ -438,6 +439,7 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
       player.loanFromClubId = undefined;
       player.loanSeasonsRemaining = undefined;
       player.loanWageShareByParent = undefined;
+      player.loanBuyOption = undefined;
       parent.players.push(player);
       assignSquadNumber(rng, parent.players, player);
     }

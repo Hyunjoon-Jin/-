@@ -8,7 +8,7 @@ import {
   createSeasonState, playRound as enginePlayRound, playToEnd, computeTable, totalRounds, currentRound,
   commitResult, simulateMatch, simulateSeason, defaultTactic, applyMatchEffects,
   buyPlayer, buyPlayerAt, buyPlayerViaReleaseClause, evaluateOffer, sellPlayer, releasePlayer,
-  exerciseBuyback, attachAddOnClause,
+  exerciseBuyback, attachAddOnClause, exerciseLoanBuyOption,
   sellOffers, acceptSellOffer,
   loanPlayerOut, recallLoanPlayer, applyLoanWageSubsidies, swapPlayers,
   type OfferEvaluation, type SellOffer, type LoanTerms, type LoanReturnEvent, type LoanObligationEvent,
@@ -971,6 +971,14 @@ export function recallLoan(state: GameState, playerId: string): ActionOutcome {
   const r = recallLoanPlayer(state.clubs, playerId);
   if (!r.ok) return { state, ok: false, message: r.reason! };
   return { state: afterSquadChange(state), ok: true, message: `${r.playerName} 임대 회수 완료` };
+}
+
+/** 임대로 데려온 선수의 우선매수옵션(OTB, 신규 개선 항목 4)을 행사해 즉시 완전 영입한다. */
+export function exerciseBuyOption(state: GameState, playerId: string): ActionOutcome {
+  if (state.live) return { state, ok: false, message: '이적은 프리시즌에만 가능합니다.' };
+  const r = exerciseLoanBuyOption(state.clubs, state.myClubId, playerId);
+  if (!r.ok) return { state, ok: false, message: r.reason! };
+  return { state: afterSquadChange(state), ok: true, message: `${r.playerName} 우선매수옵션 행사 완료 (${formatMoney(r.fee!)})` };
 }
 
 /**

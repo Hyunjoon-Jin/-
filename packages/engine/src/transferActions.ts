@@ -514,6 +514,9 @@ export interface LoanTerms {
   wageShareByParent: number;
   /** 의무완전이적 조항(선택) — 이번 임대 시즌 출전이 기준에 도달하면 완전 이적으로 전환. */
   buyObligation?: { appearances: number; fee: number };
+  /** 우선매수옵션(선택, OTB, 신규 개선 항목 4) — 임대 구단이 임대 기간 중 언제든
+   *  이 금액으로 완전 영입을 선택할 수 있다(의무완전이적과 달리 강제되지 않는다). */
+  buyOption?: { fee: number };
 }
 
 export interface LoanResult { ok: boolean; playerName?: string; reason?: string; fee?: number; }
@@ -563,6 +566,7 @@ export function loanPlayerOut(
         fee: Math.max(0, Math.round(terms.buyObligation.fee)),
       }
     : undefined;
+  player.loanBuyOption = terms.buyOption ? { fee: Math.max(0, Math.round(terms.buyOption.fee)) } : undefined;
   to.players.push(player);
   reassignSquadNumber(to, player);
 
@@ -583,10 +587,42 @@ export function recallLoanPlayer(clubs: Club[], playerId: string): LoanResult {
   player.loanSeasonsRemaining = undefined;
   player.loanWageShareByParent = undefined;
   player.loanBuyObligation = undefined;
+  player.loanBuyOption = undefined;
   parent.players.push(player);
   reassignSquadNumber(parent, player);
 
   return { ok: true, playerName: player.name };
+}
+
+export interface LoanBuyOptionResult { ok: boolean; playerName?: string; fee?: number; reason?: string; }
+
+/**
+ * 우선매수옵션(OTB, 신규 개선 항목 4) 행사 — 임대 중인 선수를 임대 구단이 정해진
+ * 금액으로 즉시 완전 영입해 임대를 조기 종료한다. 의무완전이적과 달리 강제되지
+ * 않으며, 임대 구단의 선택으로만 발동한다.
+ */
+export function exerciseLoanBuyOption(clubs: Club[], buyerClubId: string, playerId: string): LoanBuyOptionResult {
+  const loanClub = clubs.find((c) => c.id === buyerClubId);
+  if (!loanClub) return { ok: false, reason: '구단을 찾을 수 없습니다.' };
+  const player = loanClub.players.find((p) => p.id === playerId);
+  if (!player) return { ok: false, reason: '해당 선수를 찾을 수 없습니다.' };
+  if (!player.loanFromClubId) return { ok: false, reason: '임대 중인 선수가 아닙니다.' };
+  if (!player.loanBuyOption) return { ok: false, reason: '우선매수옵션이 없는 선수입니다.' };
+  const parent = clubs.find((c) => c.id === player.loanFromClubId);
+  if (!parent) return { ok: false, reason: '원 소속 구단을 찾을 수 없습니다.' };
+
+  const fee = player.loanBuyOption.fee;
+  if (loanClub.finance.balance < fee) return { ok: false, reason: '자금이 부족합니다.' };
+
+  loanClub.finance.balance -= fee;
+  parent.finance.balance += fee;
+  player.loanFromClubId = undefined;
+  player.loanSeasonsRemaining = undefined;
+  player.loanWageShareByParent = undefined;
+  player.loanBuyObligation = undefined;
+  player.loanBuyOption = undefined;
+
+  return { ok: true, playerName: player.name, fee };
 }
 
 /**

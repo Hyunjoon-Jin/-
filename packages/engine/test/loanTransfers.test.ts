@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  loanPlayerOut, recallLoanPlayer, applyLoanWageSubsidies,
+  loanPlayerOut, recallLoanPlayer, applyLoanWageSubsidies, exerciseLoanBuyOption,
   buyPlayerAt, sellPlayer, releasePlayer, evaluateOffer, sellOffers, acceptSellOffer,
   MIN_SQUAD, LOAN_MIN_SEASONS, LOAN_MAX_SEASONS, LOAN_OBLIGATION_MAX_APPS,
 } from '../src/transferActions.js';
@@ -241,5 +241,95 @@ describe('A1: 임대 의무완전이적 조항', () => {
     });
     recallLoanPlayer(clubs, player.id);
     expect(player.loanBuyObligation).toBeUndefined();
+  });
+});
+
+describe('Item4: 임대 우선매수옵션(OTB)', () => {
+  it('임대 시 우선매수옵션을 지정하면 선수에게 loanBuyOption이 붙는다', () => {
+    const clubs = makeLeague(30);
+    const from = clubs[0]!; const to = clubs[1]!;
+    const player = from.players[from.players.length - 1]!;
+    const r = loanPlayerOut(clubs, from.id, to.id, player.id, {
+      seasons: 2, fee: 0, wageShareByParent: 0, buyOption: { fee: 5000 },
+    });
+    expect(r.ok).toBe(true);
+    expect(player.loanBuyOption).toEqual({ fee: 5000 });
+  });
+
+  it('임대 구단이 우선매수옵션을 행사하면 즉시 완전 영입되어 임대가 종료된다', () => {
+    const clubs = makeLeague(31);
+    const from = clubs[0]!; const to = clubs[1]!;
+    const player = from.players[from.players.length - 1]!;
+    loanPlayerOut(clubs, from.id, to.id, player.id, {
+      seasons: 2, fee: 0, wageShareByParent: 0, buyOption: { fee: 8000 },
+    });
+    const fromBalance = from.finance.balance;
+    const toBalance = to.finance.balance;
+
+    const r = exerciseLoanBuyOption(clubs, to.id, player.id);
+    expect(r.ok).toBe(true);
+    expect(r.fee).toBe(8000);
+    expect(to.players.some((p) => p.id === player.id)).toBe(true);
+    expect(from.players.some((p) => p.id === player.id)).toBe(false);
+    expect(player.loanFromClubId).toBeUndefined();
+    expect(player.loanSeasonsRemaining).toBeUndefined();
+    expect(player.loanBuyOption).toBeUndefined();
+    expect(to.finance.balance).toBe(toBalance - 8000);
+    expect(from.finance.balance).toBe(fromBalance + 8000);
+  });
+
+  it('옵션이 없는 임대 선수는 행사할 수 없다', () => {
+    const clubs = makeLeague(32);
+    const from = clubs[0]!; const to = clubs[1]!;
+    const player = from.players[from.players.length - 1]!;
+    loanPlayerOut(clubs, from.id, to.id, player.id, { seasons: 1, fee: 0, wageShareByParent: 0 });
+    const r = exerciseLoanBuyOption(clubs, to.id, player.id);
+    expect(r.ok).toBe(false);
+  });
+
+  it('임대 구단이 아닌 다른 구단은 옵션을 행사할 수 없다', () => {
+    const clubs = makeLeague(33, 3);
+    const from = clubs[0]!; const to = clubs[1]!; const thirdParty = clubs[2]!;
+    const player = from.players[from.players.length - 1]!;
+    loanPlayerOut(clubs, from.id, to.id, player.id, {
+      seasons: 1, fee: 0, wageShareByParent: 0, buyOption: { fee: 3000 },
+    });
+    const r = exerciseLoanBuyOption(clubs, thirdParty.id, player.id);
+    expect(r.ok).toBe(false);
+  });
+
+  it('자금이 부족하면 옵션 행사가 거절된다', () => {
+    const clubs = makeLeague(34);
+    const from = clubs[0]!; const to = clubs[1]!;
+    const player = from.players[from.players.length - 1]!;
+    const hugeFee = to.finance.balance + 1_000_000;
+    loanPlayerOut(clubs, from.id, to.id, player.id, {
+      seasons: 1, fee: 0, wageShareByParent: 0, buyOption: { fee: hugeFee },
+    });
+    const r = exerciseLoanBuyOption(clubs, to.id, player.id);
+    expect(r.ok).toBe(false);
+  });
+
+  it('옵션을 행사하지 않고 임대가 자연 만료되면 옵션이 소멸한다', () => {
+    const clubs = makeLeague(35);
+    const from = clubs[0]!; const to = clubs[1]!;
+    const player = from.players[from.players.length - 1]!;
+    loanPlayerOut(clubs, from.id, to.id, player.id, {
+      seasons: 1, fee: 0, wageShareByParent: 0, buyOption: { fee: 5000 },
+    });
+    runOffseason(clubs, new Rng(300));
+    expect(from.players.some((p) => p.id === player.id)).toBe(true);
+    expect(player.loanBuyOption).toBeUndefined();
+  });
+
+  it('시즌 중 회수(콜백)하면 우선매수옵션도 함께 해제된다', () => {
+    const clubs = makeLeague(36);
+    const from = clubs[0]!; const to = clubs[1]!;
+    const player = from.players[from.players.length - 1]!;
+    loanPlayerOut(clubs, from.id, to.id, player.id, {
+      seasons: 1, fee: 0, wageShareByParent: 0, buyOption: { fee: 5000 },
+    });
+    recallLoanPlayer(clubs, player.id);
+    expect(player.loanBuyOption).toBeUndefined();
   });
 });
