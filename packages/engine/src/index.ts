@@ -67,8 +67,9 @@ export {
   recentForm, type FormResult, type FormSummary,
 } from './form.js';
 export {
-  selectCallUps, runInternationalBreak,
-  type CallUp, type InternationalResult,
+  selectCallUps, runInternationalBreak, runInternationalTournament, TOURNAMENT_INTERVAL_SEASONS,
+  type CallUp, type InternationalResult, type InternationalTournamentResult,
+  type TournamentRound, type TournamentTie,
 } from './international.js';
 export {
   START_CONFIDENCE, SACK_THRESHOLD, confidenceDelta, applyConfidence,

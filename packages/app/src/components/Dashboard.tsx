@@ -337,6 +337,9 @@ export function Dashboard({ game, onSignContract, visitedTactics, visitedSquadPr
               {last.fireSales !== undefined && last.fireSales > 0 && (
                 <> &nbsp;·&nbsp; <span className="neg">💸 재정 강제 매각: {last.fireSales}명</span></>
               )}
+              {last.internationalTournamentChampion !== undefined && (
+                <> &nbsp;·&nbsp; 🌍 국제대회 우승: <b>{last.internationalTournamentChampion ?? '무산(참가국 부족)'}</b></>
+              )}
               {last.nationalCallUps !== undefined && last.nationalCallUps > 0 && (
                 <> &nbsp;·&nbsp; 🎽 국가대표 차출: <b>{last.nationalCallUps}명</b>
                   {last.nationalInjuries !== undefined && last.nationalInjuries > 0 && (

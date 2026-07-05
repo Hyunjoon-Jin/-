@@ -11,7 +11,7 @@ import { progressPlayer } from './progression.js';
 import { generateAcademyIntake, generateYouthPlayer, assignSquadNumber } from './generate.js';
 import { applyLoanWageSubsidies } from './transferActions.js';
 import { enforceFinancialFairPlay } from './financeControl.js';
-import { runInternationalBreak } from './international.js';
+import { runInternationalBreak, runInternationalTournament, TOURNAMENT_INTERVAL_SEASONS } from './international.js';
 import { currentAbility } from './derived.js';
 import { hasTrait } from './traits.js';
 import { lineOf } from './teamStrength.js';
@@ -124,6 +124,9 @@ export interface SeasonSummary {
   loanReturns?: LoanReturnEvent[];
   /** 이번 오프시즌 리저브에서 1군으로 승격한 선수(내 구단, B9). */
   reservePromotions?: ReservePromotionEvent[];
+  /** 이번 시즌 비정기 국제대회(월드컵/유로급, C15)가 열렸다면 우승 국가. 참가 자격국 부족 시 null.
+   *  값이 undefined면 이번 시즌엔 대회가 열리지 않고 정기 A매치 차출만 있었다는 뜻. */
+  internationalTournamentChampion?: string | null;
 }
 
 /** 과거 유스 기대주 소개 이후의 후속 소식(데뷔/첫 골). */
@@ -471,7 +474,12 @@ export function advanceSeason(clubs: Club[], season: number, baseSeed: number): 
   const { retirements } = runOffseason(clubs, rng);
 
   // 5) 국가대표 차출(오프시즌 리셋 이후 — 피로/부상이 새 시즌에 반영)
-  runInternationalBreak(clubs, rng);
+  // TOURNAMENT_INTERVAL_SEASONS마다는 정기 차출 대신 비정기 국제대회(월드컵/유로급)로 확장.
+  if (season % TOURNAMENT_INTERVAL_SEASONS === 0) {
+    runInternationalTournament(clubs, rng);
+  } else {
+    runInternationalBreak(clubs, rng);
+  }
 
   const champ = table[0]!;
   return {

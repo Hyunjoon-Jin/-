@@ -16,6 +16,7 @@ import {
   createCup, playCupRound as enginePlayCupRound, playCupToEnd, isCupOver, nextCupPairings,
   CUP_FINAL_ROUND_NAME,
   applyPromotionRelegation, clubsInDivision, runInternationalBreak,
+  runInternationalTournament, TOURNAMENT_INTERVAL_SEASONS,
   confidenceDelta, applyConfidence, isSacked, START_CONFIDENCE,
   generateDemand, evaluateDemand, demandConfidence, DEMAND_LABEL,
   generateSponsorGoal, evaluateSponsorGoal, SPONSOR_GOAL_LABEL, type SponsorGoal,
@@ -513,7 +514,17 @@ export function finishSeason(state: GameState): GameState {
     .map((e) => ({ playerId: e.playerId, name: e.name, kind: e.kind }));
 
   // 5.5) 국가대표 차출 (오프시즌 리셋 이후 — 피로/부상이 새 시즌에 반영)
-  const intl = runInternationalBreak(state.clubs, new Rng(offseasonSeed(state) + 777));
+  // TOURNAMENT_INTERVAL_SEASONS마다는 정기 차출 대신 비정기 국제대회(월드컵/유로급, C15)로 확장.
+  const isTournamentSeason = state.season % TOURNAMENT_INTERVAL_SEASONS === 0;
+  let intl: { byClub: Map<string, number> };
+  let internationalTournamentChampion: string | null | undefined;
+  if (isTournamentSeason) {
+    const tournament = runInternationalTournament(state.clubs, new Rng(offseasonSeed(state) + 777));
+    intl = tournament;
+    internationalTournamentChampion = tournament.championNation;
+  } else {
+    intl = runInternationalBreak(state.clubs, new Rng(offseasonSeed(state) + 777));
+  }
   const myCallUps = intl.byClub.get(state.myClubId) ?? 0;
   const myIntlInjuries = myClub(state).players.filter((p) => p.injuryMatches > 0).length;
 
@@ -618,6 +629,7 @@ export function finishSeason(state: GameState): GameState {
     relegated,
     nationalCallUps: myCallUps,
     nationalInjuries: myIntlInjuries,
+    internationalTournamentChampion,
     demand: demandResult,
     squad: mySquad,
     milestones: myMilestones,
