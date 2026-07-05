@@ -3,6 +3,7 @@ import {
   startGame, myClub, myTactic, setMyTactic,
   startSeason, playRound, playRestOfSeason, finishSeason, advanceFullSeason,
   playCupRound, playContinentalCupRound, negotiate, buyAt, buyViaReleaseClause, offersFor, acceptSell, release, upgradeStaffAction,
+  buyback,
   recordNegotiationBreakdown,
   upgradeStadiumAction, upgradeAcademyAction,
   loanOut, loanIn, recallLoan, swapDeal,
@@ -170,8 +171,14 @@ export function App() {
     return outcome;
   };
 
-  const handleAcceptSell = (id: string, buyerId: string): ActionOutcome => {
-    const outcome = acceptSell(game, id, buyerId);
+  const handleAcceptSell = (id: string, buyerId: string, buybackFee?: number): ActionOutcome => {
+    const outcome = acceptSell(game, id, buyerId, buybackFee);
+    if (outcome.ok) update(outcome.state);
+    return outcome;
+  };
+
+  const handleBuyback = (id: string): ActionOutcome => {
+    const outcome = buyback(game, id);
     if (outcome.ok) update(outcome.state);
     return outcome;
   };
@@ -359,6 +366,7 @@ export function App() {
                 onSwap={handleSwap}
                 onSelect={setDetailPlayer}
                 onNegotiationBreakdown={(id) => update(recordNegotiationBreakdown(game, id))}
+                onBuyback={handleBuyback}
               />
             )}
           </div>

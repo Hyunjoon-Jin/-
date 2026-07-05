@@ -448,6 +448,12 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
       else if (ratio < 0.25) target = 0.5;
       player.morale = clamp(moraleRetention * player.morale + (1 - moraleRetention) * (target + leaderBonus), 0, 1);
 
+      // 바이백 조항(신규 개선 항목 2) 유효기간 카운트다운 — 0이 되면 자동 소멸.
+      if (player.buybackClause) {
+        player.buybackClause.seasonsRemaining -= 1;
+        if (player.buybackClause.seasonsRemaining <= 0) player.buybackClause = undefined;
+      }
+
       const mentorBonus = Math.max(
         hasMentor(club, player) ? MENTOR_GROWTH_MUL : 1,
         designatedMentorBonus(club, player),

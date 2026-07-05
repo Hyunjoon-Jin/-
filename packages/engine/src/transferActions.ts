@@ -367,9 +367,18 @@ export function sellOffers(clubs: Club[], myClubId: string, playerId: string): S
   return offers;
 }
 
-/** 특정 구단의 입찰을 수락해 판매 실행(입찰액은 sellOffers와 동일하게 결정론적). */
+// ── 바이백 조항 (신규 개선 항목 2) ──────────────────────────
+
+/** 바이백 조항 유효 기간(오프시즌 경계 기준 시즌 수). */
+export const BUYBACK_MAX_SEASONS = 2;
+
+/**
+ * 특정 구단의 입찰을 수락해 판매 실행(입찰액은 sellOffers와 동일하게 결정론적).
+ * buybackFee를 지정하면(판매가 이상이어야 함) 원 소속 구단(나)이 향후
+ * BUYBACK_MAX_SEASONS 시즌 이내에 이 금액으로 되사올 수 있는 권리를 남긴다.
+ */
 export function acceptSellOffer(
-  clubs: Club[], myClubId: string, playerId: string, buyerId: string,
+  clubs: Club[], myClubId: string, playerId: string, buyerId: string, buybackFee?: number,
 ): SellResult {
   const me = clubs.find((c) => c.id === myClubId);
   if (!me) return { ok: false, reason: '내 구단을 찾을 수 없습니다.' };
@@ -384,6 +393,9 @@ export function acceptSellOffer(
   if (!offer) return { ok: false, reason: '해당 구단의 제안이 유효하지 않습니다.' };
   const buyer = clubs.find((c) => c.id === buyerId)!;
   const fee = offer.bid;
+  if (buybackFee !== undefined && buybackFee < fee) {
+    return { ok: false, reason: '바이백 금액은 판매가 이상이어야 합니다.' };
+  }
 
   me.players = me.players.filter((p) => p.id !== playerId);
   me.finance.balance += fee;
@@ -393,10 +405,51 @@ export function acceptSellOffer(
   player.contractYears = 4;
   player.wage = weeklyWage(player);
   player.releaseClause = undefined;
+  player.buybackClause = buybackFee !== undefined
+    ? { clubId: myClubId, fee: buybackFee, seasonsRemaining: BUYBACK_MAX_SEASONS }
+    : undefined;
   buyer.players.push(player);
   reassignSquadNumber(buyer, player);
 
   return { ok: true, fee, buyerName: buyer.name, playerName: player.name };
+}
+
+export interface BuybackResult { ok: boolean; fee?: number; sellerName?: string; playerName?: string; reason?: string }
+
+/** 바이백 조항을 행사해 원 소속 구단이 조항 금액으로 즉시 재영입한다. */
+export function exerciseBuyback(clubs: Club[], myClubId: string, playerId: string): BuybackResult {
+  const me = clubs.find((c) => c.id === myClubId);
+  if (!me) return { ok: false, reason: '내 구단을 찾을 수 없습니다.' };
+  if (me.players.length >= MAX_SQUAD) {
+    return { ok: false, reason: `스쿼드가 가득 찼습니다 (최대 ${MAX_SQUAD}명).` };
+  }
+  const currentClub = clubs.find((c) => c.id !== myClubId && c.players.some((p) => p.id === playerId));
+  if (!currentClub) return { ok: false, reason: '해당 선수를 찾을 수 없습니다.' };
+  const player = currentClub.players.find((p) => p.id === playerId)!;
+  if (!player.buybackClause || player.buybackClause.clubId !== myClubId) {
+    return { ok: false, reason: '이 선수에 대한 바이백 권리가 없습니다.' };
+  }
+  if (player.loanFromClubId) return { ok: false, reason: '임대 중인 선수는 거래할 수 없습니다.' };
+  if (currentClub.players.length - 1 < MIN_SQUAD) {
+    return { ok: false, reason: '상대 구단이 최소 스쿼드 인원을 유지하려 합니다.' };
+  }
+  const fee = player.buybackClause.fee;
+  if (me.finance.transferBudget < fee) return { ok: false, reason: '이적 예산이 부족합니다.' };
+  if (me.finance.balance < fee) return { ok: false, reason: '보유 자금이 부족합니다.' };
+
+  me.finance.transferBudget -= fee;
+  me.finance.balance -= fee;
+  currentClub.finance.balance += fee;
+  currentClub.finance.transferBudget += fee;
+  currentClub.players = currentClub.players.filter((p) => p.id !== playerId);
+  player.buybackClause = undefined;
+  player.contractYears = 4;
+  player.wage = weeklyWage(player);
+  player.releaseClause = undefined;
+  me.players.push(player);
+  reassignSquadNumber(me, player);
+
+  return { ok: true, fee, sellerName: currentClub.name, playerName: player.name };
 }
 
 /** 선수 방출 (수입 없음, 인건비 절감). */

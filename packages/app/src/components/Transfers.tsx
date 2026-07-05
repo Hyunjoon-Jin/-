@@ -5,7 +5,7 @@ import {
 import {
   transferTargets, marketValue, currentAbility, formatMoney, lineOf, buildScoutingReport,
   MAX_NEGOTIATION_ROUNDS, LOAN_MIN_SEASONS, LOAN_MAX_SEASONS,
-  LOAN_OBLIGATION_MIN_APPS, LOAN_OBLIGATION_MAX_APPS, agentPersonality,
+  LOAN_OBLIGATION_MIN_APPS, LOAN_OBLIGATION_MAX_APPS, agentPersonality, BUYBACK_MAX_SEASONS,
   type Line, type Player, type OfferEvaluation, type TransferTarget, type SellOffer, type LoanTerms,
   type AgentPersonality,
 } from '@soccer-tycoon/engine';
@@ -22,7 +22,8 @@ interface Props {
   onBuyAt: (playerId: string, fee: number) => ActionOutcome;
   onBuyViaReleaseClause: (playerId: string) => ActionOutcome;
   onOffers: (playerId: string) => SellOffer[];
-  onAcceptSell: (playerId: string, buyerId: string) => ActionOutcome;
+  onAcceptSell: (playerId: string, buyerId: string, buybackFee?: number) => ActionOutcome;
+  onBuyback: (playerId: string) => ActionOutcome;
   onRelease: (playerId: string) => ActionOutcome;
   onLoanOut: (playerId: string, toClubId: string, terms: LoanTerms) => ActionOutcome;
   onLoanIn: (playerId: string, fromClubId: string, terms: LoanTerms) => ActionOutcome;
@@ -72,7 +73,7 @@ export function Transfers(props: Props) {
 
 function TransferMarket({
   game, onNegotiate, onBuyAt, onBuyViaReleaseClause, onOffers, onAcceptSell, onRelease,
-  onLoanOut, onLoanIn, onRecallLoan, onSwap, onSelect, onNegotiationBreakdown,
+  onLoanOut, onLoanIn, onRecallLoan, onSwap, onSelect, onNegotiationBreakdown, onBuyback,
 }: Props) {
   const club = myClub(game);
   const toast = useToast();
@@ -88,6 +89,7 @@ function TransferMarket({
   const [selling, setSelling] = useState<Player | null>(null);
   const [releasing, setReleasing] = useState<Player | null>(null);
   const [buyingViaClause, setBuyingViaClause] = useState<TransferTarget | null>(null);
+  const [buyingBack, setBuyingBack] = useState<TransferTarget | null>(null);
   const [loaningOut, setLoaningOut] = useState<Player | null>(null);
   const [loaningIn, setLoaningIn] = useState<TransferTarget | null>(null);
   const [recallingId, setRecallingId] = useState<string | null>(null);
@@ -227,6 +229,14 @@ function TransferMarket({
                     {t.player.loanFromClubId !== undefined && (
                       <span className="loan-badge" title="다른 구단에서 임대 중인 선수 — 거래 불가">🔁 임대 중</span>
                     )}
+                    {t.player.buybackClause?.clubId === game.myClubId && (
+                      <span
+                        className="clause-badge"
+                        title={`바이백 조항 ${formatMoney(t.player.buybackClause.fee)} — 우리 구단이 되사올 수 있습니다`}
+                      >
+                        🔁🔓
+                      </span>
+                    )}
                   </td>
                   <td className="muted small">{t.clubName}</td>
                   <td><span className={`pos-chip pos-${lineOf(t.player.position).toLowerCase()}`}>{t.player.position}</span></td>
@@ -250,6 +260,15 @@ function TransferMarket({
                             onClick={(e) => { e.stopPropagation(); setBuyingViaClause(t); }}
                           >
                             즉시영입
+                          </button>
+                        )}
+                        {t.player.buybackClause?.clubId === game.myClubId && (
+                          <button
+                            className="btn-small clause-buy"
+                            title={`바이백 조항 ${formatMoney(t.player.buybackClause.fee)}로 즉시 재영입`}
+                            onClick={(e) => { e.stopPropagation(); setBuyingBack(t); }}
+                          >
+                            바이백
                           </button>
                         )}
                         <button
@@ -403,6 +422,15 @@ function TransferMarket({
           onAcceptSell={onAcceptSell}
           onResult={(m) => { toast(m.text, m.ok); if (m.ok) setSelling(null); }}
           onClose={() => setSelling(null)}
+        />
+      )}
+      {buyingBack && (
+        <ConfirmDialog
+          title="바이백 조항 행사"
+          message={`${buyingBack.player.name} 선수를 바이백 조항 ${formatMoney(buyingBack.player.buybackClause?.fee ?? 0)}을(를) 지불하고 즉시 재영입하시겠습니까?`}
+          confirmLabel="바이백 확정"
+          onConfirm={() => { act(onBuyback(buyingBack.player.id)); setBuyingBack(null); }}
+          onCancel={() => setBuyingBack(null)}
         />
       )}
       {releasing && (
@@ -708,16 +736,18 @@ function SellModal({
 }: {
   player: Player;
   offers: SellOffer[];
-  onAcceptSell: (playerId: string, buyerId: string) => ActionOutcome;
+  onAcceptSell: (playerId: string, buyerId: string, buybackFee?: number) => ActionOutcome;
   onResult: (m: Msg) => void;
   onClose: () => void;
 }) {
   const [confirming, setConfirming] = useState<SellOffer | null>(null);
+  const [buybackEnabled, setBuybackEnabled] = useState(false);
+  const value = marketValue(player);
+  const [buybackFee, setBuybackFee] = useState(() => Math.round(value * 1.15));
   const accept = (buyerId: string) => {
-    const r = onAcceptSell(player.id, buyerId);
+    const r = onAcceptSell(player.id, buyerId, buybackEnabled ? buybackFee : undefined);
     onResult({ text: r.message, ok: r.ok });
   };
-  const value = marketValue(player);
   const ref = useModalA11y<HTMLDivElement>(onClose);
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -742,6 +772,23 @@ function SellModal({
           <p className="toast err">관심 구단이 없습니다. 방출을 이용하세요.</p>
         ) : (
           <>
+            <label className="loan-field">
+              <input
+                type="checkbox" checked={buybackEnabled}
+                onChange={(e) => setBuybackEnabled(e.target.checked)}
+              />
+              바이백 조항 추가(판매가 이상 금액으로 향후 되사올 권리, {BUYBACK_MAX_SEASONS}시즌 유효)
+            </label>
+            {buybackEnabled && (
+              <label className="loan-field">
+                바이백 금액
+                <input
+                  type="number" min={0} step={1000} value={buybackFee}
+                  onChange={(e) => setBuybackFee(Number(e.target.value))}
+                />
+                만원
+              </label>
+            )}
             <p className="muted small">{offers.length}개 구단이 입찰했습니다. 원하는 제안을 수락하세요.</p>
             <table className="data-table compact">
               <thead><tr><th>구단</th><th>입찰액</th><th></th></tr></thead>
@@ -763,7 +810,7 @@ function SellModal({
       {confirming && (
         <ConfirmDialog
           title="판매 확정"
-          message={`${player.name} 선수를 ${confirming.clubName}에 ${formatMoney(confirming.bid)}에 판매하시겠습니까? 되돌릴 수 없습니다.`}
+          message={`${player.name} 선수를 ${confirming.clubName}에 ${formatMoney(confirming.bid)}에 판매하시겠습니까?${buybackEnabled ? ` (바이백 ${formatMoney(buybackFee)})` : ''} 되돌릴 수 없습니다.`}
           confirmLabel="판매 확정"
           danger
           onConfirm={() => { accept(confirming.clubId); setConfirming(null); }}

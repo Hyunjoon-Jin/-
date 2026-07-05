@@ -8,6 +8,7 @@ import {
   createSeasonState, playRound as enginePlayRound, playToEnd, computeTable, totalRounds, currentRound,
   commitResult, simulateMatch, simulateSeason, defaultTactic, applyMatchEffects,
   buyPlayer, buyPlayerAt, buyPlayerViaReleaseClause, evaluateOffer, sellPlayer, releasePlayer,
+  exerciseBuyback,
   sellOffers, acceptSellOffer,
   loanPlayerOut, recallLoanPlayer, applyLoanWageSubsidies, swapPlayers,
   type OfferEvaluation, type SellOffer, type LoanTerms, type LoanReturnEvent, type LoanObligationEvent,
@@ -899,14 +900,29 @@ export function offersFor(state: GameState, playerId: string): SellOffer[] {
   return sellOffers(state.clubs, state.myClubId, playerId);
 }
 
-/** 특정 구단 입찰 수락 → 판매 실행. */
-export function acceptSell(state: GameState, playerId: string, buyerId: string): ActionOutcome {
+/** 특정 구단 입찰 수락 → 판매 실행. buybackFee를 지정하면(신규 개선 항목 2) 판매가
+ *  이상의 금액으로 향후 되사올 수 있는 바이백 조항이 함께 붙는다. */
+export function acceptSell(
+  state: GameState, playerId: string, buyerId: string, buybackFee?: number,
+): ActionOutcome {
   if (state.live) return { state, ok: false, message: '이적은 프리시즌에만 가능합니다.' };
-  const r = acceptSellOffer(state.clubs, state.myClubId, playerId, buyerId);
+  const r = acceptSellOffer(state.clubs, state.myClubId, playerId, buyerId, buybackFee);
+  if (!r.ok) return { state, ok: false, message: r.reason! };
+  const buybackMsg = buybackFee !== undefined ? ` · 바이백 ${formatMoney(buybackFee)}` : '';
+  return {
+    state: afterSquadChange(state), ok: true,
+    message: `${r.playerName} → ${r.buyerName} 판매 완료 (${formatMoney(r.fee!)}${buybackMsg})`,
+  };
+}
+
+/** 바이백 조항 행사 — 원 소속 구단이 조항 금액으로 즉시 재영입한다(신규 개선 항목 2). */
+export function buyback(state: GameState, playerId: string): ActionOutcome {
+  if (state.live) return { state, ok: false, message: '이적은 프리시즌에만 가능합니다.' };
+  const r = exerciseBuyback(state.clubs, state.myClubId, playerId);
   if (!r.ok) return { state, ok: false, message: r.reason! };
   return {
     state: afterSquadChange(state), ok: true,
-    message: `${r.playerName} → ${r.buyerName} 판매 완료 (${formatMoney(r.fee!)})`,
+    message: `${r.playerName} 바이백 완료 (${r.sellerName} → 우리 구단, ${formatMoney(r.fee!)})`,
   };
 }
 
