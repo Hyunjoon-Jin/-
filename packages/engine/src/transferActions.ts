@@ -496,3 +496,63 @@ export function applyLoanWageSubsidies(clubs: Club[]): void {
     }
   }
 }
+
+// ── 스와프 딜 (A2) ────────────────────────────────────────
+
+export interface SwapResult {
+  ok: boolean;
+  reason?: string;
+  playerAName?: string;
+  playerBName?: string;
+}
+
+/**
+ * 두 구단이 선수를 맞교환한다(A2) — 프리시즌 협상 없이 즉시 실행. 필요하면 격차를
+ * 메울 현금(cashAdjustment)을 함께 이체한다: 양수면 clubA→clubB, 음수면 clubB→clubA.
+ * 1:1 교환이라 양쪽 스쿼드 인원은 그대로라 MIN/MAX_SQUAD는 걸리지 않지만, 포지션
+ * 라인이 바닥나는 교환은 sellerLineDepthOk로 양쪽 모두 막는다.
+ */
+export function swapPlayers(
+  clubs: Club[], clubAId: string, clubBId: string, playerAId: string, playerBId: string, cashAdjustment = 0,
+): SwapResult {
+  const clubA = clubs.find((c) => c.id === clubAId);
+  if (!clubA) return { ok: false, reason: 'A 구단을 찾을 수 없습니다.' };
+  const clubB = clubs.find((c) => c.id === clubBId);
+  if (!clubB) return { ok: false, reason: 'B 구단을 찾을 수 없습니다.' };
+  if (clubA.id === clubB.id) return { ok: false, reason: '같은 구단끼리는 맞교환할 수 없습니다.' };
+
+  const playerA = clubA.players.find((p) => p.id === playerAId);
+  if (!playerA) return { ok: false, reason: 'A 선수를 찾을 수 없습니다.' };
+  const playerB = clubB.players.find((p) => p.id === playerBId);
+  if (!playerB) return { ok: false, reason: 'B 선수를 찾을 수 없습니다.' };
+
+  if (playerA.loanFromClubId || playerB.loanFromClubId) {
+    return { ok: false, reason: '임대 중인 선수는 맞교환할 수 없습니다.' };
+  }
+  if (!sellerLineDepthOk(clubA, playerA)) {
+    return { ok: false, reason: 'A 구단이 해당 포지션 자원을 유지하려 합니다.' };
+  }
+  if (!sellerLineDepthOk(clubB, playerB)) {
+    return { ok: false, reason: 'B 구단이 해당 포지션 자원을 유지하려 합니다.' };
+  }
+  if (cashAdjustment > 0 && clubA.finance.balance < cashAdjustment) {
+    return { ok: false, reason: 'A 구단 자금이 부족합니다.' };
+  }
+  if (cashAdjustment < 0 && clubB.finance.balance < -cashAdjustment) {
+    return { ok: false, reason: 'B 구단 자금이 부족합니다.' };
+  }
+
+  clubA.players = clubA.players.filter((p) => p.id !== playerAId);
+  clubB.players = clubB.players.filter((p) => p.id !== playerBId);
+  clubA.players.push(playerB);
+  clubB.players.push(playerA);
+  reassignSquadNumber(clubA, playerB);
+  reassignSquadNumber(clubB, playerA);
+
+  if (cashAdjustment !== 0) {
+    clubA.finance.balance -= cashAdjustment;
+    clubB.finance.balance += cashAdjustment;
+  }
+
+  return { ok: true, playerAName: playerA.name, playerBName: playerB.name };
+}

@@ -26,6 +26,7 @@ interface Props {
   onLoanOut: (playerId: string, toClubId: string, terms: LoanTerms) => ActionOutcome;
   onLoanIn: (playerId: string, fromClubId: string, terms: LoanTerms) => ActionOutcome;
   onRecallLoan: (playerId: string) => ActionOutcome;
+  onSwap: (myPlayerId: string, otherClubId: string, otherPlayerId: string, cashAdjustment: number) => ActionOutcome;
   onSelect: (p: Player) => void;
 }
 
@@ -64,7 +65,7 @@ export function Transfers(props: Props) {
 
 function TransferMarket({
   game, onNegotiate, onBuyAt, onBuyViaReleaseClause, onOffers, onAcceptSell, onRelease,
-  onLoanOut, onLoanIn, onRecallLoan, onSelect,
+  onLoanOut, onLoanIn, onRecallLoan, onSwap, onSelect,
 }: Props) {
   const club = myClub(game);
   const toast = useToast();
@@ -83,6 +84,7 @@ function TransferMarket({
   const [loaningOut, setLoaningOut] = useState<Player | null>(null);
   const [loaningIn, setLoaningIn] = useState<TransferTarget | null>(null);
   const [recallingId, setRecallingId] = useState<string | null>(null);
+  const [swapping, setSwapping] = useState<TransferTarget | null>(null);
 
   const loanedOut = useMemo(() => myLoanedOutPlayers(game), [game]);
   // 협상 중 진행된 라운드 수 — 선수별로 유지해, 모달을 닫았다 다시 열어도 조급증이 리셋되지 않는다.
@@ -249,6 +251,13 @@ function TransferMarket({
                           onClick={(e) => { e.stopPropagation(); setLoaningIn(t); }}
                         >
                           임대영입
+                        </button>
+                        <button
+                          className="btn-small"
+                          title="내 선수와 맞교환 제안(협상 없이 즉시 성사)"
+                          onClick={(e) => { e.stopPropagation(); setSwapping(t); }}
+                        >
+                          맞교환
                         </button>
                       </>
                     )}
@@ -421,6 +430,15 @@ function TransferMarket({
           confirmLabel="회수"
           onConfirm={() => { act(onRecallLoan(recallingId)); setRecallingId(null); }}
           onCancel={() => setRecallingId(null)}
+        />
+      )}
+      {swapping && (
+        <SwapModal
+          target={swapping}
+          myPlayers={club.players.filter((p) => p.loanFromClubId === undefined)}
+          onConfirm={(myPlayerId, cashAdjustment) => onSwap(myPlayerId, swapping.clubId, swapping.player.id, cashAdjustment)}
+          onResult={(m) => { toast(m.text, m.ok); if (m.ok) setSwapping(null); }}
+          onClose={() => setSwapping(null)}
         />
       )}
     </div>
@@ -605,6 +623,72 @@ function LoanInModal({
           obligationFee={obligationFee} setObligationFee={setObligationFee}
         />
         <button className="btn-advance" onClick={confirm}>임대 확정</button>
+      </div>
+    </div>
+  );
+}
+
+/** 선수+선수 맞교환 제안(A2). 격차 보전용 정산금은 양수(내가 냄)/음수(상대가 냄) 모두 가능. */
+function SwapModal({
+  target, myPlayers, onConfirm, onResult, onClose,
+}: {
+  target: TransferTarget;
+  myPlayers: Player[];
+  onConfirm: (myPlayerId: string, cashAdjustment: number) => ActionOutcome;
+  onResult: (m: Msg) => void;
+  onClose: () => void;
+}) {
+  const [myPlayerId, setMyPlayerId] = useState(myPlayers[0]?.id ?? '');
+  const [cashAdjustment, setCashAdjustment] = useState(0);
+  const ref = useModalA11y<HTMLDivElement>(onClose);
+
+  const myPlayer = myPlayers.find((p) => p.id === myPlayerId);
+  const valueGap = myPlayer ? marketValue(target.player) - marketValue(myPlayer) : 0;
+
+  function confirm() {
+    const r = onConfirm(myPlayerId, cashAdjustment);
+    onResult({ text: r.message, ok: r.ok });
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div
+        className="modal negotiate" role="dialog" aria-modal="true"
+        aria-label={`맞교환 제안 — ${target.player.name}`} tabIndex={-1} ref={ref}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="modal-head">
+          <h2>맞교환 제안 — {target.player.name}</h2>
+          <button className="btn-ghost" onClick={onClose}>닫기 ✕</button>
+        </div>
+        <p className="neg-sub muted">
+          {target.clubName} 소속 · 가치 {formatMoney(marketValue(target.player))}
+        </p>
+        <label className="loan-field">
+          <span>내가 내놓을 선수</span>
+          <select value={myPlayerId} onChange={(e) => setMyPlayerId(e.target.value)}>
+            {myPlayers.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name} ({p.position} · 가치 {formatMoney(marketValue(p))})
+              </option>
+            ))}
+          </select>
+        </label>
+        {myPlayer && (
+          <p className="muted small">
+            가치 격차: {valueGap === 0 ? '동등' : valueGap > 0
+              ? <>상대가 {formatMoney(valueGap)} 더 비쌉니다(정산금으로 보전 고려)</>
+              : <>내 선수가 {formatMoney(-valueGap)} 더 비쌉니다</>}
+          </p>
+        )}
+        <label className="loan-field">
+          <span>추가 정산금(양수=내가 지불, 음수=상대가 지불)</span>
+          <input
+            type="number" step={100} value={cashAdjustment}
+            onChange={(e) => setCashAdjustment(Number(e.target.value))}
+          />
+        </label>
+        <button className="btn-advance" onClick={confirm} disabled={!myPlayerId}>맞교환 확정</button>
       </div>
     </div>
   );

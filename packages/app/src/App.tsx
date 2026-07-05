@@ -4,7 +4,7 @@ import {
   startSeason, playRound, playRestOfSeason, finishSeason, advanceFullSeason,
   playCupRound, playContinentalCupRound, negotiate, buyAt, buyViaReleaseClause, offersFor, acceptSell, release, upgradeStaffAction,
   upgradeStadiumAction,
-  loanOut, loanIn, recallLoan,
+  loanOut, loanIn, recallLoan, swapDeal,
   setTrainingFocus, setTrainingPosition, renewContract,
   watchSetup, matchPreview, commitWatchedRound,
   watchCupSetup, cupPreview, commitWatchedCupRound,
@@ -192,6 +192,12 @@ export function App() {
     return outcome;
   };
 
+  const handleSwap = (myPlayerId: string, otherClubId: string, otherPlayerId: string, cashAdjustment: number): ActionOutcome => {
+    const outcome = swapDeal(game, myPlayerId, otherClubId, otherPlayerId, cashAdjustment);
+    if (outcome.ok) update(outcome.state);
+    return outcome;
+  };
+
   const handleWatch = () => {
     const ws = watchSetup(game);
     if (ws) { setWatchKind('league'); setWatching(ws); }
@@ -326,6 +332,7 @@ export function App() {
                 onLoanOut={handleLoanOut}
                 onLoanIn={handleLoanIn}
                 onRecallLoan={handleRecallLoan}
+                onSwap={handleSwap}
                 onSelect={setDetailPlayer}
               />
             )}

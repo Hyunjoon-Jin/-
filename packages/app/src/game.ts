@@ -9,7 +9,7 @@ import {
   commitResult, simulateMatch, simulateSeason, defaultTactic, applyMatchEffects,
   buyPlayer, buyPlayerAt, buyPlayerViaReleaseClause, evaluateOffer, sellPlayer, releasePlayer,
   sellOffers, acceptSellOffer,
-  loanPlayerOut, recallLoanPlayer, applyLoanWageSubsidies,
+  loanPlayerOut, recallLoanPlayer, applyLoanWageSubsidies, swapPlayers,
   type OfferEvaluation, type SellOffer, type LoanTerms, type LoanReturnEvent, type LoanObligationEvent,
   summarizeStats, aggregatePlayerStats, topScorers as engineTopScorers, recentPlayerForm,
   seasonSquadSnapshot,
@@ -859,6 +859,19 @@ export function recallLoan(state: GameState, playerId: string): ActionOutcome {
   const r = recallLoanPlayer(state.clubs, playerId);
   if (!r.ok) return { state, ok: false, message: r.reason! };
   return { state: afterSquadChange(state), ok: true, message: `${r.playerName} 임대 회수 완료` };
+}
+
+/**
+ * 내 선수와 다른 구단 선수를 맞교환한다(A2). cashAdjustment 양수=내가 추가 지불,
+ * 음수=상대가 추가 지불.
+ */
+export function swapDeal(
+  state: GameState, myPlayerId: string, otherClubId: string, otherPlayerId: string, cashAdjustment = 0,
+): ActionOutcome {
+  if (state.live) return { state, ok: false, message: '이적은 프리시즌에만 가능합니다.' };
+  const r = swapPlayers(state.clubs, state.myClubId, otherClubId, myPlayerId, otherPlayerId, cashAdjustment);
+  if (!r.ok) return { state, ok: false, message: r.reason! };
+  return { state: afterSquadChange(state), ok: true, message: `${r.playerAName} ↔ ${r.playerBName} 맞교환 완료` };
 }
 
 /** 내가 임대 보낸 선수 목록 — 실제로는 다른 구단 스쿼드에서 뛰고 있다. */
