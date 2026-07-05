@@ -30,7 +30,7 @@ import {
   type Club, type Tactic, type MatchResult, type MatchSetup, type SeasonSummary,
   type Fixture, type TableRow, type PlayerSeasonStat, type CupState, type StaffKind,
   type PlayerFormEntry, type Player, type YouthProspect, type YouthProspectUpdate,
-  type TeamStrength, type FormSummary, type ScoutingReport, type Line,
+  type TeamStrength, type FormSummary, type ScoutingReport, type Line, type StaffDepartureEvent,
 } from '@soccer-tycoon/engine';
 import { makeDefaultTactic, repairTactic } from './tactics.js';
 
@@ -541,7 +541,7 @@ export function finishSeason(state: GameState): GameState {
   // 5) 오프시즌 (전 구단)
   const {
     retirements, intakeByClub, intakePlayersByClub, fireSalesByClub, retiredPlayers, milestones, debutEvents,
-    loanReturns, loanObligations, reservePromotions,
+    loanReturns, loanObligations, reservePromotions, staffDepartures,
   } = runOffseason(state.clubs, new Rng(offseasonSeed(state)));
   // 내 구단 선수의 이번 시즌 리저브 승격(시즌 요약에 첨부)
   const myReservePromotions = reservePromotions.filter((r) => r.clubId === state.myClubId);
@@ -553,6 +553,8 @@ export function finishSeason(state: GameState): GameState {
   const myLoanObligations: LoanObligationEvent[] = loanObligations.filter(
     (o) => o.fromClubId === state.myClubId || o.toClubId === state.myClubId,
   );
+  // 내 구단에서 계약 만료로 이탈해 후임이 영입된 실명 스태프(시즌 요약에 첨부)
+  const myStaffDepartures: StaffDepartureEvent[] = staffDepartures.filter((d) => d.clubId === state.myClubId);
   // 내 구단에서 은퇴한 선수는 레전드 아카이브에 영구 보존
   const newLegends: ClubLegend[] = retiredPlayers
     .filter((r) => r.clubId === state.myClubId)
@@ -702,6 +704,7 @@ export function finishSeason(state: GameState): GameState {
     loanReturns: myLoanReturns,
     loanObligations: myLoanObligations,
     reservePromotions: myReservePromotions,
+    staffDepartures: myStaffDepartures,
     continentalCupChampionId,
     continentalCupChampionName,
     qualifiedForContinental: continentalQualifierIds.includes(state.myClubId),

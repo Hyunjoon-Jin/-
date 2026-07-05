@@ -8,6 +8,7 @@
 import type { Club, Position, Staff, StaffMember, StaffTrait } from './types.js';
 import { FIRST, LAST } from './names.js';
 import { lineOf } from './teamStrength.js';
+import type { Rng } from './rng.js';
 
 /** 세부 코치 4종 — GK/공격/수비/피지컬. 미도입(undefined) 시 총괄 coaching 레벨로 대체된다. */
 export type SpecialistCoachKind = 'coachGk' | 'coachAttack' | 'coachDefense' | 'coachPhysical';
@@ -69,6 +70,22 @@ function hireStaffMember(clubId: string, kind: NamedStaffKind, level: number): S
   return { name: `${first} ${last}`, age, contractYears, trait };
 }
 
+/** 계약 만료로 이탈한 실명 스태프의 후임을 뽑는다. hireStaffMember와 달리 rng로 뽑은
+ *  salt를 시드에 섞어, 같은 clubId·직책·레벨이라도 매번 다른 인물이 나오도록 한다
+ *  (hireStaffMember 자체를 건드리면 초기 배정·업그레이드 호출부의 결정론적 인물이
+ *  전부 바뀌므로, 이 호출부만을 위한 별도 해시 네임스페이스를 둔다). */
+function hireReplacementStaffMember(clubId: string, kind: NamedStaffKind, level: number, rng: Rng): StaffMember {
+  const salt = rng.int(0, 0xFFFFFFFF);
+  const seed = hashSeed(`${clubId}:${kind}:${level}:replacement:${salt}`);
+  const first = FIRST[seed % FIRST.length]!;
+  const last = LAST[Math.floor(seed / FIRST.length) % LAST.length]!;
+  const age = STAFF_AGE_MIN + (seed % STAFF_AGE_RANGE);
+  const contractYears = 1 + (seed % STAFF_CONTRACT_YEARS_MAX);
+  const traitRoll = hashSeed(`${clubId}:${kind}:${level}:replacement:${salt}:trait`) / 0xFFFFFFFF;
+  const trait = traitRoll < STAFF_TRAIT_CHANCE ? STAFF_TRAIT_BY_KIND[kind] : undefined;
+  return { name: `${first} ${last}`, age, contractYears, trait };
+}
+
 /** 구단 생성 시 4대 실명 스태프를 초기 레벨 그대로 배정. */
 export function hireInitialStaffMembers(clubId: string, staff: Staff): Partial<Record<NamedStaffKind, StaffMember>> {
   const members: Partial<Record<NamedStaffKind, StaffMember>> = {};
@@ -122,19 +139,44 @@ export function effectiveYouth(staff: Staff): number {
   return staff.youth + bonus;
 }
 
-/** 오프시즌 경계에 실명 스태프의 잔여 계약을 1년 감소시키고, 0이 되면 조용히 재계약한다
- *  (계약 만료로 인한 이탈·협상 드라마는 후속 확장(스태프 계약·타 구단 스카우트) 몫). */
-export function tickStaffContracts(club: Club): void {
-  if (!club.staff.members) return;
+/** 실명 스태프가 계약 만료 시 이탈할 기준 확률 — 레벨이 높을수록(시장 가치가 높을수록)
+ *  스카우트당하기 쉬워 이탈 확률도 함께 오른다. */
+const STAFF_DEPARTURE_BASE_CHANCE = 0.12;
+const STAFF_DEPARTURE_PER_LEVEL = 0.015;
+const STAFF_DEPARTURE_MAX_CHANCE = 0.45;
+
+/** 실명 스태프 계약 만료 시 이탈 이벤트. */
+export interface StaffDepartureEvent {
+  kind: NamedStaffKind;
+  name: string;
+  replacementName: string;
+}
+
+/** 오프시즌 경계에 실명 스태프의 잔여 계약을 1년 감소시킨다. 0이 되면 레벨에 비례한
+ *  확률로 타 구단에 스카우트되어 이탈하며, 이 경우 즉시 같은 자리에 새 인물을 영입해
+ *  공백 없이 채운다. 이탈하지 않으면 기존과 동일하게 조용히 재계약한다. */
+export function tickStaffContracts(club: Club, rng: Rng): StaffDepartureEvent[] {
+  if (!club.staff.members) return [];
+  const departures: StaffDepartureEvent[] = [];
   for (const kind of NAMED_STAFF_KINDS) {
     const m = club.staff.members[kind];
     if (!m) continue;
     m.contractYears -= 1;
     if (m.contractYears <= 0) {
+      const level = club.staff[kind];
+      const chance = Math.min(STAFF_DEPARTURE_MAX_CHANCE, STAFF_DEPARTURE_BASE_CHANCE + level * STAFF_DEPARTURE_PER_LEVEL);
+      if (rng.roll(chance)) {
+        const departedName = m.name;
+        const replacement = hireReplacementStaffMember(club.id, kind, level, rng);
+        club.staff.members[kind] = replacement;
+        departures.push({ kind, name: departedName, replacementName: replacement.name });
+        continue;
+      }
       const seed = hashSeed(`${club.id}:${kind}:${club.staff[kind]}:renew:${m.age}`);
       m.contractYears = 1 + (seed % STAFF_CONTRACT_YEARS_MAX);
     }
   }
+  return departures;
 }
 
 /** 현재 레벨에서 다음 레벨로 올리는 비용 (만원). */

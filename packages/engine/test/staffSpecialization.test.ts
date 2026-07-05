@@ -99,14 +99,80 @@ describe('B03: 실명 스태프', () => {
     const club = generateClub(new Rng(21), 'c4', 'Club', 10);
     const m = club.staff.members!.medical!;
     m.contractYears = 1;
-    tickStaffContracts(club);
-    expect(club.staff.members!.medical!.contractYears).toBeGreaterThanOrEqual(1); // 0으로 갔다가 즉시 재계약
+    tickStaffContracts(club, new Rng(99));
+    expect(club.staff.members!.medical!.contractYears).toBeGreaterThanOrEqual(1); // 0으로 갔다가 즉시 재계약(또는 이탈 후 후임 영입)
   });
 
   it('members가 없는(구버전 세이브) 구단에서도 tickStaffContracts는 안전하게 아무 일도 하지 않는다', () => {
     const club = generateClub(new Rng(22), 'c5', 'Club', 10);
     club.staff.members = undefined;
-    expect(() => tickStaffContracts(club)).not.toThrow();
+    expect(() => tickStaffContracts(club, new Rng(1))).not.toThrow();
+  });
+});
+
+describe('B08+B09: 스태프 계약 만료 이탈·후임 영입', () => {
+  it('이탈이 발생하면 이벤트에 담긴 이름이 실제로 새 인물로 교체되고, 계약기간이 1년 이상으로 재설정된다', () => {
+    let found = false;
+    for (let seed = 1; seed < 500 && !found; seed++) {
+      const club = generateClub(new Rng(seed), 'depClub', 'Club', 10);
+      const kind = 'coaching' as const;
+      const m = club.staff.members!.coaching!;
+      m.contractYears = 1;
+      const before = { ...m };
+      const departures = tickStaffContracts(club, new Rng(seed * 7919));
+      const event = departures.find((d) => d.kind === kind);
+      if (!event) continue;
+      found = true;
+      expect(event.name).toBe(before.name);
+      expect(event.replacementName).toBe(club.staff.members!.coaching!.name);
+      expect(club.staff.members!.coaching!.name).not.toBe(before.name);
+      expect(club.staff.members!.coaching!.contractYears).toBeGreaterThanOrEqual(1);
+    }
+    expect(found).toBe(true);
+  });
+
+  it('이탈하지 않으면(재계약) 기존과 동일하게 인물이 그대로 유지되고 계약기간만 갱신된다', () => {
+    let found = false;
+    for (let seed = 1; seed < 500 && !found; seed++) {
+      const club = generateClub(new Rng(seed), 'renewClub', 'Club', 10);
+      const m = club.staff.members!.medical!;
+      m.contractYears = 1;
+      const before = { ...m };
+      const departures = tickStaffContracts(club, new Rng(seed * 7919));
+      if (departures.some((d) => d.kind === 'medical')) continue;
+      found = true;
+      expect(club.staff.members!.medical!.name).toBe(before.name);
+      expect(club.staff.members!.medical!.contractYears).toBeGreaterThanOrEqual(1);
+    }
+    expect(found).toBe(true);
+  });
+
+  it('레벨이 높을수록(스카우트 표적이 되기 쉬워) 이탈 확률이 더 높다(다수 시드 누적 비교)', () => {
+    const TRIALS = 300;
+    let lowDepartures = 0;
+    let highDepartures = 0;
+    for (let seed = 1; seed <= TRIALS; seed++) {
+      const lowClub = generateClub(new Rng(seed), 'lowClub', 'Club', 10);
+      lowClub.staff.youth = 2;
+      lowClub.staff.members!.youth!.contractYears = 1;
+      if (tickStaffContracts(lowClub, new Rng(seed * 13)).some((d) => d.kind === 'youth')) lowDepartures++;
+
+      const highClub = generateClub(new Rng(seed), 'highClub', 'Club', 10);
+      highClub.staff.youth = 19;
+      highClub.staff.members!.youth!.contractYears = 1;
+      if (tickStaffContracts(highClub, new Rng(seed * 13)).some((d) => d.kind === 'youth')) highDepartures++;
+    }
+    expect(highDepartures).toBeGreaterThan(lowDepartures);
+  });
+
+  it('계약이 아직 남아있으면(잔여연수 > 0) 이탈 판정 없이 잔여연수만 줄어든다', () => {
+    const club = generateClub(new Rng(5), 'safeClub', 'Club', 10);
+    for (const kind of NAMED_STAFF_KINDS) club.staff.members![kind]!.contractYears = 3;
+    const before = { ...club.staff.members!.scouting! };
+    const departures = tickStaffContracts(club, new Rng(999));
+    expect(departures.length).toBe(0);
+    expect(club.staff.members!.scouting!.name).toBe(before.name);
+    expect(club.staff.members!.scouting!.contractYears).toBe(2);
   });
 });
 

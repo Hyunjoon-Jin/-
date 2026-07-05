@@ -4,18 +4,21 @@
  * 게임의 시간축을 닫는 핵심 루프.
  */
 import type { Club, Player, Position } from './types.js';
+import { POSITIONS } from './types.js';
 import { simulateSeason, type TableRow } from './league.js';
 import { settleSeason, type SeasonFinanceReport } from './finance.js';
 import { runTransferWindow, type TransferDeal } from './transfer.js';
 import { progressPlayer } from './progression.js';
 import { generateAcademyIntake, generateYouthPlayer, assignSquadNumber } from './generate.js';
-import { applyLoanWageSubsidies } from './transferActions.js';
+import { applyLoanWageSubsidies, MIN_SQUAD } from './transferActions.js';
 import { enforceFinancialFairPlay } from './financeControl.js';
 import { runInternationalBreak, runInternationalTournament, TOURNAMENT_INTERVAL_SEASONS } from './international.js';
 import { currentAbility } from './derived.js';
 import { hasTrait } from './traits.js';
 import { lineOf } from './teamStrength.js';
-import { effectiveCoaching, effectiveYouth, effectiveScouting, tickStaffContracts } from './staffActions.js';
+import {
+  effectiveCoaching, effectiveYouth, effectiveScouting, tickStaffContracts, type StaffDepartureEvent,
+} from './staffActions.js';
 import { recentForm } from './form.js';
 import { clamp } from './math.js';
 import {
@@ -126,6 +129,8 @@ export interface SeasonSummary {
   loanObligations?: LoanObligationEvent[];
   /** 이번 오프시즌 리저브에서 1군으로 승격한 선수(내 구단, B9). */
   reservePromotions?: ReservePromotionEvent[];
+  /** 이번 오프시즌 계약 만료로 타 구단에 스카우트되어 이탈한 내 구단 실명 스태프(신규 영입 후임 포함). */
+  staffDepartures?: StaffDepartureEvent[];
   /** 이번 시즌 비정기 국제대회(월드컵/유로급, C15)가 열렸다면 우승 국가. 참가 자격국 부족 시 null.
    *  값이 undefined면 이번 시즌엔 대회가 열리지 않고 정기 A매치 차출만 있었다는 뜻. */
   internationalTournamentChampion?: string | null;
@@ -286,6 +291,8 @@ export interface OffseasonResult {
   reservePromotions: ReservePromotionEvent[];
   /** clubId → 리저브에서 방출된 인원(1군 승격 기준 미달 상태로 결론 나이에 도달, B9). */
   reserveReleasesByClub: Map<string, number>;
+  /** 이번 오프시즌 계약 만료로 타 구단에 스카우트되어 이탈한 실명 스태프(전 구단, clubId 포함). */
+  staffDepartures: (StaffDepartureEvent & { clubId: string; clubName: string })[];
 }
 
 /** 멘토링 보너스 배율 — 같은 라인에 리더 특성 보유자나 리더십 높은 베테랑이 있으면 성장 가속. */
@@ -325,6 +332,7 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
   const loanObligations: LoanObligationEvent[] = [];
   const reservePromotions: ReservePromotionEvent[] = [];
   const reserveReleasesByClub = new Map<string, number>();
+  const staffDepartures: (StaffDepartureEvent & { clubId: string; clubName: string })[] = [];
 
   // 임대 복귀: 시즌 카운트다운이 끝난 임대 선수를 원 소속 구단으로 돌려보낸다. 이번
   // 오프시즌의 성장/노화/은퇴 처리를 정상적으로 받도록, 아래 본 루프보다 먼저 처리해
@@ -449,8 +457,9 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
     const fire = enforceFinancialFairPlay(club);
     fireSalesByClub.set(club.id, fire.sold.length);
 
-    // 실명 스태프 계약 잔여연수 감소(0이면 조용히 재계약)
-    tickStaffContracts(club);
+    // 실명 스태프 계약 잔여연수 감소(0이면 확률적으로 이탈·후임 영입, 그 외엔 조용히 재계약)
+    const departures = tickStaffContracts(club, rng);
+    for (const d of departures) staffDepartures.push({ ...d, clubId: club.id, clubName: club.name });
 
     // 리저브 성장 + 승격/방출 판정 — 승격 인원은 1군에 합류(스쿼드 상한 초과분은 이후
     // trimSquad가 정리). 이번 시즌 새로 들어올 유스 인테이크보다 먼저 처리해, 갓
@@ -482,12 +491,21 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
       assignSquadNumber(rng, club.players, emergencyGk);
     }
 
+    // 은퇴·임대·스태프 이탈 등이 겹쳐 스쿼드가 최소 인원 아래로 내려가면(극단적 불운)
+    // 시뮬레이션 무결성을 위해 응급 유스로 보강한다.
+    while (club.players.length < MIN_SQUAD) {
+      const position = POSITIONS[rng.int(0, POSITIONS.length - 1)]!;
+      const emergency = generateYouthPlayer(rng, position, club.finance.reputation);
+      club.players.push(emergency);
+      assignSquadNumber(rng, club.players, emergency);
+    }
+
     // 스쿼드 상한 정리
     trimSquad(club);
   }
   return {
     retirements, intakeByClub, intakePlayersByClub, fireSalesByClub, retiredPlayers, milestones,
-    debutEvents, loanReturns, loanObligations, reservePromotions, reserveReleasesByClub,
+    debutEvents, loanReturns, loanObligations, reservePromotions, reserveReleasesByClub, staffDepartures,
   };
 }
 

@@ -96,6 +96,7 @@ export {
   effectiveMedical, effectiveScouting, effectiveYouth,
   STAFF_TRAIT_LABEL, STAFF_TRAIT_DESC, STAFF_TRAIT_BONUS,
   type StaffKind, type UpgradeResult, type SpecialistCoachKind, type NamedStaffKind,
+  type StaffDepartureEvent,
 } from './staffActions.js';
 export {
   enforceFinancialFairPlay, inFinancialCrisis, wageBudget, annualWageBill,

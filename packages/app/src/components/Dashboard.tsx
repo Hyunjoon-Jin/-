@@ -7,7 +7,7 @@ import {
 import {
   formatMoney, currentAbility, wageBudget, annualWageBill, inFinancialCrisis,
   boardStatus, DEMAND_LABEL, SPONSOR_GOAL_LABEL,
-  type BoardStatus, type ManagerPersona, type BoardPersona, type Line,
+  type BoardStatus, type ManagerPersona, type BoardPersona, type Line, type NamedStaffKind,
 } from '@soccer-tycoon/engine';
 import { Landmark } from 'lucide-react';
 import { Banner } from './Banner.js';
@@ -27,6 +27,10 @@ const PERSONA_LABEL: Record<Exclude<ManagerPersona, 'neutral'>, { label: string;
 
 const PATIENCE_LABEL: Record<BoardPersona['patience'], string> = {
   patient: '인내심 있음', impatient: '조급함',
+};
+
+const STAFF_NAMED_KIND_LABEL: Record<NamedStaffKind, string> = {
+  coaching: '총괄 코치', medical: '의료', scouting: '스카우팅', youth: '유스',
 };
 const STYLE_LABEL: Record<BoardPersona['style'], string> = {
   conservative: '재정 보수적', aggressive: '성적 지상주의',
@@ -201,6 +205,21 @@ export function Dashboard({ game, onSignContract, visitedTactics, visitedSquadPr
               {o.toClubId === game.myClubId
                 ? <><b>{o.name}</b> 선수가 출전 기준을 채워 <b>{formatMoney(o.fee)}</b>에 완전 영입됐습니다.</>
                 : <><b>{o.name}</b> 선수가 <b>{o.toClubName}</b>에서 출전 기준을 채워 <b>{formatMoney(o.fee)}</b>에 완전 이적됐습니다.</>}
+            </p>
+          ))}
+        </Banner>
+      ),
+    });
+  }
+  if (last?.staffDepartures !== undefined && last.staffDepartures.length > 0) {
+    seasonBanners.push({
+      key: 'staffDepartures', priority: 7,
+      node: (
+        <Banner tone="warning" title="🚪 스태프 이적">
+          {last.staffDepartures.map((d) => (
+            <p key={d.kind}>
+              <b>{STAFF_NAMED_KIND_LABEL[d.kind]}</b> {d.name} 코치가 계약 만료로 타 구단에 스카우트됐습니다.
+              후임으로 <b>{d.replacementName}</b>을(를) 영입했습니다.
             </p>
           ))}
         </Banner>
