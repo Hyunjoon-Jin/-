@@ -3,6 +3,7 @@ import {
   startGame, myClub, myTactic, setMyTactic,
   startSeason, playRound, playRestOfSeason, finishSeason, advanceFullSeason,
   playCupRound, playContinentalCupRound, negotiate, buyAt, buyViaReleaseClause, offersFor, acceptSell, release, upgradeStaffAction,
+  recordNegotiationBreakdown,
   upgradeStadiumAction, upgradeAcademyAction,
   loanOut, loanIn, recallLoan, swapDeal,
   setTrainingFocus, setTrainingPosition, renewContract,
@@ -357,6 +358,7 @@ export function App() {
                 onRecallLoan={handleRecallLoan}
                 onSwap={handleSwap}
                 onSelect={setDetailPlayer}
+                onNegotiationBreakdown={(id) => update(recordNegotiationBreakdown(game, id))}
               />
             )}
           </div>

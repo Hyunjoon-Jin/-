@@ -136,6 +136,10 @@ export interface GameState {
   demand?: BoardDemand | null;
   /** 이번 시즌 스폰서 보너스 목표(없을 수 있음). 달성 시 일시불 현금 보너스. */
   sponsorGoal?: SponsorGoal | null;
+  /** 밀당이 결렬(roundsExhausted)된 선수 id → 재협상이 다시 가능해지는 시즌 번호
+   *  (Item1). 매도 구단이 협상을 접은 채로 곧장 재제안하지 못하게 막아, "다음
+   *  시즌에 다시 시도하세요" 안내가 실제로 지켜지도록 한다. */
+  negotiationCooldowns?: Record<string, number>;
   /** 스폰서 보너스 목표 연속 달성 횟수(C-new2) — 목표가 주어진 시즌에 달성하면 +1,
    *  실패하면 0으로 리셋. 목표가 없는 시즌은 그대로 유지(불이익 없음). 구버전
    *  세이브는 없을 수 있어 optional(없으면 0 취급). */
@@ -839,10 +843,28 @@ export function buy(state: GameState, playerId: string): ActionOutcome {
 
 /** 이적 협상: 제안액에 대한 매도 구단 반응(수락/역제안/거절). round는 이 협상에서 이미
  *  진행된 역제안 횟수(0-base) — 라운드가 늘수록 매도 구단 호가에 조급증이 붙고,
- *  상한을 넘기면 더 이상 밀당하지 않고 협상을 접는다. 상태 변경 없음. */
+ *  상한을 넘기면 더 이상 밀당하지 않고 협상을 접는다. 상태 변경 없음.
+ *  이전에 이 선수와 밀당이 완전히 결렬됐다면(Item1), 쿨다운이 풀리기 전까지는
+ *  재협상 자체를 곧장 거절한다. */
 export function negotiate(state: GameState, playerId: string, offer: number, round = 0): OfferEvaluation {
   if (state.live) return { ok: false, reason: '이적은 프리시즌에만 가능합니다.' };
+  const cooldownUntil = state.negotiationCooldowns?.[playerId];
+  if (cooldownUntil !== undefined && state.season < cooldownUntil) {
+    return {
+      ok: true, outcome: 'rejected', roundsExhausted: true,
+      reason: `지난 협상 결렬 여파로 이번 시즌은 재협상을 거절당했습니다(${cooldownUntil}시즌부터 재시도 가능).`,
+    };
+  }
   return evaluateOffer(state.clubs, state.myClubId, playerId, offer, round);
+}
+
+/** 밀당이 완전히 결렬됐을 때(evaluateOffer의 roundsExhausted) 호출 — 다음 시즌까지
+ *  이 선수와의 재협상을 막는다(Item1). */
+export function recordNegotiationBreakdown(state: GameState, playerId: string): GameState {
+  return {
+    ...state,
+    negotiationCooldowns: { ...state.negotiationCooldowns, [playerId]: state.season + 1 },
+  };
 }
 
 /** 합의된 이적료로 영입 실행(협상 타결). 이적료 외에 계약 연수에 비례한 에이전트

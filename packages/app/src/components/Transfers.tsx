@@ -29,6 +29,7 @@ interface Props {
   onRecallLoan: (playerId: string) => ActionOutcome;
   onSwap: (myPlayerId: string, otherClubId: string, otherPlayerId: string, cashAdjustment: number) => ActionOutcome;
   onSelect: (p: Player) => void;
+  onNegotiationBreakdown: (playerId: string) => void;
 }
 
 type Msg = { text: string; ok: boolean };
@@ -71,7 +72,7 @@ export function Transfers(props: Props) {
 
 function TransferMarket({
   game, onNegotiate, onBuyAt, onBuyViaReleaseClause, onOffers, onAcceptSell, onRelease,
-  onLoanOut, onLoanIn, onRecallLoan, onSwap, onSelect,
+  onLoanOut, onLoanIn, onRecallLoan, onSwap, onSelect, onNegotiationBreakdown,
 }: Props) {
   const club = myClub(game);
   const toast = useToast();
@@ -383,6 +384,7 @@ function TransferMarket({
           onBuyAt={onBuyAt}
           onResult={(m) => { toast(m.text, m.ok); if (m.ok) setNegotiating(null); }}
           onClose={() => setNegotiating(null)}
+          onNegotiationBreakdown={onNegotiationBreakdown}
         />
       )}
       {buyingViaClause && (
@@ -774,6 +776,7 @@ function SellModal({
 
 function NegotiationModal({
   target, budget, scouting, scouted, round: initialRound, onRoundChange, onNegotiate, onBuyAt, onResult, onClose,
+  onNegotiationBreakdown,
 }: {
   target: TransferTarget;
   budget: number;
@@ -786,6 +789,7 @@ function NegotiationModal({
   onBuyAt: (playerId: string, fee: number) => ActionOutcome;
   onResult: (m: Msg) => void;
   onClose: () => void;
+  onNegotiationBreakdown: (playerId: string) => void;
 }) {
   const { player, value } = target;
   const [ev, setEv] = useState<OfferEvaluation | null>(null);
@@ -798,6 +802,7 @@ function NegotiationModal({
       onResult({ text: bought.message, ok: bought.ok });
       return;
     }
+    if (r.roundsExhausted) onNegotiationBreakdown(player.id);
     if (r.outcome === 'countered') {
       const nextRound = round + 1;
       setRound(nextRound);
