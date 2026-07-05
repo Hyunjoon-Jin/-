@@ -16,8 +16,10 @@ export const SPECIALIST_COACH_KINDS: SpecialistCoachKind[] = [
   'coachGk', 'coachAttack', 'coachDefense', 'coachPhysical',
 ];
 
-export type StaffKind = 'coaching' | 'medical' | 'scouting' | 'youth' | SpecialistCoachKind;
-export const STAFF_KINDS: StaffKind[] = ['coaching', 'medical', 'scouting', 'youth', ...SPECIALIST_COACH_KINDS];
+export type StaffKind = 'coaching' | 'medical' | 'scouting' | 'youth' | SpecialistCoachKind | 'reserveCoach';
+export const STAFF_KINDS: StaffKind[] = [
+  'coaching', 'medical', 'scouting', 'youth', ...SPECIALIST_COACH_KINDS, 'reserveCoach',
+];
 
 /** 실명 인물이 배정되는 직책(원래 4대 스태프만 — 세부 코치는 총괄 코치 산하 보직으로 취급). */
 export type NamedStaffKind = 'coaching' | 'medical' | 'scouting' | 'youth';
@@ -119,6 +121,15 @@ export function effectiveCoaching(position: Position, staff: Staff): number {
   const base = posLevel * 0.7 + physLevel * 0.3;
   const bonus = staff.members?.coaching?.trait === 'developmentGuru' ? STAFF_TRAIT_BONUS : 0;
   return base + bonus;
+}
+
+/** 리저브(2군) 성장 계산에 쓰이는 유효 코칭 레벨. 전담 리저브 코치를 도입하지 않은
+ *  구단(구버전 세이브 포함)은 정확히 effectiveCoaching과 같아(하위 호환), 도입 시엔
+ *  포지션별 세부 코치(30%)보다 전담 리저브 코치(70%)가 훨씬 크게 반영된다. */
+export function effectiveReserveCoaching(position: Position, staff: Staff): number {
+  if (staff.reserveCoach === undefined) return effectiveCoaching(position, staff);
+  const posLevel = positionCoachLevel(position, staff);
+  return posLevel * 0.3 + staff.reserveCoach * 0.7;
 }
 
 /** 의료 유효 레벨 — 재활 전문가(rehabSpecialist) 특기가 있으면 가산 보너스. */

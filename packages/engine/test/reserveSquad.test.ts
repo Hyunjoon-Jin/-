@@ -77,6 +77,22 @@ describe('B9: 2군·리저브 스쿼드', () => {
     expect(result.reservePromotions.some((r) => r.playerId === 'reserve-critical')).toBe(true);
   });
 
+  it('B10: 전담 리저브 코치 레벨이 높으면 리저브 성장이 더 빨라진다(동일 시드 비교)', () => {
+    const withoutCoach = makeClub(50);
+    const withCoach = makeClub(50);
+    withCoach.staff.reserveCoach = 20;
+    let rng1 = new Rng(51);
+    let rng2 = new Rng(51);
+    for (let i = 0; i < 4; i++) {
+      runOffseason([withoutCoach], rng1);
+      runOffseason([withCoach], rng2);
+      rng1 = new Rng(51 + i + 1);
+      rng2 = new Rng(51 + i + 1);
+    }
+    const caSum = (c: Club) => (c.reserves ?? []).reduce((s, p) => s + currentAbility(p), 0);
+    expect(caSum(withCoach)).toBeGreaterThan(caSum(withoutCoach));
+  });
+
   it('여러 시즌 프랜차이즈 루프에서도 리저브 필드가 항상 유효한 배열로 유지된다(오류 없이 진행)', () => {
     const clubs = [makeClub(20), makeClub(21, 10)];
     expect(() => runFranchise(clubs, 5, 999)).not.toThrow();

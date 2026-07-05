@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  effectiveCoaching, specialistCoachLevel, upgradeStaff,
+  effectiveCoaching, effectiveReserveCoaching, specialistCoachLevel, upgradeStaff,
   hireInitialStaffMembers, tickStaffContracts, NAMED_STAFF_KINDS,
 } from '../src/staffActions.js';
 import { academyNationPool } from '../src/scouting.js';
@@ -173,6 +173,38 @@ describe('B08+B09: 스태프 계약 만료 이탈·후임 영입', () => {
     expect(departures.length).toBe(0);
     expect(club.staff.members!.scouting!.name).toBe(before.name);
     expect(club.staff.members!.scouting!.contractYears).toBe(2);
+  });
+});
+
+describe('B10: 리저브 전담 코치', () => {
+  it('전담 리저브 코치를 도입하지 않으면(undefined) 결과가 정확히 effectiveCoaching과 같다(하위 호환)', () => {
+    const staff = baseStaff(12);
+    expect(effectiveReserveCoaching('ST', staff)).toBe(effectiveCoaching('ST', staff));
+    expect(effectiveReserveCoaching('GK', staff)).toBe(effectiveCoaching('GK', staff));
+    expect(effectiveReserveCoaching('DC', staff)).toBe(effectiveCoaching('DC', staff));
+  });
+
+  it('전담 리저브 코치를 도입하면 세부 코치보다 훨씬 크게 반영된다', () => {
+    const staff: Staff = { ...baseStaff(5), reserveCoach: 20 };
+    const level = effectiveReserveCoaching('ST', staff);
+    expect(level).toBeCloseTo(5 * 0.3 + 20 * 0.7, 6);
+    expect(level).toBeGreaterThan(effectiveCoaching('ST', baseStaff(5)));
+  });
+
+  it('전담 리저브 코치 레벨이 낮으면(총괄 코치보다 낮음) 오히려 리저브 성장 유효 레벨이 내려갈 수 있다', () => {
+    const staff: Staff = { ...baseStaff(18), reserveCoach: 2 };
+    const level = effectiveReserveCoaching('ST', staff);
+    expect(level).toBeLessThan(effectiveCoaching('ST', baseStaff(18)));
+  });
+
+  it('STAFF_KINDS·upgradeStaff에서 reserveCoach를 일반 세부 코치처럼 업그레이드할 수 있다(실명 인물 없이)', () => {
+    const club = generateClub(new Rng(31), 'c6', 'Club', 10);
+    club.finance.balance = 999_999_999;
+    const membersBefore = JSON.stringify(club.staff.members);
+    const r = upgradeStaff(club, 'reserveCoach');
+    expect(r.ok).toBe(true);
+    expect(club.staff.reserveCoach).toBeGreaterThanOrEqual(1);
+    expect(JSON.stringify(club.staff.members)).toBe(membersBefore); // 실명 인물 변화 없음
   });
 });
 

@@ -192,6 +192,10 @@ export interface Staff {
   coachAttack?: number;
   coachDefense?: number;
   coachPhysical?: number;
+  /** 리저브(2군) 전담 코치 레벨 — 구버전 세이브·미도입 구단은 undefined이며,
+   *  이 경우 리저브 성장 계산 시 기존 coaching(세부 코치 블렌드) 레벨을 그대로 대체값으로
+   *  사용한다(하위 호환). 도입 시 리저브 성장에서 총괄/세부 코치보다 훨씬 크게 반영된다. */
+  reserveCoach?: number;
   /** 각 스태프 직책의 실명 인물 정보(선택 — coaching/medical/scouting/youth만 대상). */
   members?: Partial<Record<'coaching' | 'medical' | 'scouting' | 'youth', StaffMember>>;
 }

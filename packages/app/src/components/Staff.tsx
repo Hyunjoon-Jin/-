@@ -1,5 +1,5 @@
 import {
-  ClipboardList, Stethoscope, Search, GraduationCap, Hand, Target, Shield, Dumbbell, Landmark,
+  ClipboardList, Stethoscope, Search, GraduationCap, Hand, Target, Shield, Dumbbell, Landmark, Users,
   type LucideIcon,
 } from 'lucide-react';
 import { myClub, type GameState, type ActionOutcome } from '../game.js';
@@ -28,9 +28,11 @@ const STAFF: { key: StaffKind; label: string; icon: LucideIcon; effect: string }
   { key: 'coachAttack', label: '공격 코치', icon: Target, effect: '공격수·미드필더 성장률 향상' },
   { key: 'coachDefense', label: '수비 코치', icon: Shield, effect: '수비수·미드필더 성장률 향상' },
   { key: 'coachPhysical', label: '피지컬 코치', icon: Dumbbell, effect: '전 포지션 성장률에 보조로 반영' },
+  { key: 'reserveCoach', label: '리저브 전담 코치', icon: Users, effect: '리저브(2군) 선수의 성장률을 총괄/세부 코치보다 훨씬 크게 좌우' },
 ];
 
 function levelOf(staff: Club['staff'], kind: StaffKind): number {
+  if (kind === 'reserveCoach') return staff.reserveCoach ?? staff.coaching;
   return (SPECIALIST_KINDS as StaffKind[]).includes(kind)
     ? specialistCoachLevel(staff, kind as SpecialistCoachKind)
     : (staff[kind as NamedStaffKind] as number);

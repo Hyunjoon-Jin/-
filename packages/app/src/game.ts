@@ -903,6 +903,7 @@ export function myLoanedOutPlayers(state: GameState): { player: Player; loanClub
 const STAFF_LABEL: Record<string, string> = {
   coaching: '총괄 코치', medical: '의료', scouting: '스카우팅', youth: '유스',
   coachGk: 'GK 코치', coachAttack: '공격 코치', coachDefense: '수비 코치', coachPhysical: '피지컬 코치',
+  reserveCoach: '리저브 전담 코치',
 };
 
 /** 스태프 업그레이드 (보유 자금 사용). 실명 직책(코칭/의료/스카우팅/유스)은 업그레이드와

@@ -17,7 +17,8 @@ import { currentAbility } from './derived.js';
 import { hasTrait } from './traits.js';
 import { lineOf } from './teamStrength.js';
 import {
-  effectiveCoaching, effectiveYouth, effectiveScouting, tickStaffContracts, type StaffDepartureEvent,
+  effectiveCoaching, effectiveYouth, effectiveScouting, effectiveReserveCoaching,
+  tickStaffContracts, type StaffDepartureEvent,
 } from './staffActions.js';
 import { recentForm } from './form.js';
 import { clamp } from './math.js';
@@ -200,7 +201,7 @@ function progressReserves(club: Club, rng: Rng, firstTeamSize: number): ReserveP
   let released = 0;
 
   for (const p of reserves) {
-    progressPlayer(p, rng, effectiveCoaching(p.position, club.staff));
+    progressPlayer(p, rng, effectiveReserveCoaching(p.position, club.staff));
     const hist = p.caHistory ?? (p.caHistory = []);
     hist.push(Math.round(currentAbility(p)));
     if (hist.length > 20) hist.shift();
