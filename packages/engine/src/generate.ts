@@ -18,6 +18,7 @@ import { FIRST, LAST } from './names.js';
 import { academyNationPool } from './scouting.js';
 import { hireInitialStaffMembers } from './staffActions.js';
 import { academyPotentialBonus } from './finance.js';
+import { rankCaptainCandidates } from './captaincy.js';
 
 const NATIONS = ['KOR', 'JPN', 'BRA', 'ITA', 'GER', 'ESP', 'FRA', 'ENG', 'NED', 'ARG'];
 
@@ -334,16 +335,14 @@ function pickSetPieceTaker(club: Club, lineup: { position: Position; playerId: s
   return eligible.sort((a, b) => setPieceTakerScore(b) - setPieceTakerScore(a))[0]!.id;
 }
 
-/** 라인업 중 리더 특성 보유자를 우선하고, 없으면 리더십 능력치가 가장 높은 선수를 주장으로 자동 지정. */
+/** 라인업 중 주장 추천 점수(신규 개선 항목 16)가 가장 높은 선수를 주장으로 자동 지정. */
 function pickCaptain(club: Club, lineup: { position: Position; playerId: string }[]): string | undefined {
   const byId = new Map(club.players.map((p) => [p.id, p]));
   const inLineup = lineup
     .map((s) => byId.get(s.playerId))
     .filter((p): p is Player => p !== undefined);
   if (inLineup.length === 0) return undefined;
-  const leaders = inLineup.filter((p) => hasTrait(p, 'leader'));
-  const pool = leaders.length > 0 ? leaders : inLineup;
-  return [...pool].sort((a, b) => b.attributes.leadership - a.attributes.leadership)[0]!.id;
+  return rankCaptainCandidates(inLineup)[0]!.playerId;
 }
 
 /**

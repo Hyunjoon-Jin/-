@@ -135,3 +135,4 @@ export {
   simulateReserveSeason, MIN_RESERVE_SQUAD, RESERVE_LEAGUE_CHAMPION_MORALE_BOOST,
   type ReserveTableRow, type ReserveLeagueResult,
 } from './reserveLeague.js';
+export { captainScore, rankCaptainCandidates, type CaptainCandidate } from './captaincy.js';

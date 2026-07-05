@@ -4,6 +4,7 @@
  */
 import {
   currentAbility, isAvailable, FORMATIONS, FORMATION_NAMES, lineOf, hasTrait, isValidInstruction,
+  rankCaptainCandidates,
   type Club, type Player, type Position, type Tactic, type PlayerInstruction,
 } from '@soccer-tycoon/engine';
 
@@ -45,16 +46,14 @@ export function ensureSetPieceTaker(club: Club, lineup: Tactic['lineup'], curren
   return pickSetPieceTaker(club, lineup);
 }
 
-/** 라인업 중 리더 특성 보유자를 우선하고, 없으면 리더십 능력치가 가장 높은 선수를 주장으로 자동 지정(엔진 로직과 동일). */
+/** 라인업 중 주장 추천 점수(신규 개선 항목 16, 엔진 로직과 동일)가 가장 높은 선수를 자동 지정. */
 export function pickCaptain(club: Club, lineup: Tactic['lineup']): string | undefined {
   const byId = new Map(club.players.map((p) => [p.id, p]));
   const inLineup = lineup
     .map((s) => byId.get(s.playerId))
     .filter((p): p is Player => p !== undefined);
   if (inLineup.length === 0) return undefined;
-  const leaders = inLineup.filter((p) => hasTrait(p, 'leader'));
-  const pool = leaders.length > 0 ? leaders : inLineup;
-  return [...pool].sort((a, b) => b.attributes.leadership - a.attributes.leadership)[0]!.id;
+  return rankCaptainCandidates(inLineup)[0]!.playerId;
 }
 
 /** 현재 주장이 새 라인업에 더는 없으면(포메이션·스쿼드 변동) 다시 자동 지정. */
