@@ -5,7 +5,7 @@
  */
 import type { Club, MatchResult, Tactic } from './types.js';
 import { doubleRoundRobin, type Fixture } from './schedule.js';
-import { simulateMatch } from './simulateMatch.js';
+import { simulateMatchWithAiTactics } from './aiInMatch.js';
 import { defaultTactic } from './generate.js';
 import { applyMatchEffects } from './matchEffects.js';
 import { recentForm } from './form.js';
@@ -100,7 +100,7 @@ export function playNext(s: SeasonState, tactics?: TacticMap): MatchResult {
   const away = byId.get(fx.awayId)!;
   const homeTactic = tacticFor(home, away, true, tactics, s.results);
   const awayTactic = tacticFor(away, home, false, tactics, s.results);
-  const result = simulateMatch({
+  const result = simulateMatchWithAiTactics({
     home: { club: home, tactic: homeTactic },
     away: { club: away, tactic: awayTactic },
     seed: s.baseSeed + s.cursor,

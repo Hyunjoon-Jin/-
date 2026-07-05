@@ -3,12 +3,13 @@ export * from './types.js';
 export { Rng } from './rng.js';
 export { simulateMatch, MATCH_LENGTH, type MatchSetup } from './simulateMatch.js';
 export { LiveMatch, HALF_TIME, type LiveStats } from './liveMatch.js';
-export { computeTeamStrength, lineOf } from './teamStrength.js';
+export { computeTeamStrength, lineOf, formationMatchup, type FormationMatchup } from './teamStrength.js';
 export {
   playerDerived, currentAbility, isInjured, isSuspended, isAvailable, familiarityAt,
   type DerivedRatings,
 } from './derived.js';
 export { applyMatchEffects } from './matchEffects.js';
+export { decideAiHalftimeTactic, simulateMatchWithAiTactics } from './aiInMatch.js';
 export {
   rollInjury, SEVERITY_LABEL, type Injury, type InjurySeverity, type BodyPart,
   REINJURY_RISK_WINDOW, RECOVERY_ATTR_WINDOW, reinjuryRiskFactor,

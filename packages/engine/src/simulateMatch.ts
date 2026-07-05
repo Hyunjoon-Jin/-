@@ -38,8 +38,10 @@ interface Side {
   attackers: Player[];
 }
 
-function buildSide(club: Club, tactic: Tactic, isHome: boolean, isBigMatch: boolean): Side {
-  const strength = computeTeamStrength(club, tactic, isBigMatch);
+function buildSide(
+  club: Club, tactic: Tactic, isHome: boolean, isBigMatch: boolean, opponentFormation?: string,
+): Side {
+  const strength = computeTeamStrength(club, tactic, isBigMatch, opponentFormation);
   if (isHome) {
     // computeTeamStrength가 이미 [0,110]으로 클램프하므로, 이후 배율을 적용한 뒤
     // 다시 클램프해 문서화된 상한을 실제로 넘지 않도록 한다.
@@ -141,8 +143,8 @@ export function createContext(setup: MatchSetup): MatchContext {
   const isBigMatch = setup.isBigMatch ?? false;
   const ctx: MatchContext = {
     rng: new Rng(setup.seed),
-    home: buildSide(setup.home.club, setup.home.tactic, true, isBigMatch),
-    away: buildSide(setup.away.club, setup.away.tactic, false, isBigMatch),
+    home: buildSide(setup.home.club, setup.home.tactic, true, isBigMatch, setup.away.tactic.formation),
+    away: buildSide(setup.away.club, setup.away.tactic, false, isBigMatch, setup.home.tactic.formation),
     events: [],
     statMap: new Map(),
     pPossHome: 0.5,
@@ -159,7 +161,8 @@ export function createContext(setup: MatchSetup): MatchContext {
 /** 라이브 경기에서 한 팀의 전술을 교체(하프타임 개입). 전력·점유 확률 재계산. */
 export function applyTactic(ctx: MatchContext, side: 'home' | 'away', tactic: Tactic): void {
   const cur = ctx[side];
-  const next = buildSide(cur.club, tactic, cur.isHome, ctx.isBigMatch);
+  const oppSide = side === 'home' ? 'away' : 'home';
+  const next = buildSide(cur.club, tactic, cur.isHome, ctx.isBigMatch, ctx[oppSide].tactic.formation);
   // 누적 스코어/슈팅/점유 틱은 유지하고 전력·라인업만 교체
   next.goals = cur.goals;
   next.shots = cur.shots;

@@ -5,7 +5,7 @@
  * 경기 인프라(simulateMatch)와 상태 변화(applyMatchEffects)를 재사용한다.
  */
 import type { Club, MatchResult, Tactic } from './types.js';
-import { simulateMatch } from './simulateMatch.js';
+import { simulateMatchWithAiTactics } from './aiInMatch.js';
 import { applyMatchEffects } from './matchEffects.js';
 import { defaultTactic } from './generate.js';
 import { Rng } from './rng.js';
@@ -173,7 +173,7 @@ export function playCupRound(
     const result =
       watched && watched.homeClubId === pr.homeId && watched.awayClubId === pr.awayId
         ? watched
-        : simulateMatch({
+        : simulateMatchWithAiTactics({
             home: { club: home, tactic: homeTactic },
             away: { club: away, tactic: awayTactic },
             seed: pr.seed,

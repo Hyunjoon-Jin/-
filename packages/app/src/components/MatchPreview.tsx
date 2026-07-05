@@ -1,6 +1,26 @@
 import type { MatchPreview as Preview, TeamPreview } from '../game.js';
-import type { TeamStrength, FormResult } from '@soccer-tycoon/engine';
+import { formationMatchup, type TeamStrength, type FormResult } from '@soccer-tycoon/engine';
 import { ATTR_LABELS } from './PlayerDetail.js';
+
+const STRENGTH_LABEL: Record<keyof TeamStrength, string> = {
+  attack: '공격', creation: '창출', midfield: '중원', defense: '수비',
+  physical: '신체', aerial: '공중', gk: 'GK',
+};
+
+/** 두 팀의 포메이션 조합에 상성이 있으면 한 줄로 알린다(F02) — 없으면 null. */
+function formationInsight(mine: TeamPreview, opp: TeamPreview): string | null {
+  const mine2opp = formationMatchup(mine.formation, opp.formation);
+  if (mine2opp) {
+    const dir = mine2opp.mul >= 1 ? '유리하게' : '불리하게';
+    return `⚔️ ${mine.formation}가 ${opp.formation} 상대로 ${STRENGTH_LABEL[mine2opp.key]}에서 ${dir} 작용합니다.`;
+  }
+  const opp2mine = formationMatchup(opp.formation, mine.formation);
+  if (opp2mine) {
+    const dir = opp2mine.mul >= 1 ? '유리하게' : '불리하게';
+    return `⚔️ 상대 ${opp.formation}가 우리 ${mine.formation} 상대로 ${STRENGTH_LABEL[opp2mine.key]}에서 ${dir} 작용합니다.`;
+  }
+  return null;
+}
 
 const METRICS: { key: keyof TeamStrength; label: string }[] = [
   { key: 'attack', label: '공격' },
@@ -39,6 +59,7 @@ export function MatchPreview({ preview, rivalClubId }: { preview: Preview; rival
   const isDerby = rivalClubId !== undefined && (home.clubId === rivalClubId || away.clubId === rivalClubId);
   const mine = home.isMine ? home : away;
   const opp = home.isMine ? away : home;
+  const fInsight = formationInsight(mine, opp);
   return (
     <div className="preview">
       <h3>경기 프리뷰</h3>
@@ -50,6 +71,7 @@ export function MatchPreview({ preview, rivalClubId }: { preview: Preview; rival
       </div>
 
       <div className="pv-insight">🔎 {scoutingInsight(mine.strength, opp.strength)}</div>
+      {fInsight && <div className="pv-insight pv-formation">{fInsight}</div>}
 
       <div className="pv-metrics">
         {METRICS.map((m) => {

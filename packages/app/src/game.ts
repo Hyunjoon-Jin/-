@@ -1131,6 +1131,8 @@ export interface TeamPreview {
   /** 현재 리그 순위(1부터). 결과가 없으면 null. */
   position: number | null;
   strength: TeamStrength;
+  /** 예상 포메이션 — 포메이션 상성 안내에 사용. */
+  formation: string;
   form: FormSummary;
   /** 예상 선발 중 CA 최고 선수. */
   keyPlayer: { name: string; ca: number } | null;
@@ -1168,7 +1170,7 @@ function buildPreviewFrom(state: GameState, setup: MatchSetup): MatchPreview | n
     const i = table.findIndex((r) => r.clubId === clubId);
     return i < 0 ? null : i + 1; // 타 부 상대는 순위 정보 없음(null)
   };
-  const build = (club: Club, tactic: Tactic): TeamPreview => {
+  const build = (club: Club, tactic: Tactic, opponentFormation: string): TeamPreview => {
     const isMine = club.id === state.myClubId;
     const kp = keyPlayerOf(club, tactic);
     return {
@@ -1176,15 +1178,16 @@ function buildPreviewFrom(state: GameState, setup: MatchSetup): MatchPreview | n
       name: club.name,
       isMine,
       position: posOf(club.id),
-      strength: computeTeamStrength(club, tactic),
+      strength: computeTeamStrength(club, tactic, false, opponentFormation),
+      formation: tactic.formation,
       form: recentForm(results, club.id, 5),
       keyPlayer: kp ? { name: kp.name, ca: Math.round(currentAbility(kp)) } : null,
       keyPlayerReport: kp ? buildScoutingReport(kp, isMine ? 20 : myScouting) : null,
     };
   };
   return {
-    home: build(setup.home.club, setup.home.tactic),
-    away: build(setup.away.club, setup.away.tactic),
+    home: build(setup.home.club, setup.home.tactic, setup.away.tactic.formation),
+    away: build(setup.away.club, setup.away.tactic, setup.home.tactic.formation),
   };
 }
 

@@ -17,6 +17,37 @@ export function lineOf(pos: Position): Line {
   return LINE_OF[pos];
 }
 
+/** 포메이션 상성 보정 하나(적용 지표 + 배율). */
+export interface FormationMatchup {
+  key: keyof TeamStrength;
+  mul: number;
+}
+
+/** (내 포메이션 → 상대 포메이션) 조합별 소폭 보정. 정의되지 않은 조합은 중립(보정 없음).
+ *  각 항목은 실제 축구의 구조적 상성 한 가지씩만 반영한다 — 촘촘한 전 조합 표가 아니라
+ *  뚜렷한 케이스만 골라 소폭(±3~5%) 얹는다. */
+const FORMATION_MATCHUPS: Record<string, Record<string, FormationMatchup>> = {
+  '4-2-3-1': {
+    '3-5-2': { key: 'midfield', mul: 1.05 }, // 더블 볼란치가 스리백의 중원 3인 과부하를 흡수
+  },
+  '3-5-2': {
+    '4-4-2': { key: 'midfield', mul: 1.05 }, // 중원 3 대 2 수적 우위
+    '4-2-3-1': { key: 'midfield', mul: 0.97 }, // 더블 볼란치에 막혀 수적 우위가 상쇄
+  },
+  '4-4-2': {
+    '4-2-3-1': { key: 'aerial', mul: 1.04 }, // 투톱이 원톱 상대로 공중 다툼에서 우위
+    '3-5-2': { key: 'midfield', mul: 0.97 }, // 중원 수적 열세
+  },
+  '4-3-3': {
+    '3-5-2': { key: 'attack', mul: 1.04 }, // 폭넓은 윙어가 윙백이 전진한 뒷공간을 공략
+  },
+};
+
+/** (내 포메이션, 상대 포메이션) 조합의 상성 보정. 정의되지 않으면 undefined(중립). */
+export function formationMatchup(myFormation: string, opponentFormation: string): FormationMatchup | undefined {
+  return FORMATION_MATCHUPS[myFormation]?.[opponentFormation];
+}
+
 interface SlotEval {
   line: Line;
   d: DerivedRatings;
@@ -81,8 +112,11 @@ function evalLineup(club: Club, tactic: Tactic, isBigMatch: boolean): SlotEval[]
  * 팀 강도 산출.
  * mentality는 공격/수비 자원 배분을 조정한다(공격적일수록 공격 가중↑, 수비 가중↓).
  * @param isBigMatch 라이벌전·컵 결승 등 — 빅게임 히어로/새가슴 특성에만 영향.
+ * @param opponentFormation 상대 포메이션 — 주어지면 포메이션 상성 보정(F02)을 적용한다.
  */
-export function computeTeamStrength(club: Club, tactic: Tactic, isBigMatch = false): TeamStrength {
+export function computeTeamStrength(
+  club: Club, tactic: Tactic, isBigMatch = false, opponentFormation?: string,
+): TeamStrength {
   const slots = evalLineup(club, tactic, isBigMatch);
   const slotCounts = lineSlotCounts(tactic);
 
@@ -152,5 +186,8 @@ export function computeTeamStrength(club: Club, tactic: Tactic, isBigMatch = fal
   // 사실상 빈 골문인데 실점 확률이 소폭만 증가하던 문제를 막는다.
   const gk = gkSlot ? gkSlot.d.gk : (slotCounts.GK > 0 ? LINE_WIPED_PENALTY : 25);
 
-  return { attack, creation, midfield, defense, physical, aerial, gk };
+  const result: TeamStrength = { attack, creation, midfield, defense, physical, aerial, gk };
+  const matchup = opponentFormation ? formationMatchup(tactic.formation, opponentFormation) : undefined;
+  if (matchup) result[matchup.key] = clamp(result[matchup.key] * matchup.mul, 0, 110);
+  return result;
 }

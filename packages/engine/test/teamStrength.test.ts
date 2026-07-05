@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { computeTeamStrength, lineOf } from '../src/teamStrength.js';
+import { computeTeamStrength, lineOf, formationMatchup } from '../src/teamStrength.js';
 import { generateClub, defaultTactic } from '../src/generate.js';
 import { Rng } from '../src/rng.js';
+import type { Tactic } from '../src/types.js';
 
 function makeClub(seed = 1) {
   const rng = new Rng(seed);
@@ -42,5 +43,32 @@ describe('teamStrength: 라인 전멸 시 붕괴 페널티', () => {
 
     expect(after.gk).toBeLessThan(before.gk);
     expect(after.gk).toBeLessThan(15);
+  });
+});
+
+describe('F02: 포메이션 상성 매트릭스', () => {
+  it('정의된 조합은 상성 보정을 반환한다', () => {
+    expect(formationMatchup('4-2-3-1', '3-5-2')).toEqual({ key: 'midfield', mul: 1.05 });
+  });
+
+  it('정의되지 않은 조합은 undefined(중립)를 반환한다', () => {
+    expect(formationMatchup('4-3-3', '4-4-2')).toBeUndefined();
+    expect(formationMatchup('4-3-3', '4-3-3')).toBeUndefined();
+  });
+
+  it('상대 포메이션을 넘기면 상성 보정이 실제로 전력 지표에 반영된다', () => {
+    const club = makeClub(3);
+    const tactic: Tactic = { ...defaultTactic(club), formation: '4-2-3-1' };
+    const withoutMatchup = computeTeamStrength(club, tactic);
+    const withMatchup = computeTeamStrength(club, tactic, false, '3-5-2');
+    expect(withMatchup.midfield).toBeCloseTo(Math.min(withoutMatchup.midfield * 1.05, 110), 5);
+  });
+
+  it('상성 보정이 없는 상대 포메이션이면 결과가 그대로다', () => {
+    const club = makeClub(4);
+    const tactic: Tactic = { ...defaultTactic(club), formation: '4-3-3' };
+    const withoutOpp = computeTeamStrength(club, tactic);
+    const withUnrelatedOpp = computeTeamStrength(club, tactic, false, '4-4-2');
+    expect(withUnrelatedOpp).toEqual(withoutOpp);
   });
 });

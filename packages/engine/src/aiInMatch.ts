@@ -1,0 +1,102 @@
+/**
+ * AI 구단의 하프타임 개입 (F01 부상 교체 · F09 스코어라인 기반 반응형 전술).
+ * 사람 관전자만 쓰던 자유 교체·빠른 지시를, AI 구단에도 동일한 하프타임 개입
+ * 지점에서 자동으로 적용해 사람-AI 비대칭을 없앤다.
+ */
+import type { Club, InjuryEvent, MatchResult, Tactic } from './types.js';
+import { LiveMatch, HALF_TIME } from './liveMatch.js';
+import type { MatchSetup } from './simulateMatch.js';
+import { isAvailable, currentAbility, familiarityAt } from './derived.js';
+
+type QuickTacticValues = Pick<Tactic, 'mentality' | 'tempo' | 'pressing' | 'width' | 'defensiveLine'>;
+
+/** 뒤지고 있을 때 적용하는 공격적 지시(사람의 "추격 모드"와 동일한 값). */
+const CHASE_TACTIC: QuickTacticValues = { mentality: 0.75, tempo: 0.8, pressing: 0.75, width: 0.6, defensiveLine: 0.65 };
+/** 앞서고 있을 때 적용하는 안정적 지시(사람의 "리드 지키기"와 동일한 값). */
+const PROTECT_TACTIC: QuickTacticValues = { mentality: 0.3, tempo: 0.35, pressing: 0.35, width: 0.4, defensiveLine: 0.35 };
+/** 이 골차 이상 앞서야 리드 지키기로 전환(1점 차는 아직 불안하므로 유지). */
+const PROTECT_LEAD_MARGIN = 2;
+
+/** 하프타임 스코어라인에 따른 반응형 전술. 지고 있으면 추격, 2골 이상 앞서면 안정화. */
+function reactiveTactic(tactic: Tactic, myGoals: number, oppGoals: number): Tactic | null {
+  const diff = myGoals - oppGoals;
+  if (diff < 0) return { ...tactic, ...CHASE_TACTIC };
+  if (diff >= PROTECT_LEAD_MARGIN) return { ...tactic, ...PROTECT_TACTIC };
+  return null;
+}
+
+/** 슬롯에 넣을 벤치 교체 자원 선정 — 해당 포지션 숙련도 우선, 그다음 현재 능력(CA). */
+function pickReplacement(bench: Club['players'], position: Tactic['lineup'][number]['position']) {
+  return bench.reduce((best, cand) => {
+    const famBest = familiarityAt(best, position);
+    const famCand = familiarityAt(cand, position);
+    if (famCand !== famBest) return famCand > famBest ? cand : best;
+    return currentAbility(cand) > currentAbility(best) ? cand : best;
+  });
+}
+
+/** 전반 중 부상당한 선발을 하프타임에 같은 슬롯의 최적 벤치 자원으로 교체(F01). */
+function injurySubstitution(club: Club, tactic: Tactic, halfInjuries: InjuryEvent[]): Tactic | null {
+  if (halfInjuries.length === 0) return null;
+  const injuredIds = new Set(halfInjuries.map((e) => e.playerId));
+  const outSlots = tactic.lineup.filter((s) => injuredIds.has(s.playerId));
+  if (outSlots.length === 0) return null;
+
+  const lineupIds = new Set(tactic.lineup.map((s) => s.playerId));
+  let nextLineup = tactic.lineup;
+  let changed = false;
+  for (const slot of outSlots) {
+    const bench = club.players.filter((p) => isAvailable(p) && !lineupIds.has(p.id));
+    if (bench.length === 0) continue;
+    const best = pickReplacement(bench, slot.position);
+    nextLineup = nextLineup.map((s) => (s.playerId === slot.playerId ? { ...s, playerId: best.id } : s));
+    lineupIds.delete(slot.playerId);
+    lineupIds.add(best.id);
+    changed = true;
+  }
+  return changed ? { ...tactic, lineup: nextLineup } : null;
+}
+
+/**
+ * 한 팀의 하프타임 개입을 결정 — 부상 교체(F01)를 먼저 적용하고, 그 위에 스코어라인
+ * 기반 반응형 전술(F09)을 얹는다. 아무 변화도 없으면 null(개입 없음).
+ * @param halfInjuries 전반 중 이 팀에서 발생한 부상 이벤트만 필터링해 넘긴다.
+ */
+export function decideAiHalftimeTactic(
+  club: Club, tactic: Tactic, myGoals: number, oppGoals: number, halfInjuries: InjuryEvent[],
+): Tactic | null {
+  let next = tactic;
+  let changed = false;
+
+  const subbed = injurySubstitution(club, next, halfInjuries);
+  if (subbed) { next = subbed; changed = true; }
+
+  const reactive = reactiveTactic(next, myGoals, oppGoals);
+  if (reactive) { next = reactive; changed = true; }
+
+  return changed ? next : null;
+}
+
+/**
+ * simulateMatch와 동일한 로직을 공유하되, 하프타임에 양 팀 모두 부상 교체(F01)·
+ * 반응형 전술(F09)을 자동 적용한다. 개입이 전혀 없으면 simulateMatch와 완전히
+ * 동일한 결과를 낸다(LiveMatch가 같은 컨텍스트를 재사용하기 때문 — 재현성 유지).
+ */
+export function simulateMatchWithAiTactics(setup: MatchSetup): MatchResult {
+  const live = new LiveMatch(setup);
+  live.runFirstHalf();
+  const [homeGoals, awayGoals] = live.score();
+  const halfInjuries = live.injuries().filter((e) => e.minute <= HALF_TIME);
+
+  for (const side of ['home', 'away'] as const) {
+    const { club, tactic } = setup[side];
+    const myGoals = side === 'home' ? homeGoals : awayGoals;
+    const oppGoals = side === 'home' ? awayGoals : homeGoals;
+    const sideInjuries = halfInjuries.filter((e) => e.side === side);
+    const next = decideAiHalftimeTactic(club, tactic, myGoals, oppGoals, sideInjuries);
+    if (next) live.setTactic(side, next);
+  }
+
+  live.runToEnd();
+  return live.result();
+}

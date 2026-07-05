@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   LiveMatch, HALF_TIME, MATCH_LENGTH, currentAbility, isAvailable, SEVERITY_LABEL,
-  CUP_FINAL_ROUND_NAME,
+  CUP_FINAL_ROUND_NAME, decideAiHalftimeTactic,
   type Club, type Tactic, type MatchEvent, type MatchResult, type LiveStats, type InjuryEvent,
 } from '@soccer-tycoon/engine';
 import type { WatchSetup, MatchPreview as MatchPreviewData } from '../game.js';
@@ -74,6 +74,9 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
   const [activeInjury, setActiveInjury] = useState<InjuryEvent | null>(null);
   const [subsUsed, setSubsUsed] = useState(0);
   const [subModalOpen, setSubModalOpen] = useState(false);
+  /** 하프타임에 AI(상대) 측이 조정한 전술 — 없으면 킥오프 셋업 그대로. */
+  const [aiTacticOverride, setAiTacticOverride] = useState<Tactic | null>(null);
+  const [aiHalftimeNote, setAiHalftimeNote] = useState<string | null>(null);
 
   // 부상 스케줄은 킥오프 시점에 확정(재현성) — 관전 중 분이 지날 때마다 하나씩 노출.
   const injuryScheduleRef = useRef<InjuryEvent[] | null>(null);
@@ -189,15 +192,33 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
     live.setTactic(userSide, next);
   }
 
+  /** 후반 시작 시 사용자 전술을 확정하고, 상대(AI) 측도 부상 교체(F01)·반응형 전술(F09)을
+   *  동일한 하프타임 개입 지점에서 자동 적용한다 — 사람만 개입할 수 있던 비대칭을 없앤다. */
   function startSecondHalf() {
     live.setTactic(userSide, tactic);
+
+    const aiSide = userSide === 'home' ? 'away' : 'home';
+    const aiClub = aiSide === 'home' ? watch.setup.home.club : watch.setup.away.club;
+    const aiTactic = aiSide === 'home' ? watch.setup.home.tactic : watch.setup.away.tactic;
+    const [homeGoals, awayGoals] = live.score();
+    const aiGoals = aiSide === 'home' ? homeGoals : awayGoals;
+    const humanGoals = aiSide === 'home' ? awayGoals : homeGoals;
+    const aiHalfInjuries = injuryScheduleRef.current!.filter((e) => e.side === aiSide && e.minute <= HALF_TIME);
+    const nextAiTactic = decideAiHalftimeTactic(aiClub, aiTactic, aiGoals, humanGoals, aiHalfInjuries);
+    if (nextAiTactic) {
+      live.setTactic(aiSide, nextAiTactic);
+      setAiTacticOverride(nextAiTactic);
+      setAiHalftimeNote(`${watch.opponent.name}이(가) 하프타임에 전술을 조정했습니다.`);
+    }
+
     setPaused(false);
     setPhase('playing2');
   }
 
-  // 현재 포메이션(하프타임 전술 변경 반영): 사용자 측은 라이브 tactic, 상대는 셋업 고정.
-  const homeTactic = watch.userIsHome ? tactic : watch.setup.home.tactic;
-  const awayTactic = watch.userIsHome ? watch.setup.away.tactic : tactic;
+  // 현재 포메이션(하프타임 전술 변경 반영): 사용자 측은 라이브 tactic, 상대는 셋업 고정이되
+  // AI가 하프타임에 개입했으면(F01/F09) 그 결과를 반영한다.
+  const homeTactic = watch.userIsHome ? tactic : (aiTacticOverride ?? watch.setup.home.tactic);
+  const awayTactic = watch.userIsHome ? (aiTacticOverride ?? watch.setup.away.tactic) : tactic;
   const homeClub = watch.setup.home.club;
   const awayClub = watch.setup.away.club;
   const myGoals = watch.userIsHome ? view.score[0] : view.score[1];
@@ -300,11 +321,13 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
             <FullTime
               result={live.result()} homeName={homeName} awayName={awayName} score={view.score}
               myClubId={myClub.id} isDerby={isDerby} isFinal={isFinal} userIsHome={watch.userIsHome}
+              aiHalftimeNote={aiHalftimeNote}
             />
 
           ) : (
             <div className="commentary">
               <LiveStatsPanel stats={stats} homeName={homeName} awayName={awayName} userSide={userSide} />
+              {aiHalftimeNote && <p className="muted small ai-halftime-note">🔄 {aiHalftimeNote}</p>}
               <h3>중계</h3>
               <Feed events={feed} injuries={injuryFeed} userSide={userSide} />
             </div>
@@ -536,10 +559,10 @@ function FreeSubModal({
 }
 
 function FullTime({
-  result, homeName, awayName, score, myClubId, isDerby, isFinal, userIsHome,
+  result, homeName, awayName, score, myClubId, isDerby, isFinal, userIsHome, aiHalftimeNote,
 }: {
   result: MatchResult; homeName: string; awayName: string; score: [number, number]; myClubId: string;
-  isDerby: boolean; isFinal: boolean; userIsHome: boolean;
+  isDerby: boolean; isFinal: boolean; userIsHome: boolean; aiHalftimeNote: string | null;
 }) {
   const myGoals = userIsHome ? score[0] : score[1];
   const oppGoals = userIsHome ? score[1] : score[0];
@@ -547,6 +570,7 @@ function FullTime({
   return (
     <div className="ft-panel">
       <h3>경기 종료</h3>
+      {aiHalftimeNote && <p className="muted small ai-halftime-note">🔄 {aiHalftimeNote}</p>}
       {isFinal && (
         <p className={`final-result ${outcome}`}>
           {outcome === 'win' && '🏆 컵 우승 확정! 결승에서 승리했습니다.'}
