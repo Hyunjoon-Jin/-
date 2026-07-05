@@ -6,6 +6,7 @@ import {
   buyback,
   attachAddOn,
   exerciseBuyOption,
+  panicBuyAction,
   recordNegotiationBreakdown,
   upgradeStadiumAction, upgradeAcademyAction,
   loanOut, loanIn, recallLoan, swapDeal,
@@ -189,6 +190,12 @@ export function App() {
     id: string, appearances: number | undefined, goals: number | undefined, fee: number,
   ): ActionOutcome => {
     const outcome = attachAddOn(game, id, appearances, goals, fee);
+    if (outcome.ok) update(outcome.state);
+    return outcome;
+  };
+
+  const handlePanicBuy = (id: string): ActionOutcome => {
+    const outcome = panicBuyAction(game, id);
     if (outcome.ok) update(outcome.state);
     return outcome;
   };
@@ -389,6 +396,7 @@ export function App() {
                 onNegotiationBreakdown={(id) => update(recordNegotiationBreakdown(game, id))}
                 onBuyback={handleBuyback}
                 onAttachAddOn={handleAttachAddOn}
+                onPanicBuy={handlePanicBuy}
               />
             )}
           </div>

@@ -329,6 +329,24 @@ export function buyPlayer(clubs: Club[], myClubId: string, playerId: string): Bu
   return buyPlayerAt(clubs, myClubId, playerId, askingPrice(seller, player));
 }
 
+// ── 이적 마감시한 패닉 바이 (D-day 프리미엄, 신규 개선 항목 7) ─────
+
+/** 패닉 바이 시 호가 위에 얹는 웃돈 배율 — 밀당을 포기하는 대신 확실하게 데려온다. */
+export const PANIC_BUY_PREMIUM = 1.15;
+
+/**
+ * 협상이 결렬 직전이거나 시간이 없을 때 쓰는 마감시한 패닉 바이 — 호가에 웃돈
+ * (PANIC_BUY_PREMIUM배)을 얹어 협상 없이 즉시 확정 영입한다. 내부적으로 buyPlayerAt을
+ * 그대로 재사용하므로 예산·스쿼드 뎁스 검증과 관계 지수 상승(Item6)도 동일하게 적용된다.
+ */
+export function panicBuy(clubs: Club[], myClubId: string, playerId: string): BuyResult {
+  const seller = clubs.find((c) => c.id !== myClubId && c.players.some((p) => p.id === playerId));
+  if (!seller) return { ok: false, reason: '해당 선수를 찾을 수 없습니다.' };
+  const player = seller.players.find((p) => p.id === playerId)!;
+  const fee = Math.round(askingPrice(seller, player) * PANIC_BUY_PREMIUM);
+  return buyPlayerAt(clubs, myClubId, playerId, fee);
+}
+
 export interface SellResult { ok: boolean; fee?: number; buyerName?: string; playerName?: string; reason?: string }
 
 /** 내 선수 판매 (관심 있는 AI 구단에 즉시 매각, 시장가의 92%). */

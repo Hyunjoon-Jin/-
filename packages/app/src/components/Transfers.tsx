@@ -7,6 +7,7 @@ import {
   transferTargets, marketValue, currentAbility, formatMoney, lineOf, buildScoutingReport,
   MAX_NEGOTIATION_ROUNDS, LOAN_MIN_SEASONS, LOAN_MAX_SEASONS,
   LOAN_OBLIGATION_MIN_APPS, LOAN_OBLIGATION_MAX_APPS, agentPersonality, BUYBACK_MAX_SEASONS,
+  PANIC_BUY_PREMIUM,
   type Line, type Player, type OfferEvaluation, type TransferTarget, type SellOffer, type LoanTerms,
   type AgentPersonality, type AgentRelationsTier,
 } from '@soccer-tycoon/engine';
@@ -36,6 +37,7 @@ interface Props {
   onSwap: (myPlayerId: string, otherClubId: string, otherPlayerId: string, cashAdjustment: number) => ActionOutcome;
   onSelect: (p: Player) => void;
   onNegotiationBreakdown: (playerId: string) => void;
+  onPanicBuy: (playerId: string) => ActionOutcome;
 }
 
 type Msg = { text: string; ok: boolean };
@@ -88,7 +90,7 @@ export function Transfers(props: Props) {
 function TransferMarket({
   game, onNegotiate, onBuyAt, onBuyViaReleaseClause, onOffers, onAcceptSell, onRelease,
   onLoanOut, onLoanIn, onRecallLoan, onExerciseBuyOption, onSwap, onSelect, onNegotiationBreakdown,
-  onBuyback, onAttachAddOn,
+  onBuyback, onAttachAddOn, onPanicBuy,
 }: Props) {
   const club = myClub(game);
   const toast = useToast();
@@ -443,6 +445,7 @@ function TransferMarket({
           onResult={(m) => { toast(m.text, m.ok); if (m.ok) setNegotiating(null); }}
           onClose={() => setNegotiating(null)}
           onNegotiationBreakdown={onNegotiationBreakdown}
+          onPanicBuy={onPanicBuy}
         />
       )}
       {buyingViaClause && (
@@ -972,7 +975,7 @@ function SellModal({
 
 function NegotiationModal({
   target, budget, scouting, scouted, round: initialRound, onRoundChange, onNegotiate, onBuyAt, onResult, onClose,
-  onNegotiationBreakdown,
+  onNegotiationBreakdown, onPanicBuy,
 }: {
   target: TransferTarget;
   budget: number;
@@ -986,6 +989,7 @@ function NegotiationModal({
   onResult: (m: Msg) => void;
   onClose: () => void;
   onNegotiationBreakdown: (playerId: string) => void;
+  onPanicBuy: (playerId: string) => ActionOutcome;
 }) {
   const { player, value } = target;
   const [ev, setEv] = useState<OfferEvaluation | null>(null);
@@ -1009,6 +1013,10 @@ function NegotiationModal({
   const acceptCounter = (counter: number) => {
     const bought = onBuyAt(player.id, counter);
     onResult({ text: bought.message, ok: bought.ok });
+  };
+  const panicBuyNow = () => {
+    const r = onPanicBuy(player.id);
+    onResult({ text: r.message, ok: r.ok });
   };
 
   const PRESETS: { label: string; pct: number }[] = [
@@ -1052,7 +1060,16 @@ function NegotiationModal({
 
         {ev && !ev.ok && <p className="toast err">{ev.reason}</p>}
         {ev?.outcome === 'rejected' && ev.roundsExhausted && (
-          <p className="toast err">여러 차례 밀당했지만 이견을 좁히지 못해 상대가 협상을 접었습니다. 다음 시즌에 다시 시도하세요.</p>
+          <div className="neg-panic">
+            <p className="toast err">여러 차례 밀당했지만 이견을 좁히지 못해 상대가 협상을 접었습니다. 다음 시즌에 다시 시도하거나, 마감시한 패닉 바이로 지금 무조건 데려올 수 있습니다.</p>
+            <button
+              className="btn-advance"
+              disabled={ev.asking === undefined || Math.round(ev.asking * PANIC_BUY_PREMIUM) > budget}
+              onClick={panicBuyNow}
+            >
+              🚨 패닉 바이로 확정 영입 (약 {formatMoney(Math.round((ev.asking ?? 0) * PANIC_BUY_PREMIUM))})
+            </button>
+          </div>
         )}
         {ev?.outcome === 'rejected' && !ev.roundsExhausted && (
           <p className="toast err">제안이 너무 낮아 거절당했습니다. 더 높은 금액을 제시하세요.</p>

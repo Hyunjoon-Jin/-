@@ -11,6 +11,7 @@ import {
   exerciseBuyback, attachAddOnClause, exerciseLoanBuyOption,
   agentRelationsOf, agentRelationsTier,
   AGENT_RELATIONS_MIN, AGENT_RELATIONS_DEFAULT, AGENT_RELATIONS_BREAKDOWN_PENALTY,
+  panicBuy as enginePanicBuy, PANIC_BUY_PREMIUM,
   type AgentRelationsTier,
   sellOffers, acceptSellOffer,
   loanPlayerOut, recallLoanPlayer, applyLoanWageSubsidies, swapPlayers,
@@ -923,6 +924,16 @@ export function buyViaReleaseClause(state: GameState, playerId: string): ActionO
   const r = buyPlayerViaReleaseClause(state.clubs, state.myClubId, playerId);
   if (!r.ok) return { state, ok: false, message: r.reason! };
   const feeMsg = `방출조항 ${formatMoney(r.fee!)} + 에이전트 수수료 ${formatMoney(r.agentFee!)}`;
+  return { state: afterSquadChange(state), ok: true, message: `${r.playerName} 영입 완료 (${feeMsg})` };
+}
+
+/** 이적 마감시한 패닉 바이(D-day 프리미엄, Item7) — 협상 없이 호가에 웃돈을 얹어
+ *  즉시 확정 영입한다. 협상이 결렬되기 직전이거나 더 밀당할 여유가 없을 때 쓴다. */
+export function panicBuyAction(state: GameState, playerId: string): ActionOutcome {
+  if (state.live) return { state, ok: false, message: '이적은 프리시즌에만 가능합니다.' };
+  const r = enginePanicBuy(state.clubs, state.myClubId, playerId);
+  if (!r.ok) return { state, ok: false, message: r.reason! };
+  const feeMsg = `패닉 바이 ${formatMoney(r.fee!)}(호가+${Math.round((PANIC_BUY_PREMIUM - 1) * 100)}%) + 에이전트 수수료 ${formatMoney(r.agentFee!)}`;
   return { state: afterSquadChange(state), ok: true, message: `${r.playerName} 영입 완료 (${feeMsg})` };
 }
 
