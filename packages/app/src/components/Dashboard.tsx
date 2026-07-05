@@ -179,6 +179,25 @@ export function Dashboard({ game, onSignContract, visitedTactics, visitedSquadPr
       ),
     });
   }
+  if (last?.reserveLeagueTable !== undefined && last.reserveLeagueTable.length > 0) {
+    const myRow = last.reserveLeagueTable.find((r) => r.clubId === game.myClubId);
+    if (myRow) {
+      const myPos = last.reserveLeagueTable.findIndex((r) => r.clubId === game.myClubId) + 1;
+      const isChampion = myPos === 1;
+      seasonBanners.push({
+        key: 'reserveLeague', priority: 5,
+        node: (
+          <Banner tone={isChampion ? 'success' : 'info'} title="🏟️ 리저브 리그">
+            <p>
+              우리 리저브팀이 {last.reserveLeagueTable.length}팀 중 <b>{myPos}위</b>로 시즌을 마쳤습니다
+              ({myRow.won}승 {myRow.drawn}무 {myRow.lost}패, 득실 {myRow.gf - myRow.ga > 0 ? '+' : ''}{myRow.gf - myRow.ga}).
+              {isChampion && ' 우승 보너스로 리저브 전원의 사기가 올랐습니다!'}
+            </p>
+          </Banner>
+        ),
+      });
+    }
+  }
   if (last?.loanReturns !== undefined && last.loanReturns.length > 0) {
     seasonBanners.push({
       key: 'loanReturns', priority: 6,

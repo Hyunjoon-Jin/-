@@ -14,6 +14,7 @@ import { generateAcademyIntake, generateYouthPlayer, assignSquadNumber } from '.
 import { applyLoanWageSubsidies, MIN_SQUAD } from './transferActions.js';
 import { enforceFinancialFairPlay } from './financeControl.js';
 import { runInternationalBreak, runInternationalTournament, TOURNAMENT_INTERVAL_SEASONS } from './international.js';
+import { simulateReserveSeason, type ReserveTableRow } from './reserveLeague.js';
 import { currentAbility } from './derived.js';
 import { hasTrait } from './traits.js';
 import { lineOf } from './teamStrength.js';
@@ -145,6 +146,8 @@ export interface SeasonSummary {
   boardTierBonus?: { fromStatus: BoardStatus; toStatus: BoardStatus; amount: number };
   /** 이번 시즌 내 구단이 관련된 성과 기반 후불 이적료(Add-on) 발동(신규 개선 항목 3). */
   addOnPayouts?: AddOnEvent[];
+  /** 리저브팀 자체 소규모 리그(가상 매치, 신규 개선 항목 14) 순위표(전 구단 — 앱에서 내 구단 순위를 찾아 표시). */
+  reserveLeagueTable?: ReserveTableRow[];
 }
 
 /** 과거 유스 기대주 소개 이후의 후속 소식(데뷔/첫 골). */
@@ -317,6 +320,9 @@ export interface OffseasonResult {
   staffDepartures: (StaffDepartureEvent & { clubId: string; clubName: string })[];
   /** 이번 오프시즌 성과 기반 후불 이적료(Add-on)가 발동한 선수(전 구단, 신규 개선 항목 3). */
   addOnPayouts: AddOnEvent[];
+  /** 리저브팀 자체 소규모 리그(가상 매치, 신규 개선 항목 14) 순위표. 참가 자격(MIN_RESERVE_SQUAD)
+   *  미달 구단은 빠진다. 참가 자격 구단이 2개 미만이면 빈 배열. */
+  reserveLeagueTable: ReserveTableRow[];
 }
 
 /** 멘토링 보너스 배율 — 같은 라인에 리더 특성 보유자나 리더십 높은 베테랑이 있으면 성장 가속. */
@@ -447,6 +453,11 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
     }
     club.players = staying;
   }
+
+  // 리저브팀 자체 소규모 리그(가상 매치, 신규 개선 항목 14) — 이번 시즌 내내 쌓인 리저브
+  // 스쿼드로 전 구단이 한 번에 가상 매치를 치른다. 아래 본 루프에서 성장/승격/유스 인테이크로
+  // club.reserves가 바뀌기 전에, "이번 시즌을 실제로 보낸" 스쿼드 기준으로 먼저 계산한다.
+  const { table: reserveLeagueTable } = simulateReserveSeason(clubs, rng.int(1, 1_000_000_000));
 
   const expectedMatches = 2 * (clubs.length - 1); // 리그 기준 기대 출전
   for (const club of clubs) {
@@ -620,7 +631,7 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
   return {
     retirements, intakeByClub, intakePlayersByClub, fireSalesByClub, retiredPlayers, milestones,
     debutEvents, loanReturns, loanObligations, reservePromotions, reserveReleasesByClub, staffDepartures,
-    addOnPayouts,
+    addOnPayouts, reserveLeagueTable,
   };
 }
 

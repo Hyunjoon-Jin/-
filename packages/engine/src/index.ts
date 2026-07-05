@@ -131,3 +131,7 @@ export {
   MAN_MARK_POSITIONS, CUT_INSIDE_POSITIONS, CUT_INSIDE_WEIGHT_MUL, CUT_INSIDE_XG_MUL,
   type PlayerInstruction, type PlayerInstructionKind,
 } from './playerInstructions.js';
+export {
+  simulateReserveSeason, MIN_RESERVE_SQUAD, RESERVE_LEAGUE_CHAMPION_MORALE_BOOST,
+  type ReserveTableRow, type ReserveLeagueResult,
+} from './reserveLeague.js';
