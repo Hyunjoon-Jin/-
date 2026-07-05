@@ -119,7 +119,7 @@ describe('B08+B09: 스태프 계약 만료 이탈·후임 영입', () => {
       const m = club.staff.members!.coaching!;
       m.contractYears = 1;
       const before = { ...m };
-      const departures = tickStaffContracts(club, new Rng(seed * 7919));
+      const { departures } = tickStaffContracts(club, new Rng(seed * 7919));
       const event = departures.find((d) => d.kind === kind);
       if (!event) continue;
       found = true;
@@ -138,7 +138,7 @@ describe('B08+B09: 스태프 계약 만료 이탈·후임 영입', () => {
       const m = club.staff.members!.medical!;
       m.contractYears = 1;
       const before = { ...m };
-      const departures = tickStaffContracts(club, new Rng(seed * 7919));
+      const { departures } = tickStaffContracts(club, new Rng(seed * 7919));
       if (departures.some((d) => d.kind === 'medical')) continue;
       found = true;
       expect(club.staff.members!.medical!.name).toBe(before.name);
@@ -155,12 +155,12 @@ describe('B08+B09: 스태프 계약 만료 이탈·후임 영입', () => {
       const lowClub = generateClub(new Rng(seed), 'lowClub', 'Club', 10);
       lowClub.staff.youth = 2;
       lowClub.staff.members!.youth!.contractYears = 1;
-      if (tickStaffContracts(lowClub, new Rng(seed * 13)).some((d) => d.kind === 'youth')) lowDepartures++;
+      if (tickStaffContracts(lowClub, new Rng(seed * 13)).departures.some((d) => d.kind === 'youth')) lowDepartures++;
 
       const highClub = generateClub(new Rng(seed), 'highClub', 'Club', 10);
       highClub.staff.youth = 19;
       highClub.staff.members!.youth!.contractYears = 1;
-      if (tickStaffContracts(highClub, new Rng(seed * 13)).some((d) => d.kind === 'youth')) highDepartures++;
+      if (tickStaffContracts(highClub, new Rng(seed * 13)).departures.some((d) => d.kind === 'youth')) highDepartures++;
     }
     expect(highDepartures).toBeGreaterThan(lowDepartures);
   });
@@ -169,7 +169,7 @@ describe('B08+B09: 스태프 계약 만료 이탈·후임 영입', () => {
     const club = generateClub(new Rng(5), 'safeClub', 'Club', 10);
     for (const kind of NAMED_STAFF_KINDS) club.staff.members![kind]!.contractYears = 3;
     const before = { ...club.staff.members!.scouting! };
-    const departures = tickStaffContracts(club, new Rng(999));
+    const { departures } = tickStaffContracts(club, new Rng(999));
     expect(departures.length).toBe(0);
     expect(club.staff.members!.scouting!.name).toBe(before.name);
     expect(club.staff.members!.scouting!.contractYears).toBe(2);

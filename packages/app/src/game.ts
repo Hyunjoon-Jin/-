@@ -41,7 +41,8 @@ import {
   type Club, type Tactic, type MatchResult, type MatchSetup, type SeasonSummary,
   type Fixture, type TableRow, type PlayerSeasonStat, type CupState, type StaffKind, type NamedStaffKind,
   type PlayerFormEntry, type Player, type YouthProspect, type YouthProspectUpdate,
-  type TeamStrength, type FormSummary, type ScoutingReport, type Line, type StaffDepartureEvent,
+  type TeamStrength, type FormSummary, type ScoutingReport, type Line,
+  type StaffDepartureEvent, type StaffRetirementEvent,
   type AddOnEvent,
 } from '@soccer-tycoon/engine';
 import { makeDefaultTactic, repairTactic } from './tactics.js';
@@ -571,7 +572,8 @@ export function finishSeason(state: GameState): GameState {
   // 5) 오프시즌 (전 구단)
   const {
     retirements, intakeByClub, intakePlayersByClub, fireSalesByClub, retiredPlayers, milestones, debutEvents,
-    loanReturns, loanObligations, reservePromotions, staffDepartures, addOnPayouts, reserveLeagueTable,
+    loanReturns, loanObligations, reservePromotions, staffDepartures, staffRetirements, addOnPayouts,
+    reserveLeagueTable,
   } = runOffseason(state.clubs, new Rng(offseasonSeed(state)));
   // 내 구단 선수의 이번 시즌 리저브 승격(시즌 요약에 첨부)
   const myReservePromotions = reservePromotions.filter((r) => r.clubId === state.myClubId);
@@ -585,6 +587,8 @@ export function finishSeason(state: GameState): GameState {
   );
   // 내 구단에서 계약 만료로 이탈해 후임이 영입된 실명 스태프(시즌 요약에 첨부)
   const myStaffDepartures: StaffDepartureEvent[] = staffDepartures.filter((d) => d.clubId === state.myClubId);
+  // 내 구단에서 고령으로 은퇴해 후임이 영입된 실명 스태프(시즌 요약에 첨부, 신규 개선 항목 17)
+  const myStaffRetirements: StaffRetirementEvent[] = staffRetirements.filter((r) => r.clubId === state.myClubId);
   // 내 구단이 관련된 성과 기반 후불 이적료(Add-on) 발동(신규 개선 항목 3)
   const myAddOnPayouts: AddOnEvent[] = addOnPayouts.filter(
     (a) => a.fromClubId === state.myClubId || a.toClubId === state.myClubId,
@@ -758,6 +762,7 @@ export function finishSeason(state: GameState): GameState {
     loanObligations: myLoanObligations,
     reservePromotions: myReservePromotions,
     staffDepartures: myStaffDepartures,
+    staffRetirements: myStaffRetirements,
     continentalCupChampionId,
     continentalCupChampionName,
     qualifiedForContinental: continentalQualifierIds.includes(state.myClubId),

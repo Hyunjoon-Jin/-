@@ -20,7 +20,7 @@ import { hasTrait } from './traits.js';
 import { lineOf } from './teamStrength.js';
 import {
   effectiveCoaching, effectiveYouth, effectiveScouting, effectiveReserveCoaching,
-  tickStaffContracts, type StaffDepartureEvent,
+  tickStaffContracts, type StaffDepartureEvent, type StaffRetirementEvent,
 } from './staffActions.js';
 import { recentForm } from './form.js';
 import { clamp } from './math.js';
@@ -134,6 +134,8 @@ export interface SeasonSummary {
   reservePromotions?: ReservePromotionEvent[];
   /** 이번 오프시즌 계약 만료로 타 구단에 스카우트되어 이탈한 내 구단 실명 스태프(신규 영입 후임 포함). */
   staffDepartures?: StaffDepartureEvent[];
+  /** 이번 오프시즌 고령으로 은퇴한 내 구단 실명 스태프(신규 영입 후임 포함, 신규 개선 항목 17). */
+  staffRetirements?: StaffRetirementEvent[];
   /** 이번 시즌 비정기 국제대회(월드컵/유로급, C15)가 열렸다면 우승 국가. 참가 자격국 부족 시 null.
    *  값이 undefined면 이번 시즌엔 대회가 열리지 않고 정기 A매치 차출만 있었다는 뜻. */
   internationalTournamentChampion?: string | null;
@@ -318,6 +320,8 @@ export interface OffseasonResult {
   reserveReleasesByClub: Map<string, number>;
   /** 이번 오프시즌 계약 만료로 타 구단에 스카우트되어 이탈한 실명 스태프(전 구단, clubId 포함). */
   staffDepartures: (StaffDepartureEvent & { clubId: string; clubName: string })[];
+  /** 이번 오프시즌 고령으로 은퇴한 실명 스태프(전 구단, clubId 포함, 신규 개선 항목 17). */
+  staffRetirements: (StaffRetirementEvent & { clubId: string; clubName: string })[];
   /** 이번 오프시즌 성과 기반 후불 이적료(Add-on)가 발동한 선수(전 구단, 신규 개선 항목 3). */
   addOnPayouts: AddOnEvent[];
   /** 리저브팀 자체 소규모 리그(가상 매치, 신규 개선 항목 14) 순위표. 참가 자격(MIN_RESERVE_SQUAD)
@@ -405,6 +409,7 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
   const reservePromotions: ReservePromotionEvent[] = [];
   const reserveReleasesByClub = new Map<string, number>();
   const staffDepartures: (StaffDepartureEvent & { clubId: string; clubName: string })[] = [];
+  const staffRetirements: (StaffRetirementEvent & { clubId: string; clubName: string })[] = [];
   const addOnPayouts: AddOnEvent[] = [];
 
   // 임대 복귀: 시즌 카운트다운이 끝난 임대 선수를 원 소속 구단으로 돌려보낸다. 이번
@@ -574,8 +579,9 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
     fireSalesByClub.set(club.id, fire.sold.length);
 
     // 실명 스태프 계약 잔여연수 감소(0이면 확률적으로 이탈·후임 영입, 그 외엔 조용히 재계약)
-    const departures = tickStaffContracts(club, rng);
+    const { departures, retirements: staffRetired } = tickStaffContracts(club, rng);
     for (const d of departures) staffDepartures.push({ ...d, clubId: club.id, clubName: club.name });
+    for (const r of staffRetired) staffRetirements.push({ ...r, clubId: club.id, clubName: club.name });
 
     // 리저브 성장 + 승격/방출 판정 — 승격 인원은 1군에 합류(스쿼드 상한 초과분은 이후
     // trimSquad가 정리). 이번 시즌 새로 들어올 유스 인테이크보다 먼저 처리해, 갓
@@ -631,7 +637,7 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
   return {
     retirements, intakeByClub, intakePlayersByClub, fireSalesByClub, retiredPlayers, milestones,
     debutEvents, loanReturns, loanObligations, reservePromotions, reserveReleasesByClub, staffDepartures,
-    addOnPayouts, reserveLeagueTable,
+    staffRetirements, addOnPayouts, reserveLeagueTable,
   };
 }
 

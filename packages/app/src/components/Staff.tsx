@@ -8,6 +8,7 @@ import {
   STADIUM_MAX, stadiumUpgradeCost, stadiumMatchdayMultiplier,
   ACADEMY_MAX, academyUpgradeCost, academyPotentialBonus, staffTraitSynergyBonus,
   staffRaiseCost, STAFF_RAISE_ELIGIBLE_YEARS, ACADEMY_FOCUS_POTENTIAL_BONUS_PER_LEVEL,
+  STAFF_RETIRE_MIN_AGE,
   type StaffKind, type SpecialistCoachKind, type NamedStaffKind, type Club, type Line,
 } from '@soccer-tycoon/engine';
 import { useResultToast } from '../toast.js';
@@ -107,6 +108,9 @@ export function Staff({ game, onUpgrade, onUpgradeStadium, onUpgradeAcademy, onN
                     </span>
                   )}
                 </div>
+              )}
+              {member && member.age >= STAFF_RETIRE_MIN_AGE && (
+                <p className="muted small">🎂 고령으로 시즌 종료 시 은퇴할 수 있습니다.</p>
               )}
               {member && member.contractYears <= STAFF_RAISE_ELIGIBLE_YEARS && (
                 <div className="staff-raise">

@@ -245,6 +245,21 @@ export function Dashboard({ game, onSignContract, visitedTactics, visitedSquadPr
       ),
     });
   }
+  if (last?.staffRetirements !== undefined && last.staffRetirements.length > 0) {
+    seasonBanners.push({
+      key: 'staffRetirements', priority: 7.2,
+      node: (
+        <Banner tone="info" title="🎉 스태프 은퇴">
+          {last.staffRetirements.map((r) => (
+            <p key={r.kind}>
+              <b>{STAFF_NAMED_KIND_LABEL[r.kind]}</b> {r.name} 코치가 {r.finalAge}세로 은퇴했습니다.
+              후임으로 <b>{r.replacementName}</b>을(를) 영입했습니다.
+            </p>
+          ))}
+        </Banner>
+      ),
+    });
+  }
   if (last?.boardTierBonus !== undefined) {
     seasonBanners.push({
       key: 'boardTierBonus', priority: 3,

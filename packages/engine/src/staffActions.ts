@@ -166,18 +166,56 @@ export interface StaffDepartureEvent {
   replacementName: string;
 }
 
-/** 오프시즌 경계에 실명 스태프의 잔여 계약을 1년 감소시킨다. 0이 되면 레벨에 비례한
- *  확률로 타 구단에 스카우트되어 이탈하며, 이 경우 즉시 같은 자리에 새 인물을 영입해
- *  공백 없이 채운다. 이탈하지 않으면 기존과 동일하게 조용히 재계약한다. */
-export function tickStaffContracts(club: Club, rng: Rng): StaffDepartureEvent[] {
-  if (!club.staff.members) return [];
+// ── 스태프 은퇴(신규 개선 항목 17) ───────────────────────────
+
+/** 이 나이부터 매 시즌 확률적으로 은퇴한다(선수와 달리 체력 능력치가 없어 나이만 반영). */
+export const STAFF_RETIRE_MIN_AGE = 62;
+/** 이 나이 이상이면 확률과 무관하게 은퇴(하드컷). */
+export const STAFF_RETIRE_HARD_AGE = 72;
+
+/** 나이에 따른 시즌 후 은퇴 확률(62세=8%, 67세=38%, 71세=68% 기준). 계약 상태와 무관하게
+ *  매 시즌 독립적으로 판정한다 — 실제로 계약이 남아 있어도 고령이면 은퇴할 수 있다. */
+export function staffRetireChance(age: number): number {
+  if (age < STAFF_RETIRE_MIN_AGE) return 0;
+  return Math.min(0.95, (age - STAFF_RETIRE_MIN_AGE + 1) * 0.08);
+}
+
+/** 실명 스태프 은퇴 이벤트 — 즉시 같은 자리에 새 인물이 영입되어 공백을 메운다. */
+export interface StaffRetirementEvent {
+  kind: NamedStaffKind;
+  name: string;
+  finalAge: number;
+  replacementName: string;
+}
+
+export interface StaffTickResult {
+  departures: StaffDepartureEvent[];
+  retirements: StaffRetirementEvent[];
+}
+
+/** 오프시즌 경계에 실명 스태프를 한 살 더 먹이고, 고령이면 은퇴 여부를 먼저 판정한다.
+ *  은퇴하지 않은 인물만 기존과 동일하게 잔여 계약을 1년 감소시켜, 0이 되면 레벨에
+ *  비례한 확률로 타 구단에 스카우트되어 이탈한다(은퇴·이탈 모두 즉시 같은 자리에 새
+ *  인물을 영입해 공백 없이 채운다). 어느 쪽도 아니면 기존과 동일하게 조용히 재계약한다. */
+export function tickStaffContracts(club: Club, rng: Rng): StaffTickResult {
+  if (!club.staff.members) return { departures: [], retirements: [] };
   const departures: StaffDepartureEvent[] = [];
+  const retirements: StaffRetirementEvent[] = [];
   for (const kind of NAMED_STAFF_KINDS) {
     const m = club.staff.members[kind];
     if (!m) continue;
+    m.age += 1;
+    const level = club.staff[kind];
+    if (m.age >= STAFF_RETIRE_HARD_AGE || rng.roll(staffRetireChance(m.age))) {
+      const retiredName = m.name;
+      const finalAge = m.age;
+      const replacement = hireReplacementStaffMember(club.id, kind, level, rng);
+      club.staff.members[kind] = replacement;
+      retirements.push({ kind, name: retiredName, finalAge, replacementName: replacement.name });
+      continue;
+    }
     m.contractYears -= 1;
     if (m.contractYears <= 0) {
-      const level = club.staff[kind];
       const chance = Math.min(STAFF_DEPARTURE_MAX_CHANCE, STAFF_DEPARTURE_BASE_CHANCE + level * STAFF_DEPARTURE_PER_LEVEL);
       if (rng.roll(chance)) {
         const departedName = m.name;
@@ -190,7 +228,7 @@ export function tickStaffContracts(club: Club, rng: Rng): StaffDepartureEvent[] 
       m.contractYears = 1 + (seed % STAFF_CONTRACT_YEARS_MAX);
     }
   }
-  return departures;
+  return { departures, retirements };
 }
 
 // ── 코치 계약 협상 (연봉 인상 요구, 신규 개선 항목 12) ───────
