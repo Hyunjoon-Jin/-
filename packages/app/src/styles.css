@@ -347,6 +347,16 @@ body {
 .pd-fam h3 { margin: 0 0 10px; }
 .pd-fam .bar-row { margin-bottom: 6px; }
 .pd-fam .bar-label { width: 60px; white-space: nowrap; }
+.fam-map-svg {
+  width: 100%; max-width: 340px; height: auto; display: block; margin-bottom: 12px;
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px;
+}
+.fam-map-pitch { fill: none; stroke: var(--line); stroke-width: 1.5; }
+.fam-map-midline { stroke: var(--line); stroke-width: 1; stroke-dasharray: 3 3; }
+.fam-dot { fill: var(--accent-2); stroke: none; }
+.fam-dot.primary { stroke: var(--color-warning); stroke-width: 2.5; }
+.fam-dot.training { stroke: #3ddc84; stroke-width: 2.5; stroke-dasharray: 2 2; }
+.fam-label { font-size: 8.5px; fill: var(--muted); font-weight: 600; }
 .pd-form { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
 .form-rating {
   font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 6px;

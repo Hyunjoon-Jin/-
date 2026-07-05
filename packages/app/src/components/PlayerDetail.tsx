@@ -17,6 +17,7 @@ import { useResultToast } from '../toast.js';
 import { onKeyActivate } from '../a11y.js';
 import { InfoTip } from './InfoTip.js';
 import { flagFor } from '../flags.js';
+import { LINE_X, SIDE_Y } from './MatchPitch.js';
 
 function moraleLabel(m: number): { text: string; cls: string } {
   if (m >= 0.65) return { text: '😀 만족', cls: 'cond-good' };
@@ -542,6 +543,50 @@ function CareerTimeline({ entries }: { entries: TimelineEntry[] }) {
 }
 
 /** 주 포지션 + 실제로 숙련도가 쌓인(0.3 이상) 부 포지션을 숙련도 막대로 보여준다. */
+const FAM_MAP_W = 340;
+const FAM_MAP_H = 190;
+const FAM_MAP_PAD = 18;
+
+/** 포지션 숙련도 맵(신규 개선 항목 15) — MatchPitch와 같은 좌표계로 14개 포지션 전체를
+ *  피치 모양 위에 점으로 배치해, 선수의 "포지션 커버리지"를 한눈에 보여준다.
+ *  점의 불투명도가 숙련도를, 크기·테두리가 주 포지션/훈련 지정 포지션을 나타낸다. */
+function FamiliarityMap({ player }: { player: Player }) {
+  const innerW = FAM_MAP_W - FAM_MAP_PAD * 2;
+  const innerH = FAM_MAP_H - FAM_MAP_PAD * 2;
+  return (
+    <svg className="fam-map-svg" viewBox={`0 0 ${FAM_MAP_W} ${FAM_MAP_H}`} role="img" aria-label="포지션 숙련도 맵">
+      <rect
+        x={FAM_MAP_PAD / 2} y={FAM_MAP_PAD / 2}
+        width={FAM_MAP_W - FAM_MAP_PAD} height={FAM_MAP_H - FAM_MAP_PAD}
+        rx={10} className="fam-map-pitch"
+      />
+      <line
+        x1={FAM_MAP_W / 2} y1={FAM_MAP_PAD / 2} x2={FAM_MAP_W / 2} y2={FAM_MAP_H - FAM_MAP_PAD / 2}
+        className="fam-map-midline"
+      />
+      {POSITIONS.map((pos) => {
+        const fam = familiarityAt(player, pos);
+        const x = FAM_MAP_PAD + LINE_X[pos] * innerW;
+        const y = FAM_MAP_PAD + SIDE_Y[pos] * innerH;
+        const isPrimary = pos === player.position;
+        const isTraining = pos === player.trainingPosition;
+        return (
+          <g key={pos}>
+            <circle
+              cx={x} cy={y} r={isPrimary ? 13 : 9.5}
+              className={`fam-dot${isPrimary ? ' primary' : ''}${isTraining ? ' training' : ''}`}
+              style={{ opacity: 0.22 + fam * 0.78 }}
+            >
+              <title>{pos}{isPrimary ? ' (주 포지션)' : isTraining ? ' (전환 훈련 중)' : ''} — 숙련도 {Math.round(fam * 100)}%</title>
+            </circle>
+            <text x={x} y={y + (isPrimary ? 24 : 21)} textAnchor="middle" className="fam-label">{pos}</text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
 function PositionFamiliarity({ player }: { player: Player }) {
   const secondary = POSITIONS
     .filter((pos) => pos !== player.position)
@@ -556,9 +601,11 @@ function PositionFamiliarity({ player }: { player: Player }) {
         <InfoTip title="포지션 숙련도">
           주 포지션 이외의 자리는 숙련도가 낮으면 파생 전력이 깎입니다. 실전에서 그 자리를
           꾸준히 뛰거나(느리게 상승), 개발 탭에서 포지션 전환 훈련을 지정하면(코칭 지원, 더
-          빠르게 상승) 숙련도가 오릅니다.
+          빠르게 상승) 숙련도가 오릅니다. 아래 맵에서 점이 진할수록 숙련도가 높고, 금색 테두리는
+          주 포지션·훈련 지정 포지션을 나타냅니다.
         </InfoTip>
       </h3>
+      <FamiliarityMap player={player} />
       <div className="bar-row">
         <span className="bar-label">{player.position} (주)</span>
         <div className="bar-track"><div className="bar-fill" style={{ width: '100%' }} /></div>
@@ -569,7 +616,9 @@ function PositionFamiliarity({ player }: { player: Player }) {
       ) : (
         secondary.map(({ pos, v }) => (
           <div className="bar-row" key={pos}>
-            <span className="bar-label">{pos}</span>
+            <span className="bar-label">
+              {pos}{pos === player.trainingPosition ? ' 🎯' : ''}
+            </span>
             <div className="bar-track"><div className="bar-fill" style={{ width: `${v * 100}%` }} /></div>
             <span className="bar-val">{Math.round(v * 100)}</span>
           </div>
