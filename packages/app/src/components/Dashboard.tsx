@@ -187,6 +187,22 @@ export function Dashboard({ game, onSignContract, visitedTactics, visitedSquadPr
       ),
     });
   }
+  if (last?.loanObligations !== undefined && last.loanObligations.length > 0) {
+    seasonBanners.push({
+      key: 'loanObligations', priority: 6.5,
+      node: (
+        <Banner tone="success" title="📝 의무완전이적 발동">
+          {last.loanObligations.map((o) => (
+            <p key={o.playerId}>
+              {o.toClubId === game.myClubId
+                ? <><b>{o.name}</b> 선수가 출전 기준을 채워 <b>{formatMoney(o.fee)}</b>에 완전 영입됐습니다.</>
+                : <><b>{o.name}</b> 선수가 <b>{o.toClubName}</b>에서 출전 기준을 채워 <b>{formatMoney(o.fee)}</b>에 완전 이적됐습니다.</>}
+            </p>
+          ))}
+        </Banner>
+      ),
+    });
+  }
   seasonBanners.sort((a, b) => a.priority - b.priority);
 
   const [showAllBanners, setShowAllBanners] = useState(false);

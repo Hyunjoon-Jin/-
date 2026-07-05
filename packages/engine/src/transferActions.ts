@@ -389,6 +389,10 @@ export function releasePlayer(
 export const LOAN_MIN_SEASONS = 1;
 export const LOAN_MAX_SEASONS = 2;
 
+/** 의무완전이적 조항의 출전 기준(시즌 경기 수) 하한·상한. */
+export const LOAN_OBLIGATION_MIN_APPS = 1;
+export const LOAN_OBLIGATION_MAX_APPS = 40;
+
 export interface LoanTerms {
   /** 임대 기간(시즌) — LOAN_MIN_SEASONS~LOAN_MAX_SEASONS로 clamp. */
   seasons: number;
@@ -396,6 +400,8 @@ export interface LoanTerms {
   fee: number;
   /** 임대 기간 중 주급을 원 소속 구단이 분담하는 비율(0~1). */
   wageShareByParent: number;
+  /** 의무완전이적 조항(선택) — 이번 임대 시즌 출전이 기준에 도달하면 완전 이적으로 전환. */
+  buyObligation?: { appearances: number; fee: number };
 }
 
 export interface LoanResult { ok: boolean; playerName?: string; reason?: string; fee?: number; }
@@ -439,6 +445,12 @@ export function loanPlayerOut(
   player.loanFromClubId = fromClubId;
   player.loanSeasonsRemaining = seasons;
   player.loanWageShareByParent = wageShare;
+  player.loanBuyObligation = terms.buyObligation
+    ? {
+        appearances: clamp(Math.round(terms.buyObligation.appearances), LOAN_OBLIGATION_MIN_APPS, LOAN_OBLIGATION_MAX_APPS),
+        fee: Math.max(0, Math.round(terms.buyObligation.fee)),
+      }
+    : undefined;
   to.players.push(player);
   reassignSquadNumber(to, player);
 
@@ -458,6 +470,7 @@ export function recallLoanPlayer(clubs: Club[], playerId: string): LoanResult {
   player.loanFromClubId = undefined;
   player.loanSeasonsRemaining = undefined;
   player.loanWageShareByParent = undefined;
+  player.loanBuyObligation = undefined;
   parent.players.push(player);
   reassignSquadNumber(parent, player);
 

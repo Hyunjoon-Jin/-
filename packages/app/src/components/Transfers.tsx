@@ -5,6 +5,7 @@ import {
 import {
   transferTargets, marketValue, currentAbility, formatMoney, lineOf, buildScoutingReport,
   MAX_NEGOTIATION_ROUNDS, LOAN_MIN_SEASONS, LOAN_MAX_SEASONS,
+  LOAN_OBLIGATION_MIN_APPS, LOAN_OBLIGATION_MAX_APPS,
   type Line, type Player, type OfferEvaluation, type TransferTarget, type SellOffer, type LoanTerms,
 } from '@soccer-tycoon/engine';
 import { ScoutingSummary } from './PlayerDetail.js';
@@ -328,7 +329,7 @@ function TransferMarket({
           <h3>임대 보낸 선수 ({loanedOut.length})</h3>
           <table className="data-table compact">
             <thead>
-              <tr><th>선수</th><th>P</th><th>현재 소속</th><th>복귀까지</th><th></th></tr>
+              <tr><th>선수</th><th>P</th><th>현재 소속</th><th>복귀까지</th><th>의무완전이적</th><th></th></tr>
             </thead>
             <tbody>
               {loanedOut.map(({ player: p, loanClubName }) => (
@@ -338,6 +339,11 @@ function TransferMarket({
                   <td><span className={`pos-chip pos-${lineOf(p.position).toLowerCase()}`}>{p.position}</span></td>
                   <td className="muted small">{loanClubName}</td>
                   <td className="muted small">{p.loanSeasonsRemaining ?? 1}시즌 후</td>
+                  <td className="muted small">
+                    {p.loanBuyObligation
+                      ? `출전 ${p.seasonApps}/${p.loanBuyObligation.appearances} · ${formatMoney(p.loanBuyObligation.fee)}`
+                      : '—'}
+                  </td>
                   <td>
                     <button className="btn-small danger" onClick={(e) => { e.stopPropagation(); setRecallingId(p.id); }}>
                       회수
@@ -421,14 +427,18 @@ function TransferMarket({
   );
 }
 
-/** 임대 기간·임대료·주급 분담 비율 입력 필드(보내기/데려오기 공통). */
+/** 임대 기간·임대료·주급 분담 비율 + 의무완전이적 조항(A1) 입력 필드(보내기/데려오기 공통). */
 function LoanTermsFields({
   seasons, setSeasons, fee, setFee, wageSharePct, setWageSharePct, feeLabel, wageLabel,
+  obligationEnabled, setObligationEnabled, obligationApps, setObligationApps, obligationFee, setObligationFee,
 }: {
   seasons: number; setSeasons: (n: number) => void;
   fee: number; setFee: (n: number) => void;
   wageSharePct: number; setWageSharePct: (n: number) => void;
   feeLabel: string; wageLabel: string;
+  obligationEnabled: boolean; setObligationEnabled: (b: boolean) => void;
+  obligationApps: number; setObligationApps: (n: number) => void;
+  obligationFee: number; setObligationFee: (n: number) => void;
 }) {
   return (
     <>
@@ -454,6 +464,39 @@ function LoanTermsFields({
           onChange={(e) => setWageSharePct(Number(e.target.value))}
         />
       </label>
+      <label className="loan-field loan-obligation-toggle">
+        <span>
+          <input
+            type="checkbox" checked={obligationEnabled}
+            onChange={(e) => setObligationEnabled(e.target.checked)}
+          />
+          {' '}의무완전이적 조항 추가
+        </span>
+      </label>
+      {obligationEnabled && (
+        <>
+          <label className="loan-field">
+            <span>기준 출전 수(이번 임대 시즌)</span>
+            <input
+              type="number" min={LOAN_OBLIGATION_MIN_APPS} max={LOAN_OBLIGATION_MAX_APPS} value={obligationApps}
+              onChange={(e) => setObligationApps(
+                Math.min(LOAN_OBLIGATION_MAX_APPS, Math.max(LOAN_OBLIGATION_MIN_APPS, Number(e.target.value))),
+              )}
+            />
+          </label>
+          <label className="loan-field">
+            <span>완전 이적료(기준 도달 시)</span>
+            <input
+              type="number" min={0} step={100} value={obligationFee}
+              onChange={(e) => setObligationFee(Math.max(0, Number(e.target.value)))}
+            />
+          </label>
+          <p className="muted small">
+            이번 임대 시즌 출전이 {obligationApps}경기에 도달하면, 임대 잔여 기간과 무관하게
+            시즌 종료 시 완전 이적으로 자동 전환됩니다(계약상 의무).
+          </p>
+        </>
+      )}
     </>
   );
 }
@@ -471,10 +514,16 @@ function LoanOutModal({
   const [seasons, setSeasons] = useState(LOAN_MIN_SEASONS);
   const [fee, setFee] = useState(0);
   const [wageSharePct, setWageSharePct] = useState(50);
+  const [obligationEnabled, setObligationEnabled] = useState(false);
+  const [obligationApps, setObligationApps] = useState(15);
+  const [obligationFee, setObligationFee] = useState(0);
   const ref = useModalA11y<HTMLDivElement>(onClose);
 
   function confirm() {
-    const r = onConfirm(toClubId, { seasons, fee, wageShareByParent: wageSharePct / 100 });
+    const r = onConfirm(toClubId, {
+      seasons, fee, wageShareByParent: wageSharePct / 100,
+      buyObligation: obligationEnabled ? { appearances: obligationApps, fee: obligationFee } : undefined,
+    });
     onResult({ text: r.message, ok: r.ok });
   }
 
@@ -500,6 +549,9 @@ function LoanOutModal({
           fee={fee} setFee={setFee}
           wageSharePct={wageSharePct} setWageSharePct={setWageSharePct}
           feeLabel="임대료(받을 금액)" wageLabel="내가 분담할 주급 비율"
+          obligationEnabled={obligationEnabled} setObligationEnabled={setObligationEnabled}
+          obligationApps={obligationApps} setObligationApps={setObligationApps}
+          obligationFee={obligationFee} setObligationFee={setObligationFee}
         />
         <button className="btn-advance" onClick={confirm} disabled={!toClubId}>임대 확정</button>
       </div>
@@ -518,10 +570,16 @@ function LoanInModal({
   const [seasons, setSeasons] = useState(LOAN_MIN_SEASONS);
   const [fee, setFee] = useState(0);
   const [wageSharePct, setWageSharePct] = useState(0);
+  const [obligationEnabled, setObligationEnabled] = useState(false);
+  const [obligationApps, setObligationApps] = useState(15);
+  const [obligationFee, setObligationFee] = useState(0);
   const ref = useModalA11y<HTMLDivElement>(onClose);
 
   function confirm() {
-    const r = onConfirm({ seasons, fee, wageShareByParent: wageSharePct / 100 });
+    const r = onConfirm({
+      seasons, fee, wageShareByParent: wageSharePct / 100,
+      buyObligation: obligationEnabled ? { appearances: obligationApps, fee: obligationFee } : undefined,
+    });
     onResult({ text: r.message, ok: r.ok });
   }
 
@@ -542,6 +600,9 @@ function LoanInModal({
           fee={fee} setFee={setFee}
           wageSharePct={wageSharePct} setWageSharePct={setWageSharePct}
           feeLabel="임대료(내가 지불할 금액)" wageLabel="상대(원 소속)가 분담할 주급 비율"
+          obligationEnabled={obligationEnabled} setObligationEnabled={setObligationEnabled}
+          obligationApps={obligationApps} setObligationApps={setObligationApps}
+          obligationFee={obligationFee} setObligationFee={setObligationFee}
         />
         <button className="btn-advance" onClick={confirm}>임대 확정</button>
       </div>

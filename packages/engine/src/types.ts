@@ -120,6 +120,10 @@ export interface Player {
   loanSeasonsRemaining?: number;
   /** 임대 기간 중 주급을 원 소속 구단이 분담하는 비율(0~1) — 나머지는 임대 구단이 부담. */
   loanWageShareByParent?: number;
+  /** 임대 의무완전이적 조항 — 이번 임대 시즌 출전(seasonApps)이 기준에 도달하면 임대
+   *  잔여 기간과 무관하게 시즌 종료 시 이 이적료로 완전 이적 전환(계약상 의무이므로
+   *  자금 부족과 무관하게 강제 집행 — 이후 재정 위기 로직이 필요 시 뒷수습한다). */
+  loanBuyObligation?: { appearances: number; fee: number };
 }
 
 export type TrainingFocus =

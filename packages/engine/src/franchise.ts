@@ -122,6 +122,8 @@ export interface SeasonSummary {
   };
   /** 이번 오프시즌 내 구단 관련 임대 복귀(보낸 임대가 돌아오거나, 데려온 임대가 복귀). */
   loanReturns?: LoanReturnEvent[];
+  /** 이번 오프시즌 내 구단 관련 의무완전이적 조항 발동(A1). */
+  loanObligations?: LoanObligationEvent[];
   /** 이번 오프시즌 리저브에서 1군으로 승격한 선수(내 구단, B9). */
   reservePromotions?: ReservePromotionEvent[];
   /** 이번 시즌 비정기 국제대회(월드컵/유로급, C15)가 열렸다면 우승 국가. 참가 자격국 부족 시 null.
@@ -248,6 +250,20 @@ export interface LoanReturnEvent {
   toClubName: string;
 }
 
+/** 임대 의무완전이적 조항 발동 이벤트(A1) — 출전 기준을 채워 완전 이적으로 전환. */
+export interface LoanObligationEvent {
+  playerId: string;
+  name: string;
+  position: Position;
+  /** 원 소속(선수를 팔게 되는 쪽). */
+  fromClubId: string;
+  fromClubName: string;
+  /** 임대 갔던 구단(이제 완전 영입하는 쪽). */
+  toClubId: string;
+  toClubName: string;
+  fee: number;
+}
+
 export interface OffseasonResult {
   retirements: number;
   /** clubId → 유스 아카데미 배출 인원. */
@@ -264,6 +280,8 @@ export interface OffseasonResult {
   debutEvents: DebutEvent[];
   /** 이번 오프시즌에 임대 기간이 끝나 원 소속 구단으로 복귀한 선수(전 구단). */
   loanReturns: LoanReturnEvent[];
+  /** 이번 오프시즌에 의무완전이적 조항이 발동해 완전 이적으로 전환된 선수(전 구단, A1). */
+  loanObligations: LoanObligationEvent[];
   /** 이번 오프시즌 리저브에서 1군으로 승격한 선수(전 구단, B9). */
   reservePromotions: ReservePromotionEvent[];
   /** clubId → 리저브에서 방출된 인원(1군 승격 기준 미달 상태로 결론 나이에 도달, B9). */
@@ -304,6 +322,7 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
   const milestones: CareerMilestone[] = [];
   const debutEvents: DebutEvent[] = [];
   const loanReturns: LoanReturnEvent[] = [];
+  const loanObligations: LoanObligationEvent[] = [];
   const reservePromotions: ReservePromotionEvent[] = [];
   const reserveReleasesByClub = new Map<string, number>();
 
@@ -315,9 +334,29 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
     const staying: Player[] = [];
     for (const player of club.players) {
       if (player.loanFromClubId === undefined) { staying.push(player); continue; }
+      const parent = clubById.get(player.loanFromClubId);
+
+      // 의무완전이적 조항(A1) — 이번 시즌 출전이 기준에 도달하면 잔여 임대 기간과
+      // 무관하게 계약상 의무로 완전 이적이 확정된다(자금 부족이어도 강제 집행 —
+      // 재정 위기로 이어지면 같은 오프시즌 뒤에 도는 enforceFinancialFairPlay가 즉시 뒷수습한다).
+      if (parent && player.loanBuyObligation && player.seasonApps >= player.loanBuyObligation.appearances) {
+        const fee = player.loanBuyObligation.fee;
+        club.finance.balance -= fee;
+        parent.finance.balance += fee;
+        loanObligations.push({
+          playerId: player.id, name: player.name, position: player.position,
+          fromClubId: parent.id, fromClubName: parent.name, toClubId: club.id, toClubName: club.name, fee,
+        });
+        player.loanFromClubId = undefined;
+        player.loanSeasonsRemaining = undefined;
+        player.loanWageShareByParent = undefined;
+        player.loanBuyObligation = undefined;
+        staying.push(player); // 완전 이적이라 현 구단(임대 갔던 구단)에 그대로 남는다.
+        continue;
+      }
+
       player.loanSeasonsRemaining = (player.loanSeasonsRemaining ?? 1) - 1;
       if (player.loanSeasonsRemaining > 0) { staying.push(player); continue; }
-      const parent = clubById.get(player.loanFromClubId);
       if (!parent) { staying.push(player); continue; } // 원 소속 구단이 사라진 극단적 경우 현 구단에 잔류
       loanReturns.push({
         playerId: player.id, name: player.name, position: player.position,
@@ -448,7 +487,7 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
   }
   return {
     retirements, intakeByClub, intakePlayersByClub, fireSalesByClub, retiredPlayers, milestones,
-    debutEvents, loanReturns, reservePromotions, reserveReleasesByClub,
+    debutEvents, loanReturns, loanObligations, reservePromotions, reserveReleasesByClub,
   };
 }
 

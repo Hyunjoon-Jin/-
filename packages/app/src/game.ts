@@ -10,7 +10,7 @@ import {
   buyPlayer, buyPlayerAt, buyPlayerViaReleaseClause, evaluateOffer, sellPlayer, releasePlayer,
   sellOffers, acceptSellOffer,
   loanPlayerOut, recallLoanPlayer, applyLoanWageSubsidies,
-  type OfferEvaluation, type SellOffer, type LoanTerms, type LoanReturnEvent,
+  type OfferEvaluation, type SellOffer, type LoanTerms, type LoanReturnEvent, type LoanObligationEvent,
   summarizeStats, aggregatePlayerStats, topScorers as engineTopScorers, recentPlayerForm,
   seasonSquadSnapshot,
   createCup, playCupRound as enginePlayCupRound, playCupToEnd, isCupOver, nextCupPairings,
@@ -530,13 +530,17 @@ export function finishSeason(state: GameState): GameState {
   // 5) 오프시즌 (전 구단)
   const {
     retirements, intakeByClub, intakePlayersByClub, fireSalesByClub, retiredPlayers, milestones, debutEvents,
-    loanReturns, reservePromotions,
+    loanReturns, loanObligations, reservePromotions,
   } = runOffseason(state.clubs, new Rng(offseasonSeed(state)));
   // 내 구단 선수의 이번 시즌 리저브 승격(시즌 요약에 첨부)
   const myReservePromotions = reservePromotions.filter((r) => r.clubId === state.myClubId);
   // 내 구단이 관련된 임대 복귀(보낸 임대가 돌아오거나, 데려온 임대가 복귀)
   const myLoanReturns: LoanReturnEvent[] = loanReturns.filter(
     (r) => r.fromClubId === state.myClubId || r.toClubId === state.myClubId,
+  );
+  // 내 구단이 관련된 의무완전이적 조항 발동(A1 — 판매자로서 이적료를 받거나, 구매자로서 완전 영입 확정)
+  const myLoanObligations: LoanObligationEvent[] = loanObligations.filter(
+    (o) => o.fromClubId === state.myClubId || o.toClubId === state.myClubId,
   );
   // 내 구단에서 은퇴한 선수는 레전드 아카이브에 영구 보존
   const newLegends: ClubLegend[] = retiredPlayers
@@ -685,6 +689,7 @@ export function finishSeason(state: GameState): GameState {
     sponsorGoal: sponsorGoalResult,
     promotionPlayoff: promotionPlayoffResult,
     loanReturns: myLoanReturns,
+    loanObligations: myLoanObligations,
     reservePromotions: myReservePromotions,
     continentalCupChampionId,
     continentalCupChampionName,
