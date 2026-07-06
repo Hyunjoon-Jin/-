@@ -178,17 +178,18 @@ export function settleSeason(
 }
 
 /**
- * 스폰서 계약(유니폼/스타디움 명명권) — 아래의 성과 기반 시즌 목표 보너스와는 별개로,
+ * 스폰서 계약(유니폼/스타디움 명명권/소매) — 아래의 성과 기반 시즌 목표 보너스와는 별개로,
  * 한 번 체결하면 성과와 무관하게 정해진 시즌 동안 고정 수익을 매 시즌 보장하는
- * 장기 계약(신규 개선 항목 24). 체결 시점의 평판(과 스타디움 명명권의 경우 스타디움
- * 규모)에 수익이 고정되므로, 평판이 오르기 전에 미리 체결하면 손해, 오른 뒤 체결하면
- * 이득이라는 타이밍 판단이 생긴다.
+ * 장기 계약(신규 개선 항목 24, 고도화 항목15로 소매 스폰서 추가 다변화). 체결 시점의
+ * 평판(과 스타디움 명명권의 경우 스타디움 규모)에 수익이 고정되므로, 평판이 오르기 전에
+ * 미리 체결하면 손해, 오른 뒤 체결하면 이득이라는 타이밍 판단이 생긴다.
  */
-export type SponsorContractKind = 'kit' | 'stadiumNaming';
+export type SponsorContractKind = 'kit' | 'stadiumNaming' | 'sleeve';
 
 export const SPONSOR_CONTRACT_LABEL: Record<SponsorContractKind, string> = {
   kit: '유니폼 스폰서',
   stadiumNaming: '스타디움 명명권',
+  sleeve: '소매 스폰서',
 };
 
 /** 계약 기간(시즌) — 만료되면 재계약(재체결)이 필요하다. */
@@ -203,10 +204,12 @@ export const SPONSOR_CONTRACT_STADIUM_MIN_LEVEL = 1;
 const SPONSOR_CONTRACT_BASE: Record<SponsorContractKind, number> = {
   kit: 6_000,
   stadiumNaming: 5_000,
+  sleeve: 3_000,
 };
 const SPONSOR_CONTRACT_PER_REP: Record<SponsorContractKind, number> = {
   kit: 900,
   stadiumNaming: 700,
+  sleeve: 500,
 };
 
 /** 계약 체결 시 시즌당 고정 수익(만원) — 스타디움 명명권은 스타디움 규모만큼 추가로 붙는다. */

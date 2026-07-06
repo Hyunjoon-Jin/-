@@ -33,7 +33,7 @@ interface Props {
   onPoachStaff: (targetClubId: string, kind: NamedStaffKind, attempt: number) => ActionOutcome;
 }
 
-const SPONSOR_CONTRACT_KINDS: SponsorContractKind[] = ['kit', 'stadiumNaming'];
+const SPONSOR_CONTRACT_KINDS: SponsorContractKind[] = ['kit', 'stadiumNaming', 'sleeve'];
 
 const ACADEMY_FOCUS_OPTIONS: { key: Line; label: string }[] = [
   { key: 'GK', label: 'GK' },
