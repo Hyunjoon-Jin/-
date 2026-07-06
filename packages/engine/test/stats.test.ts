@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   aggregatePlayerStats, topScorers, seasonAwards, summarizeStats, careerScorers, recentPlayerForm,
-  seasonSquadSnapshot,
+  seasonSquadSnapshot, clubDisciplineTable,
 } from '../src/stats.js';
 import { simulateSeason } from '../src/league.js';
 import { generateClub, defaultTactic } from '../src/generate.js';
@@ -58,6 +58,53 @@ describe('stats: 시즌 통계 집계', () => {
     const { topScorers: ts, awards } = summarizeStats(matches, 14);
     expect(ts.length).toBeLessThanOrEqual(10);
     expect(awards).toBeDefined();
+  });
+});
+
+function mkResult(overrides: Partial<MatchResult>): MatchResult {
+  return {
+    homeClubId: 'a', awayClubId: 'b', homeClubName: 'A', awayClubName: 'B',
+    score: [0, 0], possession: [50, 50], shots: [0, 0], events: [], cards: [], injuries: [],
+    playerStats: { home: [], away: [] }, seed: 1,
+    ...overrides,
+  };
+}
+
+describe('stats: 시즌 페어플레이(징계) 순위 (고도화 항목22)', () => {
+  it('카드가 적은 구단이 상위, 카드 없는 구단은 0으로 집계된다', () => {
+    const results: MatchResult[] = [
+      mkResult({
+        homeClubId: 'a', awayClubId: 'b', homeClubName: 'A', awayClubName: 'B',
+        cards: [
+          { minute: 10, side: 'home', playerId: 'p1', playerName: '선수1', type: 'yellow' },
+          { minute: 20, side: 'home', playerId: 'p2', playerName: '선수2', type: 'yellow' },
+          { minute: 30, side: 'away', playerId: 'p3', playerName: '선수3', type: 'yellow' },
+        ],
+      }),
+      mkResult({ homeClubId: 'c', awayClubId: 'a', homeClubName: 'C', awayClubName: 'A' }),
+    ];
+    const table = clubDisciplineTable(results);
+    expect(table.map((r) => r.clubId)).toEqual(['c', 'b', 'a']);
+    expect(table.find((r) => r.clubId === 'a')).toEqual({
+      clubId: 'a', clubName: 'A', yellowCards: 2, redCards: 0, totalCards: 2,
+    });
+    expect(table.find((r) => r.clubId === 'c')).toEqual({
+      clubId: 'c', clubName: 'C', yellowCards: 0, redCards: 0, totalCards: 0,
+    });
+  });
+
+  it('카드 수가 같으면 레드카드가 적은 쪽이 상위', () => {
+    const results: MatchResult[] = [
+      mkResult({
+        homeClubId: 'a', awayClubId: 'b', homeClubName: 'A', awayClubName: 'B',
+        cards: [
+          { minute: 10, side: 'home', playerId: 'p1', playerName: '선수1', type: 'red' },
+          { minute: 20, side: 'away', playerId: 'p2', playerName: '선수2', type: 'yellow' },
+        ],
+      }),
+    ];
+    const table = clubDisciplineTable(results);
+    expect(table.map((r) => r.clubId)).toEqual(['b', 'a']);
   });
 });
 

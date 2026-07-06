@@ -2,7 +2,7 @@ import { BarChart3 } from 'lucide-react';
 import {
   liveTopScorers, liveSquadStats, lastSummary, myClub, type GameState,
 } from '../game.js';
-import type { PlayerSeasonStat, BestXIEntry } from '@soccer-tycoon/engine';
+import type { PlayerSeasonStat, BestXIEntry, ClubDisciplineRow } from '@soccer-tycoon/engine';
 import { ratingClass } from '../rating.js';
 import { EmptyState } from './EmptyState.js';
 
@@ -12,6 +12,7 @@ export function Stats({ game }: { game: GameState }) {
   const scorers = live ? liveTopScorers(game, 10) : (lastSummary(game)?.topScorers ?? []);
   const squad = live ? liveSquadStats(game) : lastSeasonSquad(game);
   const awards = live ? null : lastSummary(game)?.awards;
+  const fairPlayTable = live ? null : lastSummary(game)?.fairPlayTable;
   const heading = live ? `시즌 ${game.season} (진행 중)` : lastSummary(game) ? `시즌 ${lastSummary(game)!.season} 최종` : null;
 
   if (!heading) {
@@ -73,7 +74,37 @@ export function Stats({ game }: { game: GameState }) {
           <ScorerTable rows={squad.slice(0, 14)} myClubId={game.myClubId} showClub={false} />
         </div>
       </div>
+
+      {fairPlayTable && fairPlayTable.length > 0 && (
+        <div>
+          <h3>🟨 페어플레이 순위</h3>
+          <FairPlayTable rows={fairPlayTable} myClubId={game.myClubId} />
+        </div>
+      )}
     </div>
+  );
+}
+
+function FairPlayTable({ rows, myClubId }: { rows: ClubDisciplineRow[]; myClubId: string }) {
+  return (
+    <table className="data-table compact">
+      <thead>
+        <tr>
+          <th>순위</th><th>구단</th><th>옐로</th><th>레드</th><th>합계</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((r, i) => (
+          <tr key={r.clubId} className={r.clubId === myClubId ? 'mine' : ''}>
+            <td>{i === 0 ? <span className="rank-gold">1</span> : i + 1}</td>
+            <td className="name">{r.clubName}</td>
+            <td>{r.yellowCards}</td>
+            <td>{r.redCards}</td>
+            <td><b>{r.totalCards}</b></td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
 

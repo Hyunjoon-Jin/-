@@ -160,6 +160,41 @@ export function seasonAwards(stats: PlayerSeasonStat[], minApps: number): Season
   };
 }
 
+export interface ClubDisciplineRow {
+  clubId: string;
+  clubName: string;
+  yellowCards: number;
+  redCards: number;
+  totalCards: number;
+}
+
+/**
+ * 시즌 페어플레이(징계) 순위(고도화 항목22) — 구단별 옐로/레드카드 집계.
+ * 카드 수가 적을수록(동률이면 레드가 적을수록) 페어플레이 순위가 높다.
+ */
+export function clubDisciplineTable(results: MatchResult[]): ClubDisciplineRow[] {
+  const map = new Map<string, ClubDisciplineRow>();
+  const ensure = (clubId: string, clubName: string): ClubDisciplineRow => {
+    let row = map.get(clubId);
+    if (!row) {
+      row = { clubId, clubName, yellowCards: 0, redCards: 0, totalCards: 0 };
+      map.set(clubId, row);
+    }
+    return row;
+  };
+  for (const r of results) {
+    ensure(r.homeClubId, r.homeClubName);
+    ensure(r.awayClubId, r.awayClubName);
+    for (const c of r.cards) {
+      const row = c.side === 'home' ? ensure(r.homeClubId, r.homeClubName) : ensure(r.awayClubId, r.awayClubName);
+      if (c.type === 'yellow') row.yellowCards++;
+      else row.redCards++;
+      row.totalCards++;
+    }
+  }
+  return [...map.values()].sort((a, b) => a.totalCards - b.totalCards || a.redCards - b.redCards);
+}
+
 /** clubs 인자는 향후 확장용(현재는 결과만으로 충분). */
 export function summarizeStats(results: MatchResult[], totalRounds: number): {
   topScorers: PlayerSeasonStat[];

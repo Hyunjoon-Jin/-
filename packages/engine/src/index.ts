@@ -22,9 +22,9 @@ export {
 } from './injury.js';
 export {
   aggregatePlayerStats, topScorers, topAssists, playerOfSeason, seasonAwards, summarizeStats,
-  careerScorers, recentPlayerForm, seasonSquadSnapshot, goldenGlove, bestXI,
+  careerScorers, recentPlayerForm, seasonSquadSnapshot, goldenGlove, bestXI, clubDisciplineTable,
   type PlayerSeasonStat, type SeasonAwards, type CareerStat, type PlayerFormEntry,
-  type SeasonSquadEntry, type BestXIEntry,
+  type SeasonSquadEntry, type BestXIEntry, type ClubDisciplineRow,
 } from './stats.js';
 export {
   generateClub, generateYouthPlayer, defaultTactic, FORMATION_433, type TacticContext,
