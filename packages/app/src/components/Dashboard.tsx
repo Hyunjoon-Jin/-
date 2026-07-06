@@ -377,6 +377,20 @@ export function Dashboard({
       ),
     });
   }
+  if (last?.mentorGraduations !== undefined && last.mentorGraduations.length > 0) {
+    seasonBanners.push({
+      key: 'mentorGraduations', priority: 6.8,
+      node: (
+        <Banner tone="success" title="🎓 멘토링 졸업">
+          {last.mentorGraduations.map((g) => (
+            <p key={g.menteeId}>
+              <b>{g.menteeName}</b> 선수가 {g.reason === 'age' ? '유망주 나이를 넘어서며' : '멘토의 기량을 넘어서며'} <b>{g.mentorName}</b>와(과)의 멘토링을 졸업했습니다.
+            </p>
+          ))}
+        </Banner>
+      ),
+    });
+  }
   seasonBanners.sort((a, b) => a.priority - b.priority);
 
   const [showAllBanners, setShowAllBanners] = useState(false);

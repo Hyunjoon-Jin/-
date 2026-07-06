@@ -51,7 +51,7 @@ import {
   type PlayerFormEntry, type Player, type YouthProspect, type YouthProspectUpdate,
   type TeamStrength, type FormSummary, type ScoutingReport, type Line, type Position,
   type StaffDepartureEvent, type StaffRetirementEvent, type AcademyAlumnusUpdate,
-  type AddOnEvent,
+  type AddOnEvent, type MentorGraduationEvent,
 } from '@soccer-tycoon/engine';
 import { makeDefaultTactic, repairTactic } from './tactics.js';
 
@@ -612,7 +612,7 @@ export function finishSeason(state: GameState): GameState {
   const {
     retirements, intakeByClub, intakePlayersByClub, fireSalesByClub, retiredPlayers, milestones, debutEvents,
     loanReturns, loanObligations, reservePromotions, staffDepartures, staffRetirements, addOnPayouts,
-    reserveLeagueTable,
+    reserveLeagueTable, mentorGraduations,
   } = runOffseason(state.clubs, new Rng(offseasonSeed(state)));
   // 내 구단 선수의 이번 시즌 리저브 승격(시즌 요약에 첨부)
   const myReservePromotions = reservePromotions.filter((r) => r.clubId === state.myClubId);
@@ -631,6 +631,10 @@ export function finishSeason(state: GameState): GameState {
   // 내 구단이 관련된 성과 기반 후불 이적료(Add-on) 발동(신규 개선 항목 3)
   const myAddOnPayouts: AddOnEvent[] = addOnPayouts.filter(
     (a) => a.fromClubId === state.myClubId || a.toClubId === state.myClubId,
+  );
+  // 내 구단의 멘토-멘티 페어링이 "졸업"으로 자동 해제된 소식(고도화 항목8)
+  const myMentorGraduations: MentorGraduationEvent[] = mentorGraduations.filter(
+    (g) => g.clubId === state.myClubId,
   );
   // 내 구단에서 은퇴한 선수는 레전드 아카이브에 영구 보존
   const newLegends: ClubLegend[] = retiredPlayers
@@ -875,6 +879,7 @@ export function finishSeason(state: GameState): GameState {
     qualifiedForContinental: continentalQualifierIds.includes(state.myClubId),
     boardTierBonus: boardBonusResult,
     addOnPayouts: myAddOnPayouts,
+    mentorGraduations: myMentorGraduations.length > 0 ? myMentorGraduations : undefined,
     reserveLeagueTable: reserveLeagueTable.length > 0 ? reserveLeagueTable : undefined,
     sponsorContractExpired,
     boldPrediction: boldPredictionResult,

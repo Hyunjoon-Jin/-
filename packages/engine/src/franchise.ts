@@ -3,7 +3,7 @@
  * 한 시즌 = 이적 창 → 리그 경기 → 재정 정산 → 선수 성장/노화 → 은퇴·유스 유입.
  * 게임의 시간축을 닫는 핵심 루프.
  */
-import type { Club, Player, Position, AddOnConditionKind } from './types.js';
+import type { Club, Player, Position, AddOnConditionKind, MentorPairing } from './types.js';
 import type { BoardStatus } from './board.js';
 import { POSITIONS } from './types.js';
 import { simulateSeason, type TableRow } from './league.js';
@@ -173,6 +173,9 @@ export interface SeasonSummary {
   /** 이번 시즌 컵대회에서 내 구단이 이변의 주인공이거나 희생양이었던 경기(신규 개선
    *  항목 29, 앱 전용). */
   cupUpsets?: CupUpsetEvent[];
+  /** 이번 오프시즌 내 구단의 멘토-멘티 페어링이 "졸업"(나이 초과 또는 멘티가 멘토를
+   *  추월)으로 자동 해제된 소식(고도화 항목8, 앱 전용). */
+  mentorGraduations?: MentorGraduationEvent[];
 }
 
 /** 유스 졸업생 동문 네트워크(신규 개선 항목 18) — 과거 우리 리저브 출신으로 1군
@@ -367,6 +370,22 @@ export interface OffseasonResult {
   /** 리저브팀 자체 소규모 리그(가상 매치, 신규 개선 항목 14) 순위표. 참가 자격(MIN_RESERVE_SQUAD)
    *  미달 구단은 빠진다. 참가 자격 구단이 2개 미만이면 빈 배열. */
   reserveLeagueTable: ReserveTableRow[];
+  /** 이번 오프시즌 "졸업"으로 자동 해제된 멘토-멘티 페어링(전 구단, 고도화 항목8). */
+  mentorGraduations: MentorGraduationEvent[];
+}
+
+/** 멘토-멘티 페어링 졸업 사유(고도화 항목8). */
+export type MentorGraduationReason = 'age' | 'surpassed';
+
+/** 멘토-멘티 페어링이 "졸업"으로 자동 해제된 이벤트(고도화 항목8). */
+export interface MentorGraduationEvent {
+  mentorId: string;
+  mentorName: string;
+  menteeId: string;
+  menteeName: string;
+  clubId: string;
+  clubName: string;
+  reason: MentorGraduationReason;
 }
 
 /** 멘토링 보너스 배율 — 같은 라인에 리더 특성 보유자나 리더십 높은 베테랑이 있으면 성장 가속. */
@@ -398,6 +417,12 @@ function hasMentor(club: Club, player: Player): boolean {
 export const MENTOR_PAIRING_MAX = 3;
 /** 직접 지정한 멘토링은 자동(같은 라인) 멘토링보다 더 큰 성장 보너스를 준다. */
 const DESIGNATED_MENTOR_GROWTH_MUL = 1.25;
+/** 성향 충돌(고도화 항목8) — 다혈질(hothead) 멘토×차분한(rock) 멘티는 스타일이 맞지
+ *  않아 지정 멘토링 효과가 크게 줄어든다(그래도 자동 멘토링보다는 약간 낫다). */
+const MENTOR_CLASH_GROWTH_MUL = 1.05;
+/** 멘토 보상(고도화 항목8) — 페어링이 유지되는 시즌마다 조언자 역할에 대한 소폭
+ *  사기 보너스를 준다. */
+const MENTOR_REWARD_MORALE = 0.03;
 
 export interface MentorAssignResult { ok: boolean; reason?: string }
 
@@ -428,12 +453,15 @@ export function clearMentorPairing(club: Club, menteeId: string): void {
 }
 
 /** 멘티에게 유저 지정 멘토가 배정돼 있고 그 멘토가 여전히 스쿼드에 있으면 강화된
- *  성장 배율을, 아니면 1을 반환한다(자동 멘토링과 별개 — 더 큰 쪽을 적용). */
+ *  성장 배율을, 아니면 1을 반환한다(자동 멘토링과 별개 — 더 큰 쪽을 적용). 다혈질
+ *  멘토×차분한 멘티 조합이면 성향 충돌로 보너스가 크게 줄어든다(고도화 항목8). */
 function designatedMentorBonus(club: Club, player: Player): number {
   const pairing = club.mentorPairings?.find((m) => m.menteeId === player.id);
   if (!pairing) return 1;
-  const mentorStillHere = club.players.some((p) => p.id === pairing.mentorId);
-  return mentorStillHere ? DESIGNATED_MENTOR_GROWTH_MUL : 1;
+  const mentor = club.players.find((p) => p.id === pairing.mentorId);
+  if (!mentor) return 1;
+  if (hasTrait(mentor, 'hothead') && hasTrait(player, 'rock')) return MENTOR_CLASH_GROWTH_MUL;
+  return DESIGNATED_MENTOR_GROWTH_MUL;
 }
 
 export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
@@ -451,6 +479,7 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
   const staffDepartures: (StaffDepartureEvent & { clubId: string; clubName: string })[] = [];
   const staffRetirements: (StaffRetirementEvent & { clubId: string; clubName: string })[] = [];
   const addOnPayouts: AddOnEvent[] = [];
+  const mentorGraduations: MentorGraduationEvent[] = [];
 
   // 임대 복귀: 시즌 카운트다운이 끝난 임대 선수를 원 소속 구단으로 돌려보낸다. 이번
   // 오프시즌의 성장/노화/은퇴 처리를 정상적으로 받도록, 아래 본 루프보다 먼저 처리해
@@ -678,18 +707,38 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
     // 스쿼드 상한 정리
     trimSquad(club);
 
-    // 멘토·멘티 중 한쪽이라도 스쿼드를 떠났으면(은퇴·매각·이적 등) 페어링을 정리한다
-    // (세이브 파일에 죽은 페어링이 계속 쌓이는 것을 방지 — 성장 계산은 어차피
-    // designatedMentorBonus에서 매번 재검증하므로 정합성에는 영향 없음).
+    // 멘토-멘티 관계 심화(고도화 항목8): 페어링이 유지된 시즌마다 멘토에게 소폭
+    // 사기 보상을 주고, 멘티가 나이 초과 또는 멘토의 CA를 따라잡으면 "졸업"으로
+    // 자동 해제해 이벤트로 보고한다. 어느 한쪽이든 스쿼드를 떠났으면(은퇴·매각·
+    // 이적 등) 조용히 정리한다(세이브에 죽은 페어링이 쌓이는 것을 방지).
     if (club.mentorPairings) {
-      const ids = new Set(club.players.map((p) => p.id));
-      club.mentorPairings = club.mentorPairings.filter((m) => ids.has(m.mentorId) && ids.has(m.menteeId));
+      const byId = new Map(club.players.map((p) => [p.id, p]));
+      const remaining: MentorPairing[] = [];
+      for (const pairing of club.mentorPairings) {
+        const mentor = byId.get(pairing.mentorId);
+        const mentee = byId.get(pairing.menteeId);
+        if (!mentor || !mentee) continue;
+        mentor.morale = clamp(mentor.morale + MENTOR_REWARD_MORALE, 0, 1);
+        const agedOut = mentee.age > MENTEE_MAX_AGE;
+        const surpassed = currentAbility(mentee) >= currentAbility(mentor);
+        if (agedOut || surpassed) {
+          mentorGraduations.push({
+            mentorId: mentor.id, mentorName: mentor.name,
+            menteeId: mentee.id, menteeName: mentee.name,
+            clubId: club.id, clubName: club.name,
+            reason: agedOut ? 'age' : 'surpassed',
+          });
+          continue;
+        }
+        remaining.push(pairing);
+      }
+      club.mentorPairings = remaining;
     }
   }
   return {
     retirements, intakeByClub, intakePlayersByClub, fireSalesByClub, retiredPlayers, milestones,
     debutEvents, loanReturns, loanObligations, reservePromotions, reserveReleasesByClub, staffDepartures,
-    staffRetirements, addOnPayouts, reserveLeagueTable,
+    staffRetirements, addOnPayouts, reserveLeagueTable, mentorGraduations,
   };
 }
 

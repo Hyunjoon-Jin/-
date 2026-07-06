@@ -984,6 +984,7 @@ h3 { font-size: 14px; margin: 0 0 10px; color: var(--muted); text-transform: upp
   background: var(--panel-2); border-radius: 6px; padding: 5px 10px;
 }
 .mentor-clear-btn { margin-left: auto; font-size: 12px; padding: 2px 8px; }
+.mentor-clash-warning { color: var(--color-warning); font-size: 12px; margin: 8px 0 0; }
 .mentor-form { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .mentor-form select {
   background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
