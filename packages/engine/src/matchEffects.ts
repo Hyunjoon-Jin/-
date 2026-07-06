@@ -44,9 +44,12 @@ function applySide(club: Club, tactic: Tactic, outcome: Outcome, injuries: Injur
   const starters = new Set(tactic.lineup.map((s) => s.playerId));
   const slotByPlayer = new Map(tactic.lineup.map((s) => [s.playerId, s.position]));
   const dMorale = outcome === 'W' ? TUNING.moraleWin : outcome === 'L' ? -TUNING.moraleLoss : 0;
-  // 주장이 지정돼 있는데 이번 경기 라인업에 없으면(결장) 팀 전체에 소폭 사기 페널티.
+  // 주장이 지정돼 있는데 이번 경기 라인업에 없으면(결장) 팀 전체에 소폭 사기 페널티 —
+  // 단, 부주장(고도화 항목14)이 라인업에 있으면 완장을 대신 차 페널티가 발생하지 않는다.
   const captainMissing = tactic.captainId !== undefined && !starters.has(tactic.captainId);
-  const captainPenalty = captainMissing ? TUNING.captainMissingPenalty : 0;
+  const viceCaptainActing = captainMissing
+    && tactic.viceCaptainId !== undefined && starters.has(tactic.viceCaptainId);
+  const captainPenalty = captainMissing && !viceCaptainActing ? TUNING.captainMissingPenalty : 0;
   // 의료 레벨이 높을수록 회복 보너스 (0.9~1.15배, 의료 20에서만 상한 도달)
   const recoveryBonus = clamp(0.9 + (effectiveMedical(club.staff) / 20) * 0.25, 0.9, 1.15);
   const injuryByPlayer = new Map(injuries.map((e) => [e.playerId, e]));
