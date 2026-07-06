@@ -30,7 +30,7 @@ import {
 import { recentForm } from './form.js';
 import { clamp } from './math.js';
 import {
-  summarizeStats, type PlayerSeasonStat, type SeasonAwards, type SeasonSquadEntry,
+  summarizeStats, aggregatePlayerStats, type PlayerSeasonStat, type SeasonAwards, type SeasonSquadEntry,
 } from './stats.js';
 import { Rng } from './rng.js';
 
@@ -157,6 +157,9 @@ export interface SeasonSummary {
   addOnPayouts?: AddOnEvent[];
   /** 리저브팀 자체 소규모 리그(가상 매치, 신규 개선 항목 14) 순위표(전 구단 — 앱에서 내 구단 순위를 찾아 표시). */
   reserveLeagueTable?: ReserveTableRow[];
+  /** 내 구단 리저브 선수의 이번 시즌 리저브 리그 개인 기록(고도화 항목11, 앱 전용) —
+   *  리그 자체가 없었거나 내 구단이 참가 자격 미달이면 undefined. */
+  reservePlayerStats?: PlayerSeasonStat[];
   /** 과거 내 구단 리저브에서 1군으로 승격했다가 이후 타 구단으로 떠난 "동문"의 이번 시즌
    *  소식(신규 개선 항목 18, 앱 전용 — 헤드리스엔 미설정). 은퇴·방출로 더는 어디서도
    *  뛰지 않는 졸업생은 포함되지 않는다(현재 뛰고 있는 구단을 찾을 수 있는 경우만). */
@@ -372,6 +375,9 @@ export interface OffseasonResult {
   reserveLeagueTable: ReserveTableRow[];
   /** 이번 오프시즌 "졸업"으로 자동 해제된 멘토-멘티 페어링(전 구단, 고도화 항목8). */
   mentorGraduations: MentorGraduationEvent[];
+  /** 리저브 리그(가상 매치) 개인 선수 기록(전 구단, 고도화 항목11) — 참가 자격 미달로
+   *  리그 자체가 열리지 않았으면 빈 배열. */
+  reservePlayerStats: PlayerSeasonStat[];
 }
 
 /** 멘토-멘티 페어링 졸업 사유(고도화 항목8). */
@@ -535,7 +541,9 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
   // 리저브팀 자체 소규모 리그(가상 매치, 신규 개선 항목 14) — 이번 시즌 내내 쌓인 리저브
   // 스쿼드로 전 구단이 한 번에 가상 매치를 치른다. 아래 본 루프에서 성장/승격/유스 인테이크로
   // club.reserves가 바뀌기 전에, "이번 시즌을 실제로 보낸" 스쿼드 기준으로 먼저 계산한다.
-  const { table: reserveLeagueTable } = simulateReserveSeason(clubs, rng.int(1, 1_000_000_000));
+  const { table: reserveLeagueTable, matches: reserveMatches } = simulateReserveSeason(clubs, rng.int(1, 1_000_000_000));
+  // 리저브 리그 개인 선수 기록(고도화 항목11) — 참가 자격 미달로 리그 자체가 없으면 빈 배열.
+  const reservePlayerStats = aggregatePlayerStats(reserveMatches);
 
   const expectedMatches = 2 * (clubs.length - 1); // 리그 기준 기대 출전
   for (const club of clubs) {
@@ -738,7 +746,7 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
   return {
     retirements, intakeByClub, intakePlayersByClub, fireSalesByClub, retiredPlayers, milestones,
     debutEvents, loanReturns, loanObligations, reservePromotions, reserveReleasesByClub, staffDepartures,
-    staffRetirements, addOnPayouts, reserveLeagueTable, mentorGraduations,
+    staffRetirements, addOnPayouts, reserveLeagueTable, mentorGraduations, reservePlayerStats,
   };
 }
 

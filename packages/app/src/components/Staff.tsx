@@ -4,7 +4,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { useState } from 'react';
-import { myClub, STAFF_LABEL, type GameState, type ActionOutcome } from '../game.js';
+import { myClub, lastSummary, STAFF_LABEL, type GameState, type ActionOutcome } from '../game.js';
 import {
   upgradeCost, STAFF_MAX, formatMoney, specialistCoachLevel, STAFF_TRAIT_LABEL, STAFF_TRAIT_DESC,
   STAFF_TRAIT_TIER_LABEL, STAFF_TRAIT_TIER_BONUS, staffMarketValue,
@@ -399,6 +399,43 @@ export function Staff({
             </div>
           ))
         )}
+      </div>
+
+      <div className="injury-recovery-report">
+        <h3>
+          🌱 리저브 리그 개인 기록
+          <InfoTip title="리저브 리그 개인 기록">
+            리저브(2군) 스쿼드끼리 매 시즌 한 번 치르는 가상 리그(신규 개선 항목 14)의
+            개인 출전·득점·도움·평점 기록입니다(고도화 항목11). 지난 시즌 결과이며,
+            참가 자격(MIN_RESERVE_SQUAD) 미달이었던 시즌에는 표시되지 않습니다.
+          </InfoTip>
+        </h3>
+        {(() => {
+          const stats = lastSummary(game)?.reservePlayerStats;
+          if (!stats || stats.length === 0) {
+            return <p className="muted small">지난 시즌 리저브 리그 개인 기록이 없습니다.</p>;
+          }
+          const sorted = [...stats].sort((a, b) => b.goals - a.goals || b.avgRating - a.avgRating);
+          return (
+            <table className="data-table compact">
+              <thead>
+                <tr><th>선수</th><th>포지션</th><th>출전</th><th>득점</th><th>도움</th><th>평점</th></tr>
+              </thead>
+              <tbody>
+                {sorted.map((s) => (
+                  <tr key={s.playerId}>
+                    <td className="name">{s.name}</td>
+                    <td>{s.position}</td>
+                    <td>{s.apps}</td>
+                    <td>{s.goals}</td>
+                    <td>{s.assists}</td>
+                    <td>{s.avgRating.toFixed(1)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          );
+        })()}
       </div>
 
       <div className="sponsor-contracts">

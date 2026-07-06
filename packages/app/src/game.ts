@@ -618,11 +618,17 @@ export function finishSeason(state: GameState): GameState {
   }
 
   // 5) 오프시즌 (전 구단)
+  // 리저브 리그(가상 매치)는 runOffseason 내부에서 승격/방출/유스 인테이크로 reserves가
+  // 바뀌기 전의 "이번 시즌을 실제로 보낸" 명단으로 뛴다(reserveLeague.ts 주석 참고) —
+  // 개인 기록을 그 명단 기준으로 걸러내려면 오프시즌 처리 전에 미리 스냅샷해야 한다.
+  const myReserveIdsThisSeason = new Set((myClub(state).reserves ?? []).map((p) => p.id));
   const {
     retirements, intakeByClub, intakePlayersByClub, fireSalesByClub, retiredPlayers, milestones, debutEvents,
     loanReturns, loanObligations, reservePromotions, staffDepartures, staffRetirements, addOnPayouts,
-    reserveLeagueTable, mentorGraduations,
+    reserveLeagueTable, mentorGraduations, reservePlayerStats,
   } = runOffseason(state.clubs, new Rng(offseasonSeed(state)));
+  // 내 구단 리저브 선수의 이번 시즌 리저브 리그 개인 기록(고도화 항목11)
+  const myReservePlayerStats = reservePlayerStats.filter((s) => myReserveIdsThisSeason.has(s.playerId));
   // 내 구단 선수의 이번 시즌 리저브 승격(시즌 요약에 첨부)
   const myReservePromotions = reservePromotions.filter((r) => r.clubId === state.myClubId);
   // 내 구단이 관련된 임대 복귀(보낸 임대가 돌아오거나, 데려온 임대가 복귀)
@@ -890,6 +896,7 @@ export function finishSeason(state: GameState): GameState {
     addOnPayouts: myAddOnPayouts,
     mentorGraduations: myMentorGraduations.length > 0 ? myMentorGraduations : undefined,
     reserveLeagueTable: reserveLeagueTable.length > 0 ? reserveLeagueTable : undefined,
+    reservePlayerStats: myReservePlayerStats.length > 0 ? myReservePlayerStats : undefined,
     sponsorContractExpired,
     boldPrediction: boldPredictionResult,
     watchlistContractAlerts: watchlistContractAlerts.length > 0 ? watchlistContractAlerts : undefined,

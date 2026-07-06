@@ -201,6 +201,15 @@ export function Dashboard({
               ({myRow.won}승 {myRow.drawn}무 {myRow.lost}패, 득실 {myRow.gf - myRow.ga > 0 ? '+' : ''}{myRow.gf - myRow.ga}).
               {isChampion && ' 우승 보너스로 리저브 전원의 사기가 올랐습니다!'}
             </p>
+            {last.reservePlayerStats !== undefined && last.reservePlayerStats.length > 0 && (() => {
+              const topScorer = [...last.reservePlayerStats].sort((a, b) => b.goals - a.goals)[0]!;
+              return topScorer.goals > 0 && (
+                <p className="muted small">
+                  개인 기록: <b>{topScorer.name}</b> {topScorer.goals}골 {topScorer.assists}도움({topScorer.apps}경기)
+                  · 스태프 탭에서 리저브 개인 기록 전체를 볼 수 있습니다.
+                </p>
+              );
+            })()}
           </Banner>
         ),
       });
