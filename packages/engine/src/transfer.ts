@@ -1,7 +1,7 @@
 /**
  * 이적 시장 AI 시뮬레이션 (economy.md 5장).
- * 각 구단이 약점 라인을 식별 → 예산 내 매물 탐색 → 제안 → 수락/거절.
- * MVP 단순화: 협상 1라운드, 구단당 최대 1영입/창.
+ * 각 구단이 약점 라인을 식별 → 예산 내 매물 탐색 → 제안(거절 시 한 번 재협상) →
+ * 수락/거절. 구단당 창마다 최대 AI_MAX_DEALS_PER_CLUB건까지 성사 가능(고도화 항목6).
  */
 import type { Club, Line, Player } from './types.js';
 import { lineOf } from './teamStrength.js';
@@ -24,6 +24,10 @@ export interface TransferDeal {
 }
 
 const OUTFIELD_LINES: Line[] = ['DEF', 'MID', 'ATT'];
+
+/** 한 이적 창에서 AI 구단 하나가 성사시킬 수 있는 최대 영입 건수(고도화 항목6) —
+ *  기존 "창당 1건" 제한을 완화해 여러 약점 라인을 순차 보강할 수 있게 한다. */
+export const AI_MAX_DEALS_PER_CLUB = 2;
 
 function playersInLine(club: Club, line: Line): Player[] {
   return club.players.filter((p) => lineOf(p.position) === line);
@@ -69,68 +73,75 @@ export function runTransferWindow(
   }
 
   for (const buyer of order) {
-    const need = weakestLine(buyer);
-    const buyerLevel = bestCAInLine(buyer, need);
-    const budget = buyer.finance.transferBudget;
+    // 구단당 여러 건을 성사시킬 수 있다(고도화 항목6) — 첫 영입 후 스쿼드가 바뀌므로
+    // 매 회차마다 약점 라인·예산을 다시 계산해, 한 창에서 여러 약점을 순차 보강한다.
+    for (let dealCount = 0; dealCount < AI_MAX_DEALS_PER_CLUB; dealCount++) {
+      const need = weakestLine(buyer);
+      const buyerLevel = bestCAInLine(buyer, need);
+      const budget = buyer.finance.transferBudget;
 
-    // 후보 탐색: 타 구단, 필요 라인, 예산 내, 우리 자원보다 확실히 나은 선수
-    let best: { seller: Club; player: Player; fee: number } | null = null;
-    for (const seller of clubs) {
-      if (seller.id === buyer.id) continue;
-      if (seller.id === excludeClubId) continue; // 보호 구단은 매도 대상에서 제외
-      // 매도 구단은 해당 라인에 최소 인원(3)을 남겨야 판다
-      if (playersInLine(seller, need).length <= 3) continue;
-      // 이번 창에서 이미 다른 구매자에게 판 만큼 줄어든 전체 스쿼드도 하한 밑으로 못 내려간다.
-      if (seller.players.length - 1 < MIN_SQUAD) continue;
-      for (const player of playersInLine(seller, need)) {
-        if (moved.has(player.id)) continue; // 이미 이번 창에 이적함
-        const ca = currentAbility(player);
-        if (ca <= buyerLevel + 3) continue; // 의미 있는 보강만
-        const value = marketValue(player);
-        // 협상 변동폭 — 0.95배 하한으로 생성하면 그 아래는 반올림 경계에서만 나올 수 있어
-        // 바로 아래의 "시장가 95% 미만 거절" 검사가 사실상 죽은 코드가 된다. 실제로
-        // 거절이 발생할 수 있도록 하한을 낮춰 폭을 넓힌다.
-        const fee = Math.round(value * (0.85 + rng.next() * 0.30));
-        if (fee > budget) continue;
-        if (fee > buyer.finance.balance) continue; // 예산은 있어도 실제 보유 자금이 없으면 불가
-        // 매도 구단 수락 조건: 제안가가 시장가의 95% 이상
-        if (fee < value * 0.95) continue;
-        // 영입 후 연간 임금 총액이 지속가능한 예산을 넘으면(자멸적 영입) 포기
-        const projectedWageBill = annualWageBill(buyer) + weeklyWage(player) * 52;
-        if (projectedWageBill > wageBudget(buyer)) continue;
-        if (!best || ca > currentAbility(best.player)) {
-          best = { seller, player, fee };
+      // 후보 탐색: 타 구단, 필요 라인, 예산 내, 우리 자원보다 확실히 나은 선수
+      let best: { seller: Club; player: Player; fee: number } | null = null;
+      for (const seller of clubs) {
+        if (seller.id === buyer.id) continue;
+        if (seller.id === excludeClubId) continue; // 보호 구단은 매도 대상에서 제외
+        // 매도 구단은 해당 라인에 최소 인원(3)을 남겨야 판다
+        if (playersInLine(seller, need).length <= 3) continue;
+        // 이번 창에서 이미 다른 구매자에게 판 만큼 줄어든 전체 스쿼드도 하한 밑으로 못 내려간다.
+        if (seller.players.length - 1 < MIN_SQUAD) continue;
+        for (const player of playersInLine(seller, need)) {
+          if (moved.has(player.id)) continue; // 이미 이번 창에 이적함
+          const ca = currentAbility(player);
+          if (ca <= buyerLevel + 3) continue; // 의미 있는 보강만
+          const value = marketValue(player);
+          // 1차 제안은 다소 낮게 부른다(시가의 80~100%).
+          let fee = Math.round(value * (0.80 + rng.next() * 0.20));
+          if (fee < value * 0.95) {
+            // 매도 구단이 거절할 만한 저가 제안이면, 선수 협상처럼 한 번 더 올려
+            // 재협상을 시도한다(고도화 항목6 — 다중 라운드 협상).
+            fee = Math.round(value * (0.95 + rng.next() * 0.15));
+          }
+          if (fee > budget) continue;
+          if (fee > buyer.finance.balance) continue; // 예산은 있어도 실제 보유 자금이 없으면 불가
+          // 매도 구단 수락 조건: 재협상까지 거쳐도 시장가의 95% 미만이면 결렬
+          if (fee < value * 0.95) continue;
+          // 영입 후 연간 임금 총액이 지속가능한 예산을 넘으면(자멸적 영입) 포기
+          const projectedWageBill = annualWageBill(buyer) + weeklyWage(player) * 52;
+          if (projectedWageBill > wageBudget(buyer)) continue;
+          if (!best || ca > currentAbility(best.player)) {
+            best = { seller, player, fee };
+          }
         }
       }
+
+      if (!best) break; // 이번 회차에 성사가 없으면 이후 회차도 기대하기 어려우므로 중단
+
+      // 성사: 자금/선수단 이동
+      const { seller, player, fee } = best;
+      buyer.finance.transferBudget -= fee;
+      buyer.finance.balance -= fee;
+      seller.finance.balance += fee;
+      seller.finance.transferBudget += fee;
+
+      seller.players = seller.players.filter((p) => p.id !== player.id);
+      player.contractYears = 4;
+      player.wage = weeklyWage(player);
+      player.releaseClause = undefined;
+      buyer.players.push(player);
+      assignSquadNumber(rng, buyer.players, player);
+      moved.add(player.id);
+
+      deals.push({
+        playerId: player.id,
+        playerName: player.name,
+        position: player.position,
+        fromClubId: seller.id,
+        fromClubName: seller.name,
+        toClubId: buyer.id,
+        toClubName: buyer.name,
+        fee,
+      });
     }
-
-    if (!best) continue;
-
-    // 성사: 자금/선수단 이동
-    const { seller, player, fee } = best;
-    buyer.finance.transferBudget -= fee;
-    buyer.finance.balance -= fee;
-    seller.finance.balance += fee;
-    seller.finance.transferBudget += fee;
-
-    seller.players = seller.players.filter((p) => p.id !== player.id);
-    player.contractYears = 4;
-    player.wage = weeklyWage(player);
-    player.releaseClause = undefined;
-    buyer.players.push(player);
-    assignSquadNumber(rng, buyer.players, player);
-    moved.add(player.id);
-
-    deals.push({
-      playerId: player.id,
-      playerName: player.name,
-      position: player.position,
-      fromClubId: seller.id,
-      fromClubName: seller.name,
-      toClubId: buyer.id,
-      toClubName: buyer.name,
-      fee,
-    });
   }
 
   return deals;

@@ -73,7 +73,7 @@ export {
   type StadiumUpgradeResult, type AcademyUpgradeResult, type TrainingGroundUpgradeResult,
   type SponsorContract, type SponsorContractKind, type SponsorContractSignResult, type SponsorContractTickResult,
 } from './finance.js';
-export { runTransferWindow, type TransferDeal } from './transfer.js';
+export { runTransferWindow, AI_MAX_DEALS_PER_CLUB, type TransferDeal } from './transfer.js';
 export {
   createCup, playCupRound, playCupToEnd, isCupOver, cupSurvivors, nextCupPairings,
   CUP_FINAL_ROUND_NAME, CUP_UPSET_REP_GAP, findCupUpsets,
