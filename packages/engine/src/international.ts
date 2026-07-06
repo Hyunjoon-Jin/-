@@ -73,6 +73,7 @@ export function runInternationalBreak(clubs: Club[], rng: Rng): InternationalRes
       p.injuryMatches = rng.int(1, 3);
       p.injuryTotalMatches = p.injuryMatches; // 회복 진행률(신규 개선 항목 28) 계산 기준
       p.injuryName = '대표팀 차출 중 부상';
+      p.careerInjuryCount = (p.careerInjuryCount ?? 0) + 1; // 시장 가치 리스크 할인(고도화 항목7) 기준
       p.condition = 0.6;
       injuries++;
     }
@@ -288,6 +289,7 @@ export function runInternationalTournament(clubs: Club[], rng: Rng): Internation
           p.injuryMatches = Math.max(p.injuryMatches, rng.int(1, 4));
           p.injuryTotalMatches = p.injuryMatches; // 회복 진행률(신규 개선 항목 28) 계산 기준
           p.injuryName = '국제대회 중 부상';
+          p.careerInjuryCount = (p.careerInjuryCount ?? 0) + 1; // 시장 가치 리스크 할인(고도화 항목7) 기준
           p.condition = Math.min(p.condition, 0.55);
           injuries++;
           break;

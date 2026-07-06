@@ -11,6 +11,7 @@ import { formatMoney } from '../src/money.js';
 /** 모든 능력치를 동일 값으로 채운 선수. CA = attrVal × 10. */
 function makePlayer(opts: {
   attrVal: number; age: number; contractYears: number; potential?: number; id?: string;
+  morale?: number; careerInjuryCount?: number;
 }): Player {
   const attributes = {} as Attributes;
   for (const k of ALL_ATTRS) attributes[k] = opts.attrVal;
@@ -24,9 +25,10 @@ function makePlayer(opts: {
     attributes,
     potential: opts.potential ?? opts.attrVal * 10,
     condition: 1,
-    morale: 0.5,
+    morale: opts.morale ?? 0.5,
     contractYears: opts.contractYears,
     wage: 0,
+    careerInjuryCount: opts.careerInjuryCount,
   };
   return p;
 }
@@ -57,6 +59,28 @@ describe('valuation: 시장 가치', () => {
     const hi = weeklyWage(makePlayer({ attrVal: 16, age: 26, contractYears: 3 }));
     expect(lo).toBeGreaterThan(0);
     expect(hi).toBeGreaterThan(lo);
+  });
+
+  it('고도화 항목7: 통산 부상 이력이 많을수록 시장 가치가 낮아진다', () => {
+    const healthy = marketValue(makePlayer({ attrVal: 14, age: 26, contractYears: 3, careerInjuryCount: 0 }));
+    const oneInjury = marketValue(makePlayer({ attrVal: 14, age: 26, contractYears: 3, careerInjuryCount: 1 }));
+    const injuryProne = marketValue(makePlayer({ attrVal: 14, age: 26, contractYears: 3, careerInjuryCount: 8 }));
+    expect(oneInjury).toBe(healthy); // 1건까지는 정상 리스크로 보아 페널티 없음
+    expect(injuryProne).toBeLessThan(oneInjury);
+  });
+
+  it('고도화 항목7: 부상 이력에 따른 할인은 최대 20%로 하한이 있다', () => {
+    const healthy = marketValue(makePlayer({ attrVal: 14, age: 26, contractYears: 3, careerInjuryCount: 0 }));
+    const veryInjuryProne = marketValue(makePlayer({ attrVal: 14, age: 26, contractYears: 3, careerInjuryCount: 50 }));
+    expect(veryInjuryProne).toBeGreaterThanOrEqual(Math.round(healthy * 0.8) - 1);
+  });
+
+  it('고도화 항목7: 사기(폼)가 높을수록 시장 가치가 높아진다', () => {
+    const lowMorale = marketValue(makePlayer({ attrVal: 14, age: 26, contractYears: 3, morale: 0.1 }));
+    const neutral = marketValue(makePlayer({ attrVal: 14, age: 26, contractYears: 3, morale: 0.5 }));
+    const highMorale = marketValue(makePlayer({ attrVal: 14, age: 26, contractYears: 3, morale: 1.0 }));
+    expect(lowMorale).toBeLessThan(neutral);
+    expect(highMorale).toBeGreaterThan(neutral);
   });
 });
 

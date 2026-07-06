@@ -91,6 +91,7 @@ function applySide(club: Club, tactic: Tactic, outcome: Outcome, injuries: Injur
         p.injuryTotalMatches = inj.matches; // 회복 진행률(신규 개선 항목 28) 계산 기준
         p.injuryName = inj.name;
         p.injuryBodyPart = inj.bodyPart;
+        p.careerInjuryCount = (p.careerInjuryCount ?? 0) + 1; // 시장 가치 리스크 할인(고도화 항목7) 기준
         p.condition = inj.severity === 'serious' ? 0.25 : 0.3;
         // 다시 다쳤으니 이전 회복 지연 구간은 무의미 — 다음 복귀 시 새로 시작한다.
         p.reinjuryRiskMatches = 0;
