@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   attendanceFormFactor, settleSeason, generateSponsorGoal, evaluateSponsorGoal, SPONSOR_GOAL_LABEL,
+  sponsorStreakMultiplier,
 } from '../src/finance.js';
 import { confidenceDelta } from '../src/board.js';
 import { generateDemand } from '../src/demands.js';
@@ -74,6 +75,21 @@ describe('C02: 스폰서 보너스 목표', () => {
   it('모든 목표 종류에 라벨이 있다', () => {
     expect(SPONSOR_GOAL_LABEL.top4Finish.length).toBeGreaterThan(0);
     expect(SPONSOR_GOAL_LABEL.cupWon.length).toBeGreaterThan(0);
+  });
+});
+
+describe('C-new2: 스폰서 목표 연속 달성 스트릭', () => {
+  it('스트릭 0(첫 달성)은 배율 1.0이다', () => {
+    expect(sponsorStreakMultiplier(0)).toBe(1);
+  });
+
+  it('스트릭이 쌓일수록 배율이 커진다', () => {
+    expect(sponsorStreakMultiplier(1)).toBeGreaterThan(sponsorStreakMultiplier(0));
+    expect(sponsorStreakMultiplier(3)).toBeGreaterThan(sponsorStreakMultiplier(1));
+  });
+
+  it('상한 이상으로는 배율이 더 늘지 않는다(무한 인플레이션 방지)', () => {
+    expect(sponsorStreakMultiplier(5)).toBe(sponsorStreakMultiplier(100));
   });
 });
 

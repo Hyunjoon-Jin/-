@@ -4,18 +4,29 @@
  * 게임의 시간축을 닫는 핵심 루프.
  */
 import type { Club, Player, Position } from './types.js';
+import type { BoardStatus } from './board.js';
+import { POSITIONS } from './types.js';
 import { simulateSeason, type TableRow } from './league.js';
-import { settleSeason, type SeasonFinanceReport } from './finance.js';
+import { settleSeason, type SeasonFinanceReport, type SponsorContractKind } from './finance.js';
+import type { BoldPredictionResult } from './board.js';
+import type { CupUpsetEvent } from './cup.js';
 import { runTransferWindow, type TransferDeal } from './transfer.js';
 import { progressPlayer } from './progression.js';
 import { generateAcademyIntake, generateYouthPlayer, assignSquadNumber } from './generate.js';
-import { applyLoanWageSubsidies } from './transferActions.js';
+import { applyLoanWageSubsidies, MIN_SQUAD } from './transferActions.js';
 import { enforceFinancialFairPlay } from './financeControl.js';
-import { runInternationalBreak, runInternationalTournament, TOURNAMENT_INTERVAL_SEASONS } from './international.js';
+import {
+  runInternationalBreak, runInternationalTournament, TOURNAMENT_INTERVAL_SEASONS, checkInternationalRetirements,
+  type InternationalRetirementEvent,
+} from './international.js';
+import { simulateReserveSeason, type ReserveTableRow } from './reserveLeague.js';
 import { currentAbility } from './derived.js';
 import { hasTrait } from './traits.js';
 import { lineOf } from './teamStrength.js';
-import { effectiveCoaching, effectiveYouth, effectiveScouting, tickStaffContracts } from './staffActions.js';
+import {
+  effectiveCoaching, effectiveYouth, effectiveScouting, effectiveReserveCoaching,
+  tickStaffContracts, type StaffDepartureEvent, type StaffRetirementEvent,
+} from './staffActions.js';
 import { recentForm } from './form.js';
 import { clamp } from './math.js';
 import {
@@ -122,8 +133,16 @@ export interface SeasonSummary {
   };
   /** 이번 오프시즌 내 구단 관련 임대 복귀(보낸 임대가 돌아오거나, 데려온 임대가 복귀). */
   loanReturns?: LoanReturnEvent[];
+  /** 이번 오프시즌 내 구단 관련 의무완전이적 조항 발동(A1). */
+  loanObligations?: LoanObligationEvent[];
   /** 이번 오프시즌 리저브에서 1군으로 승격한 선수(내 구단, B9). */
   reservePromotions?: ReservePromotionEvent[];
+  /** 이번 오프시즌 계약 만료로 타 구단에 스카우트되어 이탈한 내 구단 실명 스태프(신규 영입 후임 포함). */
+  staffDepartures?: StaffDepartureEvent[];
+  /** 이번 오프시즌 고령으로 은퇴한 내 구단 실명 스태프(신규 영입 후임 포함, 신규 개선 항목 17). */
+  staffRetirements?: StaffRetirementEvent[];
+  /** 이번 오프시즌 내 구단 선수 중 국가대표 은퇴를 선언한 인원(신규 개선 항목 19). */
+  internationalRetirements?: InternationalRetirementEvent[];
   /** 이번 시즌 비정기 국제대회(월드컵/유로급, C15)가 열렸다면 우승 국가. 참가 자격국 부족 시 null.
    *  값이 undefined면 이번 시즌엔 대회가 열리지 않고 정기 A매치 차출만 있었다는 뜻. */
   internationalTournamentChampion?: string | null;
@@ -132,6 +151,41 @@ export interface SeasonSummary {
   continentalCupChampionName?: string;
   /** 이번 시즌 성적으로 다음 시즌 대륙컵 진출권을 획득했는지(내 구단 기준, 앱). */
   qualifiedForContinental?: boolean;
+  /** 이사회 신뢰 등급이 이번 시즌 실제로 올라 지급된 일회성 투자 예산 승인(내 구단, 앱). */
+  boardTierBonus?: { fromStatus: BoardStatus; toStatus: BoardStatus; amount: number };
+  /** 이번 시즌 내 구단이 관련된 성과 기반 후불 이적료(Add-on) 발동(신규 개선 항목 3). */
+  addOnPayouts?: AddOnEvent[];
+  /** 리저브팀 자체 소규모 리그(가상 매치, 신규 개선 항목 14) 순위표(전 구단 — 앱에서 내 구단 순위를 찾아 표시). */
+  reserveLeagueTable?: ReserveTableRow[];
+  /** 과거 내 구단 리저브에서 1군으로 승격했다가 이후 타 구단으로 떠난 "동문"의 이번 시즌
+   *  소식(신규 개선 항목 18, 앱 전용 — 헤드리스엔 미설정). 은퇴·방출로 더는 어디서도
+   *  뛰지 않는 졸업생은 포함되지 않는다(현재 뛰고 있는 구단을 찾을 수 있는 경우만). */
+  academyAlumni?: AcademyAlumnusUpdate[];
+  /** 이번 시즌 만료된 내 구단 스폰서 계약 종류(신규 개선 항목 24, 앱 전용) — 재계약하지
+   *  않으면 다음 시즌부터 해당 계약 수익이 끊긴다는 알림용. */
+  sponsorContractExpired?: SponsorContractKind[];
+  /** 이번 시즌 공개 선언한 대담한 목표의 결과(신규 개선 항목 25, 앱 전용). 선언하지
+   *  않았으면 undefined. */
+  boldPrediction?: BoldPredictionResult;
+  /** 이적 관심 목록(신규 개선 항목 27, 앱 전용)에 올린 선수 중 이번 시즌 계약이 마지막
+   *  해로 접어든 선수 알림. */
+  watchlistContractAlerts?: { playerId: string; name: string; clubName: string }[];
+  /** 이번 시즌 컵대회에서 내 구단이 이변의 주인공이거나 희생양이었던 경기(신규 개선
+   *  항목 29, 앱 전용). */
+  cupUpsets?: CupUpsetEvent[];
+}
+
+/** 유스 졸업생 동문 네트워크(신규 개선 항목 18) — 과거 우리 리저브 출신으로 1군
+ *  승격했다가 지금은 다른 구단에서 뛰고 있는 선수의 이번 시즌 소식. */
+export interface AcademyAlumnusUpdate {
+  playerId: string;
+  name: string;
+  position: Position;
+  /** 현재 소속 구단(리저브 포함) — 내 구단이 아닌 다른 구단. */
+  clubId: string;
+  clubName: string;
+  seasonGoals: number;
+  seasonApps: number;
 }
 
 /** 과거 유스 기대주 소개 이후의 후속 소식(데뷔/첫 골). */
@@ -193,10 +247,12 @@ function progressReserves(club: Club, rng: Rng, firstTeamSize: number): ReserveP
   let released = 0;
 
   for (const p of reserves) {
-    progressPlayer(p, rng, effectiveCoaching(p.position, club.staff));
+    progressPlayer(p, rng, effectiveReserveCoaching(p.position, club.staff));
     const hist = p.caHistory ?? (p.caHistory = []);
     hist.push(Math.round(currentAbility(p)));
     if (hist.length > 20) hist.shift();
+    // 로열티(신규 개선 항목 10) — 리저브도 같은 구단 소속이므로 함께 쌓인다.
+    p.seasonsAtClub = (p.seasonsAtClub ?? 0) + 1;
 
     const ready = currentAbility(p) >= p.potential * RESERVE_READY_RATIO;
     const squadCritical = firstTeamSize + promoted.length < SQUAD_CRITICAL_SIZE;
@@ -248,6 +304,34 @@ export interface LoanReturnEvent {
   toClubName: string;
 }
 
+/** 임대 의무완전이적 조항 발동 이벤트(A1) — 출전 기준을 채워 완전 이적으로 전환. */
+export interface LoanObligationEvent {
+  playerId: string;
+  name: string;
+  position: Position;
+  /** 원 소속(선수를 팔게 되는 쪽). */
+  fromClubId: string;
+  fromClubName: string;
+  /** 임대 갔던 구단(이제 완전 영입하는 쪽). */
+  toClubId: string;
+  toClubName: string;
+  fee: number;
+}
+
+/** 성과 기반 후불 이적료(Add-on) 발동 이벤트(신규 개선 항목 3). */
+export interface AddOnEvent {
+  playerId: string;
+  name: string;
+  position: Position;
+  /** 지금 이 선수가 뛰고 있는 구단(이적료를 지불하는 쪽). */
+  fromClubId: string;
+  fromClubName: string;
+  /** 원 소속(이적료를 받는 쪽). */
+  toClubId: string;
+  toClubName: string;
+  fee: number;
+}
+
 export interface OffseasonResult {
   retirements: number;
   /** clubId → 유스 아카데미 배출 인원. */
@@ -264,10 +348,21 @@ export interface OffseasonResult {
   debutEvents: DebutEvent[];
   /** 이번 오프시즌에 임대 기간이 끝나 원 소속 구단으로 복귀한 선수(전 구단). */
   loanReturns: LoanReturnEvent[];
+  /** 이번 오프시즌에 의무완전이적 조항이 발동해 완전 이적으로 전환된 선수(전 구단, A1). */
+  loanObligations: LoanObligationEvent[];
   /** 이번 오프시즌 리저브에서 1군으로 승격한 선수(전 구단, B9). */
   reservePromotions: ReservePromotionEvent[];
   /** clubId → 리저브에서 방출된 인원(1군 승격 기준 미달 상태로 결론 나이에 도달, B9). */
   reserveReleasesByClub: Map<string, number>;
+  /** 이번 오프시즌 계약 만료로 타 구단에 스카우트되어 이탈한 실명 스태프(전 구단, clubId 포함). */
+  staffDepartures: (StaffDepartureEvent & { clubId: string; clubName: string })[];
+  /** 이번 오프시즌 고령으로 은퇴한 실명 스태프(전 구단, clubId 포함, 신규 개선 항목 17). */
+  staffRetirements: (StaffRetirementEvent & { clubId: string; clubName: string })[];
+  /** 이번 오프시즌 성과 기반 후불 이적료(Add-on)가 발동한 선수(전 구단, 신규 개선 항목 3). */
+  addOnPayouts: AddOnEvent[];
+  /** 리저브팀 자체 소규모 리그(가상 매치, 신규 개선 항목 14) 순위표. 참가 자격(MIN_RESERVE_SQUAD)
+   *  미달 구단은 빠진다. 참가 자격 구단이 2개 미만이면 빈 배열. */
+  reserveLeagueTable: ReserveTableRow[];
 }
 
 /** 멘토링 보너스 배율 — 같은 라인에 리더 특성 보유자나 리더십 높은 베테랑이 있으면 성장 가속. */
@@ -295,6 +390,48 @@ function hasMentor(club: Club, player: Player): boolean {
   });
 }
 
+/** 유저 지정 멘토 페어링(B14) 최대 동시 개수 — 유한한 자원으로 만들어 실제 선택이 되게 한다. */
+export const MENTOR_PAIRING_MAX = 3;
+/** 직접 지정한 멘토링은 자동(같은 라인) 멘토링보다 더 큰 성장 보너스를 준다. */
+const DESIGNATED_MENTOR_GROWTH_MUL = 1.25;
+
+export interface MentorAssignResult { ok: boolean; reason?: string }
+
+/** 유저가 직접 멘토-멘티를 지정한다. 멘토는 멘티보다 나이가 많아야 하고, 멘티는
+ *  아직 성장 중(23세 이하)이어야 한다. 이미 그 멘티에게 지정된 멘토가 있으면
+ *  교체로 취급해(상한 소모 없이) 갱신한다. */
+export function assignMentor(club: Club, mentorId: string, menteeId: string): MentorAssignResult {
+  if (mentorId === menteeId) return { ok: false, reason: '같은 선수를 멘토와 멘티로 지정할 수 없습니다.' };
+  const mentor = club.players.find((p) => p.id === mentorId);
+  const mentee = club.players.find((p) => p.id === menteeId);
+  if (!mentor || !mentee) return { ok: false, reason: '선수를 찾을 수 없습니다.' };
+  if (mentee.age > MENTEE_MAX_AGE) return { ok: false, reason: `멘티는 ${MENTEE_MAX_AGE}세 이하 유망주만 가능합니다.` };
+  if (mentor.age <= mentee.age) return { ok: false, reason: '멘토는 멘티보다 나이가 많아야 합니다.' };
+  const pairings = club.mentorPairings ?? (club.mentorPairings = []);
+  const existingForMentee = pairings.find((m) => m.menteeId === menteeId);
+  if (existingForMentee) { existingForMentee.mentorId = mentorId; return { ok: true }; }
+  if (pairings.length >= MENTOR_PAIRING_MAX) {
+    return { ok: false, reason: `동시에 최대 ${MENTOR_PAIRING_MAX}쌍까지만 지정할 수 있습니다.` };
+  }
+  pairings.push({ mentorId, menteeId });
+  return { ok: true };
+}
+
+/** 지정된 멘토 페어링을 해제한다(멘티 기준). */
+export function clearMentorPairing(club: Club, menteeId: string): void {
+  if (!club.mentorPairings) return;
+  club.mentorPairings = club.mentorPairings.filter((m) => m.menteeId !== menteeId);
+}
+
+/** 멘티에게 유저 지정 멘토가 배정돼 있고 그 멘토가 여전히 스쿼드에 있으면 강화된
+ *  성장 배율을, 아니면 1을 반환한다(자동 멘토링과 별개 — 더 큰 쪽을 적용). */
+function designatedMentorBonus(club: Club, player: Player): number {
+  const pairing = club.mentorPairings?.find((m) => m.menteeId === player.id);
+  if (!pairing) return 1;
+  const mentorStillHere = club.players.some((p) => p.id === pairing.mentorId);
+  return mentorStillHere ? DESIGNATED_MENTOR_GROWTH_MUL : 1;
+}
+
 export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
   let retirements = 0;
   const intakeByClub = new Map<string, number>();
@@ -304,8 +441,12 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
   const milestones: CareerMilestone[] = [];
   const debutEvents: DebutEvent[] = [];
   const loanReturns: LoanReturnEvent[] = [];
+  const loanObligations: LoanObligationEvent[] = [];
   const reservePromotions: ReservePromotionEvent[] = [];
   const reserveReleasesByClub = new Map<string, number>();
+  const staffDepartures: (StaffDepartureEvent & { clubId: string; clubName: string })[] = [];
+  const staffRetirements: (StaffRetirementEvent & { clubId: string; clubName: string })[] = [];
+  const addOnPayouts: AddOnEvent[] = [];
 
   // 임대 복귀: 시즌 카운트다운이 끝난 임대 선수를 원 소속 구단으로 돌려보낸다. 이번
   // 오프시즌의 성장/노화/은퇴 처리를 정상적으로 받도록, 아래 본 루프보다 먼저 처리해
@@ -315,9 +456,30 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
     const staying: Player[] = [];
     for (const player of club.players) {
       if (player.loanFromClubId === undefined) { staying.push(player); continue; }
+      const parent = clubById.get(player.loanFromClubId);
+
+      // 의무완전이적 조항(A1) — 이번 시즌 출전이 기준에 도달하면 잔여 임대 기간과
+      // 무관하게 계약상 의무로 완전 이적이 확정된다(자금 부족이어도 강제 집행 —
+      // 재정 위기로 이어지면 같은 오프시즌 뒤에 도는 enforceFinancialFairPlay가 즉시 뒷수습한다).
+      if (parent && player.loanBuyObligation && player.seasonApps >= player.loanBuyObligation.appearances) {
+        const fee = player.loanBuyObligation.fee;
+        club.finance.balance -= fee;
+        parent.finance.balance += fee;
+        loanObligations.push({
+          playerId: player.id, name: player.name, position: player.position,
+          fromClubId: parent.id, fromClubName: parent.name, toClubId: club.id, toClubName: club.name, fee,
+        });
+        player.loanFromClubId = undefined;
+        player.loanSeasonsRemaining = undefined;
+        player.loanWageShareByParent = undefined;
+        player.loanBuyObligation = undefined;
+        player.loanBuyOption = undefined;
+        staying.push(player); // 완전 이적이라 현 구단(임대 갔던 구단)에 그대로 남는다.
+        continue;
+      }
+
       player.loanSeasonsRemaining = (player.loanSeasonsRemaining ?? 1) - 1;
       if (player.loanSeasonsRemaining > 0) { staying.push(player); continue; }
-      const parent = clubById.get(player.loanFromClubId);
       if (!parent) { staying.push(player); continue; } // 원 소속 구단이 사라진 극단적 경우 현 구단에 잔류
       loanReturns.push({
         playerId: player.id, name: player.name, position: player.position,
@@ -326,11 +488,17 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
       player.loanFromClubId = undefined;
       player.loanSeasonsRemaining = undefined;
       player.loanWageShareByParent = undefined;
+      player.loanBuyOption = undefined;
       parent.players.push(player);
       assignSquadNumber(rng, parent.players, player);
     }
     club.players = staying;
   }
+
+  // 리저브팀 자체 소규모 리그(가상 매치, 신규 개선 항목 14) — 이번 시즌 내내 쌓인 리저브
+  // 스쿼드로 전 구단이 한 번에 가상 매치를 치른다. 아래 본 루프에서 성장/승격/유스 인테이크로
+  // club.reserves가 바뀌기 전에, "이번 시즌을 실제로 보낸" 스쿼드 기준으로 먼저 계산한다.
+  const { table: reserveLeagueTable } = simulateReserveSeason(clubs, rng.int(1, 1_000_000_000));
 
   const expectedMatches = 2 * (clubs.length - 1); // 리그 기준 기대 출전
   for (const club of clubs) {
@@ -355,7 +523,22 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
       else if (ratio < 0.25) target = 0.5;
       player.morale = clamp(moraleRetention * player.morale + (1 - moraleRetention) * (target + leaderBonus), 0, 1);
 
-      const mentorBonus = hasMentor(club, player) ? MENTOR_GROWTH_MUL : 1;
+      // 바이백 조항(신규 개선 항목 2) 유효기간 카운트다운 — 0이 되면 자동 소멸.
+      if (player.buybackClause) {
+        player.buybackClause.seasonsRemaining -= 1;
+        if (player.buybackClause.seasonsRemaining <= 0) player.buybackClause = undefined;
+      }
+
+      // 로열티(신규 개선 항목 10) — 이적 없이 이 구단에서 시즌을 마쳤으니 1시즌 가산.
+      // 임대 온 선수는 원 소속(loanFromClubId)에 대한 로열티이므로 여기서는 늘리지 않는다.
+      if (player.loanFromClubId === undefined) {
+        player.seasonsAtClub = (player.seasonsAtClub ?? 0) + 1;
+      }
+
+      const mentorBonus = Math.max(
+        hasMentor(club, player) ? MENTOR_GROWTH_MUL : 1,
+        designatedMentorBonus(club, player),
+      );
       progressPlayer(player, rng, effectiveCoaching(player.position, club.staff), mentorBonus);
       // 성장 곡선: 이번 시즌 종료 시점 CA 스냅샷(최근 20시즌 유지)
       const hist = player.caHistory ?? (player.caHistory = []);
@@ -378,6 +561,27 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
       }
       if (beforeGoals === 0 && (player.seasonGoals ?? 0) > 0) {
         debutEvents.push({ playerId: player.id, name: player.name, clubId: club.id, clubName: club.name, kind: 'firstGoal' });
+      }
+      // 성과 기반 후불 이적료(Add-on, 신규 개선 항목 3) — 이번 시즌 출전·득점 중 지정된
+      // 조건에 하나라도 도달하면 원 소속 구단에 즉시 지급하고 조항을 소멸시킨다.
+      if (player.addOnClause) {
+        const clause = player.addOnClause;
+        const appsHit = clause.appearances !== undefined && player.seasonApps >= clause.appearances;
+        const goalsHit = clause.goals !== undefined && (player.seasonGoals ?? 0) >= clause.goals;
+        if (appsHit || goalsHit) {
+          const seller = clubById.get(clause.sellerClubId);
+          if (seller) {
+            club.finance.balance -= clause.fee;
+            seller.finance.balance += clause.fee;
+            seller.finance.transferBudget += clause.fee;
+            addOnPayouts.push({
+              playerId: player.id, name: player.name, position: player.position,
+              fromClubId: club.id, fromClubName: club.name, toClubId: seller.id, toClubName: seller.name,
+              fee: clause.fee,
+            });
+          }
+          player.addOnClause = undefined;
+        }
       }
       // 새 시즌은 풀 컨디션·부상/징계 리셋으로 시작
       player.condition = 1;
@@ -410,8 +614,10 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
     const fire = enforceFinancialFairPlay(club);
     fireSalesByClub.set(club.id, fire.sold.length);
 
-    // 실명 스태프 계약 잔여연수 감소(0이면 조용히 재계약)
-    tickStaffContracts(club);
+    // 실명 스태프 계약 잔여연수 감소(0이면 확률적으로 이탈·후임 영입, 그 외엔 조용히 재계약)
+    const { departures, retirements: staffRetired } = tickStaffContracts(club, rng);
+    for (const d of departures) staffDepartures.push({ ...d, clubId: club.id, clubName: club.name });
+    for (const r of staffRetired) staffRetirements.push({ ...r, clubId: club.id, clubName: club.name });
 
     // 리저브 성장 + 승격/방출 판정 — 승격 인원은 1군에 합류(스쿼드 상한 초과분은 이후
     // trimSquad가 정리). 이번 시즌 새로 들어올 유스 인테이크보다 먼저 처리해, 갓
@@ -428,6 +634,7 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
     // 유스 아카데미 배출 — 1군이 아닌 리저브로 합류(B9), 승격 전까지는 출전 대상이 아니다.
     const intake = generateAcademyIntake(
       rng, club.finance.reputation, effectiveYouth(club.staff), effectiveScouting(club.staff),
+      club.finance.academyLevel ?? 0, club.finance.academyFocus,
     );
     const reserves = club.reserves ?? (club.reserves = []);
     reserves.push(...intake);
@@ -443,12 +650,30 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
       assignSquadNumber(rng, club.players, emergencyGk);
     }
 
+    // 은퇴·임대·스태프 이탈 등이 겹쳐 스쿼드가 최소 인원 아래로 내려가면(극단적 불운)
+    // 시뮬레이션 무결성을 위해 응급 유스로 보강한다.
+    while (club.players.length < MIN_SQUAD) {
+      const position = POSITIONS[rng.int(0, POSITIONS.length - 1)]!;
+      const emergency = generateYouthPlayer(rng, position, club.finance.reputation);
+      club.players.push(emergency);
+      assignSquadNumber(rng, club.players, emergency);
+    }
+
     // 스쿼드 상한 정리
     trimSquad(club);
+
+    // 멘토·멘티 중 한쪽이라도 스쿼드를 떠났으면(은퇴·매각·이적 등) 페어링을 정리한다
+    // (세이브 파일에 죽은 페어링이 계속 쌓이는 것을 방지 — 성장 계산은 어차피
+    // designatedMentorBonus에서 매번 재검증하므로 정합성에는 영향 없음).
+    if (club.mentorPairings) {
+      const ids = new Set(club.players.map((p) => p.id));
+      club.mentorPairings = club.mentorPairings.filter((m) => ids.has(m.mentorId) && ids.has(m.menteeId));
+    }
   }
   return {
     retirements, intakeByClub, intakePlayersByClub, fireSalesByClub, retiredPlayers, milestones,
-    debutEvents, loanReturns, reservePromotions, reserveReleasesByClub,
+    debutEvents, loanReturns, loanObligations, reservePromotions, reserveReleasesByClub, staffDepartures,
+    staffRetirements, addOnPayouts, reserveLeagueTable,
   };
 }
 
@@ -478,7 +703,11 @@ export function advanceSeason(clubs: Club[], season: number, baseSeed: number): 
   // 4) 오프시즌: 성장/노화 + 은퇴·유스 아카데미
   const { retirements } = runOffseason(clubs, rng);
 
-  // 5) 국가대표 차출(오프시즌 리셋 이후 — 피로/부상이 새 시즌에 반영)
+  // 5) 국가대표 은퇴 판정(신규 개선 항목 19) — 차출 명단 확정 전에 먼저 반영해야
+  // 이번 시즌부터 즉시 차출 대상에서 제외된다.
+  checkInternationalRetirements(clubs, rng);
+
+  // 5.5) 국가대표 차출(오프시즌 리셋 이후 — 피로/부상이 새 시즌에 반영)
   // TOURNAMENT_INTERVAL_SEASONS마다는 정기 차출 대신 비정기 국제대회(월드컵/유로급)로 확장.
   if (season % TOURNAMENT_INTERVAL_SEASONS === 0) {
     runInternationalTournament(clubs, rng);

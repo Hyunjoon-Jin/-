@@ -8,29 +8,49 @@ import {
   createSeasonState, playRound as enginePlayRound, playToEnd, computeTable, totalRounds, currentRound,
   commitResult, simulateMatch, simulateSeason, defaultTactic, applyMatchEffects,
   buyPlayer, buyPlayerAt, buyPlayerViaReleaseClause, evaluateOffer, sellPlayer, releasePlayer,
+  transferTargets,
+  exerciseBuyback, attachAddOnClause, exerciseLoanBuyOption,
+  agentRelationsOf, agentRelationsTier,
+  AGENT_RELATIONS_MIN, AGENT_RELATIONS_DEFAULT, AGENT_RELATIONS_BREAKDOWN_PENALTY,
+  panicBuy as enginePanicBuy, PANIC_BUY_PREMIUM, executeRivalSnipe,
+  type AgentRelationsTier,
   sellOffers, acceptSellOffer,
-  loanPlayerOut, recallLoanPlayer, applyLoanWageSubsidies,
-  type OfferEvaluation, type SellOffer, type LoanTerms, type LoanReturnEvent,
+  loanPlayerOut, recallLoanPlayer, applyLoanWageSubsidies, swapPlayers,
+  type OfferEvaluation, type SellOffer, type LoanTerms, type LoanReturnEvent, type LoanObligationEvent,
   summarizeStats, aggregatePlayerStats, topScorers as engineTopScorers, recentPlayerForm,
   seasonSquadSnapshot,
   createCup, playCupRound as enginePlayCupRound, playCupToEnd, isCupOver, nextCupPairings,
-  CUP_FINAL_ROUND_NAME,
+  CUP_FINAL_ROUND_NAME, findCupUpsets,
   applyPromotionRelegation, clubsInDivision, runInternationalBreak,
-  runInternationalTournament, TOURNAMENT_INTERVAL_SEASONS,
-  confidenceDelta, applyConfidence, isSacked, START_CONFIDENCE,
+  runInternationalTournament, TOURNAMENT_INTERVAL_SEASONS, checkInternationalRetirements,
+  confidenceDelta, applyConfidence, isSacked, START_CONFIDENCE, boardStatus, boardTierUpgradeBonus,
+  boldPredictionTarget, evaluateBoldPrediction, type BoldPredictionResult,
+  type BoardStatus,
   generateDemand, evaluateDemand, demandConfidence, DEMAND_LABEL,
-  generateSponsorGoal, evaluateSponsorGoal, SPONSOR_GOAL_LABEL, type SponsorGoal,
+  renegotiateDemand as engineRenegotiateDemand,
+  generateSponsorGoal, evaluateSponsorGoal, SPONSOR_GOAL_LABEL, sponsorStreakMultiplier, type SponsorGoal,
+  signSponsorContract as engineSignSponsorContract, tickSponsorContracts, SPONSOR_CONTRACT_LABEL,
+  type SponsorContractKind,
+  matchWeather, type Weather,
   annualWageBill, wageBudget,
   matchOutcomeKind, mediaToneOptions, shouldTriggerMediaEvent, applyMediaTone,
   MEDIA_TONE_STYLE, classifyPersona,
   type BoardDemand, type RetiredLegend,
   type MediaEventKind, type MediaTone, type MediaToneOption, type ManagerPersona,
-  upgradeStaff as engineUpgradeStaff, upgradeStadium as engineUpgradeStadium, formatMoney,
-  computeTeamStrength, currentAbility, recentForm, buildScoutingReport,
+  upgradeStaff as engineUpgradeStaff, upgradeStadium as engineUpgradeStadium,
+  upgradeTrainingGround as engineUpgradeTrainingGround,
+  negotiateStaffRaise as engineNegotiateStaffRaise,
+  upgradeAcademy as engineUpgradeAcademy, formatMoney,
+  loyaltyDiscount,
+  computeTeamStrength, currentAbility, recentForm, buildScoutingReport, lineOf,
+  dispatchScout as engineDispatchScout,
+  assignMentor as engineAssignMentor, clearMentorPairing as engineClearMentorPairing,
   type Club, type Tactic, type MatchResult, type MatchSetup, type SeasonSummary,
-  type Fixture, type TableRow, type PlayerSeasonStat, type CupState, type StaffKind,
+  type Fixture, type TableRow, type PlayerSeasonStat, type CupState, type StaffKind, type NamedStaffKind,
   type PlayerFormEntry, type Player, type YouthProspect, type YouthProspectUpdate,
-  type TeamStrength, type FormSummary, type ScoutingReport,
+  type TeamStrength, type FormSummary, type ScoutingReport, type Line, type Position,
+  type StaffDepartureEvent, type StaffRetirementEvent, type AcademyAlumnusUpdate,
+  type AddOnEvent,
 } from '@soccer-tycoon/engine';
 import { makeDefaultTactic, repairTactic } from './tactics.js';
 
@@ -130,8 +150,23 @@ export interface GameState {
   sacked?: boolean;
   /** 이번 시즌 이사회 특별 요구(없을 수 있음). */
   demand?: BoardDemand | null;
+  /** 이번 시즌 이사회 요구 재협상을 이미 시도했는가(신규 개선 항목 22, 시즌당 1회 제한).
+   *  다음 시즌 새 요구가 생성될 때 초기화된다. */
+  demandRenegotiated?: boolean;
   /** 이번 시즌 스폰서 보너스 목표(없을 수 있음). 달성 시 일시불 현금 보너스. */
   sponsorGoal?: SponsorGoal | null;
+  /** 밀당이 결렬(roundsExhausted)된 선수 id → 재협상이 다시 가능해지는 시즌 번호
+   *  (Item1). 매도 구단이 협상을 접은 채로 곧장 재제안하지 못하게 막아, "다음
+   *  시즌에 다시 시도하세요" 안내가 실제로 지켜지도록 한다. */
+  negotiationCooldowns?: Record<string, number>;
+  /** 판매한 선수 id → 재영입이 다시 가능해지는 시즌 번호(신규 개선 항목 11). 바이백
+   *  조항 없이 판 선수를 곧바로 되사들여 이적 시스템을 우회하는 것을 막는다 — 정식
+   *  경로는 판매 시 바이백 조항(Item2)을 붙이는 것뿐이다. */
+  soldPlayerCooldowns?: Record<string, number>;
+  /** 스폰서 보너스 목표 연속 달성 횟수(C-new2) — 목표가 주어진 시즌에 달성하면 +1,
+   *  실패하면 0으로 리셋. 목표가 없는 시즌은 그대로 유지(불이익 없음). 구버전
+   *  세이브는 없을 수 있어 optional(없으면 0 취급). */
+  sponsorStreak?: number;
   /** 내 구단에서 뛰다 은퇴한 선수 아카이브(레전드). */
   legends: ClubLegend[];
   /** 라이벌 구단 id. 게임 시작 시 1회 고정(같은 부 내 평판이 가장 가까운 구단). */
@@ -148,6 +183,12 @@ export interface GameState {
   ambition: number;
   /** playerId → 내 구단 소속으로 뛴 시즌의 평균 평점 이력(최근 20시즌). 출전이 없던 시즌은 기록되지 않는다. */
   ratingHistory: Record<string, SeasonRatingEntry[]>;
+  /** 이번 시즌 공개 선언한 대담한 목표 순위(신규 개선 항목 25) — 시즌 시작 전(첫 경기
+   *  전)에만 선언할 수 있고, 다음 시즌 시작 시 초기화된다. 미선언이면 undefined. */
+  boldPrediction?: number;
+  /** 이적 관심 목록(신규 개선 항목 27)에 올린 타 구단 선수 id — 시즌을 넘어 유지되며,
+   *  계약 만료가 임박하면 시즌 종료 시 알림이 뜬다. */
+  transferWatchlist?: string[];
 }
 
 /** 선수의 한 시즌 평균 평점 스냅샷. */
@@ -297,6 +338,23 @@ export function myClub(state: GameState): Club {
   return state.clubs.find((c) => c.id === state.myClubId)!;
 }
 
+/** 내 구단의 현재 에이전트 관계 지수와 등급(Item6, 이적 시장 UI 표시용). */
+export function myAgentRelations(state: GameState): { value: number; tier: AgentRelationsTier } {
+  const value = agentRelationsOf(myClub(state));
+  return { value, tier: agentRelationsTier(value) };
+}
+
+/** 라인별 권장 최소 보유 인원(A5) — 이 아래면 부상·정지가 겹칠 때 그 라인이 통째로 빌 위험. */
+export const LINE_DEPTH_RECOMMENDED: Record<Line, number> = { GK: 2, DEF: 5, MID: 5, ATT: 3 };
+
+/** 내 구단 라인 중 권장 보유 인원에 못 미치는 라인 목록(뎁스 경고 배너용). */
+export function thinSquadLines(state: GameState): { line: Line; count: number }[] {
+  const club = myClub(state);
+  return (Object.keys(LINE_DEPTH_RECOMMENDED) as Line[])
+    .map((line) => ({ line, count: club.players.filter((p) => lineOf(p.position) === line).length }))
+    .filter(({ line, count }) => count < LINE_DEPTH_RECOMMENDED[line]);
+}
+
 export function rivalClub(state: GameState): Club {
   return state.clubs.find((c) => c.id === state.rivalClubId)!;
 }
@@ -398,6 +456,13 @@ export function finishSeason(state: GameState): GameState {
   if (!state.live) return state;
   const myDiv = myDivision(state);
 
+  // 이적 관심 목록(신규 개선 항목 27) 계약 만료 임박 알림 준비 — 오프시즌 처리(계약
+  // 연수 차감 등) 전의 잔여 계약 연수를 캡처해, 이번 시즌에 "새로" 마지막 해에
+  // 접어들었는지(이전엔 아니었는데 지금은 그런지) 비교할 기준으로 삼는다.
+  const watchlistBeforeById = new Map(
+    transferTargets(state.clubs, state.myClubId).map((t) => [t.player.id, t.player.contractYears]),
+  );
+
   // 요구 평가용: 오프시즌 이전(사용자가 운영한 스쿼드)의 임금 건전성 캡처
   const wageUnderBudget = annualWageBill(myClub(state)) <= wageBudget(myClub(state));
 
@@ -462,25 +527,39 @@ export function finishSeason(state: GameState): GameState {
   applyLoanWageSubsidies(state.clubs);
 
   // 3) 정산 (부별 순위 기준) — 최근 폼(승점 비율)이 매치데이 수익에 반영된다.
+  // 라이벌전 매치데이 프리미엄(신규 개선 항목 23) — 내 구단이 라이벌을 홈에서 상대한
+  // 경기 수만큼 매치데이 수익에 프리미엄이 붙는다(라이벌이 다른 부에 있어도 잡힌다).
+  const myRivalHomeMatches = state.rivalClubId
+    ? [...ss.results, ...otherResult.matches].filter(
+      (r) => r.homeClubId === state.myClubId && r.awayClubId === state.rivalClubId,
+    ).length
+    : 0;
   const finance = new Map();
   myTable.forEach((row, pos) => {
     const club = state.clubs.find((c) => c.id === row.clubId)!;
     const form = recentForm(ss.results, club.id, 5);
     const formRatio = form.results.length > 0 ? form.points / (form.results.length * 3) : undefined;
-    finance.set(club.id, settleSeason(club, pos, CLUBS_PER_DIV, undefined, formRatio));
+    const rivalHomeMatches = club.id === state.myClubId ? myRivalHomeMatches : 0;
+    finance.set(club.id, settleSeason(club, pos, CLUBS_PER_DIV, undefined, formRatio, rivalHomeMatches));
   });
   otherTable.forEach((row, pos) => {
     const club = state.clubs.find((c) => c.id === row.clubId)!;
     const form = recentForm(otherResult.matches, club.id, 5);
     const formRatio = form.results.length > 0 ? form.points / (form.results.length * 3) : undefined;
-    finance.set(club.id, settleSeason(club, pos, CLUBS_PER_DIV, undefined, formRatio));
+    const rivalHomeMatches = club.id === state.myClubId ? myRivalHomeMatches : 0;
+    finance.set(club.id, settleSeason(club, pos, CLUBS_PER_DIV, undefined, formRatio, rivalHomeMatches));
   });
 
   // 4) 컵 자동 완료 + 우승 상금 (전 구단)
   let cupChampionId: string | undefined;
   let cupChampionName: string | undefined;
+  // 컵대회 이변(자이언트 킬링, 신규 개선 항목 29) — 내 구단이 이변의 주인공이거나
+  // 희생양인 경기만 골라 시즌 요약에 남긴다(전체 대회 이변은 앱 표시 범위 밖).
+  let myCupUpsets: ReturnType<typeof findCupUpsets> = [];
   if (state.cup) {
     const finishedCup = playCupToEnd(state.cup, state.clubs, tacticMap(state));
+    myCupUpsets = findCupUpsets(state.clubs, finishedCup)
+      .filter((u) => u.winnerId === state.myClubId || u.loserId === state.myClubId);
     if (finishedCup.championId) {
       cupChampionId = finishedCup.championId;
       const champClub = state.clubs.find((c) => c.id === finishedCup.championId);
@@ -530,13 +609,26 @@ export function finishSeason(state: GameState): GameState {
   // 5) 오프시즌 (전 구단)
   const {
     retirements, intakeByClub, intakePlayersByClub, fireSalesByClub, retiredPlayers, milestones, debutEvents,
-    loanReturns, reservePromotions,
+    loanReturns, loanObligations, reservePromotions, staffDepartures, staffRetirements, addOnPayouts,
+    reserveLeagueTable,
   } = runOffseason(state.clubs, new Rng(offseasonSeed(state)));
   // 내 구단 선수의 이번 시즌 리저브 승격(시즌 요약에 첨부)
   const myReservePromotions = reservePromotions.filter((r) => r.clubId === state.myClubId);
   // 내 구단이 관련된 임대 복귀(보낸 임대가 돌아오거나, 데려온 임대가 복귀)
   const myLoanReturns: LoanReturnEvent[] = loanReturns.filter(
     (r) => r.fromClubId === state.myClubId || r.toClubId === state.myClubId,
+  );
+  // 내 구단이 관련된 의무완전이적 조항 발동(A1 — 판매자로서 이적료를 받거나, 구매자로서 완전 영입 확정)
+  const myLoanObligations: LoanObligationEvent[] = loanObligations.filter(
+    (o) => o.fromClubId === state.myClubId || o.toClubId === state.myClubId,
+  );
+  // 내 구단에서 계약 만료로 이탈해 후임이 영입된 실명 스태프(시즌 요약에 첨부)
+  const myStaffDepartures: StaffDepartureEvent[] = staffDepartures.filter((d) => d.clubId === state.myClubId);
+  // 내 구단에서 고령으로 은퇴해 후임이 영입된 실명 스태프(시즌 요약에 첨부, 신규 개선 항목 17)
+  const myStaffRetirements: StaffRetirementEvent[] = staffRetirements.filter((r) => r.clubId === state.myClubId);
+  // 내 구단이 관련된 성과 기반 후불 이적료(Add-on) 발동(신규 개선 항목 3)
+  const myAddOnPayouts: AddOnEvent[] = addOnPayouts.filter(
+    (a) => a.fromClubId === state.myClubId || a.toClubId === state.myClubId,
   );
   // 내 구단에서 은퇴한 선수는 레전드 아카이브에 영구 보존
   const newLegends: ClubLegend[] = retiredPlayers
@@ -555,6 +647,31 @@ export function finishSeason(state: GameState): GameState {
   const myProspectUpdates: YouthProspectUpdate[] = debutEvents
     .filter((e) => e.clubId === state.myClubId && introducedProspectIds.has(e.playerId))
     .map((e) => ({ playerId: e.playerId, name: e.name, kind: e.kind }));
+
+  // 유스 졸업생 동문 네트워크(신규 개선 항목 18) — 과거 내 구단 리저브에서 1군으로
+  // 승격했던 선수 중 지금은 내 구단이 아닌 다른 구단에서 뛰고 있는 선수를 찾아
+  // 이번 시즌 소식을 전한다(은퇴·방출로 어디서도 찾을 수 없는 졸업생은 제외).
+  const myGraduateIds = new Set(
+    state.history.flatMap((s) => (s.reservePromotions ?? []).map((p) => p.playerId)),
+  );
+  const leagueWidePlayerStats = aggregatePlayerStats([...ss.results, ...otherResult.matches]);
+  const academyAlumni: AcademyAlumnusUpdate[] = [];
+  for (const club of state.clubs) {
+    if (club.id === state.myClubId) continue;
+    for (const p of [...club.players, ...(club.reserves ?? [])]) {
+      if (!myGraduateIds.has(p.id)) continue;
+      const stat = leagueWidePlayerStats.find((s) => s.playerId === p.id);
+      academyAlumni.push({
+        playerId: p.id, name: p.name, position: p.position,
+        clubId: club.id, clubName: club.name,
+        seasonGoals: stat?.goals ?? 0, seasonApps: stat?.apps ?? 0,
+      });
+    }
+  }
+
+  // 5.4) 국가대표 은퇴 판정(신규 개선 항목 19) — 차출 명단 확정 전에 먼저 반영.
+  const myIntlRetirements = checkInternationalRetirements(state.clubs, new Rng(offseasonSeed(state) + 3333))
+    .filter((r) => r.clubId === state.myClubId);
 
   // 5.5) 국가대표 차출 (오프시즌 리셋 이후 — 피로/부상이 새 시즌에 반영)
   // TOURNAMENT_INTERVAL_SEASONS마다는 정기 차출 대신 비정기 국제대회(월드컵/유로급, C15)로 확장.
@@ -613,6 +730,13 @@ export function finishSeason(state: GameState): GameState {
     position: myPosition, objective: state.objective, promoted, relegated, netFinance: myNet,
   }, boardPersona);
 
+  // 대담한 목표 공개 선언 평가(신규 개선 항목 25) — 선언했었다면 신뢰도 가감치가
+  // 이사회 신뢰도 갱신에 그대로 더해진다.
+  let boldPredictionResult: BoldPredictionResult | undefined;
+  if (state.boldPrediction !== undefined) {
+    boldPredictionResult = evaluateBoldPrediction(state.boldPrediction, myPosition, state.objective);
+  }
+
   // 이사회 특별 요구 평가
   const myName = myClub(state).name;
   let demandResult: { label: string; met: boolean } | undefined;
@@ -628,23 +752,72 @@ export function finishSeason(state: GameState): GameState {
     demandResult = { label: DEMAND_LABEL[state.demand.kind], met };
   }
 
-  // 스폰서 보너스 목표 평가 — 신뢰도가 아닌 일시불 현금 보너스로 이어진다.
+  // 스폰서 보너스 목표 평가 — 신뢰도가 아닌 일시불 현금 보너스로 이어진다. 연속으로
+  // 달성할수록 스트릭 배율(C-new2)이 다음 보너스에 가산되고, 실패하면 리셋된다.
   let sponsorGoalResult: { label: string; met: boolean; bonus: number } | undefined;
+  let nextSponsorStreak = state.sponsorStreak ?? 0;
   if (state.sponsorGoal) {
     const met = evaluateSponsorGoal(state.sponsorGoal, {
       top4Finish: myPosition <= 4,
       cupWon: cupChampionId === state.myClubId,
     });
+    const streakBefore = state.sponsorStreak ?? 0;
+    const paidBonus = met ? Math.round(state.sponsorGoal.bonus * sponsorStreakMultiplier(streakBefore)) : 0;
     if (met) {
       const me = myClub(state);
-      me.finance.balance += state.sponsorGoal.bonus;
-      me.finance.transferBudget += state.sponsorGoal.bonus;
+      me.finance.balance += paidBonus;
+      me.finance.transferBudget += paidBonus;
+      nextSponsorStreak = streakBefore + 1;
+    } else {
+      nextSponsorStreak = 0;
     }
-    sponsorGoalResult = { label: SPONSOR_GOAL_LABEL[state.sponsorGoal.kind], met, bonus: state.sponsorGoal.bonus };
+    sponsorGoalResult = { label: SPONSOR_GOAL_LABEL[state.sponsorGoal.kind], met, bonus: paidBonus };
   }
 
-  const boardConfidence = applyConfidence(state.boardConfidence, delta + demandDelta);
+  // 스폰서 계약(유니폼/스타디움 명명권) 정산 — 성과와 무관하게 체결 시 고정된 금액이
+  // 매 시즌 지급되고, 잔여 시즌이 다하면 만료(재계약 필요, 신규 개선 항목 24).
+  const sponsorContractTick = tickSponsorContracts(myClub(state));
+  if (sponsorContractTick.income > 0) {
+    const me = myClub(state);
+    me.finance.balance += sponsorContractTick.income;
+    me.finance.transferBudget += sponsorContractTick.income;
+  }
+  const sponsorContractExpired = sponsorContractTick.expired.length > 0
+    ? sponsorContractTick.expired.map((c) => c.kind)
+    : undefined;
+
+  // 이적 관심 목록(신규 개선 항목 27) 계약 만료 임박 알림 — 오프시즌 처리 후 잔여 계약
+  // 연수가 1년 이하로 "새로" 접어든 관심 선수만 알린다(매 시즌 같은 선수로 반복 알림 방지).
+  // 이미 팔렸거나 은퇴 등으로 시장에서 사라졌으면 조용히 넘어간다.
+  const watchlistAfterById = new Map(
+    transferTargets(state.clubs, state.myClubId).map((t) => [t.player.id, t]),
+  );
+  const watchlistContractAlerts: { playerId: string; name: string; clubName: string }[] = [];
+  for (const id of state.transferWatchlist ?? []) {
+    const after = watchlistAfterById.get(id);
+    if (!after) continue;
+    const before = watchlistBeforeById.get(id);
+    if (after.player.contractYears <= 1 && (before === undefined || before > 1)) {
+      watchlistContractAlerts.push({ playerId: id, name: after.player.name, clubName: after.clubName });
+    }
+  }
+
+  const boardConfidence = applyConfidence(
+    state.boardConfidence, delta + demandDelta + (boldPredictionResult?.confidenceAdjust ?? 0),
+  );
   const sacked = isSacked(boardConfidence);
+
+  // 이사회 신뢰 등급이 이번 시즌 실제로 올랐으면(예: 불안정→안정) 일회성 투자 예산 승인(C-new1).
+  const prevBoardStatus = boardStatus(state.boardConfidence);
+  const newBoardStatus = boardStatus(boardConfidence);
+  const boardTierBonus = boardTierUpgradeBonus(prevBoardStatus, newBoardStatus, myClub(state).finance.reputation);
+  let boardBonusResult: { fromStatus: BoardStatus; toStatus: BoardStatus; amount: number } | undefined;
+  if (boardTierBonus > 0) {
+    const me = myClub(state);
+    me.finance.balance += boardTierBonus;
+    me.finance.transferBudget += boardTierBonus;
+    boardBonusResult = { fromStatus: prevBoardStatus, toStatus: newBoardStatus, amount: boardTierBonus };
+  }
 
   // 다음 시즌 요구/스폰서 목표 생성(오프시즌 이후 임금 기준 + 장기 계약 누적치만큼 이사회 기대치 상향)
   const nextDemand = generateDemand(
@@ -685,10 +858,22 @@ export function finishSeason(state: GameState): GameState {
     sponsorGoal: sponsorGoalResult,
     promotionPlayoff: promotionPlayoffResult,
     loanReturns: myLoanReturns,
+    loanObligations: myLoanObligations,
     reservePromotions: myReservePromotions,
+    staffDepartures: myStaffDepartures,
+    staffRetirements: myStaffRetirements,
+    internationalRetirements: myIntlRetirements,
+    academyAlumni,
     continentalCupChampionId,
     continentalCupChampionName,
     qualifiedForContinental: continentalQualifierIds.includes(state.myClubId),
+    boardTierBonus: boardBonusResult,
+    addOnPayouts: myAddOnPayouts,
+    reserveLeagueTable: reserveLeagueTable.length > 0 ? reserveLeagueTable : undefined,
+    sponsorContractExpired,
+    boldPrediction: boldPredictionResult,
+    watchlistContractAlerts: watchlistContractAlerts.length > 0 ? watchlistContractAlerts : undefined,
+    cupUpsets: myCupUpsets.length > 0 ? myCupUpsets : undefined,
   };
 
   const repaired = repairTactic(myClub(state), myTactic(state));
@@ -702,7 +887,10 @@ export function finishSeason(state: GameState): GameState {
     boardConfidence,
     sacked,
     demand: nextDemand,
+    demandRenegotiated: false,
+    boldPrediction: undefined,
     sponsorGoal: nextSponsorGoal,
+    sponsorStreak: nextSponsorStreak,
     legends: [...state.legends, ...newLegends],
     rivalRecord,
     rivalMeetings: [...state.rivalMeetings, ...newRivalMeetings],
@@ -719,19 +907,41 @@ export function setMyTactic(state: GameState, tactic: Tactic): GameState {
   return { ...state, tactics: { ...state.tactics, [state.myClubId]: tactic } };
 }
 
-/** 내 선수 재계약 (계약 연장 + 임금 인상 + 사기 상승, 계약금 지출). */
-export function renewContract(state: GameState, playerId: string): ActionOutcome {
+/** 재계약 시 선택 가능한 계약 기간(년) 하한·상한(신규 개선 항목 5). */
+export const RENEWAL_MIN_YEARS = 2;
+export const RENEWAL_MAX_YEARS = 5;
+
+/**
+ * 내 선수 재계약 (계약 연장 + 임금 인상 + 사기 상승, 계약금 지출).
+ * 신규 개선 항목 5(다년 계약 사인온보너스) — years로 계약 기간을 직접 고를 수 있고
+ * (짧을수록/길수록 계약금이 비례해 늘거나 준다), signOnBonus를 얹으면 그만큼 계약금
+ * 위에 추가로 지불하는 대신 사기가 더 크게 오른다(체감 — 무한정 사기를 올리진 않는다).
+ */
+export function renewContract(
+  state: GameState, playerId: string, years = 4, signOnBonus = 0,
+): ActionOutcome {
   const club = myClub(state);
   const p = club.players.find((pl) => pl.id === playerId);
   if (!p) return { state, ok: false, message: '선수를 찾을 수 없습니다.' };
   if (p.contractYears > 2) return { state, ok: false, message: '아직 재계약이 필요하지 않습니다.' };
-  const cost = Math.round(p.wage * 20);
+  const clampedYears = Math.min(RENEWAL_MAX_YEARS, Math.max(RENEWAL_MIN_YEARS, Math.round(years)));
+  const bonus = Math.max(0, Math.round(signOnBonus));
+  // 로열티(신규 개선 항목 10) — 이적 없이 오래 남아준 선수는 재계약이 저렴해진다.
+  const discount = loyaltyDiscount(p.seasonsAtClub ?? 0);
+  const baseCost = Math.round(p.wage * 20 * (clampedYears / 4) * (1 - discount));
+  const cost = baseCost + bonus;
   if (club.finance.balance < cost) return { state, ok: false, message: '자금이 부족합니다.' };
   club.finance.balance -= cost;
-  p.contractYears = 4;
+  p.contractYears = clampedYears;
   p.wage = Math.round(p.wage * 1.1);
-  p.morale = Math.min(1, p.morale + 0.15);
-  return { state: { ...state }, ok: true, message: `${p.name} 재계약 완료 (계약금 ${formatMoney(cost)})` };
+  const bonusMoraleBoost = bonus > 0 ? Math.min(0.15, bonus / (p.wage * 100)) : 0;
+  p.morale = Math.min(1, p.morale + 0.15 + bonusMoraleBoost);
+  const bonusMsg = bonus > 0 ? ` + 사인온보너스 ${formatMoney(bonus)}` : '';
+  const loyaltyMsg = discount > 0 ? ` (로열티 할인 ${Math.round(discount * 100)}%)` : '';
+  return {
+    state: { ...state }, ok: true,
+    message: `${p.name} 재계약 완료 (${clampedYears}년 · 계약금 ${formatMoney(baseCost)}${bonusMsg}${loyaltyMsg})`,
+  };
 }
 
 /** 내 선수의 훈련 포커스 설정. */
@@ -743,6 +953,12 @@ export function setTrainingFocus(
   return { ...state };
 }
 
+/** 유스 아카데미 포지션 특화 라인 설정(신규 개선 항목 13). undefined를 넘기면 특화를 해제한다. */
+export function setAcademyFocus(state: GameState, focus: import('@soccer-tycoon/engine').Line | undefined): GameState {
+  myClub(state).finance.academyFocus = focus;
+  return { ...state };
+}
+
 /** 포지션 전환 훈련 대상 지정(해제하려면 undefined). 시즌 경계마다 코칭 지원을 받아 숙련도가 오른다. */
 export function setTrainingPosition(
   state: GameState, playerId: string, position: import('@soccer-tycoon/engine').Position | undefined,
@@ -750,6 +966,21 @@ export function setTrainingPosition(
   const p = myClub(state).players.find((pl) => pl.id === playerId);
   if (p) p.trainingPosition = position;
   return { ...state };
+}
+
+/** 멘토-멘티 페어링 직접 지정(B14) — 자동(같은 라인) 멘토링보다 강한 성장 보너스를 준다. */
+export function assignMentorAction(state: GameState, mentorId: string, menteeId: string): ActionOutcome {
+  const club = myClub(state);
+  const r = engineAssignMentor(club, mentorId, menteeId);
+  if (!r.ok) return { state, ok: false, message: r.reason! };
+  return { state: { ...state }, ok: true, message: '멘토 페어링을 지정했습니다.' };
+}
+
+/** 지정된 멘토 페어링 해제(B14). */
+export function clearMentorPairingAction(state: GameState, menteeId: string): ActionOutcome {
+  const club = myClub(state);
+  engineClearMentorPairing(club, menteeId);
+  return { state: { ...state }, ok: true, message: '멘토 페어링을 해제했습니다.' };
 }
 
 /** 프리시즌에서 한 시즌 전체를 한 번에 진행(킥오프→전 경기→정산). */
@@ -767,8 +998,24 @@ function afterSquadChange(state: GameState): GameState {
   return { ...state, tactics: { ...state.tactics, [state.myClubId]: repaired } };
 }
 
+/** 판매 후 재영입 쿨다운 기간(시즌, 신규 개선 항목 11). */
+const SOLD_COOLDOWN_SEASONS = 1;
+
+/** 최근 판매(바이백 조항 없이)한 선수는 이번 쿨다운 동안 어떤 경로로도 재영입할 수
+ *  없다(신규 개선 항목 11) — 판매·재구매를 반복해 이적 시스템을 우회하는 것을 막는다.
+ *  정식 재영입 경로는 판매 시 바이백 조항(Item2)을 붙이는 것뿐이다. */
+function soldCooldownMessage(state: GameState, playerId: string): string | undefined {
+  const cooldownUntil = state.soldPlayerCooldowns?.[playerId];
+  if (cooldownUntil !== undefined && state.season < cooldownUntil) {
+    return `최근에 판매한 선수는 재영입할 수 없습니다(${cooldownUntil}시즌부터 가능 — 판매 시 바이백 조항을 붙이면 즉시 되사올 수 있습니다).`;
+  }
+  return undefined;
+}
+
 export function buy(state: GameState, playerId: string): ActionOutcome {
   if (state.live) return { state, ok: false, message: '이적은 프리시즌에만 가능합니다.' };
+  const blocked = soldCooldownMessage(state, playerId);
+  if (blocked) return { state, ok: false, message: blocked };
   const r = buyPlayer(state.clubs, state.myClubId, playerId);
   if (!r.ok) return { state, ok: false, message: r.reason! };
   return { state: afterSquadChange(state), ok: true, message: `${r.playerName} 영입 완료` };
@@ -776,16 +1023,58 @@ export function buy(state: GameState, playerId: string): ActionOutcome {
 
 /** 이적 협상: 제안액에 대한 매도 구단 반응(수락/역제안/거절). round는 이 협상에서 이미
  *  진행된 역제안 횟수(0-base) — 라운드가 늘수록 매도 구단 호가에 조급증이 붙고,
- *  상한을 넘기면 더 이상 밀당하지 않고 협상을 접는다. 상태 변경 없음. */
+ *  상한을 넘기면 더 이상 밀당하지 않고 협상을 접는다. 상태 변경 없음.
+ *  이전에 이 선수와 밀당이 완전히 결렬됐다면(Item1), 쿨다운이 풀리기 전까지는
+ *  재협상 자체를 곧장 거절한다. */
 export function negotiate(state: GameState, playerId: string, offer: number, round = 0): OfferEvaluation {
   if (state.live) return { ok: false, reason: '이적은 프리시즌에만 가능합니다.' };
+  const cooldownUntil = state.negotiationCooldowns?.[playerId];
+  if (cooldownUntil !== undefined && state.season < cooldownUntil) {
+    return {
+      ok: true, outcome: 'rejected', roundsExhausted: true,
+      reason: `지난 협상 결렬 여파로 이번 시즌은 재협상을 거절당했습니다(${cooldownUntil}시즌부터 재시도 가능).`,
+    };
+  }
+  const soldBlocked = soldCooldownMessage(state, playerId);
+  if (soldBlocked) return { ok: false, reason: soldBlocked };
   return evaluateOffer(state.clubs, state.myClubId, playerId, offer, round);
+}
+
+/** 밀당이 완전히 결렬됐을 때(evaluateOffer의 roundsExhausted) 호출 — 다음 시즌까지
+ *  이 선수와의 재협상을 막고(Item1), 에이전트 관계 지수를 깎는다(Item6). */
+export function recordNegotiationBreakdown(state: GameState, playerId: string): GameState {
+  const club = myClub(state);
+  club.agentRelations = Math.max(
+    AGENT_RELATIONS_MIN,
+    (club.agentRelations ?? AGENT_RELATIONS_DEFAULT) - AGENT_RELATIONS_BREAKDOWN_PENALTY,
+  );
+  return {
+    ...state,
+    negotiationCooldowns: { ...state.negotiationCooldowns, [playerId]: state.season + 1 },
+  };
+}
+
+/** 경쟁 입찰(신규 개선 항목 9)로 협상 중이던 선수를 라이벌 구단에 빼앗겼을 때 실제로
+ *  그 이적을 확정한다. negotiate()가 outcome:'lostToRival'을 반환하면, 화면에 결과를
+ *  보여준 뒤 이 액션을 호출해 evaluateOffer가 계산한 rivalClubId·rivalBid로 이적을 집행한다. */
+export function resolveRivalSnipe(
+  state: GameState, playerId: string, rivalClubId: string, bid: number,
+): ActionOutcome {
+  if (state.live) return { state, ok: false, message: '이적은 프리시즌에만 가능합니다.' };
+  const r = executeRivalSnipe(state.clubs, rivalClubId, playerId, bid);
+  if (!r.ok) return { state, ok: false, message: r.reason! };
+  return {
+    state: { ...state }, ok: true,
+    message: `${r.playerName} 선수를 ${r.rivalClubName} 구단이 ${formatMoney(r.fee!)}에 채갔습니다.`,
+  };
 }
 
 /** 합의된 이적료로 영입 실행(협상 타결). 이적료 외에 계약 연수에 비례한 에이전트
  *  수수료가 별도로 잔고에서 차감된다. */
 export function buyAt(state: GameState, playerId: string, fee: number): ActionOutcome {
   if (state.live) return { state, ok: false, message: '이적은 프리시즌에만 가능합니다.' };
+  const blocked = soldCooldownMessage(state, playerId);
+  if (blocked) return { state, ok: false, message: blocked };
   const r = buyPlayerAt(state.clubs, state.myClubId, playerId, fee);
   if (!r.ok) return { state, ok: false, message: r.reason! };
   const feeMsg = `이적료 ${formatMoney(r.fee!)} + 에이전트 수수료 ${formatMoney(r.agentFee!)}`;
@@ -795,9 +1084,23 @@ export function buyAt(state: GameState, playerId: string, fee: number): ActionOu
 /** 방출(바이아웃) 조항 이용 즉시 영입 — 협상 없이 조항 금액 그대로 지불한다. */
 export function buyViaReleaseClause(state: GameState, playerId: string): ActionOutcome {
   if (state.live) return { state, ok: false, message: '이적은 프리시즌에만 가능합니다.' };
+  const blocked = soldCooldownMessage(state, playerId);
+  if (blocked) return { state, ok: false, message: blocked };
   const r = buyPlayerViaReleaseClause(state.clubs, state.myClubId, playerId);
   if (!r.ok) return { state, ok: false, message: r.reason! };
   const feeMsg = `방출조항 ${formatMoney(r.fee!)} + 에이전트 수수료 ${formatMoney(r.agentFee!)}`;
+  return { state: afterSquadChange(state), ok: true, message: `${r.playerName} 영입 완료 (${feeMsg})` };
+}
+
+/** 이적 마감시한 패닉 바이(D-day 프리미엄, Item7) — 협상 없이 호가에 웃돈을 얹어
+ *  즉시 확정 영입한다. 협상이 결렬되기 직전이거나 더 밀당할 여유가 없을 때 쓴다. */
+export function panicBuyAction(state: GameState, playerId: string): ActionOutcome {
+  if (state.live) return { state, ok: false, message: '이적은 프리시즌에만 가능합니다.' };
+  const blocked = soldCooldownMessage(state, playerId);
+  if (blocked) return { state, ok: false, message: blocked };
+  const r = enginePanicBuy(state.clubs, state.myClubId, playerId);
+  if (!r.ok) return { state, ok: false, message: r.reason! };
+  const feeMsg = `패닉 바이 ${formatMoney(r.fee!)}(호가+${Math.round((PANIC_BUY_PREMIUM - 1) * 100)}%) + 에이전트 수수료 ${formatMoney(r.agentFee!)}`;
   return { state: afterSquadChange(state), ok: true, message: `${r.playerName} 영입 완료 (${feeMsg})` };
 }
 
@@ -805,7 +1108,11 @@ export function sell(state: GameState, playerId: string): ActionOutcome {
   if (state.live) return { state, ok: false, message: '이적은 프리시즌에만 가능합니다.' };
   const r = sellPlayer(state.clubs, state.myClubId, playerId);
   if (!r.ok) return { state, ok: false, message: r.reason! };
-  return { state: afterSquadChange(state), ok: true, message: `${r.playerName} → ${r.buyerName} 판매 완료` };
+  const next = afterSquadChange(state);
+  return {
+    state: { ...next, soldPlayerCooldowns: { ...next.soldPlayerCooldowns, [playerId]: state.season + SOLD_COOLDOWN_SEASONS } },
+    ok: true, message: `${r.playerName} → ${r.buyerName} 판매 완료`,
+  };
 }
 
 /** 내 선수에 대한 AI 구단 입찰 목록(상태 변경 없음). */
@@ -814,15 +1121,48 @@ export function offersFor(state: GameState, playerId: string): SellOffer[] {
   return sellOffers(state.clubs, state.myClubId, playerId);
 }
 
-/** 특정 구단 입찰 수락 → 판매 실행. */
-export function acceptSell(state: GameState, playerId: string, buyerId: string): ActionOutcome {
+/** 특정 구단 입찰 수락 → 판매 실행. buybackFee를 지정하면(신규 개선 항목 2) 판매가
+ *  이상의 금액으로 향후 되사올 수 있는 바이백 조항이 함께 붙는다. */
+export function acceptSell(
+  state: GameState, playerId: string, buyerId: string, buybackFee?: number,
+): ActionOutcome {
   if (state.live) return { state, ok: false, message: '이적은 프리시즌에만 가능합니다.' };
-  const r = acceptSellOffer(state.clubs, state.myClubId, playerId, buyerId);
+  const r = acceptSellOffer(state.clubs, state.myClubId, playerId, buyerId, buybackFee);
+  if (!r.ok) return { state, ok: false, message: r.reason! };
+  const buybackMsg = buybackFee !== undefined ? ` · 바이백 ${formatMoney(buybackFee)}` : '';
+  let next = afterSquadChange(state);
+  // 바이백 조항 없이 판 선수만 쿨다운을 건다(신규 개선 항목 11) — 바이백은 이미 정식 재영입 경로다.
+  if (buybackFee === undefined) {
+    next = {
+      ...next,
+      soldPlayerCooldowns: { ...next.soldPlayerCooldowns, [playerId]: state.season + SOLD_COOLDOWN_SEASONS },
+    };
+  }
+  return {
+    state: next, ok: true,
+    message: `${r.playerName} → ${r.buyerName} 판매 완료 (${formatMoney(r.fee!)}${buybackMsg})`,
+  };
+}
+
+/** 바이백 조항 행사 — 원 소속 구단이 조항 금액으로 즉시 재영입한다(신규 개선 항목 2). */
+export function buyback(state: GameState, playerId: string): ActionOutcome {
+  if (state.live) return { state, ok: false, message: '이적은 프리시즌에만 가능합니다.' };
+  const r = exerciseBuyback(state.clubs, state.myClubId, playerId);
   if (!r.ok) return { state, ok: false, message: r.reason! };
   return {
     state: afterSquadChange(state), ok: true,
-    message: `${r.playerName} → ${r.buyerName} 판매 완료 (${formatMoney(r.fee!)})`,
+    message: `${r.playerName} 바이백 완료 (${r.sellerName} → 우리 구단, ${formatMoney(r.fee!)})`,
   };
+}
+
+/** 방금 판매한 선수에게 성과 기반 후불 이적료(Add-on) 조항을 붙인다(신규 개선 항목 3) —
+ *  판매(acceptSell) 직후 별도로 호출해 조건을 지정한다. */
+export function attachAddOn(
+  state: GameState, playerId: string, appearances: number | undefined, goals: number | undefined, fee: number,
+): ActionOutcome {
+  const r = attachAddOnClause(state.clubs, playerId, state.myClubId, appearances, goals, fee);
+  if (!r.ok) return { state, ok: false, message: r.reason! };
+  return { state: { ...state }, ok: true, message: '성과 기반 후불 이적료 조항을 추가했습니다.' };
 }
 
 export function release(state: GameState, playerId: string): ActionOutcome {
@@ -856,6 +1196,27 @@ export function recallLoan(state: GameState, playerId: string): ActionOutcome {
   return { state: afterSquadChange(state), ok: true, message: `${r.playerName} 임대 회수 완료` };
 }
 
+/** 임대로 데려온 선수의 우선매수옵션(OTB, 신규 개선 항목 4)을 행사해 즉시 완전 영입한다. */
+export function exerciseBuyOption(state: GameState, playerId: string): ActionOutcome {
+  if (state.live) return { state, ok: false, message: '이적은 프리시즌에만 가능합니다.' };
+  const r = exerciseLoanBuyOption(state.clubs, state.myClubId, playerId);
+  if (!r.ok) return { state, ok: false, message: r.reason! };
+  return { state: afterSquadChange(state), ok: true, message: `${r.playerName} 우선매수옵션 행사 완료 (${formatMoney(r.fee!)})` };
+}
+
+/**
+ * 내 선수와 다른 구단 선수를 맞교환한다(A2). cashAdjustment 양수=내가 추가 지불,
+ * 음수=상대가 추가 지불.
+ */
+export function swapDeal(
+  state: GameState, myPlayerId: string, otherClubId: string, otherPlayerId: string, cashAdjustment = 0,
+): ActionOutcome {
+  if (state.live) return { state, ok: false, message: '이적은 프리시즌에만 가능합니다.' };
+  const r = swapPlayers(state.clubs, state.myClubId, otherClubId, myPlayerId, otherPlayerId, cashAdjustment);
+  if (!r.ok) return { state, ok: false, message: r.reason! };
+  return { state: afterSquadChange(state), ok: true, message: `${r.playerAName} ↔ ${r.playerBName} 맞교환 완료` };
+}
+
 /** 내가 임대 보낸 선수 목록 — 실제로는 다른 구단 스쿼드에서 뛰고 있다. */
 export function myLoanedOutPlayers(state: GameState): { player: Player; loanClubId: string; loanClubName: string }[] {
   const out: { player: Player; loanClubId: string; loanClubName: string }[] = [];
@@ -871,6 +1232,7 @@ export function myLoanedOutPlayers(state: GameState): { player: Player; loanClub
 const STAFF_LABEL: Record<string, string> = {
   coaching: '총괄 코치', medical: '의료', scouting: '스카우팅', youth: '유스',
   coachGk: 'GK 코치', coachAttack: '공격 코치', coachDefense: '수비 코치', coachPhysical: '피지컬 코치',
+  reserveCoach: '리저브 전담 코치',
 };
 
 /** 스태프 업그레이드 (보유 자금 사용). 실명 직책(코칭/의료/스카우팅/유스)은 업그레이드와
@@ -889,6 +1251,19 @@ export function upgradeStaffAction(state: GameState, kind: StaffKind): ActionOut
   };
 }
 
+/** 코치 계약 협상(연봉 인상 요구, 신규 개선 항목 12) — 계약 만료가 임박한 실명 스태프의
+ *  연봉을 인상해 계약을 연장한다. 거절(호출하지 않음)하면 다음 오프시즌에 기존처럼
+ *  확률적으로 이탈할 수 있다. */
+export function negotiateStaffRaiseAction(state: GameState, kind: NamedStaffKind): ActionOutcome {
+  const club = myClub(state);
+  const r = engineNegotiateStaffRaise(club, kind);
+  if (!r.ok) return { state, ok: false, message: r.reason! };
+  return {
+    state: { ...state }, ok: true,
+    message: `${STAFF_LABEL[kind]} ${r.staffName} 연봉 인상 협상 타결 (−${formatMoney(r.cost!)}, 계약 연장)`,
+  };
+}
+
 /** 스타디움 한 단계 증축(보유 자금 사용) — 매치데이 수익 상한이 여러 시즌에 걸쳐 오른다. */
 export function upgradeStadiumAction(state: GameState): ActionOutcome {
   const club = myClub(state);
@@ -897,6 +1272,43 @@ export function upgradeStadiumAction(state: GameState): ActionOutcome {
   return {
     state: { ...state }, ok: true,
     message: `스타디움 Lv.${r.newLevel} 증축 완료 (−${formatMoney(r.cost!)})`,
+  };
+}
+
+/** 아카데미 시설 한 단계 증축(보유 자금 사용, B11) — 유스 스태프와 별개로 유스 인테이크
+ *  잠재력에 추가 보너스가 여러 시즌에 걸쳐 쌓인다. */
+export function upgradeAcademyAction(state: GameState): ActionOutcome {
+  const club = myClub(state);
+  const r = engineUpgradeAcademy(club);
+  if (!r.ok) return { state, ok: false, message: r.reason! };
+  return {
+    state: { ...state }, ok: true,
+    message: `아카데미 시설 Lv.${r.newLevel} 증축 완료 (−${formatMoney(r.cost!)})`,
+  };
+}
+
+/** 훈련장(피지컬 트레이닝) 시설 한 단계 증축(보유 자금 사용, 신규 개선 항목 21) — 의료
+ *  스태프와 별개로 전 선수의 경기당 부상 발생 확률이 추가로 낮아진다. */
+export function upgradeTrainingGroundAction(state: GameState): ActionOutcome {
+  const club = myClub(state);
+  const r = engineUpgradeTrainingGround(club);
+  if (!r.ok) return { state, ok: false, message: r.reason! };
+  return {
+    state: { ...state }, ok: true,
+    message: `훈련장 시설 Lv.${r.newLevel} 증축 완료 (−${formatMoney(r.cost!)})`,
+  };
+}
+
+/** 스폰서 계약(유니폼/스타디움 명명권) 신규 체결(신규 개선 항목 24) — 체결 수수료를
+ *  즉시 지불하는 대신, 이후 SPONSOR_CONTRACT_LENGTH_SEASONS 시즌 동안 성과와 무관하게
+ *  고정 수익을 매 시즌 지급받는다. */
+export function signSponsorContractAction(state: GameState, kind: SponsorContractKind): ActionOutcome {
+  const club = myClub(state);
+  const r = engineSignSponsorContract(club, kind);
+  if (!r.ok) return { state, ok: false, message: r.reason! };
+  return {
+    state: { ...state }, ok: true,
+    message: `${SPONSOR_CONTRACT_LABEL[kind]} 계약 체결 완료 (−${formatMoney(r.cost!)}, 시즌당 +${formatMoney(r.contract!.payoutPerSeason)})`,
   };
 }
 
@@ -1177,9 +1589,11 @@ export function formStability(history: SeasonRatingEntry[]): 'steady' | 'volatil
  * 이적 시장(협상 모달)뿐 아니라 선수 상세 화면에서도 공유해서 써야
  * "이름 클릭 한 번으로 스카우팅 안개를 우회"하는 일이 없다 — 내 구단 소속
  * 선수는 항상 안개가 없으므로 호출부에서 scouting=20(만개)을 넘긴다.
+ * scouted=true면(B13, 그 선수를 개별 파견 정찰했음) 구단 전체 스카우팅 레벨과
+ * 무관하게 항상 정확한 값을 보여준다.
  */
-export function revealPotential(scouting: number, potential: number): string {
-  if (scouting >= 15) return potential.toFixed(0);
+export function revealPotential(scouting: number, potential: number, scouted = false): string {
+  if (scouted || scouting >= 15) return potential.toFixed(0);
   if (scouting >= 8) {
     const band = 12 - Math.round((scouting - 8) * 1.2); // 8→12, 14→5 폭
     const lo = Math.max(0, Math.round(potential - band));
@@ -1187,6 +1601,105 @@ export function revealPotential(scouting: number, potential: number): string {
     return `${lo}~${hi}`;
   }
   return '?';
+}
+
+/** 특정 선수를 파견 정찰했는지(B13) — 내 구단 기준. */
+export function isScouted(state: GameState, playerId: string): boolean {
+  return myClub(state).scoutedPlayerIds?.includes(playerId) ?? false;
+}
+
+/** 이적 관심 목록(신규 개선 항목 27) 항목 — Transfers 탭 전용 표시용. */
+export interface WatchlistEntry {
+  playerId: string;
+  name: string;
+  clubId: string;
+  clubName: string;
+  position: Position;
+  ca: number;
+  contractYearsLeft: number;
+}
+
+/** 이적 관심 목록에 올린 선수인지. */
+export function isWatchlisted(state: GameState, playerId: string): boolean {
+  return (state.transferWatchlist ?? []).includes(playerId);
+}
+
+/** 이적 관심 목록에 올린 선수 중 아직 다른 구단 소속으로 시장에 남아있는 항목(CA순). */
+export function transferWatchlistEntries(state: GameState): WatchlistEntry[] {
+  const ids = state.transferWatchlist ?? [];
+  if (ids.length === 0) return [];
+  const idSet = new Set(ids);
+  return transferTargets(state.clubs, state.myClubId)
+    .filter((t) => idSet.has(t.player.id))
+    .map((t) => ({
+      playerId: t.player.id, name: t.player.name, clubId: t.clubId, clubName: t.clubName,
+      position: t.player.position, ca: Math.round(currentAbility(t.player)), contractYearsLeft: t.player.contractYears,
+    }))
+    .sort((a, b) => b.ca - a.ca);
+}
+
+/** 이적 관심 목록 토글(추가/제거, 신규 개선 항목 27) — 이미 내 구단 소속이면 대상이 아니다. */
+export function toggleWatchlistAction(state: GameState, playerId: string): ActionOutcome {
+  if (myClub(state).players.some((p) => p.id === playerId)) {
+    return { state, ok: false, message: '이미 우리 구단 소속 선수입니다.' };
+  }
+  const current = state.transferWatchlist ?? [];
+  const already = current.includes(playerId);
+  const next = already ? current.filter((id) => id !== playerId) : [...current, playerId];
+  return {
+    state: { ...state, transferWatchlist: next },
+    ok: true,
+    message: already ? '관심 목록에서 제외했습니다.' : '⭐ 관심 목록에 추가했습니다.',
+  };
+}
+
+/** 이사회 특별 요구 재협상 요청(신규 개선 항목 22) — 시즌당 1회만 시도할 수 있다.
+ *  받아들여지면 요구 강도(보상·벌점 양쪽)가 즉시 완화되는 대신 신뢰도를 조금 깎인다.
+ *  조급한(impatient) 이사회는 확률적으로 아예 거절할 수 있다(이 경우 비용 없음). */
+export function renegotiateDemandAction(state: GameState): ActionOutcome {
+  if (!state.demand) return { state, ok: false, message: '진행 중인 이사회 특별 요구가 없습니다.' };
+  if (state.demandRenegotiated) return { state, ok: false, message: '이번 시즌에는 이미 재협상을 시도했습니다.' };
+  const persona = myClub(state).boardPersona;
+  const r = engineRenegotiateDemand(state.demand, new Rng(seasonSeed(state) + 6161), persona);
+  if (!r.ok) {
+    return { state: { ...state, demandRenegotiated: true }, ok: false, message: r.reason! };
+  }
+  const boardConfidence = applyConfidence(state.boardConfidence, -r.confidenceCost);
+  return {
+    state: { ...state, demand: r.newDemand, demandRenegotiated: true, boardConfidence },
+    ok: true,
+    message: `이사회가 재협상에 응했습니다 — 요구 강도가 완화됐습니다 (신뢰도 −${r.confidenceCost}).`,
+  };
+}
+
+/** 대담한 목표 공개 선언(신규 개선 항목 25) — 이사회 목표보다 더 높은 순위를 언론에
+ *  공개 선언한다. 시즌 시작 전(첫 경기 전)에만, 시즌당 1회만 선언할 수 있다. 달성하면
+ *  추가 신뢰도 보너스, 원래 이사회 목표조차 놓치면 추가 페널티가 시즌 종료 시 붙는다. */
+export function declareBoldPredictionAction(state: GameState): ActionOutcome {
+  if (state.boldPrediction !== undefined) {
+    return { state, ok: false, message: '이미 이번 시즌 목표를 선언했습니다.' };
+  }
+  if (!state.live || state.live.results.length > 0) {
+    return { state, ok: false, message: '시즌 시작 전(첫 경기 전)에만 선언할 수 있습니다.' };
+  }
+  const target = boldPredictionTarget(state.objective);
+  return {
+    state: { ...state, boldPrediction: target }, ok: true,
+    message: `대담한 목표를 선언했습니다 — 리그 ${target}위 이내. 달성하면 이사회 신뢰도 보너스, `
+      + `원래 목표(${state.objective}위)조차 놓치면 추가 페널티가 있습니다.`,
+  };
+}
+
+/** 선수 한 명을 지목해 스카우트 파견(보유 자금 사용, B13) — 성공하면 이후 항상
+ *  정확한 PA를 볼 수 있다(구단 전체 스카우팅 레벨과 무관, 영구 등록). */
+export function dispatchScoutAction(state: GameState, playerId: string): ActionOutcome {
+  const club = myClub(state);
+  const r = engineDispatchScout(club, playerId);
+  if (!r.ok) return { state, ok: false, message: r.reason! };
+  return {
+    state: { ...state }, ok: true,
+    message: `스카우트 파견 완료 — 이제 이 선수의 PA를 정확히 알 수 있습니다 (−${formatMoney(r.cost!)})`,
+  };
 }
 
 /** 진행 중 시즌, 내 구단 선수들의 시즌 통계(평점순). */
@@ -1265,6 +1778,8 @@ export interface TeamPreview {
 export interface MatchPreview {
   home: TeamPreview;
   away: TeamPreview;
+  /** 경기 날씨(신규 개선 항목 26) — 킥오프 전에도 미리 확인 가능. */
+  weather: Weather;
 }
 
 /** 선발(전술 라인업) 중 현재 능력 최고 선수. */
@@ -1310,6 +1825,7 @@ function buildPreviewFrom(state: GameState, setup: MatchSetup): MatchPreview | n
   return {
     home: build(setup.home.club, setup.home.tactic, setup.away.tactic.formation),
     away: build(setup.away.club, setup.away.tactic, setup.home.tactic.formation),
+    weather: matchWeather(setup.seed, setup.home.club.id, setup.away.club.id),
   };
 }
 

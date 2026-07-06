@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   confidenceDelta, applyConfidence, boardStatus, isSacked,
-  START_CONFIDENCE, SACK_THRESHOLD,
+  START_CONFIDENCE, SACK_THRESHOLD, boardTierUpgradeBonus,
 } from '../src/board.js';
 
 describe('board: 이사회 신뢰도', () => {
@@ -59,5 +59,28 @@ describe('board: 이사회 신뢰도', () => {
       c = applyConfidence(c, confidenceDelta({ position: 12, objective: 6, promoted: false, relegated: true, netFinance: -50000 }));
     }
     expect(isSacked(c)).toBe(true);
+  });
+
+  it('C-new1: 신뢰 등급이 실제로 올라간 시즌에만 투자 보너스가 지급된다', () => {
+    expect(boardTierUpgradeBonus('shaky', 'stable', 10)).toBeGreaterThan(0);
+    expect(boardTierUpgradeBonus('stable', 'secure', 10)).toBeGreaterThan(0);
+    expect(boardTierUpgradeBonus('stable', 'stable', 10)).toBe(0);
+    expect(boardTierUpgradeBonus('secure', 'stable', 10)).toBe(0); // 하락은 보너스 없음(패널티도 없음)
+  });
+
+  it('C-new1: 두 단계 이상 오르면 보너스도 그만큼 커진다', () => {
+    const oneTier = boardTierUpgradeBonus('shaky', 'stable', 10);
+    const twoTiers = boardTierUpgradeBonus('critical', 'stable', 10);
+    expect(twoTiers).toBeGreaterThan(oneTier);
+  });
+
+  it('C-new1: 평판이 높을수록 같은 등급 상승에도 보너스가 더 크다', () => {
+    const lowRep = boardTierUpgradeBonus('shaky', 'stable', 5);
+    const highRep = boardTierUpgradeBonus('shaky', 'stable', 20);
+    expect(highRep).toBeGreaterThan(lowRep);
+  });
+
+  it('C-new1: 이미 최고 등급(secure)을 유지만 하면 보너스가 없다(반복 소득 방지)', () => {
+    expect(boardTierUpgradeBonus('secure', 'secure', 15)).toBe(0);
   });
 });

@@ -4,6 +4,8 @@
  */
 import type { InjurySeverity, BodyPart } from './injury.js';
 import type { PlayerInstruction } from './playerInstructions.js';
+import type { SponsorContract } from './finance.js';
+import type { Weather } from './weather.js';
 
 // ── 능력치 키 ──────────────────────────────────────────────
 
@@ -82,6 +84,9 @@ export interface Player {
   injuryName?: string;
   /** 부상 부위(부상 중이거나 회복 지연 중일 때 설정). 회복 지연 종료 시 해제. */
   injuryBodyPart?: BodyPart;
+  /** 이번 부상의 최초 총 결장 경기 수(부상 시점에 고정, 신규 개선 항목 28) — injuryMatches(잔여)와
+   *  비교해 회복 진행률을 계산하는 데 쓰인다. 회복 시 해제. 구버전 세이브는 없을 수 있어 optional. */
+  injuryTotalMatches?: number;
   /** 복귀 직후 재부상 위험이 남은 경기 수. 0 = 위험 없음. */
   reinjuryRiskMatches?: number;
   /** 부상 부위 연관 능력치가 완전히 회복될 때까지 남은 경기 수. 0 = 정상. */
@@ -102,6 +107,9 @@ export interface Player {
   traits: PlayerTrait[];
   /** 국가대표 A매치 출전 캡. 차출로 누적. */
   caps: number;
+  /** 국가대표 은퇴 선언 여부(신규 개선 항목 19) — true면 이후 차출 대상에서 영구 제외된다.
+   *  구버전 세이브는 없을 수 있어 optional(undefined는 은퇴하지 않은 것과 동일). */
+  internationalRetired?: boolean;
   /** 이번 시즌 득점(리그+컵). 시즌 경계 리셋. */
   seasonGoals: number;
   /** 통산 선발 출전 수(전 시즌 누적). */
@@ -110,6 +118,10 @@ export interface Player {
   careerGoals: number;
   /** 시즌별 CA 스냅샷(성장 곡선). 오프시즌마다 1개 추가. */
   caHistory: number[];
+  /** 현 소속 구단에서 이적 없이 보낸 시즌 수(로열티, 신규 개선 항목 10) — 구단을
+   *  옮기면(영입/판매/스와프/경쟁 입찰 등) 0으로 초기화되고, 오프시즌마다 1씩
+   *  늘어난다. 구버전 세이브는 없을 수 있어 optional(없으면 0 취급). */
+  seasonsAtClub?: number;
   /** 방출(바이아웃) 조항 금액(만원). 설정돼 있으면 협상 없이 이 금액으로 즉시 영입 가능. */
   releaseClause?: number;
   /** 임대 중이면 원 소속 구단 id — 이 선수는 지금 다른 구단(club.players 소속)에서
@@ -120,6 +132,21 @@ export interface Player {
   loanSeasonsRemaining?: number;
   /** 임대 기간 중 주급을 원 소속 구단이 분담하는 비율(0~1) — 나머지는 임대 구단이 부담. */
   loanWageShareByParent?: number;
+  /** 임대 의무완전이적 조항 — 이번 임대 시즌 출전(seasonApps)이 기준에 도달하면 임대
+   *  잔여 기간과 무관하게 시즌 종료 시 이 이적료로 완전 이적 전환(계약상 의무이므로
+   *  자금 부족과 무관하게 강제 집행 — 이후 재정 위기 로직이 필요 시 뒷수습한다). */
+  loanBuyObligation?: { appearances: number; fee: number };
+  /** 임대 우선매수옵션(OTB, 신규 개선 항목 4) — 임대 구단이 임대 기간 중 언제든
+   *  정해진 금액으로 완전 영입할 수 있는 "권리"(의무완전이적과 달리 강제되지 않는다).
+   *  행사하지 않고 임대가 끝나면 그대로 소멸한다. */
+  loanBuyOption?: { fee: number };
+  /** 바이백 조항(신규 개선 항목 2) — 판매 시 원 소속 구단이 향후 정해진 금액으로
+   *  되사올 수 있는 권리를 남긴다. seasonsRemaining이 0이 되면 자동 소멸. */
+  buybackClause?: { clubId: string; fee: number; seasonsRemaining: number };
+  /** 성과 기반 후불 이적료(Add-on, 신규 개선 항목 3) — 새 구단에서 이번 시즌 출전
+   *  또는 득점이 조건에 도달하면 원 소속 구단에 추가 이적료를 지급하고 소멸한다.
+   *  두 조건 중 하나만 있어도 되며, 있는 조건 중 하나라도 달성하면 발동한다. */
+  addOnClause?: { sellerClubId: string; appearances?: number; goals?: number; fee: number };
 }
 
 export type TrainingFocus =
@@ -188,6 +215,10 @@ export interface Staff {
   coachAttack?: number;
   coachDefense?: number;
   coachPhysical?: number;
+  /** 리저브(2군) 전담 코치 레벨 — 구버전 세이브·미도입 구단은 undefined이며,
+   *  이 경우 리저브 성장 계산 시 기존 coaching(세부 코치 블렌드) 레벨을 그대로 대체값으로
+   *  사용한다(하위 호환). 도입 시 리저브 성장에서 총괄/세부 코치보다 훨씬 크게 반영된다. */
+  reserveCoach?: number;
   /** 각 스태프 직책의 실명 인물 정보(선택 — coaching/medical/scouting/youth만 대상). */
   members?: Partial<Record<'coaching' | 'medical' | 'scouting' | 'youth', StaffMember>>;
 }
@@ -203,6 +234,22 @@ export interface ClubFinance {
   /** 스타디움 증축 단계(0~STADIUM_MAX) — 매치데이 수익 상한을 다시즌에 걸쳐 회수하는
    *  구조로 높인다(C8). 구버전 세이브는 없을 수 있어 optional(없으면 0 = 기본 규모). */
   stadiumLevel?: number;
+  /** 아카데미 시설 등급(0~ACADEMY_MAX) — 유스 스태프(인력)와 별개로 훈련장·시설
+   *  자체에 투자하는 자본재. 유스 인테이크 잠재력에 가산 보너스로 반영된다(B11).
+   *  구버전 세이브는 없을 수 있어 optional(없으면 0 = 기본 시설). */
+  academyLevel?: number;
+  /** 유스 아카데미 포지션 특화 라인(신규 개선 항목 13) — 지정하면 이후 유스 인테이크가
+   *  이 라인 포지션을 더 자주 배출하고, 그 라인 유망주는 잠재력도 추가로 오른다(대신
+   *  다른 라인은 상대적으로 덜 나온다). 지정하지 않으면(undefined) 기존과 동일하게
+   *  라인 편향 없이 균등하게 배출된다. */
+  academyFocus?: Line;
+  /** 훈련장(피지컬 트레이닝) 시설 등급(0~TRAINING_GROUND_MAX, 신규 개선 항목 21) — 의료
+   *  스태프(인력)와 별개로 훈련 인프라 자체에 투자하는 자본재. 전 선수의 경기당 부상
+   *  발생 확률을 추가로 낮춘다. 구버전 세이브는 없을 수 있어 optional(없으면 0 = 기본 시설). */
+  trainingGroundLevel?: number;
+  /** 체결한 스폰서 계약(유니폼/스타디움 명명권, 신규 개선 항목 24) — 성과와 무관하게
+   *  매 시즌 고정 수익을 지급하는 장기 계약. 구버전 세이브는 없을 수 있어 optional. */
+  sponsorContracts?: SponsorContract[];
 }
 
 /** 이사회의 인내심 성향 — 목표 미달 시 얼마나 가혹하게 반응하는가(board.ts). */
@@ -230,6 +277,23 @@ export interface Club {
   /** 리저브(2군) 스쿼드 — 유스 인테이크가 1군에 바로 합류하는 대신 여기서 성장하다가
    *  준비되면 승격된다(B9). 구버전 세이브는 없을 수 있어 optional(없으면 빈 배열 취급). */
   reserves?: Player[];
+  /** 파견 정찰을 마쳐 PA를 영구적으로 정확히 알고 있는 선수 id 목록(B13). 구버전
+   *  세이브는 없을 수 있어 optional(없으면 파견한 선수 없음 취급). */
+  scoutedPlayerIds?: string[];
+  /** 유저가 직접 지정한 멘토-멘티 쌍(B14) — 같은 라인 자동 멘토링보다 강한 성장
+   *  보너스를 준다(상한 인원 제한). 구버전 세이브는 없을 수 있어 optional. */
+  mentorPairings?: MentorPairing[];
+  /** 에이전트 관계 지수(0~100, 신규 개선 항목 6) — 이 구단이 이적 시장에서 에이전트들과
+   *  쌓아온 신뢰. 순조로운 영입 협상이 성사될 때마다 조금씩 오르고, 협상이 완전히
+   *  결렬되면 크게 깎인다. 높을수록 다음 협상의 하한·역제안이 유리해진다. 구버전
+   *  세이브는 없을 수 있어 optional(없으면 AGENT_RELATIONS_DEFAULT = 중립 취급). */
+  agentRelations?: number;
+}
+
+/** 유저가 직접 지정한 멘토-멘티 쌍(B14). */
+export interface MentorPairing {
+  mentorId: string;
+  menteeId: string;
 }
 
 // ── 경기 입력/출력 ────────────────────────────────────────
@@ -311,4 +375,6 @@ export interface MatchResult {
   seed: number;
   /** 양 팀 통틀어 평점(동률이면 득점)이 가장 높은 선수 — 맨오브더매치. 출전자가 없으면 미설정. */
   motmPlayerId?: string;
+  /** 경기 날씨(신규 개선 항목 26). 손으로 만든 MatchResult(테스트 등)엔 없을 수 있어 optional. */
+  weather?: Weather;
 }

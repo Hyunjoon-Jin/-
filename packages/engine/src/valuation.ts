@@ -70,3 +70,34 @@ const AGENT_FEE_RATE = 0.05;
 export function agentFee(fee: number, contractYears: number): number {
   return Math.max(0, Math.round(fee * AGENT_FEE_RATE * (contractYears / AGENT_FEE_BASE_YEARS)));
 }
+
+// ── 로열티 보너스 (신규 개선 항목 10) ────────────────────────
+
+/** 로열티 등급 — 한 구단에서 이적 없이 보낸 시즌 수(Player.seasonsAtClub) 기준. */
+export type LoyaltyTier = 'newcomer' | 'trusted' | 'legend';
+
+/** trusted 등급 진입 문턱(시즌). 이 미만은 newcomer로 보너스가 없다. */
+export const LOYALTY_TRUSTED_SEASONS = 3;
+/** legend 등급 진입 문턱(시즌) — 이 이상이면 최대 할인이 적용된다. */
+export const LOYALTY_LEGEND_SEASONS = 6;
+/** legend 등급에서 재계약 계약금에 적용되는 최대 할인율. */
+export const LOYALTY_MAX_DISCOUNT = 0.2;
+
+/** 한 구단에서 보낸 시즌 수를 로열티 등급으로 분류(UI 표시용). */
+export function loyaltyTier(seasonsAtClub: number): LoyaltyTier {
+  if (seasonsAtClub >= LOYALTY_LEGEND_SEASONS) return 'legend';
+  if (seasonsAtClub >= LOYALTY_TRUSTED_SEASONS) return 'trusted';
+  return 'newcomer';
+}
+
+/**
+ * 로열티가 재계약 계약금에 주는 할인율(0~LOYALTY_MAX_DISCOUNT) — 오래 뛴 선수일수록
+ * 이적 없이 남아준 것에 대한 보답으로 재계약이 저렴해진다. trusted 문턱부터 선형으로
+ * 늘어 legend 문턱에서 최대치에 도달한다.
+ */
+export function loyaltyDiscount(seasonsAtClub: number): number {
+  if (seasonsAtClub < LOYALTY_TRUSTED_SEASONS) return 0;
+  const span = LOYALTY_LEGEND_SEASONS - LOYALTY_TRUSTED_SEASONS;
+  const progress = clamp((seasonsAtClub - LOYALTY_TRUSTED_SEASONS) / span, 0, 1);
+  return progress * LOYALTY_MAX_DISCOUNT;
+}

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   transferTargets, buyPlayer, buyPlayerAt, buyPlayerViaReleaseClause, sellPlayer, releasePlayer,
-  askingPrice, evaluateOffer, MAX_NEGOTIATION_ROUNDS, MIN_SQUAD,
+  askingPrice, evaluateOffer, MAX_NEGOTIATION_ROUNDS, MIN_SQUAD, swapPlayers, loanPlayerOut,
 } from '../src/transferActions.js';
 import { marketValue, agentFee } from '../src/valuation.js';
 import { currentAbility } from '../src/derived.js';
@@ -299,5 +299,126 @@ describe('transferActions: 방출(바이아웃) 조항(A03)', () => {
     const viaClause = buyPlayerViaReleaseClause(clubs, 'c0', target.id);
     expect(viaClause.ok).toBe(true); // 방출조항은 뎁스와 무관하게 성사
     expect(viaClause.fee).toBe(clause);
+  });
+});
+
+describe('A2: 스와프 딜', () => {
+  it('두 구단이 선수를 맞교환하면 소속이 정확히 뒤바뀐다', () => {
+    const clubs = makeLeague(50);
+    const a = clubs[0]!; const b = clubs[1]!;
+    const playerA = a.players[a.players.length - 1]!;
+    const playerB = b.players[b.players.length - 1]!;
+
+    const r = swapPlayers(clubs, a.id, b.id, playerA.id, playerB.id);
+    expect(r.ok).toBe(true);
+    expect(r.playerAName).toBe(playerA.name);
+    expect(r.playerBName).toBe(playerB.name);
+    expect(a.players.some((p) => p.id === playerA.id)).toBe(false);
+    expect(a.players.some((p) => p.id === playerB.id)).toBe(true);
+    expect(b.players.some((p) => p.id === playerB.id)).toBe(false);
+    expect(b.players.some((p) => p.id === playerA.id)).toBe(true);
+  });
+
+  it('양수 정산금은 A→B, 음수는 B→A로 이체된다', () => {
+    const clubs = makeLeague(51);
+    const a = clubs[0]!; const b = clubs[1]!;
+    const playerA = a.players[a.players.length - 1]!;
+    const playerB = b.players[b.players.length - 1]!;
+    const aBefore = a.finance.balance; const bBefore = b.finance.balance;
+
+    const r = swapPlayers(clubs, a.id, b.id, playerA.id, playerB.id, 5000);
+    expect(r.ok).toBe(true);
+    expect(a.finance.balance).toBe(aBefore - 5000);
+    expect(b.finance.balance).toBe(bBefore + 5000);
+  });
+
+  it('같은 구단끼리는 맞교환할 수 없다', () => {
+    const clubs = makeLeague(52);
+    const a = clubs[0]!;
+    const p1 = a.players[0]!; const p2 = a.players[1]!;
+    const r = swapPlayers(clubs, a.id, a.id, p1.id, p2.id);
+    expect(r.ok).toBe(false);
+  });
+
+  it('포지션 라인이 바닥나는 교환은 거절된다', () => {
+    const clubs = makeLeague(53);
+    const a = clubs[0]!; const b = clubs[1]!;
+    const gk = a.players.find((p) => p.position === 'GK')!;
+    // 다른 GK를 모두 제거해 뎁스를 바닥낸다.
+    a.players = a.players.filter((p) => p.id === gk.id || p.position !== 'GK');
+    const playerB = b.players[b.players.length - 1]!;
+    const r = swapPlayers(clubs, a.id, b.id, gk.id, playerB.id);
+    expect(r.ok).toBe(false);
+  });
+
+  it('임대 중인 선수는 맞교환 대상에서 제외된다', () => {
+    const clubs = makeLeague(54);
+    const a = clubs[0]!; const b = clubs[1]!; const c = clubs[2]!;
+    const loanedPlayer = a.players[a.players.length - 1]!;
+    loanPlayerOut(clubs, a.id, c.id, loanedPlayer.id, { seasons: 1, fee: 0, wageShareByParent: 0 });
+    const playerB = b.players[b.players.length - 1]!;
+    const r = swapPlayers(clubs, c.id, b.id, loanedPlayer.id, playerB.id);
+    expect(r.ok).toBe(false);
+  });
+
+  it('자금이 부족하면 정산금이 걸린 교환은 거절된다', () => {
+    const clubs = makeLeague(55);
+    const a = clubs[0]!; const b = clubs[1]!;
+    const playerA = a.players[a.players.length - 1]!;
+    const playerB = b.players[b.players.length - 1]!;
+    const r = swapPlayers(clubs, a.id, b.id, playerA.id, playerB.id, a.finance.balance + 1_000_000);
+    expect(r.ok).toBe(false);
+  });
+});
+
+describe('신규 개선 항목 8: 스와프 딜에 유스(리저브) 선수 포함', () => {
+  it('양쪽 다 리저브 선수를 맞교환하면 리저브 소속끼리 정확히 뒤바뀐다', () => {
+    const clubs = makeLeague(60);
+    const a = clubs[0]!; const b = clubs[1]!;
+    const youthA = a.players[a.players.length - 1]!;
+    const youthB = b.players[b.players.length - 1]!;
+    a.players = a.players.filter((p) => p.id !== youthA.id);
+    a.reserves = [youthA];
+    b.players = b.players.filter((p) => p.id !== youthB.id);
+    b.reserves = [youthB];
+
+    const r = swapPlayers(clubs, a.id, b.id, youthA.id, youthB.id);
+    expect(r.ok).toBe(true);
+    expect((a.reserves ?? []).some((p) => p.id === youthA.id)).toBe(false);
+    expect((a.reserves ?? []).some((p) => p.id === youthB.id)).toBe(true);
+    expect((b.reserves ?? []).some((p) => p.id === youthA.id)).toBe(true);
+    expect(a.players.some((p) => p.id === youthB.id)).toBe(false);
+    expect(b.players.some((p) => p.id === youthA.id)).toBe(false);
+  });
+
+  it('1군 선수와 상대 리저브 선수의 크로스티어 맞교환도 성립한다', () => {
+    const clubs = makeLeague(61);
+    const a = clubs[0]!; const b = clubs[1]!;
+    const firstTeamerA = a.players[a.players.length - 1]!;
+    const youthB = b.players[b.players.length - 1]!;
+    b.players = b.players.filter((p) => p.id !== youthB.id);
+    b.reserves = [youthB];
+
+    const r = swapPlayers(clubs, a.id, b.id, firstTeamerA.id, youthB.id);
+    expect(r.ok).toBe(true);
+    // A는 1군 선수를 내주고 상대 유스를 리저브로 받는다.
+    expect(a.players.some((p) => p.id === firstTeamerA.id)).toBe(false);
+    expect((a.reserves ?? []).some((p) => p.id === youthB.id)).toBe(true);
+    // B는 유스를 내주고 상대 1군 선수를 1군으로 받는다.
+    expect((b.reserves ?? []).some((p) => p.id === youthB.id)).toBe(false);
+    expect(b.players.some((p) => p.id === firstTeamerA.id)).toBe(true);
+  });
+
+  it('리저브 선수는 1군 포지션 뎁스 제약(sellerLineDepthOk)의 영향을 받지 않는다', () => {
+    const clubs = makeLeague(62);
+    const a = clubs[0]!; const b = clubs[1]!;
+    const gk = a.players.find((p) => p.position === 'GK')!;
+    a.players = a.players.filter((p) => p.id === gk.id || p.position !== 'GK');
+    a.reserves = [gk];
+    a.players = a.players.filter((p) => p.id !== gk.id);
+    const playerB = b.players[b.players.length - 1]!;
+
+    const r = swapPlayers(clubs, a.id, b.id, gk.id, playerB.id);
+    expect(r.ok).toBe(true);
   });
 });

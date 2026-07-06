@@ -2,22 +2,39 @@ import {
   TECHNICAL_ATTRS, MENTAL_ATTRS, PHYSICAL_ATTRS, GOALKEEPING_ATTRS, POSITIONS,
   TRAINING_FOCUSES, TRAINING_LABELS, TRAIT_LABELS, TRAIT_DESC,
   currentAbility, marketValue, playerDerived, isInjured, isSuspended, lineOf, familiarityAt,
-  formatMoney, buildScoutingReport, retireChance, RETIRE_MIN_AGE,
+  formatMoney, buildScoutingReport, retireChance, RETIRE_MIN_AGE, scoutDispatchCost,
+  loyaltyTier, loyaltyDiscount, LOYALTY_TRUSTED_SEASONS, LOYALTY_LEGEND_SEASONS,
   type AttrKey, type Player, type DerivedRatings, type TrainingFocus, type Position,
   type PlayerFormEntry, type OverallTier, type PotentialTier, type AgeProfile, type ScoutingReport,
 } from '@soccer-tycoon/engine';
 import { useState } from 'react';
-import { formStability, revealPotential, type TimelineEntry, type SeasonRatingEntry } from '../game.js';
+import {
+  formStability, revealPotential, RENEWAL_MIN_YEARS, RENEWAL_MAX_YEARS,
+  type TimelineEntry, type SeasonRatingEntry,
+} from '../game.js';
 import { useModalA11y } from './useModalA11y.js';
 import { useResultToast } from '../toast.js';
 import { onKeyActivate } from '../a11y.js';
 import { InfoTip } from './InfoTip.js';
 import { flagFor } from '../flags.js';
+import { LINE_X, SIDE_Y } from './MatchPitch.js';
 
 function moraleLabel(m: number): { text: string; cls: string } {
   if (m >= 0.65) return { text: '😀 만족', cls: 'cond-good' };
   if (m >= 0.4) return { text: '😐 보통', cls: '' };
   return { text: '😠 불만', cls: 'injury' };
+}
+
+/** 로열티(신규 개선 항목 10) 등급 배지 — newcomer는 특별히 표시하지 않는다. */
+function loyaltyBadge(seasonsAtClub: number): { text: string; title: string } | null {
+  const tier = loyaltyTier(seasonsAtClub);
+  if (tier === 'legend') {
+    return { text: `🏅 원클럽맨(${seasonsAtClub}시즌)`, title: `${LOYALTY_LEGEND_SEASONS}시즌 이상 한 구단에 머물러 재계약 계약금이 최대로 할인됩니다.` };
+  }
+  if (tier === 'trusted') {
+    return { text: `🤝 신뢰받는 선수(${seasonsAtClub}시즌)`, title: `${LOYALTY_TRUSTED_SEASONS}시즌 이상 한 구단에 머물러 재계약 계약금이 할인됩니다.` };
+  }
+  return null;
 }
 
 function ratingCls(r: number): string {
@@ -110,8 +127,8 @@ interface Props {
   onSetFocus?: (focus: TrainingFocus) => void;
   /** 내 선수면 포지션 전환 훈련 대상 설정 가능(해제는 undefined). */
   onSetTrainingPosition?: (position: Position | undefined) => void;
-  /** 내 선수면 재계약 가능. */
-  onRenew?: () => { ok: boolean; message: string };
+  /** 내 선수면 재계약 가능. years(계약 기간)·signOnBonus(사인온보너스, 신규 개선 항목 5)를 선택해 넘긴다. */
+  onRenew?: (years: number, signOnBonus: number) => { ok: boolean; message: string };
   /** 진행 중 시즌 최근 폼(평점). live 없거나 미출전이면 빈 배열. */
   recentForm?: PlayerFormEntry[];
   /** 커리어 타임라인(이적·마일스톤·은퇴). 시즌순. */
@@ -121,6 +138,10 @@ interface Props {
   /** 이 선수에 대한 스카우팅 레벨(PA 공개 정도·강점/약점 리포트에 반영).
    *  내 구단 선수면 FULL_SCOUTING, 아니면 club.staff.scouting을 넘긴다. */
   scouting: number;
+  /** 이 선수를 이미 파견 정찰했는지(B13) — true면 scouting과 무관하게 PA가 정확히 보인다. */
+  scouted?: boolean;
+  /** 내 선수가 아니고 아직 파견 정찰하지 않았으면 파견 버튼을 보여준다. */
+  onDispatchScout?: () => { ok: boolean; message: string };
   /** 임대 중인 선수면 원 소속 구단명(loanFromClubId를 이름으로 미리 변환해 전달). */
   loanFromClubName?: string;
 }
@@ -132,9 +153,47 @@ const PD_TABS: { key: PdTab; label: string }[] = [
   { key: 'career', label: '커리어' },
 ];
 
+/** 재계약 시 계약 기간·사인온보너스(신규 개선 항목 5)를 골라 확정하는 인라인 패널. */
+function RenewPanel({
+  player, onRenew, toast,
+}: {
+  player: Player;
+  onRenew: (years: number, signOnBonus: number) => { ok: boolean; message: string };
+  toast: (r: { ok: boolean; message: string }) => void;
+}) {
+  const [years, setYears] = useState(4);
+  const [signOnBonus, setSignOnBonus] = useState(0);
+  const discount = loyaltyDiscount(player.seasonsAtClub ?? 0);
+  const baseCost = Math.round(player.wage * 20 * (years / 4) * (1 - discount));
+
+  return (
+    <div className="pd-renew-panel">
+      <span className="muted">계약 만료 임박 ({player.contractYears}년)</span>
+      <label className="loan-field">
+        <span>계약 기간</span>
+        <select value={years} onChange={(e) => setYears(Number(e.target.value))}>
+          {Array.from({ length: RENEWAL_MAX_YEARS - RENEWAL_MIN_YEARS + 1 }, (_, i) => RENEWAL_MIN_YEARS + i).map((n) => (
+            <option key={n} value={n}>{n}년</option>
+          ))}
+        </select>
+      </label>
+      <label className="loan-field">
+        <span>사인온보너스(선택)</span>
+        <input
+          type="number" min={0} step={1000} value={signOnBonus}
+          onChange={(e) => setSignOnBonus(Math.max(0, Number(e.target.value)))}
+        />
+      </label>
+      <button className="btn-small" onClick={() => toast(onRenew(years, signOnBonus))}>
+        재계약 (계약금 {formatMoney(baseCost + signOnBonus)}{discount > 0 ? ` · 로열티 -${Math.round(discount * 100)}%` : ''})
+      </button>
+    </div>
+  );
+}
+
 export function PlayerDetail({
   player, onClose, onSetFocus, onSetTrainingPosition, onRenew, recentForm, timeline, ratingHistory, scouting,
-  loanFromClubName,
+  scouted, onDispatchScout, loanFromClubName,
 }: Props) {
   const toast = useResultToast();
   const ca = currentAbility(player);
@@ -169,12 +228,22 @@ export function PlayerDetail({
         <div className="pd-meta">
           <span>CA <b>{ca.toFixed(0)}</b></span>
           <span>
-            PA <b>{revealPotential(scouting, player.potential)}</b>
+            PA <b>{revealPotential(scouting, player.potential, scouted)}</b>
             <InfoTip title="CA / PA">
               CA는 현재 실력, PA는 성장했을 때 도달 가능한 최대 실력입니다. 스카우팅 레벨이
               낮으면 PA가 범위("~")로만 표시되며, 스태프의 스카우팅 등급을 올리면 더 정확히
-              드러납니다. 내 구단 선수는 항상 정확한 PA가 보입니다.
+              드러납니다. 내 구단 선수는 항상 정확한 PA가 보입니다. 특정 선수를 파견
+              정찰하면(B13) 구단 전체 스카우팅 레벨과 무관하게 그 선수만 항상 정확히 보입니다.
             </InfoTip>
+            {onDispatchScout && !scouted && (
+              <button
+                className="btn-ghost pd-dispatch-btn"
+                onClick={() => toast(onDispatchScout())}
+                title="이 선수를 파견 정찰해 PA를 정확히 알아냅니다"
+              >
+                🔭 파견 정찰 ({formatMoney(scoutDispatchCost(scouting))})
+              </button>
+            )}
           </span>
           <span>가치 <b>{formatMoney(marketValue(player))}</b></span>
           <span>주급 <b>{formatMoney(player.wage)}</b></span>
@@ -198,6 +267,11 @@ export function PlayerDetail({
             <span className="muted" title="이전 시즌까지 통산 기록">통산 {player.careerApps ?? 0}경 {player.careerGoals ?? 0}골</span>
           )}
           {(player.caps ?? 0) > 0 && <span className="pd-caps" title="국가대표 A매치 출전 캡">🎽 A매치 {player.caps}경</span>}
+          {loyaltyBadge(player.seasonsAtClub ?? 0) && (
+            <span className="pd-caps" title={loyaltyBadge(player.seasonsAtClub ?? 0)!.title}>
+              {loyaltyBadge(player.seasonsAtClub ?? 0)!.text}
+            </span>
+          )}
         </div>
 
         <div className="modal-tabs" role="tablist">
@@ -231,10 +305,7 @@ export function PlayerDetail({
             {onRenew && (
               <div className="pd-renew">
                 {player.contractYears <= 2 ? (
-                  <>
-                    <span className="muted">계약 만료 임박 ({player.contractYears}년) — </span>
-                    <button className="btn-small" onClick={() => toast(onRenew())}>재계약 (계약금 {formatMoney(player.wage * 20)})</button>
-                  </>
+                  <RenewPanel player={player} onRenew={onRenew} toast={toast} />
                 ) : (
                   <span className="muted small">계약 {player.contractYears}년 남음 — 재계약 불필요.</span>
                 )}
@@ -472,6 +543,50 @@ function CareerTimeline({ entries }: { entries: TimelineEntry[] }) {
 }
 
 /** 주 포지션 + 실제로 숙련도가 쌓인(0.3 이상) 부 포지션을 숙련도 막대로 보여준다. */
+const FAM_MAP_W = 340;
+const FAM_MAP_H = 190;
+const FAM_MAP_PAD = 18;
+
+/** 포지션 숙련도 맵(신규 개선 항목 15) — MatchPitch와 같은 좌표계로 14개 포지션 전체를
+ *  피치 모양 위에 점으로 배치해, 선수의 "포지션 커버리지"를 한눈에 보여준다.
+ *  점의 불투명도가 숙련도를, 크기·테두리가 주 포지션/훈련 지정 포지션을 나타낸다. */
+function FamiliarityMap({ player }: { player: Player }) {
+  const innerW = FAM_MAP_W - FAM_MAP_PAD * 2;
+  const innerH = FAM_MAP_H - FAM_MAP_PAD * 2;
+  return (
+    <svg className="fam-map-svg" viewBox={`0 0 ${FAM_MAP_W} ${FAM_MAP_H}`} role="img" aria-label="포지션 숙련도 맵">
+      <rect
+        x={FAM_MAP_PAD / 2} y={FAM_MAP_PAD / 2}
+        width={FAM_MAP_W - FAM_MAP_PAD} height={FAM_MAP_H - FAM_MAP_PAD}
+        rx={10} className="fam-map-pitch"
+      />
+      <line
+        x1={FAM_MAP_W / 2} y1={FAM_MAP_PAD / 2} x2={FAM_MAP_W / 2} y2={FAM_MAP_H - FAM_MAP_PAD / 2}
+        className="fam-map-midline"
+      />
+      {POSITIONS.map((pos) => {
+        const fam = familiarityAt(player, pos);
+        const x = FAM_MAP_PAD + LINE_X[pos] * innerW;
+        const y = FAM_MAP_PAD + SIDE_Y[pos] * innerH;
+        const isPrimary = pos === player.position;
+        const isTraining = pos === player.trainingPosition;
+        return (
+          <g key={pos}>
+            <circle
+              cx={x} cy={y} r={isPrimary ? 13 : 9.5}
+              className={`fam-dot${isPrimary ? ' primary' : ''}${isTraining ? ' training' : ''}`}
+              style={{ opacity: 0.22 + fam * 0.78 }}
+            >
+              <title>{pos}{isPrimary ? ' (주 포지션)' : isTraining ? ' (전환 훈련 중)' : ''} — 숙련도 {Math.round(fam * 100)}%</title>
+            </circle>
+            <text x={x} y={y + (isPrimary ? 24 : 21)} textAnchor="middle" className="fam-label">{pos}</text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
 function PositionFamiliarity({ player }: { player: Player }) {
   const secondary = POSITIONS
     .filter((pos) => pos !== player.position)
@@ -486,9 +601,11 @@ function PositionFamiliarity({ player }: { player: Player }) {
         <InfoTip title="포지션 숙련도">
           주 포지션 이외의 자리는 숙련도가 낮으면 파생 전력이 깎입니다. 실전에서 그 자리를
           꾸준히 뛰거나(느리게 상승), 개발 탭에서 포지션 전환 훈련을 지정하면(코칭 지원, 더
-          빠르게 상승) 숙련도가 오릅니다.
+          빠르게 상승) 숙련도가 오릅니다. 아래 맵에서 점이 진할수록 숙련도가 높고, 금색 테두리는
+          주 포지션·훈련 지정 포지션을 나타냅니다.
         </InfoTip>
       </h3>
+      <FamiliarityMap player={player} />
       <div className="bar-row">
         <span className="bar-label">{player.position} (주)</span>
         <div className="bar-track"><div className="bar-fill" style={{ width: '100%' }} /></div>
@@ -499,7 +616,9 @@ function PositionFamiliarity({ player }: { player: Player }) {
       ) : (
         secondary.map(({ pos, v }) => (
           <div className="bar-row" key={pos}>
-            <span className="bar-label">{pos}</span>
+            <span className="bar-label">
+              {pos}{pos === player.trainingPosition ? ' 🎯' : ''}
+            </span>
             <div className="bar-track"><div className="bar-fill" style={{ width: `${v * 100}%` }} /></div>
             <span className="bar-val">{Math.round(v * 100)}</span>
           </div>

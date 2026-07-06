@@ -4,7 +4,7 @@
  * MVP 데이터 생성기의 축소판 — 추후 packages/data 로 확장.
  */
 import type {
-  AttrKey, Attributes, BoardPersona, Club, Player, Position, Tactic,
+  AttrKey, Attributes, BoardPersona, Club, Line, Player, Position, Tactic,
 } from './types.js';
 import { ALL_ATTRS, GOALKEEPING_ATTRS } from './types.js';
 import { Rng } from './rng.js';
@@ -17,6 +17,8 @@ import { lineOf } from './teamStrength.js';
 import { FIRST, LAST } from './names.js';
 import { academyNationPool } from './scouting.js';
 import { hireInitialStaffMembers } from './staffActions.js';
+import { academyPotentialBonus } from './finance.js';
+import { rankCaptainCandidates } from './captaincy.js';
 
 const NATIONS = ['KOR', 'JPN', 'BRA', 'ITA', 'GER', 'ESP', 'FRA', 'ENG', 'NED', 'ARG'];
 
@@ -172,22 +174,39 @@ const ACADEMY_POSITIONS: Position[] = [
   'GK', 'DC', 'DL', 'DR', 'DM', 'MC', 'MC', 'AML', 'AMR', 'AMC', 'ST', 'ST',
 ];
 
+/** 포지션 특화(신규 개선 항목 13) 지정 시 해당 라인 포지션이 뽑힐 가중치 배율. */
+export const ACADEMY_FOCUS_WEIGHT_MULTIPLIER = 3;
+/** 포지션 특화 라인 소속 유망주에게 시설 등급당 추가로 붙는 잠재력 가산치(B11 가산과 별개). */
+export const ACADEMY_FOCUS_POTENTIAL_BONUS_PER_LEVEL = 2;
+
 /**
  * 유스 아카데미 유망주 배출 (매 시즌).
  * 유스 레벨이 높을수록 배출 인원↑·잠재력↑. scoutingLevel이 높을수록 해외 스카우팅
  * 네트워크가 넓어져 더 다양한 국적의 유망주가 나온다(academyNationPool).
+ * academyLevel(시설 등급, B11)은 유스 스태프(인력)와 별개로 잠재력에 추가 가산된다
+ * — 생략하면(0) 기존과 정확히 동일한 결과(하위 호환).
+ * focus(포지션 특화, 신규 개선 항목 13)를 지정하면 해당 라인 포지션이 뽑힐 확률이
+ * ACADEMY_FOCUS_WEIGHT_MULTIPLIER배로 늘고, 그 라인 유망주는 잠재력 보너스도 추가로
+ * 받는다 — 대신 다른 라인은 상대적으로 덜 나온다(총 배출 인원은 그대로라 트레이드오프).
  */
 export function generateAcademyIntake(
-  rng: Rng, tier: number, youthLevel: number, scoutingLevel = 20,
+  rng: Rng, tier: number, youthLevel: number, scoutingLevel = 20, academyLevel = 0, focus?: Line,
 ): Player[] {
   const count = 1 + Math.floor(youthLevel / 8); // 1~7:1명, 8~15:2명, 16~20:3명
   const nationPool = academyNationPool(scoutingLevel);
+  const positionPool = focus
+    ? ACADEMY_POSITIONS.flatMap((pos) => (
+        lineOf(pos) === focus ? Array(ACADEMY_FOCUS_WEIGHT_MULTIPLIER).fill(pos) : [pos]
+      ))
+    : ACADEMY_POSITIONS;
   const out: Player[] = [];
   for (let i = 0; i < count; i++) {
-    const pos = ACADEMY_POSITIONS[rng.int(0, ACADEMY_POSITIONS.length - 1)]!;
+    const pos = positionPool[rng.int(0, positionPool.length - 1)]!;
     const p = genPlayer(rng, pos, tier - 2, rng.int(16, 18));
-    // 아카데미 수준에 따른 잠재력 보너스(유스 8=중립)
-    const bonus = Math.max(0, youthLevel - 8) * 2;
+    // 아카데미 수준에 따른 잠재력 보너스(유스 8=중립) + 시설 등급 가산(B11)
+    // + 포지션 특화 라인이면 시설 등급 기반 추가 가산(신규 개선 항목 13)
+    const focusBonus = focus && lineOf(pos) === focus ? academyLevel * ACADEMY_FOCUS_POTENTIAL_BONUS_PER_LEVEL : 0;
+    const bonus = Math.max(0, youthLevel - 8) * 2 + academyPotentialBonus(academyLevel) + focusBonus;
     p.potential = clamp(p.potential + bonus, 0, 200);
     p.nationality = rng.pick(nationPool);
     out.push(p);
@@ -316,16 +335,14 @@ function pickSetPieceTaker(club: Club, lineup: { position: Position; playerId: s
   return eligible.sort((a, b) => setPieceTakerScore(b) - setPieceTakerScore(a))[0]!.id;
 }
 
-/** 라인업 중 리더 특성 보유자를 우선하고, 없으면 리더십 능력치가 가장 높은 선수를 주장으로 자동 지정. */
+/** 라인업 중 주장 추천 점수(신규 개선 항목 16)가 가장 높은 선수를 주장으로 자동 지정. */
 function pickCaptain(club: Club, lineup: { position: Position; playerId: string }[]): string | undefined {
   const byId = new Map(club.players.map((p) => [p.id, p]));
   const inLineup = lineup
     .map((s) => byId.get(s.playerId))
     .filter((p): p is Player => p !== undefined);
   if (inLineup.length === 0) return undefined;
-  const leaders = inLineup.filter((p) => hasTrait(p, 'leader'));
-  const pool = leaders.length > 0 ? leaders : inLineup;
-  return [...pool].sort((a, b) => b.attributes.leadership - a.attributes.leadership)[0]!.id;
+  return rankCaptainCandidates(inLineup)[0]!.playerId;
 }
 
 /**

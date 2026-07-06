@@ -8,6 +8,7 @@ import {
   type MatchContext, type MatchSetup,
 } from './simulateMatch.js';
 import type { InjuryEvent, MatchEvent, MatchResult, Tactic } from './types.js';
+import type { Weather } from './weather.js';
 
 export const HALF_TIME = Math.floor(MATCH_LENGTH / 2); // 45분
 
@@ -40,6 +41,11 @@ export class LiveMatch {
 
   score(): [number, number] {
     return [this.ctx.home.goals, this.ctx.away.goals];
+  }
+
+  /** 경기 날씨(신규 개선 항목 26) — 킥오프 시점에 결정, 관전 중 계속 동일. */
+  weather(): Weather {
+    return this.ctx.weather;
   }
 
   /** 현재까지 실시간 통계(점유율·슈팅·유효슈팅). 유효슈팅=골+선방. */

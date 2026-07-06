@@ -3,12 +3,22 @@ import {
   startGame, myClub, myTactic, setMyTactic,
   startSeason, playRound, playRestOfSeason, finishSeason, advanceFullSeason,
   playCupRound, playContinentalCupRound, negotiate, buyAt, buyViaReleaseClause, offersFor, acceptSell, release, upgradeStaffAction,
-  upgradeStadiumAction,
-  loanOut, loanIn, recallLoan,
-  setTrainingFocus, setTrainingPosition, renewContract,
+  negotiateStaffRaiseAction,
+  buyback,
+  attachAddOn,
+  exerciseBuyOption,
+  panicBuyAction,
+  resolveRivalSnipe,
+  recordNegotiationBreakdown,
+  upgradeStadiumAction, upgradeAcademyAction, upgradeTrainingGroundAction, signSponsorContractAction,
+  toggleWatchlistAction,
+  loanOut, loanIn, recallLoan, swapDeal,
+  setTrainingFocus, setTrainingPosition, renewContract, setAcademyFocus,
   watchSetup, matchPreview, commitWatchedRound,
   watchCupSetup, cupPreview, commitWatchedCupRound,
   playerForm, playerTimeline, playerRatingHistory, respondMedia, dismissMedia, signContract,
+  dispatchScoutAction, isScouted, assignMentorAction, clearMentorPairingAction, renegotiateDemandAction,
+  declareBoldPredictionAction,
   type GameState, type ActionOutcome, type WatchSetup, type Difficulty, type MediaEvent,
 } from './game.js';
 import type { Tactic, MatchResult, LoanTerms } from '@soccer-tycoon/engine';
@@ -156,6 +166,14 @@ export function App() {
     return outcome;
   };
 
+  // 재협상 결과(신규 개선 항목 22)는 거절당해도 demandRenegotiated 플래그가 갱신되므로,
+  // runAction과 달리 성공 여부와 무관하게 항상 state를 반영해야 한다.
+  const handleRenegotiateDemand = (): ActionOutcome => {
+    const outcome = renegotiateDemandAction(game);
+    update(outcome.state);
+    return outcome;
+  };
+
   const handleBuyAt = (id: string, fee: number): ActionOutcome => {
     const outcome = buyAt(game, id, fee);
     if (outcome.ok) update(outcome.state);
@@ -168,8 +186,34 @@ export function App() {
     return outcome;
   };
 
-  const handleAcceptSell = (id: string, buyerId: string): ActionOutcome => {
-    const outcome = acceptSell(game, id, buyerId);
+  const handleAcceptSell = (id: string, buyerId: string, buybackFee?: number): ActionOutcome => {
+    const outcome = acceptSell(game, id, buyerId, buybackFee);
+    if (outcome.ok) update(outcome.state);
+    return outcome;
+  };
+
+  const handleBuyback = (id: string): ActionOutcome => {
+    const outcome = buyback(game, id);
+    if (outcome.ok) update(outcome.state);
+    return outcome;
+  };
+
+  const handleAttachAddOn = (
+    id: string, appearances: number | undefined, goals: number | undefined, fee: number,
+  ): ActionOutcome => {
+    const outcome = attachAddOn(game, id, appearances, goals, fee);
+    if (outcome.ok) update(outcome.state);
+    return outcome;
+  };
+
+  const handlePanicBuy = (id: string): ActionOutcome => {
+    const outcome = panicBuyAction(game, id);
+    if (outcome.ok) update(outcome.state);
+    return outcome;
+  };
+
+  const handleRivalSnipe = (id: string, rivalClubId: string, bid: number): ActionOutcome => {
+    const outcome = resolveRivalSnipe(game, id, rivalClubId, bid);
     if (outcome.ok) update(outcome.state);
     return outcome;
   };
@@ -188,6 +232,30 @@ export function App() {
 
   const handleRecallLoan = (id: string): ActionOutcome => {
     const outcome = recallLoan(game, id);
+    if (outcome.ok) update(outcome.state);
+    return outcome;
+  };
+
+  const handleExerciseBuyOption = (id: string): ActionOutcome => {
+    const outcome = exerciseBuyOption(game, id);
+    if (outcome.ok) update(outcome.state);
+    return outcome;
+  };
+
+  const handleSwap = (myPlayerId: string, otherClubId: string, otherPlayerId: string, cashAdjustment: number): ActionOutcome => {
+    const outcome = swapDeal(game, myPlayerId, otherClubId, otherPlayerId, cashAdjustment);
+    if (outcome.ok) update(outcome.state);
+    return outcome;
+  };
+
+  const handleAssignMentor = (mentorId: string, menteeId: string): ActionOutcome => {
+    const outcome = assignMentorAction(game, mentorId, menteeId);
+    if (outcome.ok) update(outcome.state);
+    return outcome;
+  };
+
+  const handleClearMentor = (menteeId: string): ActionOutcome => {
+    const outcome = clearMentorPairingAction(game, menteeId);
     if (outcome.ok) update(outcome.state);
     return outcome;
   };
@@ -231,13 +299,21 @@ export function App() {
             onSetTrainingPosition={isMine ? (pos) => update(setTrainingPosition(game, detailPlayer.id, pos)) : undefined}
             onRenew={
               isMine
-                ? () => { const o = renewContract(game, detailPlayer.id); if (o.ok) update(o.state); return o; }
+                ? (years, signOnBonus) => {
+                    const o = renewContract(game, detailPlayer.id, years, signOnBonus);
+                    if (o.ok) update(o.state);
+                    return o;
+                  }
                 : undefined
             }
             recentForm={playerForm(game, detailPlayer.id)}
             timeline={playerTimeline(game, detailPlayer.id)}
             ratingHistory={playerRatingHistory(game, detailPlayer.id)}
             scouting={isMine ? FULL_SCOUTING : club.staff.scouting}
+            scouted={isMine || isScouted(game, detailPlayer.id)}
+            onDispatchScout={
+              isMine ? undefined : () => runAction(dispatchScoutAction, detailPlayer.id)
+            }
             loanFromClubName={game.clubs.find((c) => c.id === detailPlayer.loanFromClubId)?.name}
           />
         );
@@ -277,9 +353,16 @@ export function App() {
                 visitedTactics={visitedTactics}
                 visitedSquadPrep={visitedSquadPrep}
                 onGoToTab={setTab}
+                onRenegotiateDemand={handleRenegotiateDemand}
+                onDeclareBoldPrediction={() => runAction(declareBoldPredictionAction, undefined)}
               />
             )}
-            {tab === 'squad' && <Squad key={slotId} club={club} onSelect={setDetailPlayer} />}
+            {tab === 'squad' && (
+              <Squad
+                key={slotId} club={club} onSelect={setDetailPlayer}
+                onAssignMentor={handleAssignMentor} onClearMentor={handleClearMentor}
+              />
+            )}
             {tab === 'tactics' && (
               <Tactics club={club} tactic={myTactic(game)} onChange={handleTacticChange} />
             )}
@@ -309,6 +392,11 @@ export function App() {
                 game={game}
                 onUpgrade={(kind) => runAction(upgradeStaffAction, kind)}
                 onUpgradeStadium={() => runAction(upgradeStadiumAction, undefined)}
+                onUpgradeAcademy={() => runAction(upgradeAcademyAction, undefined)}
+                onUpgradeTrainingGround={() => runAction(upgradeTrainingGroundAction, undefined)}
+                onSignSponsorContract={(kind) => runAction(signSponsorContractAction, kind)}
+                onNegotiateRaise={(kind) => runAction(negotiateStaffRaiseAction, kind)}
+                onSetAcademyFocus={(focus) => update(setAcademyFocus(game, focus))}
               />
             )}
             {tab === 'history' && <History game={game} />}
@@ -326,7 +414,15 @@ export function App() {
                 onLoanOut={handleLoanOut}
                 onLoanIn={handleLoanIn}
                 onRecallLoan={handleRecallLoan}
+                onExerciseBuyOption={handleExerciseBuyOption}
+                onSwap={handleSwap}
                 onSelect={setDetailPlayer}
+                onNegotiationBreakdown={(id) => update(recordNegotiationBreakdown(game, id))}
+                onBuyback={handleBuyback}
+                onAttachAddOn={handleAttachAddOn}
+                onPanicBuy={handlePanicBuy}
+                onRivalSnipe={handleRivalSnipe}
+                onToggleWatchlist={(id) => runAction(toggleWatchlistAction, id)}
               />
             )}
           </div>

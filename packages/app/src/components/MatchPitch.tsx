@@ -27,7 +27,9 @@ const W = 760;
 const H = 460;
 
 // 우측 공격(홈) 기준 포지션별 기본 좌표(0~1). 원정은 x를 반전.
-const LINE_X: Record<Position, number> = {
+// PlayerDetail의 포지션 숙련도 맵(신규 개선 항목 15)도 같은 좌표계를 재사용해
+// 포지션 배치 감각을 일관되게 유지한다.
+export const LINE_X: Record<Position, number> = {
   GK: 0.05,
   DL: 0.20, DC: 0.19, DR: 0.20,
   WBL: 0.27, WBR: 0.27,
@@ -36,7 +38,7 @@ const LINE_X: Record<Position, number> = {
   AML: 0.66, AMC: 0.66, AMR: 0.66,
   ST: 0.84,
 };
-const SIDE_Y: Record<Position, number> = {
+export const SIDE_Y: Record<Position, number> = {
   GK: 0.5,
   DL: 0.18, DC: 0.5, DR: 0.82,
   WBL: 0.10, WBR: 0.90,

@@ -46,6 +46,32 @@ describe('A7: 임대 이적 (앱 통합)', () => {
     expect(summary.loanReturns?.some((r) => r.playerId === target.id && r.fromClubId === g.myClubId)).toBe(true);
   });
 
+  it('의무완전이적 조항(A1)을 지정하면 출전 기준 도달 시 다음 시즌 요약에 발동 내역이 실린다', () => {
+    let g = startGame(2030, 'c0');
+    const club = myClub(g);
+    const player = club.players[club.players.length - 1]!;
+    // 상대 부 구단으로 보내야(다른 부는 헤드리스 자동 시뮬이라 seasonApps가 건드려지지 않아)
+    // 아래에서 수동 설정한 seasonApps 값이 시즌 진행 중 훼손되지 않는다.
+    const myDiv = club.division;
+    const targetClubId = g.clubs.find((c) => c.division !== myDiv)!.id;
+
+    const outcome = loanOut(g, player.id, targetClubId, {
+      seasons: 2, fee: 0, wageShareByParent: 0, buyObligation: { appearances: 15, fee: 9000 },
+    });
+    expect(outcome.ok).toBe(true);
+    g = outcome.state;
+    expect(player.loanBuyObligation).toEqual({ appearances: 15, fee: 9000 });
+
+    player.seasonApps = 20; // 기준(15) 이상
+    g = advanceFullSeason(g);
+
+    const summary = g.history[g.history.length - 1]!;
+    expect(summary.loanObligations?.length).toBe(1);
+    expect(summary.loanObligations![0]!.playerId).toBe(player.id);
+    expect(summary.loanObligations![0]!.fee).toBe(9000);
+    expect(myLoanedOutPlayers(g)).toHaveLength(0); // 완전 이적이라 더는 "임대 보낸 선수"가 아니다.
+  });
+
   it('임대 보낸 선수는 시즌 중 언제든 회수할 수 있다', () => {
     let g = startGame(2028, 'c0');
     const club = myClub(g);

@@ -1,16 +1,19 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import {
   myClub, rivalClub, lastSummary, myLastPosition, managerPersona, contractOptions,
-  DIFFICULTIES, DIVISION_LABELS, type GameState,
+  thinSquadLines, LINE_DEPTH_RECOMMENDED,
+  DIFFICULTIES, DIVISION_LABELS, type GameState, type ActionOutcome,
 } from '../game.js';
 import {
   formatMoney, currentAbility, wageBudget, annualWageBill, inFinancialCrisis,
-  boardStatus, DEMAND_LABEL, SPONSOR_GOAL_LABEL,
-  type BoardStatus, type ManagerPersona, type BoardPersona,
+  boardStatus, DEMAND_LABEL, SPONSOR_GOAL_LABEL, sponsorStreakMultiplier, SPONSOR_CONTRACT_LABEL,
+  boldPredictionTarget,
+  type BoardStatus, type ManagerPersona, type BoardPersona, type Line, type NamedStaffKind,
 } from '@soccer-tycoon/engine';
 import { Landmark } from 'lucide-react';
 import { Banner } from './Banner.js';
 import { InfoTip } from './InfoTip.js';
+import { useResultToast } from '../toast.js';
 
 /** 대시보드에 한 번에 펼쳐 보여줄 시즌 소식 배너 수 — 나머지는 "더 보기"로 접는다. */
 const VISIBLE_SEASON_BANNERS = 2;
@@ -27,9 +30,15 @@ const PERSONA_LABEL: Record<Exclude<ManagerPersona, 'neutral'>, { label: string;
 const PATIENCE_LABEL: Record<BoardPersona['patience'], string> = {
   patient: '인내심 있음', impatient: '조급함',
 };
+
+const STAFF_NAMED_KIND_LABEL: Record<NamedStaffKind, string> = {
+  coaching: '총괄 코치', medical: '의료', scouting: '스카우팅', youth: '유스',
+};
 const STYLE_LABEL: Record<BoardPersona['style'], string> = {
   conservative: '재정 보수적', aggressive: '성적 지상주의',
 };
+
+const LINE_LABEL: Record<Line, string> = { GK: 'GK', DEF: '수비', MID: '미드필드', ATT: '공격' };
 
 interface Props {
   game: GameState;
@@ -39,13 +48,19 @@ interface Props {
   /** "이적" 또는 "스태프" 탭을 방문했는지 — 첫 시즌 체크리스트 진행 상황 표시용. */
   visitedSquadPrep: boolean;
   onGoToTab: (tab: 'tactics' | 'transfers' | 'match') => void;
+  onRenegotiateDemand: () => ActionOutcome;
+  onDeclareBoldPrediction: () => ActionOutcome;
 }
 
-export function Dashboard({ game, onSignContract, visitedTactics, visitedSquadPrep, onGoToTab }: Props) {
+export function Dashboard({
+  game, onSignContract, visitedTactics, visitedSquadPrep, onGoToTab, onRenegotiateDemand,
+  onDeclareBoldPrediction,
+}: Props) {
   const club = myClub(game);
   const rival = rivalClub(game);
   const last = lastSummary(game);
   const pos = myLastPosition(game);
+  const toast = useResultToast();
 
   const squadAvgCA =
     club.players.reduce((s, p) => s + currentAbility(p), 0) / club.players.length;
@@ -56,6 +71,7 @@ export function Dashboard({ game, onSignContract, visitedTactics, visitedSquadPr
 
   const crisis = inFinancialCrisis(club);
   const overWages = annualWageBill(club) > wageBudget(club);
+  const thinLines = thinSquadLines(game);
   const retiredThisSeason = last ? game.legends.filter((l) => l.season === last.season) : [];
   const persona = managerPersona(game);
   const contract = contractOptions(game);
@@ -171,6 +187,56 @@ export function Dashboard({ game, onSignContract, visitedTactics, visitedSquadPr
       ),
     });
   }
+  if (last?.reserveLeagueTable !== undefined && last.reserveLeagueTable.length > 0) {
+    const myRow = last.reserveLeagueTable.find((r) => r.clubId === game.myClubId);
+    if (myRow) {
+      const myPos = last.reserveLeagueTable.findIndex((r) => r.clubId === game.myClubId) + 1;
+      const isChampion = myPos === 1;
+      seasonBanners.push({
+        key: 'reserveLeague', priority: 5,
+        node: (
+          <Banner tone={isChampion ? 'success' : 'info'} title="🏟️ 리저브 리그">
+            <p>
+              우리 리저브팀이 {last.reserveLeagueTable.length}팀 중 <b>{myPos}위</b>로 시즌을 마쳤습니다
+              ({myRow.won}승 {myRow.drawn}무 {myRow.lost}패, 득실 {myRow.gf - myRow.ga > 0 ? '+' : ''}{myRow.gf - myRow.ga}).
+              {isChampion && ' 우승 보너스로 리저브 전원의 사기가 올랐습니다!'}
+            </p>
+          </Banner>
+        ),
+      });
+    }
+  }
+  if (last?.internationalRetirements !== undefined && last.internationalRetirements.length > 0) {
+    seasonBanners.push({
+      key: 'internationalRetirements', priority: 6.2,
+      node: (
+        <Banner tone="info" title="🏳️ 국가대표 은퇴">
+          {last.internationalRetirements.map((r) => (
+            <p key={r.playerId}>
+              <b>{r.name}</b> 선수가 A매치 {r.caps}캡을 뒤로하고 국가대표에서 은퇴를 선언했습니다.
+              앞으로 구단 커리어에만 집중합니다.
+            </p>
+          ))}
+        </Banner>
+      ),
+    });
+  }
+  if (last?.academyAlumni !== undefined && last.academyAlumni.length > 0) {
+    const sortedAlumni = [...last.academyAlumni].sort((a, b) => b.seasonGoals - a.seasonGoals);
+    seasonBanners.push({
+      key: 'academyAlumni', priority: 5.5,
+      node: (
+        <Banner tone="special" title="🎓 동문 소식">
+          {sortedAlumni.map((a) => (
+            <p key={a.playerId}>
+              우리 유스 출신 <b>{a.name}</b>({a.position}), 현재 <b>{a.clubName}</b> 소속으로
+              이번 시즌 {a.seasonApps}경기 <b>{a.seasonGoals}골</b>을 기록했습니다.
+            </p>
+          ))}
+        </Banner>
+      ),
+    });
+  }
   if (last?.loanReturns !== undefined && last.loanReturns.length > 0) {
     seasonBanners.push({
       key: 'loanReturns', priority: 6,
@@ -181,6 +247,130 @@ export function Dashboard({ game, onSignContract, visitedTactics, visitedSquadPr
               {r.toClubId === game.myClubId
                 ? <><b>{r.name}</b> 선수가 <b>{r.fromClubName}</b> 임대를 마치고 복귀했습니다.</>
                 : <><b>{r.name}</b> 선수가 임대를 마치고 <b>{r.toClubName}</b>(으)로 복귀했습니다.</>}
+            </p>
+          ))}
+        </Banner>
+      ),
+    });
+  }
+  if (last?.loanObligations !== undefined && last.loanObligations.length > 0) {
+    seasonBanners.push({
+      key: 'loanObligations', priority: 6.5,
+      node: (
+        <Banner tone="success" title="📝 의무완전이적 발동">
+          {last.loanObligations.map((o) => (
+            <p key={o.playerId}>
+              {o.toClubId === game.myClubId
+                ? <><b>{o.name}</b> 선수가 출전 기준을 채워 <b>{formatMoney(o.fee)}</b>에 완전 영입됐습니다.</>
+                : <><b>{o.name}</b> 선수가 <b>{o.toClubName}</b>에서 출전 기준을 채워 <b>{formatMoney(o.fee)}</b>에 완전 이적됐습니다.</>}
+            </p>
+          ))}
+        </Banner>
+      ),
+    });
+  }
+  if (last?.staffDepartures !== undefined && last.staffDepartures.length > 0) {
+    seasonBanners.push({
+      key: 'staffDepartures', priority: 7,
+      node: (
+        <Banner tone="warning" title="🚪 스태프 이적">
+          {last.staffDepartures.map((d) => (
+            <p key={d.kind}>
+              <b>{STAFF_NAMED_KIND_LABEL[d.kind]}</b> {d.name} 코치가 계약 만료로 타 구단에 스카우트됐습니다.
+              후임으로 <b>{d.replacementName}</b>을(를) 영입했습니다.
+            </p>
+          ))}
+        </Banner>
+      ),
+    });
+  }
+  if (last?.staffRetirements !== undefined && last.staffRetirements.length > 0) {
+    seasonBanners.push({
+      key: 'staffRetirements', priority: 7.2,
+      node: (
+        <Banner tone="info" title="🎉 스태프 은퇴">
+          {last.staffRetirements.map((r) => (
+            <p key={r.kind}>
+              <b>{STAFF_NAMED_KIND_LABEL[r.kind]}</b> {r.name} 코치가 {r.finalAge}세로 은퇴했습니다.
+              후임으로 <b>{r.replacementName}</b>을(를) 영입했습니다.
+            </p>
+          ))}
+        </Banner>
+      ),
+    });
+  }
+  if (last?.sponsorContractExpired !== undefined && last.sponsorContractExpired.length > 0) {
+    seasonBanners.push({
+      key: 'sponsorContractExpired', priority: 6.9,
+      node: (
+        <Banner tone="warning" title="🤝 스폰서 계약 만료">
+          {last.sponsorContractExpired.map((kind) => (
+            <p key={kind}>
+              <b>{SPONSOR_CONTRACT_LABEL[kind]}</b> 계약이 만료됐습니다. 재계약하지 않으면 이번
+              시즌부터 해당 고정 수익이 끊깁니다.
+            </p>
+          ))}
+        </Banner>
+      ),
+    });
+  }
+  if (last?.watchlistContractAlerts !== undefined && last.watchlistContractAlerts.length > 0) {
+    seasonBanners.push({
+      key: 'watchlistContractAlerts', priority: 6.4,
+      node: (
+        <Banner tone="gold" title="⭐ 관심 선수 소식">
+          {last.watchlistContractAlerts.map((a) => (
+            <p key={a.playerId}>
+              <b>{a.name}</b>({a.clubName})의 계약이 마지막 해로 접어들었습니다 — 다음 시즌 자유
+              이적/저렴한 영입을 노려볼 수 있습니다.
+            </p>
+          ))}
+        </Banner>
+      ),
+    });
+  }
+  if (last?.cupUpsets !== undefined && last.cupUpsets.length > 0) {
+    seasonBanners.push({
+      key: 'cupUpsets', priority: 5.8,
+      node: (
+        <>
+          {last.cupUpsets.map((u) => {
+            const won = u.winnerId === game.myClubId;
+            return (
+              <Banner key={`${u.round}-${u.winnerId}-${u.loserId}`} tone={won ? 'success' : 'danger'}>
+                {won
+                  ? <>🎉 <b>이변의 주인공!</b> {u.round}에서 <b>{u.loserName}</b>을(를) 꺾었습니다
+                      (평판 격차 {u.repGap}).</>
+                  : <>😱 <b>이변의 희생양…</b> {u.round}에서 <b>{u.winnerName}</b>에게 발목을 잡혔습니다
+                      (평판 격차 {u.repGap}).</>}
+              </Banner>
+            );
+          })}
+        </>
+      ),
+    });
+  }
+  if (last?.boardTierBonus !== undefined) {
+    seasonBanners.push({
+      key: 'boardTierBonus', priority: 3,
+      node: (
+        <Banner tone="success" title="💼 이사회 투자 예산 승인">
+          이사회 신뢰도가 <b>{BOARD_LABEL[last.boardTierBonus.fromStatus]}</b> → <b>{BOARD_LABEL[last.boardTierBonus.toStatus]}</b>(으)로
+          상승해, 추가 투자 예산 <b>{formatMoney(last.boardTierBonus.amount)}</b>을(를) 승인했습니다.
+        </Banner>
+      ),
+    });
+  }
+  if (last?.addOnPayouts !== undefined && last.addOnPayouts.length > 0) {
+    seasonBanners.push({
+      key: 'addOnPayouts', priority: 6.7,
+      node: (
+        <Banner tone="warning" title="💰 성과 기반 후불 이적료 발동">
+          {last.addOnPayouts.map((a) => (
+            <p key={a.playerId}>
+              {a.fromClubId === game.myClubId
+                ? <><b>{a.name}</b> 선수가 조건을 달성해 <b>{a.toClubName}</b>에 추가 이적료 <b>{formatMoney(a.fee)}</b>을(를) 지급했습니다.</>
+                : <><b>{a.name}</b> 선수가 <b>{a.fromClubName}</b>에서 조건을 달성해 추가 이적료 <b>{formatMoney(a.fee)}</b>을(를) 받았습니다.</>}
             </p>
           ))}
         </Banner>
@@ -226,6 +416,14 @@ export function Dashboard({ game, onSignContract, visitedTactics, visitedSquadPr
           ⚠ 임금 과다 — 임금 총액이 지속가능 수준을 넘었습니다. 장기 재정에 주의하세요.
         </Banner>
       ) : null}
+
+      {thinLines.length > 0 && (
+        <Banner tone="warning">
+          ⚠ 스쿼드 뎁스 부족 — {thinLines.map(({ line, count }) => (
+            `${LINE_LABEL[line]}(${count}/${LINE_DEPTH_RECOMMENDED[line]}명)`
+          )).join(', ')}. 부상·정지가 겹치면 라인이 통째로 빌 수 있습니다. 이적 시장에서 보강을 고려하세요.
+        </Banner>
+      )}
 
       <div className="objective">
         <b className="div-badge">{DIVISION_LABELS[club.division]}</b>{' '}
@@ -290,13 +488,48 @@ export function Dashboard({ game, onSignContract, visitedTactics, visitedSquadPr
         <Banner tone="info">
           📋 이사회 특별 요구: <b>{DEMAND_LABEL[game.demand.kind]}</b>
           <span className="muted small"> (달성 시 신뢰도 +{game.demand.reward} · 실패 시 −{game.demand.penalty})</span>
+          {!game.demandRenegotiated && (
+            <button
+              className="btn-small demand-renegotiate-btn"
+              onClick={() => toast(onRenegotiateDemand())}
+              title="이사회에 요구 강도 완화를 요청합니다. 신뢰도를 조금 지불하며, 조급한 이사회는 거절할 수 있습니다."
+            >
+              🤝 재협상 요청
+            </button>
+          )}
         </Banner>
       )}
 
-      {game.sponsorGoal && (
-        <Banner tone="gold">
-          💰 스폰서 보너스 목표: <b>{SPONSOR_GOAL_LABEL[game.sponsorGoal.kind]}</b>
-          <span className="muted small"> (달성 시 {formatMoney(game.sponsorGoal.bonus)} 일시불 지급)</span>
+      {game.sponsorGoal && (() => {
+        const streak = game.sponsorStreak ?? 0;
+        const previewBonus = Math.round(game.sponsorGoal.bonus * sponsorStreakMultiplier(streak));
+        return (
+          <Banner tone="gold">
+            💰 스폰서 보너스 목표: <b>{SPONSOR_GOAL_LABEL[game.sponsorGoal.kind]}</b>
+            <span className="muted small"> (달성 시 {formatMoney(previewBonus)} 일시불 지급)</span>
+            {streak > 0 && (
+              <span className="muted small"> · 🔥 연속 달성 {streak}회(배율 ×{sponsorStreakMultiplier(streak).toFixed(1)})</span>
+            )}
+          </Banner>
+        );
+      })()}
+
+      {game.live && game.live.results.length === 0 && game.boldPrediction === undefined && (
+        <Banner tone="info">
+          🎤 대담한 목표를 공개 선언하시겠습니까? 선언하면 목표가 <b>{boldPredictionTarget(game.objective)}위</b> 이내로
+          상향되고, 달성 시 이사회 신뢰도 보너스를, 원래 목표(<b>{game.objective}위</b>)조차 놓치면 추가 페널티를 받습니다.
+          <button
+            className="btn-small"
+            onClick={() => toast(onDeclareBoldPrediction())}
+            title="시즌 시작 전(첫 경기 전)에만, 시즌당 1회만 선언할 수 있습니다."
+          >
+            🎤 선언하기
+          </button>
+        </Banner>
+      )}
+      {game.boldPrediction !== undefined && (
+        <Banner tone="warning">
+          🎤 대담한 목표 선언 중 — 리그 <b>{game.boldPrediction}위</b> 이내
         </Banner>
       )}
 
@@ -358,6 +591,13 @@ export function Dashboard({ game, onSignContract, visitedTactics, visitedSquadPr
                   <span className="muted small"> ({last.demand.label})</span>
                 </>
               )}
+              {last.boldPrediction && (
+                <> &nbsp;·&nbsp; 🎤 대담한 목표(<b>{last.boldPrediction.declaredTarget}위</b>){' '}
+                  <span className={last.boldPrediction.met ? 'pos' : last.boldPrediction.missedObjective ? 'neg' : ''}>
+                    {last.boldPrediction.met ? '달성 ✓' : last.boldPrediction.missedObjective ? '실패(목표 미달) ✕' : '미달성'}
+                  </span>
+                </>
+              )}
               {last.sponsorGoal && (
                 <> &nbsp;·&nbsp; 💰 스폰서 목표 <span className={last.sponsorGoal.met ? 'pos' : 'neg'}>
                   {last.sponsorGoal.met ? `달성 ✓ (+${formatMoney(last.sponsorGoal.bonus)})` : '실패 ✕'}
@@ -377,7 +617,11 @@ export function Dashboard({ game, onSignContract, visitedTactics, visitedSquadPr
                   </span>
                 </p>
                 <p className="muted small finance-breakdown">
-                  중계 {formatMoney(myReport.income.tv)} · 매치데이 {formatMoney(myReport.income.matchday)} ·
+                  중계 {formatMoney(myReport.income.tv)} · 매치데이 {formatMoney(myReport.income.matchday)}
+                  {myReport.rivalBonus !== undefined && (
+                    <span> (라이벌전 홈경기 프리미엄 +{formatMoney(myReport.rivalBonus)} 포함)</span>
+                  )}
+                  {' · '}
                   스폰서 {formatMoney(myReport.income.sponsor)} · 상금 {formatMoney(myReport.income.prize)}
                   {' · '}인건비 {formatMoney(myReport.expense.wages)} · 운영비 {formatMoney(myReport.expense.operations)}
                 </p>

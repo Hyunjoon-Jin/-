@@ -9,6 +9,13 @@ export function logistic(x: number): number {
   return 1 / (1 + Math.exp(-x));
 }
 
+/** 문자열 → 32비트 해시(결정론적, RNG 불필요 — Rng 컨텍스트가 없는 유저 액션에서 쓴다). */
+export function hashSeed(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return h;
+}
+
 /** 가중 평균. weights 합으로 정규화. */
 export function weightedMean(
   values: Record<string, number>,

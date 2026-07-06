@@ -8,6 +8,8 @@
 import type { Club, Position, Staff, StaffMember, StaffTrait } from './types.js';
 import { FIRST, LAST } from './names.js';
 import { lineOf } from './teamStrength.js';
+import type { Rng } from './rng.js';
+import { hashSeed } from './math.js';
 
 /** 세부 코치 4종 — GK/공격/수비/피지컬. 미도입(undefined) 시 총괄 coaching 레벨로 대체된다. */
 export type SpecialistCoachKind = 'coachGk' | 'coachAttack' | 'coachDefense' | 'coachPhysical';
@@ -15,8 +17,10 @@ export const SPECIALIST_COACH_KINDS: SpecialistCoachKind[] = [
   'coachGk', 'coachAttack', 'coachDefense', 'coachPhysical',
 ];
 
-export type StaffKind = 'coaching' | 'medical' | 'scouting' | 'youth' | SpecialistCoachKind;
-export const STAFF_KINDS: StaffKind[] = ['coaching', 'medical', 'scouting', 'youth', ...SPECIALIST_COACH_KINDS];
+export type StaffKind = 'coaching' | 'medical' | 'scouting' | 'youth' | SpecialistCoachKind | 'reserveCoach';
+export const STAFF_KINDS: StaffKind[] = [
+  'coaching', 'medical', 'scouting', 'youth', ...SPECIALIST_COACH_KINDS, 'reserveCoach',
+];
 
 /** 실명 인물이 배정되는 직책(원래 4대 스태프만 — 세부 코치는 총괄 코치 산하 보직으로 취급). */
 export type NamedStaffKind = 'coaching' | 'medical' | 'scouting' | 'youth';
@@ -49,13 +53,6 @@ const STAFF_TRAIT_CHANCE = 0.45;
 /** 특기 특성이 주는 유효 레벨 가산치. */
 export const STAFF_TRAIT_BONUS = 2;
 
-/** 문자열 → 32비트 해시(결정론적, RNG 불필요 — 유저 액션(업그레이드)엔 Rng 컨텍스트가 없다). */
-function hashSeed(s: string): number {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
-  return h;
-}
-
 /** clubId·직책·레벨을 시드로 결정론적인 "새 인물"을 뽑는다 — 같은 조합이면 항상 같은 사람. */
 function hireStaffMember(clubId: string, kind: NamedStaffKind, level: number): StaffMember {
   const seed = hashSeed(`${clubId}:${kind}:${level}`);
@@ -65,6 +62,22 @@ function hireStaffMember(clubId: string, kind: NamedStaffKind, level: number): S
   const contractYears = 1 + (seed % STAFF_CONTRACT_YEARS_MAX);
   // 특기 특성 — 이름/나이와 별개 해시로 판정(같은 조합이면 항상 같은 결과).
   const traitRoll = hashSeed(`${clubId}:${kind}:${level}:trait`) / 0xFFFFFFFF;
+  const trait = traitRoll < STAFF_TRAIT_CHANCE ? STAFF_TRAIT_BY_KIND[kind] : undefined;
+  return { name: `${first} ${last}`, age, contractYears, trait };
+}
+
+/** 계약 만료로 이탈한 실명 스태프의 후임을 뽑는다. hireStaffMember와 달리 rng로 뽑은
+ *  salt를 시드에 섞어, 같은 clubId·직책·레벨이라도 매번 다른 인물이 나오도록 한다
+ *  (hireStaffMember 자체를 건드리면 초기 배정·업그레이드 호출부의 결정론적 인물이
+ *  전부 바뀌므로, 이 호출부만을 위한 별도 해시 네임스페이스를 둔다). */
+function hireReplacementStaffMember(clubId: string, kind: NamedStaffKind, level: number, rng: Rng): StaffMember {
+  const salt = rng.int(0, 0xFFFFFFFF);
+  const seed = hashSeed(`${clubId}:${kind}:${level}:replacement:${salt}`);
+  const first = FIRST[seed % FIRST.length]!;
+  const last = LAST[Math.floor(seed / FIRST.length) % LAST.length]!;
+  const age = STAFF_AGE_MIN + (seed % STAFF_AGE_RANGE);
+  const contractYears = 1 + (seed % STAFF_CONTRACT_YEARS_MAX);
+  const traitRoll = hashSeed(`${clubId}:${kind}:${level}:replacement:${salt}:trait`) / 0xFFFFFFFF;
   const trait = traitRoll < STAFF_TRAIT_CHANCE ? STAFF_TRAIT_BY_KIND[kind] : undefined;
   return { name: `${first} ${last}`, age, contractYears, trait };
 }
@@ -101,40 +114,163 @@ export function effectiveCoaching(position: Position, staff: Staff): number {
   const physLevel = specialistCoachLevel(staff, 'coachPhysical');
   const base = posLevel * 0.7 + physLevel * 0.3;
   const bonus = staff.members?.coaching?.trait === 'developmentGuru' ? STAFF_TRAIT_BONUS : 0;
-  return base + bonus;
+  return base + bonus + staffTraitSynergyBonus(staff);
+}
+
+/** 리저브(2군) 성장 계산에 쓰이는 유효 코칭 레벨. 전담 리저브 코치를 도입하지 않은
+ *  구단(구버전 세이브 포함)은 정확히 effectiveCoaching과 같아(하위 호환), 도입 시엔
+ *  포지션별 세부 코치(30%)보다 전담 리저브 코치(70%)가 훨씬 크게 반영된다. */
+export function effectiveReserveCoaching(position: Position, staff: Staff): number {
+  if (staff.reserveCoach === undefined) return effectiveCoaching(position, staff);
+  const posLevel = positionCoachLevel(position, staff);
+  return posLevel * 0.3 + staff.reserveCoach * 0.7 + staffTraitSynergyBonus(staff);
 }
 
 /** 의료 유효 레벨 — 재활 전문가(rehabSpecialist) 특기가 있으면 가산 보너스. */
 export function effectiveMedical(staff: Staff): number {
   const bonus = staff.members?.medical?.trait === 'rehabSpecialist' ? STAFF_TRAIT_BONUS : 0;
-  return staff.medical + bonus;
+  return staff.medical + bonus + staffTraitSynergyBonus(staff);
 }
 
 /** 스카우팅 유효 레벨 — 유망주 안목(eyeForTalent) 특기가 있으면 가산 보너스. */
 export function effectiveScouting(staff: Staff): number {
   const bonus = staff.members?.scouting?.trait === 'eyeForTalent' ? STAFF_TRAIT_BONUS : 0;
-  return staff.scouting + bonus;
+  return staff.scouting + bonus + staffTraitSynergyBonus(staff);
 }
 
 /** 유스 유효 레벨 — 아카데미 명장(academyMaestro) 특기가 있으면 가산 보너스. */
 export function effectiveYouth(staff: Staff): number {
   const bonus = staff.members?.youth?.trait === 'academyMaestro' ? STAFF_TRAIT_BONUS : 0;
-  return staff.youth + bonus;
+  return staff.youth + bonus + staffTraitSynergyBonus(staff);
 }
 
-/** 오프시즌 경계에 실명 스태프의 잔여 계약을 1년 감소시키고, 0이 되면 조용히 재계약한다
- *  (계약 만료로 인한 이탈·협상 드라마는 후속 확장(스태프 계약·타 구단 스카우트) 몫). */
-export function tickStaffContracts(club: Club): void {
-  if (!club.staff.members) return;
+/** 특기 특성을 가진 실명 스태프 수에 따른 시너지 가산치(B12) — 핵심 스태프진이 여럿
+ *  손발이 맞으면(특기 보유자 2명 이상) 개별 보너스와 별개로 팀 전체에 추가 보너스가
+ *  붙는다. 특기 보유자가 0~1명이면 0(기존과 동일 — 하위 호환). */
+const STAFF_SYNERGY_BONUS_BY_COUNT: Record<number, number> = { 0: 0, 1: 0, 2: 1, 3: 2, 4: 3 };
+export function staffTraitSynergyBonus(staff: Staff): number {
+  const count = NAMED_STAFF_KINDS.reduce((n, kind) => n + (staff.members?.[kind]?.trait ? 1 : 0), 0);
+  return STAFF_SYNERGY_BONUS_BY_COUNT[count] ?? 0;
+}
+
+/** 실명 스태프가 계약 만료 시 이탈할 기준 확률 — 레벨이 높을수록(시장 가치가 높을수록)
+ *  스카우트당하기 쉬워 이탈 확률도 함께 오른다. */
+const STAFF_DEPARTURE_BASE_CHANCE = 0.12;
+const STAFF_DEPARTURE_PER_LEVEL = 0.015;
+const STAFF_DEPARTURE_MAX_CHANCE = 0.45;
+
+/** 실명 스태프 계약 만료 시 이탈 이벤트. */
+export interface StaffDepartureEvent {
+  kind: NamedStaffKind;
+  name: string;
+  replacementName: string;
+}
+
+// ── 스태프 은퇴(신규 개선 항목 17) ───────────────────────────
+
+/** 이 나이부터 매 시즌 확률적으로 은퇴한다(선수와 달리 체력 능력치가 없어 나이만 반영). */
+export const STAFF_RETIRE_MIN_AGE = 62;
+/** 이 나이 이상이면 확률과 무관하게 은퇴(하드컷). */
+export const STAFF_RETIRE_HARD_AGE = 72;
+
+/** 나이에 따른 시즌 후 은퇴 확률(62세=8%, 67세=38%, 71세=68% 기준). 계약 상태와 무관하게
+ *  매 시즌 독립적으로 판정한다 — 실제로 계약이 남아 있어도 고령이면 은퇴할 수 있다. */
+export function staffRetireChance(age: number): number {
+  if (age < STAFF_RETIRE_MIN_AGE) return 0;
+  return Math.min(0.95, (age - STAFF_RETIRE_MIN_AGE + 1) * 0.08);
+}
+
+/** 실명 스태프 은퇴 이벤트 — 즉시 같은 자리에 새 인물이 영입되어 공백을 메운다. */
+export interface StaffRetirementEvent {
+  kind: NamedStaffKind;
+  name: string;
+  finalAge: number;
+  replacementName: string;
+}
+
+export interface StaffTickResult {
+  departures: StaffDepartureEvent[];
+  retirements: StaffRetirementEvent[];
+}
+
+/** 오프시즌 경계에 실명 스태프를 한 살 더 먹이고, 고령이면 은퇴 여부를 먼저 판정한다.
+ *  은퇴하지 않은 인물만 기존과 동일하게 잔여 계약을 1년 감소시켜, 0이 되면 레벨에
+ *  비례한 확률로 타 구단에 스카우트되어 이탈한다(은퇴·이탈 모두 즉시 같은 자리에 새
+ *  인물을 영입해 공백 없이 채운다). 어느 쪽도 아니면 기존과 동일하게 조용히 재계약한다. */
+export function tickStaffContracts(club: Club, rng: Rng): StaffTickResult {
+  if (!club.staff.members) return { departures: [], retirements: [] };
+  const departures: StaffDepartureEvent[] = [];
+  const retirements: StaffRetirementEvent[] = [];
   for (const kind of NAMED_STAFF_KINDS) {
     const m = club.staff.members[kind];
     if (!m) continue;
+    m.age += 1;
+    const level = club.staff[kind];
+    if (m.age >= STAFF_RETIRE_HARD_AGE || rng.roll(staffRetireChance(m.age))) {
+      const retiredName = m.name;
+      const finalAge = m.age;
+      const replacement = hireReplacementStaffMember(club.id, kind, level, rng);
+      club.staff.members[kind] = replacement;
+      retirements.push({ kind, name: retiredName, finalAge, replacementName: replacement.name });
+      continue;
+    }
     m.contractYears -= 1;
     if (m.contractYears <= 0) {
+      const chance = Math.min(STAFF_DEPARTURE_MAX_CHANCE, STAFF_DEPARTURE_BASE_CHANCE + level * STAFF_DEPARTURE_PER_LEVEL);
+      if (rng.roll(chance)) {
+        const departedName = m.name;
+        const replacement = hireReplacementStaffMember(club.id, kind, level, rng);
+        club.staff.members[kind] = replacement;
+        departures.push({ kind, name: departedName, replacementName: replacement.name });
+        continue;
+      }
       const seed = hashSeed(`${club.id}:${kind}:${club.staff[kind]}:renew:${m.age}`);
       m.contractYears = 1 + (seed % STAFF_CONTRACT_YEARS_MAX);
     }
   }
+  return { departures, retirements };
+}
+
+// ── 코치 계약 협상 (연봉 인상 요구, 신규 개선 항목 12) ───────
+
+/** 연봉 인상 협상을 걸 수 있는 기준 — 잔여 계약이 이 값 이하로 남아야 임박한 것으로 본다. */
+export const STAFF_RAISE_ELIGIBLE_YEARS = 1;
+/** 연봉 인상 수락 시 부여되는 새 계약 기간(년). */
+export const STAFF_RAISE_EXTENSION_YEARS = STAFF_CONTRACT_YEARS_MAX;
+
+/** 연봉 인상 협상 비용(만원) — 레벨이 높을수록(몸값이 비쌀수록) 더 많이 요구한다. */
+export function staffRaiseCost(level: number): number {
+  return Math.round(2000 * (1 + level * 0.25));
+}
+
+export interface StaffRaiseResult {
+  ok: boolean;
+  reason?: string;
+  cost?: number;
+  staffName?: string;
+  kind?: NamedStaffKind;
+}
+
+/**
+ * 코치 계약 협상(연봉 인상 요구, 신규 개선 항목 12) — 계약 만료가 임박한(잔여
+ * STAFF_RAISE_ELIGIBLE_YEARS년 이하) 실명 스태프의 연봉을 인상해 계약을 연장한다.
+ * 수락하지 않고 넘어가면 다음 오프시즌 tickStaffContracts의 확률적 이탈 판정을
+ * 그대로 받는다(레벨이 오르는 조합이면 항상 같은 인물이 유지되는 hireStaffMember와
+ * 달리, 이 함수는 이름·나이·특기는 그대로 두고 계약 기간만 갱신한다 — 같은 사람을
+ * 붙잡아두는 것이 협상의 요점이므로).
+ */
+export function negotiateStaffRaise(club: Club, kind: NamedStaffKind): StaffRaiseResult {
+  const member = club.staff.members?.[kind];
+  if (!member) return { ok: false, reason: '해당 직책에 실명 스태프가 없습니다.' };
+  if (member.contractYears > STAFF_RAISE_ELIGIBLE_YEARS) {
+    return { ok: false, reason: '아직 계약 만료가 임박하지 않았습니다.' };
+  }
+  const level = club.staff[kind];
+  const cost = staffRaiseCost(level);
+  if (club.finance.balance < cost) return { ok: false, reason: '보유 자금이 부족합니다.' };
+  club.finance.balance -= cost;
+  member.contractYears = STAFF_RAISE_EXTENSION_YEARS;
+  return { ok: true, cost, staffName: member.name, kind };
 }
 
 /** 현재 레벨에서 다음 레벨로 올리는 비용 (만원). */

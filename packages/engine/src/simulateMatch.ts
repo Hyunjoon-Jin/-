@@ -19,10 +19,12 @@ import { TUNING } from './tuning.js';
 import { hasTrait } from './traits.js';
 import { rollInjury, medicalBias, reinjuryRiskFactor } from './injury.js';
 import { effectiveMedical } from './staffActions.js';
+import { trainingGroundInjuryFactor } from './finance.js';
 import {
   findManMarker, manMarkWeightMultiplier, manMarkXgMultiplier, isValidInstruction,
   CUT_INSIDE_WEIGHT_MUL, CUT_INSIDE_XG_MUL,
 } from './playerInstructions.js';
+import { matchWeather, WEATHER_ATTACK_MULTIPLIER, WEATHER_CREATION_MULTIPLIER, type Weather } from './weather.js';
 
 export interface MatchSetup {
   home: { club: Club; tactic: Tactic };
@@ -45,6 +47,7 @@ interface Side {
 
 function buildSide(
   club: Club, tactic: Tactic, isHome: boolean, isBigMatch: boolean, opponentFormation?: string,
+  weather: Weather = 'clear',
 ): Side {
   const strength = computeTeamStrength(club, tactic, isBigMatch, opponentFormation);
   if (isHome) {
@@ -53,6 +56,9 @@ function buildSide(
     strength.attack = clamp(strength.attack * TUNING.homeAdvantage, 0, 110);
     strength.creation = clamp(strength.creation * TUNING.homeAdvantage, 0, 110);
   }
+  // 날씨(신규 개선 항목 26) — 양 팀 모두에게 동일하게 적용(홈 이점과 별개로 곱산).
+  strength.attack = clamp(strength.attack * WEATHER_ATTACK_MULTIPLIER[weather], 0, 110);
+  strength.creation = clamp(strength.creation * WEATHER_CREATION_MULTIPLIER[weather], 0, 110);
   const byId = new Map(club.players.map((p) => [p.id, p]));
   const attackers = tactic.lineup
     .filter((s) => lineOf(s.position) === 'ATT' || lineOf(s.position) === 'MID')
@@ -171,6 +177,8 @@ export interface MatchContext {
   playedLineups: { home: LineupSlot[]; away: LineupSlot[] };
   /** 라이벌전·컵 결승 등 — 하프타임 전술 교체로 Side가 재생성돼도 유지된다. */
   isBigMatch: boolean;
+  /** 경기 날씨(신규 개선 항목 26) — 킥오프 시점에 결정, 하프타임 전술 교체로도 바뀌지 않는다. */
+  weather: Weather;
 }
 
 function recomputePossession(ctx: MatchContext): void {
@@ -182,10 +190,11 @@ function recomputePossession(ctx: MatchContext): void {
 
 export function createContext(setup: MatchSetup): MatchContext {
   const isBigMatch = setup.isBigMatch ?? false;
+  const weather = matchWeather(setup.seed, setup.home.club.id, setup.away.club.id);
   const ctx: MatchContext = {
     rng: new Rng(setup.seed),
-    home: buildSide(setup.home.club, setup.home.tactic, true, isBigMatch, setup.away.tactic.formation),
-    away: buildSide(setup.away.club, setup.away.tactic, false, isBigMatch, setup.home.tactic.formation),
+    home: buildSide(setup.home.club, setup.home.tactic, true, isBigMatch, setup.away.tactic.formation, weather),
+    away: buildSide(setup.away.club, setup.away.tactic, false, isBigMatch, setup.home.tactic.formation, weather),
     events: [],
     statMap: new Map(),
     pPossHome: 0.5,
@@ -193,6 +202,7 @@ export function createContext(setup: MatchSetup): MatchContext {
     injuries: [],
     playedLineups: { home: [...setup.home.tactic.lineup], away: [...setup.away.tactic.lineup] },
     isBigMatch,
+    weather,
   };
   ctx.injuries = generateInjuries(ctx);
   recomputePossession(ctx);
@@ -203,7 +213,7 @@ export function createContext(setup: MatchSetup): MatchContext {
 export function applyTactic(ctx: MatchContext, side: 'home' | 'away', tactic: Tactic): void {
   const cur = ctx[side];
   const oppSide = side === 'home' ? 'away' : 'home';
-  const next = buildSide(cur.club, tactic, cur.isHome, ctx.isBigMatch, ctx[oppSide].tactic.formation);
+  const next = buildSide(cur.club, tactic, cur.isHome, ctx.isBigMatch, ctx[oppSide].tactic.formation, ctx.weather);
   // 누적 스코어/슈팅/점유 틱은 유지하고 전력·라인업만 교체
   next.goals = cur.goals;
   next.shots = cur.shots;
@@ -397,6 +407,9 @@ export function generateInjuries(ctx: MatchContext): InjuryEvent[] {
     const byId = new Map(side.club.players.map((p) => [p.id, p]));
     const medical = effectiveMedical(side.club.staff);
     const medFactor = injuryMedicalFactor(medical);
+    // 훈련장(피지컬 트레이닝) 시설 등급(신규 개선 항목 21) — 의료 스태프(인력)와 별개로
+    // 시설(자본재) 투자분만큼 부상 확률을 추가로 낮춘다.
+    const facilityFactor = trainingGroundInjuryFactor(side.club.finance.trainingGroundLevel);
     for (const slot of side.tactic.lineup) {
       const p = byId.get(slot.playerId);
       if (!p || p.injuryMatches > 0 || p.suspensionMatches > 0) continue;
@@ -406,7 +419,7 @@ export function generateInjuries(ctx: MatchContext): InjuryEvent[] {
       // 복귀 직후 재부상 위험 구간(REINJURY_RISK_WINDOW 경기) — 구간이 끝나갈수록 1.0으로 감쇠.
       const reinjuryMul = reinjuryRiskFactor(p.reinjuryRiskMatches);
       const injMul = traitMul * trainingMul * reinjuryMul;
-      if (!rng.roll(TUNING.injuryTriggerChance * medFactor * injMul)) continue;
+      if (!rng.roll(TUNING.injuryTriggerChance * medFactor * facilityFactor * injMul)) continue;
       const inj = rollInjury(rng, medical);
       injuries.push({
         minute: rng.int(1, 90), side: sideKey, playerId: p.id, playerName: p.name,
@@ -453,6 +466,7 @@ export function finalize(ctx: MatchContext): MatchResult {
     playerStats: { home: homeStats, away: awayStats },
     seed: ctx.seed,
     motmPlayerId: motm?.playerId,
+    weather: ctx.weather,
   };
 }
 

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
-  computeTeamStrength, currentAbility, isInjured, isSuspended, isAvailable, lineOf, hasTrait,
-  eligibleInstructionKinds, POSITIONS, FORMATIONS,
+  computeTeamStrength, currentAbility, isInjured, isSuspended, isAvailable, lineOf,
+  eligibleInstructionKinds, POSITIONS, FORMATIONS, rankCaptainCandidates,
   type Club, type Tactic, type TeamStrength, type PlayerInstructionKind, type Position,
 } from '@soccer-tycoon/engine';
 import {
@@ -104,10 +104,15 @@ export function Tactics({ club, tactic, onChange, disabled }: Props) {
     .filter((p): p is NonNullable<typeof p> => p !== undefined)
     .sort((a, b) => b.attributes.setPiece - a.attributes.setPiece);
 
-  const captainCandidates = tactic.lineup
-    .map((slot) => byId.get(slot.playerId))
-    .filter((p): p is NonNullable<typeof p> => p !== undefined)
-    .sort((a, b) => b.attributes.leadership - a.attributes.leadership);
+  // 주장 추천 점수(신규 개선 항목 16) 내림차순 — 리더십을 중심으로 리더/다혈질 특성,
+  // 소속 기간, 국가대표 경험을 반영한 종합 점수다.
+  const captainRanking = rankCaptainCandidates(
+    tactic.lineup
+      .map((slot) => byId.get(slot.playerId))
+      .filter((p): p is NonNullable<typeof p> => p !== undefined),
+  );
+  const captainCandidates = captainRanking
+    .map((r) => ({ player: byId.get(r.playerId)!, rank: r }));
 
   const [customPresets, setCustomPresets] = useState<CustomPreset[]>(() => loadCustomPresets());
   const [presetNameInput, setPresetNameInput] = useState('');
@@ -379,13 +384,17 @@ export function Tactics({ club, tactic, onChange, disabled }: Props) {
                 disabled={disabled}
                 onChange={(e) => setCaptain(e.target.value)}
               >
-                {captainCandidates.map((p) => (
+                {captainCandidates.map(({ player: p, rank }) => (
                   <option key={p.id} value={p.id}>
-                    {p.name}{hasTrait(p, 'leader') ? ' ★리더' : ''} (리더십 {p.attributes.leadership})
+                    {p.id === captainCandidates[0]!.player.id ? '⭐ ' : ''}
+                    {p.name}{rank.isLeaderTrait ? ' ★리더' : ''}{rank.isHothead ? ' ⚠️다혈질' : ''} (리더십 {p.attributes.leadership})
                   </option>
                 ))}
               </select>
-              <p className="muted small">주장이 결장하면 팀 전체 사기에 소폭 페널티가 붙습니다.</p>
+              <p className="muted small">
+                ⭐ 표시가 추천 1순위입니다(리더십·리더 특성·소속 기간·국가대표 경험 종합).
+                주장이 결장하면 팀 전체 사기에 소폭 페널티가 붙습니다.
+              </p>
             </>
           )}
         </div>

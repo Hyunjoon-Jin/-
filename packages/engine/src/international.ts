@@ -29,11 +29,12 @@ export interface InternationalResult {
   byClub: Map<string, number>;
 }
 
-/** 차출 기준: 국적별 상위 squadSize명, 단 최소 능력(minCA) 이상만. */
+/** 차출 기준: 국적별 상위 squadSize명, 단 최소 능력(minCA) 이상만(국가대표 은퇴 선언자는 제외, 신규 개선 항목 19). */
 export function selectCallUps(clubs: Club[], squadSize = 23, minCA = 148): Player[] {
   const byNation = new Map<string, { p: Player }[]>();
   for (const club of clubs) {
     for (const p of club.players) {
+      if (p.internationalRetired) continue;
       if (currentAbility(p) < minCA) continue;
       const arr = byNation.get(p.nationality);
       if (arr) arr.push({ p });
@@ -70,6 +71,7 @@ export function runInternationalBreak(clubs: Club[], rng: Rng): InternationalRes
     const injP = clamp(0.08 - (p.attributes.naturalFitness - 10) * 0.004, 0.02, 0.12);
     if (rng.roll(injP)) {
       p.injuryMatches = rng.int(1, 3);
+      p.injuryTotalMatches = p.injuryMatches; // 회복 진행률(신규 개선 항목 28) 계산 기준
       p.injuryName = '대표팀 차출 중 부상';
       p.condition = 0.6;
       injuries++;
@@ -81,6 +83,47 @@ export function runInternationalBreak(clubs: Club[], rng: Rng): InternationalRes
   }
 
   return { callUps, injuries, byClub };
+}
+
+// ── 국가대표 은퇴(신규 개선 항목 19) ─────────────────────────
+
+/** 이 나이부터 확률적으로 국가대표 은퇴를 고려한다(선수 은퇴보다 훨씬 이른 나이 — 실제로
+ *  구단 커리어에 집중하려 A매치를 먼저 그만두는 경우가 많다). */
+export const INTL_RETIRE_MIN_AGE = 32;
+/** 이만큼 캡을 쌓은 "기존 국가대표"만 은퇴를 선언한다(무명 선수는 그냥 차출 대상에서
+ *  자연히 밀려날 뿐 별도 이벤트가 필요 없다). */
+export const INTL_RETIRE_MIN_CAPS = 20;
+
+/** 나이·캡에 따른 국가대표 은퇴 선언 확률(32세=5%, 36세=25%, 39세=40% 기준, 상한 있음). */
+export function internationalRetireChance(age: number, caps: number): number {
+  if (age < INTL_RETIRE_MIN_AGE || caps < INTL_RETIRE_MIN_CAPS) return 0;
+  return clamp((age - INTL_RETIRE_MIN_AGE + 1) * 0.05, 0, 0.6);
+}
+
+export interface InternationalRetirementEvent {
+  playerId: string;
+  name: string;
+  clubId: string;
+  clubName: string;
+  caps: number;
+}
+
+/**
+ * 오프시즌 경계에 고령·다수 캡 선수의 국가대표 은퇴 여부를 판정한다(runInternationalBreak/
+ * runInternationalTournament보다 먼저 호출해야 이번 시즌 차출 명단에 즉시 반영된다).
+ * 은퇴해도 클럽 경기력에는 영향이 없다 — 이후 A매치 차출 대상에서만 영구 제외될 뿐이다.
+ */
+export function checkInternationalRetirements(clubs: Club[], rng: Rng): InternationalRetirementEvent[] {
+  const events: InternationalRetirementEvent[] = [];
+  for (const club of clubs) {
+    for (const p of club.players) {
+      if (p.internationalRetired) continue;
+      if (!rng.roll(internationalRetireChance(p.age, p.caps))) continue;
+      p.internationalRetired = true;
+      events.push({ playerId: p.id, name: p.name, clubId: club.id, clubName: club.name, caps: p.caps });
+    }
+  }
+  return events;
 }
 
 // ── 비정기 국제대회(C15, 월드컵/유로급) ─────────────────────
@@ -142,11 +185,13 @@ function buildNationalTeam(nationality: string, players: Player[]): Club {
   };
 }
 
-/** 국적별 참가 자격 선수 풀(대회 소집 인원만큼, 능력순). 유효 인원 미달 국가는 제외. */
+/** 국적별 참가 자격 선수 풀(대회 소집 인원만큼, 능력순). 유효 인원 미달 국가는 제외
+ *  (국가대표 은퇴 선언자는 제외, 신규 개선 항목 19). */
 function nationalPools(clubs: Club[]): Map<string, Player[]> {
   const byNation = new Map<string, Player[]>();
   for (const club of clubs) {
     for (const p of club.players) {
+      if (p.internationalRetired) continue;
       if (currentAbility(p) < TOURNAMENT_MIN_CA) continue;
       const arr = byNation.get(p.nationality);
       if (arr) arr.push(p); else byNation.set(p.nationality, [p]);
@@ -241,6 +286,7 @@ export function runInternationalTournament(clubs: Club[], rng: Rng): Internation
         const injP = clamp(0.05 - (p.attributes.naturalFitness - 10) * 0.002, 0.015, 0.08);
         if (rng.roll(injP)) {
           p.injuryMatches = Math.max(p.injuryMatches, rng.int(1, 4));
+          p.injuryTotalMatches = p.injuryMatches; // 회복 진행률(신규 개선 항목 28) 계산 기준
           p.injuryName = '국제대회 중 부상';
           p.condition = Math.min(p.condition, 0.55);
           injuries++;

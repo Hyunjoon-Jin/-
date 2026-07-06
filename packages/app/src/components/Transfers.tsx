@@ -1,11 +1,16 @@
 import { useMemo, useState } from 'react';
 import {
-  myClub, lastSummary, revealPotential, myLoanedOutPlayers, type GameState, type ActionOutcome,
+  myClub, lastSummary, revealPotential, myLoanedOutPlayers, isScouted, myAgentRelations,
+  isWatchlisted,
+  type GameState, type ActionOutcome,
 } from '../game.js';
 import {
   transferTargets, marketValue, currentAbility, formatMoney, lineOf, buildScoutingReport,
   MAX_NEGOTIATION_ROUNDS, LOAN_MIN_SEASONS, LOAN_MAX_SEASONS,
+  LOAN_OBLIGATION_MIN_APPS, LOAN_OBLIGATION_MAX_APPS, agentPersonality, BUYBACK_MAX_SEASONS,
+  PANIC_BUY_PREMIUM,
   type Line, type Player, type OfferEvaluation, type TransferTarget, type SellOffer, type LoanTerms,
+  type AgentPersonality, type AgentRelationsTier,
 } from '@soccer-tycoon/engine';
 import { ScoutingSummary } from './PlayerDetail.js';
 import { useModalA11y } from './useModalA11y.js';
@@ -20,12 +25,22 @@ interface Props {
   onBuyAt: (playerId: string, fee: number) => ActionOutcome;
   onBuyViaReleaseClause: (playerId: string) => ActionOutcome;
   onOffers: (playerId: string) => SellOffer[];
-  onAcceptSell: (playerId: string, buyerId: string) => ActionOutcome;
+  onAcceptSell: (playerId: string, buyerId: string, buybackFee?: number) => ActionOutcome;
+  onBuyback: (playerId: string) => ActionOutcome;
+  onAttachAddOn: (
+    playerId: string, appearances: number | undefined, goals: number | undefined, fee: number,
+  ) => ActionOutcome;
   onRelease: (playerId: string) => ActionOutcome;
   onLoanOut: (playerId: string, toClubId: string, terms: LoanTerms) => ActionOutcome;
   onLoanIn: (playerId: string, fromClubId: string, terms: LoanTerms) => ActionOutcome;
   onRecallLoan: (playerId: string) => ActionOutcome;
+  onExerciseBuyOption: (playerId: string) => ActionOutcome;
+  onSwap: (myPlayerId: string, otherClubId: string, otherPlayerId: string, cashAdjustment: number) => ActionOutcome;
   onSelect: (p: Player) => void;
+  onNegotiationBreakdown: (playerId: string) => void;
+  onPanicBuy: (playerId: string) => ActionOutcome;
+  onRivalSnipe: (playerId: string, rivalClubId: string, bid: number) => ActionOutcome;
+  onToggleWatchlist: (playerId: string) => ActionOutcome;
 }
 
 type Msg = { text: string; ok: boolean };
@@ -38,6 +53,20 @@ const LINE_FILTERS: { key: LineFilter; label: string }[] = [
   { key: 'MID', label: '미드' },
   { key: 'ATT', label: '공격' },
 ];
+
+/** 에이전트 개성(A3)별 협상 UI 배지 — 보통(moderate)은 특별히 표시하지 않는다. */
+const AGENT_PERSONALITY_LABEL: Record<AgentPersonality, string | null> = {
+  hardliner: '💪 강경파 에이전트', moderate: null, flexible: '🤝 유연한 에이전트',
+};
+
+/** 에이전트 관계 지수(Item6) 등급별 라벨·스타일. */
+const AGENT_RELATIONS_LABEL: Record<AgentRelationsTier, { text: string; cls: string }> = {
+  excellent: { text: '😍 매우 우호적', cls: 'pos' },
+  good: { text: '🙂 우호적', cls: 'pos' },
+  neutral: { text: '😐 보통', cls: 'muted' },
+  poor: { text: '😒 냉랭함', cls: 'injury-risk' },
+  hostile: { text: '😠 적대적', cls: 'injury' },
+};
 
 type AgeFilter = 'ALL' | 'young' | 'prime' | 'veteran';
 const AGE_FILTERS: { key: AgeFilter; label: string; test: (age: number) => boolean }[] = [
@@ -63,7 +92,8 @@ export function Transfers(props: Props) {
 
 function TransferMarket({
   game, onNegotiate, onBuyAt, onBuyViaReleaseClause, onOffers, onAcceptSell, onRelease,
-  onLoanOut, onLoanIn, onRecallLoan, onSelect,
+  onLoanOut, onLoanIn, onRecallLoan, onExerciseBuyOption, onSwap, onSelect, onNegotiationBreakdown,
+  onBuyback, onAttachAddOn, onPanicBuy, onRivalSnipe, onToggleWatchlist,
 }: Props) {
   const club = myClub(game);
   const toast = useToast();
@@ -71,6 +101,7 @@ function TransferMarket({
   const [ageFilter, setAgeFilter] = useState<AgeFilter>('ALL');
   const [search, setSearch] = useState('');
   const [affordableOnly, setAffordableOnly] = useState(true);
+  const [watchlistOnly, setWatchlistOnly] = useState(false);
   const [sort, setSort] = useState<MarketSortKey>('ca');
   const [dir, setDir] = useState<SortDir>(-1);
   const [squadSort, setSquadSort] = useState<MarketSortKey>('ca');
@@ -79,9 +110,12 @@ function TransferMarket({
   const [selling, setSelling] = useState<Player | null>(null);
   const [releasing, setReleasing] = useState<Player | null>(null);
   const [buyingViaClause, setBuyingViaClause] = useState<TransferTarget | null>(null);
+  const [buyingBack, setBuyingBack] = useState<TransferTarget | null>(null);
   const [loaningOut, setLoaningOut] = useState<Player | null>(null);
   const [loaningIn, setLoaningIn] = useState<TransferTarget | null>(null);
   const [recallingId, setRecallingId] = useState<string | null>(null);
+  const [exercisingOption, setExercisingOption] = useState<Player | null>(null);
+  const [swapping, setSwapping] = useState<TransferTarget | null>(null);
 
   const loanedOut = useMemo(() => myLoanedOutPlayers(game), [game]);
   // 협상 중 진행된 라운드 수 — 선수별로 유지해, 모달을 닫았다 다시 열어도 조급증이 리셋되지 않는다.
@@ -89,6 +123,7 @@ function TransferMarket({
 
   const budget = club.finance.transferBudget;
   const scouting = club.staff.scouting;
+  const agentRelations = myAgentRelations(game);
 
   function toggleSquadSort(k: MarketSortKey) {
     if (k === squadSort) { setSquadDir((d) => (d === 1 ? -1 : 1) as SortDir); return; }
@@ -108,6 +143,7 @@ function TransferMarket({
     const ageTest = AGE_FILTERS.find((f) => f.key === ageFilter)!.test;
     list = list.filter((t) => ageTest(t.player.age));
     if (affordableOnly) list = list.filter((t) => t.value <= budget);
+    if (watchlistOnly) list = list.filter((t) => isWatchlisted(game, t.player.id));
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       list = list.filter((t) => t.player.name.toLowerCase().includes(q));
@@ -123,7 +159,7 @@ function TransferMarket({
       return cmp * dir;
     });
     return list.slice(0, 40);
-  }, [game.clubs, game.myClubId, line, ageFilter, affordableOnly, search, sort, dir, budget]);
+  }, [game, line, ageFilter, affordableOnly, watchlistOnly, search, sort, dir, budget]);
 
   const mySquad = useMemo(() => {
     const list = [...club.players];
@@ -138,7 +174,7 @@ function TransferMarket({
       return cmp * squadDir;
     });
     return list;
-  }, [club.players, squadSort, squadDir]);
+  }, [game, squadSort, squadDir]);
 
   function act(outcome: ActionOutcome) {
     toast(outcome.message, outcome.ok);
@@ -151,6 +187,12 @@ function TransferMarket({
           <span className="muted">이적 예산</span>{' '}
           <b className="budget">{formatMoney(budget)}</b>
           <span className="muted"> · 스쿼드 {club.players.length}명</span>
+          <span
+            className={`market-relations ${AGENT_RELATIONS_LABEL[agentRelations.tier].cls}`}
+            title="에이전트 관계 지수 — 순조로운 영입 협상이 성사될 때마다 조금씩 오르고, 협상이 완전히 결렬되면 크게 깎입니다. 좋을수록 다음 협상의 하한·역제안이 유리해집니다."
+          >
+            {' · '}에이전트 관계 {AGENT_RELATIONS_LABEL[agentRelations.tier].text} ({agentRelations.value.toFixed(0)})
+          </span>
         </div>
       </div>
 
@@ -170,6 +212,11 @@ function TransferMarket({
               <input type="checkbox" checked={affordableOnly}
                 onChange={(e) => setAffordableOnly(e.target.checked)} />
               예산 내
+            </label>
+            <label className="afford" title="관심 목록(신규 개선 항목 27)에 올린 선수만 보기">
+              <input type="checkbox" checked={watchlistOnly}
+                onChange={(e) => setWatchlistOnly(e.target.checked)} />
+              ⭐ 관심만
             </label>
           </div>
           <div className="filters">
@@ -217,14 +264,29 @@ function TransferMarket({
                     {t.player.loanFromClubId !== undefined && (
                       <span className="loan-badge" title="다른 구단에서 임대 중인 선수 — 거래 불가">🔁 임대 중</span>
                     )}
+                    {t.player.buybackClause?.clubId === game.myClubId && (
+                      <span
+                        className="clause-badge"
+                        title={`바이백 조항 ${formatMoney(t.player.buybackClause.fee)} — 우리 구단이 되사올 수 있습니다`}
+                      >
+                        🔁🔓
+                      </span>
+                    )}
                   </td>
                   <td className="muted small">{t.clubName}</td>
                   <td><span className={`pos-chip pos-${lineOf(t.player.position).toLowerCase()}`}>{t.player.position}</span></td>
                   <td>{t.player.age}</td>
                   <td><b>{currentAbility(t.player).toFixed(0)}</b></td>
-                  <td className="muted">{revealPotential(scouting, t.player.potential)}</td>
+                  <td className="muted">{revealPotential(scouting, t.player.potential, isScouted(game, t.player.id))}</td>
                   <td>{formatMoney(t.value)}</td>
                   <td className="market-actions">
+                    <button
+                      className={`btn-small watch-star-btn${isWatchlisted(game, t.player.id) ? ' active' : ''}`}
+                      title={isWatchlisted(game, t.player.id) ? '관심 목록에서 제외' : '관심 목록에 추가 — 계약 만료 임박 시 알려드립니다'}
+                      onClick={(e) => { e.stopPropagation(); act(onToggleWatchlist(t.player.id)); }}
+                    >
+                      {isWatchlisted(game, t.player.id) ? '⭐' : '☆'}
+                    </button>
                     {t.player.loanFromClubId === undefined && (
                       <>
                         <button
@@ -242,12 +304,28 @@ function TransferMarket({
                             즉시영입
                           </button>
                         )}
+                        {t.player.buybackClause?.clubId === game.myClubId && (
+                          <button
+                            className="btn-small clause-buy"
+                            title={`바이백 조항 ${formatMoney(t.player.buybackClause.fee)}로 즉시 재영입`}
+                            onClick={(e) => { e.stopPropagation(); setBuyingBack(t); }}
+                          >
+                            바이백
+                          </button>
+                        )}
                         <button
                           className="btn-small"
                           title="정해진 기간만 임대로 데려오기"
                           onClick={(e) => { e.stopPropagation(); setLoaningIn(t); }}
                         >
                           임대영입
+                        </button>
+                        <button
+                          className="btn-small"
+                          title="내 선수와 맞교환 제안(협상 없이 즉시 성사)"
+                          onClick={(e) => { e.stopPropagation(); setSwapping(t); }}
+                        >
+                          맞교환
                         </button>
                       </>
                     )}
@@ -290,6 +368,14 @@ function TransferMarket({
                     {p.loanFromClubId !== undefined && (
                       <span className="loan-badge" title="다른 구단에서 임대로 데려온 선수 — 거래 불가">🔁 임대</span>
                     )}
+                    {p.loanBuyOption !== undefined && (
+                      <span
+                        className="clause-badge"
+                        title={`우선매수옵션(OTB) ${formatMoney(p.loanBuyOption.fee)} — 언제든 완전 영입 가능`}
+                      >
+                        🔓
+                      </span>
+                    )}
                   </td>
                   <td><span className={`pos-chip pos-${lineOf(p.position).toLowerCase()}`}>{p.position}</span></td>
                   <td>{p.age}</td>
@@ -297,7 +383,7 @@ function TransferMarket({
                   <td className="muted">{p.potential.toFixed(0)}</td>
                   <td>{formatMoney(marketValue(p))}</td>
                   <td className="sell-actions">
-                    {p.loanFromClubId === undefined && (
+                    {p.loanFromClubId === undefined ? (
                       <>
                         <button className="btn-small" onClick={(e) => { e.stopPropagation(); setSelling(p); }}>판매</button>
                         <button
@@ -314,6 +400,14 @@ function TransferMarket({
                           임대보내기
                         </button>
                       </>
+                    ) : p.loanBuyOption !== undefined && (
+                      <button
+                        className="btn-small clause-buy"
+                        title={`우선매수옵션 ${formatMoney(p.loanBuyOption.fee)}로 완전 영입`}
+                        onClick={(e) => { e.stopPropagation(); setExercisingOption(p); }}
+                      >
+                        옵션행사
+                      </button>
                     )}
                   </td>
                 </tr>
@@ -328,7 +422,7 @@ function TransferMarket({
           <h3>임대 보낸 선수 ({loanedOut.length})</h3>
           <table className="data-table compact">
             <thead>
-              <tr><th>선수</th><th>P</th><th>현재 소속</th><th>복귀까지</th><th></th></tr>
+              <tr><th>선수</th><th>P</th><th>현재 소속</th><th>복귀까지</th><th>의무완전이적</th><th></th></tr>
             </thead>
             <tbody>
               {loanedOut.map(({ player: p, loanClubName }) => (
@@ -338,6 +432,11 @@ function TransferMarket({
                   <td><span className={`pos-chip pos-${lineOf(p.position).toLowerCase()}`}>{p.position}</span></td>
                   <td className="muted small">{loanClubName}</td>
                   <td className="muted small">{p.loanSeasonsRemaining ?? 1}시즌 후</td>
+                  <td className="muted small">
+                    {p.loanBuyObligation
+                      ? `출전 ${p.seasonApps}/${p.loanBuyObligation.appearances} · ${formatMoney(p.loanBuyObligation.fee)}`
+                      : '—'}
+                  </td>
                   <td>
                     <button className="btn-small danger" onClick={(e) => { e.stopPropagation(); setRecallingId(p.id); }}>
                       회수
@@ -355,12 +454,16 @@ function TransferMarket({
           target={negotiating}
           budget={budget}
           scouting={scouting}
+          scouted={isScouted(game, negotiating.player.id)}
           round={roundsUsed[negotiating.player.id] ?? 0}
           onRoundChange={(r) => setRoundsUsed((prev) => ({ ...prev, [negotiating.player.id]: r }))}
           onNegotiate={onNegotiate}
           onBuyAt={onBuyAt}
           onResult={(m) => { toast(m.text, m.ok); if (m.ok) setNegotiating(null); }}
           onClose={() => setNegotiating(null)}
+          onNegotiationBreakdown={onNegotiationBreakdown}
+          onPanicBuy={onPanicBuy}
+          onRivalSnipe={onRivalSnipe}
         />
       )}
       {buyingViaClause && (
@@ -377,8 +480,18 @@ function TransferMarket({
           player={selling}
           offers={onOffers(selling.id)}
           onAcceptSell={onAcceptSell}
+          onAttachAddOn={onAttachAddOn}
           onResult={(m) => { toast(m.text, m.ok); if (m.ok) setSelling(null); }}
           onClose={() => setSelling(null)}
+        />
+      )}
+      {buyingBack && (
+        <ConfirmDialog
+          title="바이백 조항 행사"
+          message={`${buyingBack.player.name} 선수를 바이백 조항 ${formatMoney(buyingBack.player.buybackClause?.fee ?? 0)}을(를) 지불하고 즉시 재영입하시겠습니까?`}
+          confirmLabel="바이백 확정"
+          onConfirm={() => { act(onBuyback(buyingBack.player.id)); setBuyingBack(null); }}
+          onCancel={() => setBuyingBack(null)}
         />
       )}
       {releasing && (
@@ -417,18 +530,45 @@ function TransferMarket({
           onCancel={() => setRecallingId(null)}
         />
       )}
+      {exercisingOption && (
+        <ConfirmDialog
+          title="우선매수옵션(OTB) 행사"
+          message={`${exercisingOption.name} 선수를 우선매수옵션 ${formatMoney(exercisingOption.loanBuyOption?.fee ?? 0)}을(를) 지불하고 즉시 완전 영입하시겠습니까?`}
+          confirmLabel="옵션 행사"
+          onConfirm={() => { act(onExerciseBuyOption(exercisingOption.id)); setExercisingOption(null); }}
+          onCancel={() => setExercisingOption(null)}
+        />
+      )}
+      {swapping && (
+        <SwapModal
+          target={swapping}
+          myPlayers={[...club.players, ...(club.reserves ?? [])].filter((p) => p.loanFromClubId === undefined)}
+          myReserveIds={new Set((club.reserves ?? []).map((p) => p.id))}
+          theirReserves={game.clubs.find((c) => c.id === swapping.clubId)?.reserves ?? []}
+          onConfirm={(myPlayerId, theirPlayerId, cashAdjustment) => onSwap(myPlayerId, swapping.clubId, theirPlayerId, cashAdjustment)}
+          onResult={(m) => { toast(m.text, m.ok); if (m.ok) setSwapping(null); }}
+          onClose={() => setSwapping(null)}
+        />
+      )}
     </div>
   );
 }
 
-/** 임대 기간·임대료·주급 분담 비율 입력 필드(보내기/데려오기 공통). */
+/** 임대 기간·임대료·주급 분담 비율 + 의무완전이적 조항(A1) + 우선매수옵션(OTB, Item4) 입력 필드(보내기/데려오기 공통). */
 function LoanTermsFields({
   seasons, setSeasons, fee, setFee, wageSharePct, setWageSharePct, feeLabel, wageLabel,
+  obligationEnabled, setObligationEnabled, obligationApps, setObligationApps, obligationFee, setObligationFee,
+  buyOptionEnabled, setBuyOptionEnabled, buyOptionFee, setBuyOptionFee,
 }: {
   seasons: number; setSeasons: (n: number) => void;
   fee: number; setFee: (n: number) => void;
   wageSharePct: number; setWageSharePct: (n: number) => void;
   feeLabel: string; wageLabel: string;
+  obligationEnabled: boolean; setObligationEnabled: (b: boolean) => void;
+  obligationApps: number; setObligationApps: (n: number) => void;
+  obligationFee: number; setObligationFee: (n: number) => void;
+  buyOptionEnabled: boolean; setBuyOptionEnabled: (b: boolean) => void;
+  buyOptionFee: number; setBuyOptionFee: (n: number) => void;
 }) {
   return (
     <>
@@ -454,6 +594,63 @@ function LoanTermsFields({
           onChange={(e) => setWageSharePct(Number(e.target.value))}
         />
       </label>
+      <label className="loan-field loan-obligation-toggle">
+        <span>
+          <input
+            type="checkbox" checked={obligationEnabled}
+            onChange={(e) => setObligationEnabled(e.target.checked)}
+          />
+          {' '}의무완전이적 조항 추가
+        </span>
+      </label>
+      {obligationEnabled && (
+        <>
+          <label className="loan-field">
+            <span>기준 출전 수(이번 임대 시즌)</span>
+            <input
+              type="number" min={LOAN_OBLIGATION_MIN_APPS} max={LOAN_OBLIGATION_MAX_APPS} value={obligationApps}
+              onChange={(e) => setObligationApps(
+                Math.min(LOAN_OBLIGATION_MAX_APPS, Math.max(LOAN_OBLIGATION_MIN_APPS, Number(e.target.value))),
+              )}
+            />
+          </label>
+          <label className="loan-field">
+            <span>완전 이적료(기준 도달 시)</span>
+            <input
+              type="number" min={0} step={100} value={obligationFee}
+              onChange={(e) => setObligationFee(Math.max(0, Number(e.target.value)))}
+            />
+          </label>
+          <p className="muted small">
+            이번 임대 시즌 출전이 {obligationApps}경기에 도달하면, 임대 잔여 기간과 무관하게
+            시즌 종료 시 완전 이적으로 자동 전환됩니다(계약상 의무).
+          </p>
+        </>
+      )}
+      <label className="loan-field loan-obligation-toggle">
+        <span>
+          <input
+            type="checkbox" checked={buyOptionEnabled}
+            onChange={(e) => setBuyOptionEnabled(e.target.checked)}
+          />
+          {' '}우선매수옵션(OTB) 추가
+        </span>
+      </label>
+      {buyOptionEnabled && (
+        <>
+          <label className="loan-field">
+            <span>옵션 행사 금액</span>
+            <input
+              type="number" min={0} step={100} value={buyOptionFee}
+              onChange={(e) => setBuyOptionFee(Math.max(0, Number(e.target.value)))}
+            />
+          </label>
+          <p className="muted small">
+            임대 구단이 임대 기간 중 언제든 이 금액으로 완전 영입을 선택할 수 있습니다
+            (의무완전이적과 달리 강제되지 않으며, 행사하지 않으면 임대 종료 시 소멸합니다).
+          </p>
+        </>
+      )}
     </>
   );
 }
@@ -471,10 +668,19 @@ function LoanOutModal({
   const [seasons, setSeasons] = useState(LOAN_MIN_SEASONS);
   const [fee, setFee] = useState(0);
   const [wageSharePct, setWageSharePct] = useState(50);
+  const [obligationEnabled, setObligationEnabled] = useState(false);
+  const [obligationApps, setObligationApps] = useState(15);
+  const [obligationFee, setObligationFee] = useState(0);
+  const [buyOptionEnabled, setBuyOptionEnabled] = useState(false);
+  const [buyOptionFee, setBuyOptionFee] = useState(0);
   const ref = useModalA11y<HTMLDivElement>(onClose);
 
   function confirm() {
-    const r = onConfirm(toClubId, { seasons, fee, wageShareByParent: wageSharePct / 100 });
+    const r = onConfirm(toClubId, {
+      seasons, fee, wageShareByParent: wageSharePct / 100,
+      buyObligation: obligationEnabled ? { appearances: obligationApps, fee: obligationFee } : undefined,
+      buyOption: buyOptionEnabled ? { fee: buyOptionFee } : undefined,
+    });
     onResult({ text: r.message, ok: r.ok });
   }
 
@@ -500,6 +706,11 @@ function LoanOutModal({
           fee={fee} setFee={setFee}
           wageSharePct={wageSharePct} setWageSharePct={setWageSharePct}
           feeLabel="임대료(받을 금액)" wageLabel="내가 분담할 주급 비율"
+          obligationEnabled={obligationEnabled} setObligationEnabled={setObligationEnabled}
+          obligationApps={obligationApps} setObligationApps={setObligationApps}
+          obligationFee={obligationFee} setObligationFee={setObligationFee}
+          buyOptionEnabled={buyOptionEnabled} setBuyOptionEnabled={setBuyOptionEnabled}
+          buyOptionFee={buyOptionFee} setBuyOptionFee={setBuyOptionFee}
         />
         <button className="btn-advance" onClick={confirm} disabled={!toClubId}>임대 확정</button>
       </div>
@@ -518,10 +729,19 @@ function LoanInModal({
   const [seasons, setSeasons] = useState(LOAN_MIN_SEASONS);
   const [fee, setFee] = useState(0);
   const [wageSharePct, setWageSharePct] = useState(0);
+  const [obligationEnabled, setObligationEnabled] = useState(false);
+  const [obligationApps, setObligationApps] = useState(15);
+  const [obligationFee, setObligationFee] = useState(0);
+  const [buyOptionEnabled, setBuyOptionEnabled] = useState(false);
+  const [buyOptionFee, setBuyOptionFee] = useState(0);
   const ref = useModalA11y<HTMLDivElement>(onClose);
 
   function confirm() {
-    const r = onConfirm({ seasons, fee, wageShareByParent: wageSharePct / 100 });
+    const r = onConfirm({
+      seasons, fee, wageShareByParent: wageSharePct / 100,
+      buyObligation: obligationEnabled ? { appearances: obligationApps, fee: obligationFee } : undefined,
+      buyOption: buyOptionEnabled ? { fee: buyOptionFee } : undefined,
+    });
     onResult({ text: r.message, ok: r.ok });
   }
 
@@ -542,6 +762,11 @@ function LoanInModal({
           fee={fee} setFee={setFee}
           wageSharePct={wageSharePct} setWageSharePct={setWageSharePct}
           feeLabel="임대료(내가 지불할 금액)" wageLabel="상대(원 소속)가 분담할 주급 비율"
+          obligationEnabled={obligationEnabled} setObligationEnabled={setObligationEnabled}
+          obligationApps={obligationApps} setObligationApps={setObligationApps}
+          obligationFee={obligationFee} setObligationFee={setObligationFee}
+          buyOptionEnabled={buyOptionEnabled} setBuyOptionEnabled={setBuyOptionEnabled}
+          buyOptionFee={buyOptionFee} setBuyOptionFee={setBuyOptionFee}
         />
         <button className="btn-advance" onClick={confirm}>임대 확정</button>
       </div>
@@ -549,21 +774,127 @@ function LoanInModal({
   );
 }
 
+/**
+ * 선수+선수 맞교환 제안(A2, 신규 개선 항목 8로 유스/리저브 선수까지 확장). 격차
+ * 보전용 정산금은 양수(내가 냄)/음수(상대가 냄) 모두 가능. myPlayers에는 1군·리저브
+ * 선수가 함께 담기고(라벨로 구분), theirReserves를 고르면 원래 클릭한 1군 대상 대신
+ * 상대 구단 유스 유망주를 받는 크로스티어 딜로 바꿀 수 있다.
+ */
+function SwapModal({
+  target, myPlayers, myReserveIds, theirReserves, onConfirm, onResult, onClose,
+}: {
+  target: TransferTarget;
+  myPlayers: Player[];
+  /** myPlayers 중 리저브 소속 선수 id 집합(라벨 표시용). */
+  myReserveIds: Set<string>;
+  theirReserves: Player[];
+  onConfirm: (myPlayerId: string, theirPlayerId: string, cashAdjustment: number) => ActionOutcome;
+  onResult: (m: Msg) => void;
+  onClose: () => void;
+}) {
+  const [myPlayerId, setMyPlayerId] = useState(myPlayers[0]?.id ?? '');
+  const [theirPlayerId, setTheirPlayerId] = useState(target.player.id);
+  const [cashAdjustment, setCashAdjustment] = useState(0);
+  const ref = useModalA11y<HTMLDivElement>(onClose);
+
+  const theirOptions = [target.player, ...theirReserves];
+  const theirPlayer = theirOptions.find((p) => p.id === theirPlayerId) ?? target.player;
+  const myPlayer = myPlayers.find((p) => p.id === myPlayerId);
+  const valueGap = myPlayer ? marketValue(theirPlayer) - marketValue(myPlayer) : 0;
+
+  function confirm() {
+    const r = onConfirm(myPlayerId, theirPlayerId, cashAdjustment);
+    onResult({ text: r.message, ok: r.ok });
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div
+        className="modal negotiate" role="dialog" aria-modal="true"
+        aria-label={`맞교환 제안 — ${target.player.name}`} tabIndex={-1} ref={ref}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="modal-head">
+          <h2>맞교환 제안 — {target.clubName}</h2>
+          <button className="btn-ghost" onClick={onClose}>닫기 ✕</button>
+        </div>
+        <label className="loan-field">
+          <span>받을 선수</span>
+          <select value={theirPlayerId} onChange={(e) => setTheirPlayerId(e.target.value)}>
+            <option value={target.player.id}>
+              {target.player.name} ({target.player.position} · 1군 · 가치 {formatMoney(marketValue(target.player))})
+            </option>
+            {theirReserves.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name} ({p.position} · 유스 · 가치 {formatMoney(marketValue(p))})
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="loan-field">
+          <span>내가 내놓을 선수</span>
+          <select value={myPlayerId} onChange={(e) => setMyPlayerId(e.target.value)}>
+            {myPlayers.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name} ({p.position} · {myReserveIds.has(p.id) ? '유스' : '1군'} · 가치 {formatMoney(marketValue(p))})
+              </option>
+            ))}
+          </select>
+        </label>
+        {myPlayer && (
+          <p className="muted small">
+            가치 격차: {valueGap === 0 ? '동등' : valueGap > 0
+              ? <>상대가 {formatMoney(valueGap)} 더 비쌉니다(정산금으로 보전 고려)</>
+              : <>내 선수가 {formatMoney(-valueGap)} 더 비쌉니다</>}
+          </p>
+        )}
+        <label className="loan-field">
+          <span>추가 정산금(양수=내가 지불, 음수=상대가 지불)</span>
+          <input
+            type="number" step={100} value={cashAdjustment}
+            onChange={(e) => setCashAdjustment(Number(e.target.value))}
+          />
+        </label>
+        <button className="btn-advance" onClick={confirm} disabled={!myPlayerId}>맞교환 확정</button>
+      </div>
+    </div>
+  );
+}
+
 function SellModal({
-  player, offers, onAcceptSell, onResult, onClose,
+  player, offers, onAcceptSell, onAttachAddOn, onResult, onClose,
 }: {
   player: Player;
   offers: SellOffer[];
-  onAcceptSell: (playerId: string, buyerId: string) => ActionOutcome;
+  onAcceptSell: (playerId: string, buyerId: string, buybackFee?: number) => ActionOutcome;
+  onAttachAddOn: (
+    playerId: string, appearances: number | undefined, goals: number | undefined, fee: number,
+  ) => ActionOutcome;
   onResult: (m: Msg) => void;
   onClose: () => void;
 }) {
   const [confirming, setConfirming] = useState<SellOffer | null>(null);
+  const [buybackEnabled, setBuybackEnabled] = useState(false);
+  const value = marketValue(player);
+  const [buybackFee, setBuybackFee] = useState(() => Math.round(value * 1.15));
+  const [addOnEnabled, setAddOnEnabled] = useState(false);
+  const [addOnAppsEnabled, setAddOnAppsEnabled] = useState(true);
+  const [addOnApps, setAddOnApps] = useState(15);
+  const [addOnGoalsEnabled, setAddOnGoalsEnabled] = useState(false);
+  const [addOnGoals, setAddOnGoals] = useState(10);
+  const [addOnFee, setAddOnFee] = useState(() => Math.round(value * 0.2));
+  const addOnValid = !addOnEnabled || addOnAppsEnabled || addOnGoalsEnabled;
   const accept = (buyerId: string) => {
-    const r = onAcceptSell(player.id, buyerId);
+    const r = onAcceptSell(player.id, buyerId, buybackEnabled ? buybackFee : undefined);
+    if (r.ok && addOnEnabled && (addOnAppsEnabled || addOnGoalsEnabled)) {
+      const a = onAttachAddOn(
+        player.id, addOnAppsEnabled ? addOnApps : undefined, addOnGoalsEnabled ? addOnGoals : undefined, addOnFee,
+      );
+      onResult({ text: a.ok ? `${r.message} · ${a.message}` : `${r.message} (Add-on 조항 실패: ${a.message})`, ok: r.ok });
+      return;
+    }
     onResult({ text: r.message, ok: r.ok });
   };
-  const value = marketValue(player);
   const ref = useModalA11y<HTMLDivElement>(onClose);
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -588,6 +919,67 @@ function SellModal({
           <p className="toast err">관심 구단이 없습니다. 방출을 이용하세요.</p>
         ) : (
           <>
+            <label className="loan-field">
+              <input
+                type="checkbox" checked={buybackEnabled}
+                onChange={(e) => setBuybackEnabled(e.target.checked)}
+              />
+              바이백 조항 추가(판매가 이상 금액으로 향후 되사올 권리, {BUYBACK_MAX_SEASONS}시즌 유효)
+            </label>
+            {buybackEnabled && (
+              <label className="loan-field">
+                바이백 금액
+                <input
+                  type="number" min={0} step={1000} value={buybackFee}
+                  onChange={(e) => setBuybackFee(Number(e.target.value))}
+                />
+                만원
+              </label>
+            )}
+            <label className="loan-field">
+              <input
+                type="checkbox" checked={addOnEnabled}
+                onChange={(e) => setAddOnEnabled(e.target.checked)}
+              />
+              성과 기반 후불 이적료(Add-on) 조항 추가(출전/득점 조건 달성 시 추가 이적료 수령)
+            </label>
+            {addOnEnabled && (
+              <>
+                <label className="loan-field">
+                  <input
+                    type="checkbox" checked={addOnAppsEnabled}
+                    onChange={(e) => setAddOnAppsEnabled(e.target.checked)}
+                  />
+                  출전 조건
+                  <input
+                    type="number" min={1} value={addOnApps} disabled={!addOnAppsEnabled}
+                    onChange={(e) => setAddOnApps(Math.max(1, Number(e.target.value)))}
+                  />
+                  경기
+                </label>
+                <label className="loan-field">
+                  <input
+                    type="checkbox" checked={addOnGoalsEnabled}
+                    onChange={(e) => setAddOnGoalsEnabled(e.target.checked)}
+                  />
+                  득점 조건
+                  <input
+                    type="number" min={1} value={addOnGoals} disabled={!addOnGoalsEnabled}
+                    onChange={(e) => setAddOnGoals(Math.max(1, Number(e.target.value)))}
+                  />
+                  골
+                </label>
+                <label className="loan-field">
+                  추가 이적료
+                  <input
+                    type="number" min={0} step={1000} value={addOnFee}
+                    onChange={(e) => setAddOnFee(Number(e.target.value))}
+                  />
+                  만원
+                </label>
+                {!addOnValid && <p className="toast err">출전 또는 득점 조건 중 하나는 선택해야 합니다.</p>}
+              </>
+            )}
             <p className="muted small">{offers.length}개 구단이 입찰했습니다. 원하는 제안을 수락하세요.</p>
             <table className="data-table compact">
               <thead><tr><th>구단</th><th>입찰액</th><th></th></tr></thead>
@@ -598,7 +990,9 @@ function SellModal({
                     <td><b>{formatMoney(o.bid)}</b>
                       {o.bid >= value ? <span className="pos small"> (가치↑)</span> : <span className="muted small"> ({Math.round((o.bid / value) * 100)}%)</span>}
                     </td>
-                    <td><button className="btn-small" onClick={() => setConfirming(o)}>수락</button></td>
+                    <td>
+                      <button className="btn-small" disabled={!addOnValid} onClick={() => setConfirming(o)}>수락</button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -609,7 +1003,7 @@ function SellModal({
       {confirming && (
         <ConfirmDialog
           title="판매 확정"
-          message={`${player.name} 선수를 ${confirming.clubName}에 ${formatMoney(confirming.bid)}에 판매하시겠습니까? 되돌릴 수 없습니다.`}
+          message={`${player.name} 선수를 ${confirming.clubName}에 ${formatMoney(confirming.bid)}에 판매하시겠습니까?${buybackEnabled ? ` (바이백 ${formatMoney(buybackFee)})` : ''} 되돌릴 수 없습니다.`}
           confirmLabel="판매 확정"
           danger
           onConfirm={() => { accept(confirming.clubId); setConfirming(null); }}
@@ -621,11 +1015,13 @@ function SellModal({
 }
 
 function NegotiationModal({
-  target, budget, scouting, round: initialRound, onRoundChange, onNegotiate, onBuyAt, onResult, onClose,
+  target, budget, scouting, scouted, round: initialRound, onRoundChange, onNegotiate, onBuyAt, onResult, onClose,
+  onNegotiationBreakdown, onPanicBuy, onRivalSnipe,
 }: {
   target: TransferTarget;
   budget: number;
   scouting: number;
+  scouted: boolean;
   /** 이 선수와의 협상에서 지금까지 진행된 역제안 횟수(0-base, 모달을 닫아도 유지). */
   round: number;
   onRoundChange: (round: number) => void;
@@ -633,6 +1029,9 @@ function NegotiationModal({
   onBuyAt: (playerId: string, fee: number) => ActionOutcome;
   onResult: (m: Msg) => void;
   onClose: () => void;
+  onNegotiationBreakdown: (playerId: string) => void;
+  onPanicBuy: (playerId: string) => ActionOutcome;
+  onRivalSnipe: (playerId: string, rivalClubId: string, bid: number) => ActionOutcome;
 }) {
   const { player, value } = target;
   const [ev, setEv] = useState<OfferEvaluation | null>(null);
@@ -645,6 +1044,13 @@ function NegotiationModal({
       onResult({ text: bought.message, ok: bought.ok });
       return;
     }
+    if (r.outcome === 'lostToRival' && r.rivalClubId !== undefined && r.rivalBid !== undefined) {
+      const sniped = onRivalSnipe(player.id, r.rivalClubId, r.rivalBid);
+      onResult({ text: sniped.message, ok: false });
+      onClose();
+      return;
+    }
+    if (r.roundsExhausted) onNegotiationBreakdown(player.id);
     if (r.outcome === 'countered') {
       const nextRound = round + 1;
       setRound(nextRound);
@@ -655,6 +1061,10 @@ function NegotiationModal({
   const acceptCounter = (counter: number) => {
     const bought = onBuyAt(player.id, counter);
     onResult({ text: bought.message, ok: bought.ok });
+  };
+  const panicBuyNow = () => {
+    const r = onPanicBuy(player.id);
+    onResult({ text: r.message, ok: r.ok });
   };
 
   const PRESETS: { label: string; pct: number }[] = [
@@ -681,7 +1091,12 @@ function NegotiationModal({
         </div>
         <p className="neg-sub muted">
           {player.position} · {player.age}세 · CA <b>{currentAbility(player).toFixed(0)}</b>
-          {' · '}잠재 {revealPotential(scouting, player.potential)}
+          {' · '}잠재 {revealPotential(scouting, player.potential, scouted)}
+          {AGENT_PERSONALITY_LABEL[agentPersonality(player)] && (
+            <> · <span className={`agent-badge agent-${agentPersonality(player)}`}>
+              {AGENT_PERSONALITY_LABEL[agentPersonality(player)]}
+            </span></>
+          )}
         </p>
         <ScoutingSummary report={buildScoutingReport(player, scouting)} title="🔎 스카우팅 평가" />
         <div className="neg-facts">
@@ -693,7 +1108,16 @@ function NegotiationModal({
 
         {ev && !ev.ok && <p className="toast err">{ev.reason}</p>}
         {ev?.outcome === 'rejected' && ev.roundsExhausted && (
-          <p className="toast err">여러 차례 밀당했지만 이견을 좁히지 못해 상대가 협상을 접었습니다. 다음 시즌에 다시 시도하세요.</p>
+          <div className="neg-panic">
+            <p className="toast err">여러 차례 밀당했지만 이견을 좁히지 못해 상대가 협상을 접었습니다. 다음 시즌에 다시 시도하거나, 마감시한 패닉 바이로 지금 무조건 데려올 수 있습니다.</p>
+            <button
+              className="btn-advance"
+              disabled={ev.asking === undefined || Math.round(ev.asking * PANIC_BUY_PREMIUM) > budget}
+              onClick={panicBuyNow}
+            >
+              🚨 패닉 바이로 확정 영입 (약 {formatMoney(Math.round((ev.asking ?? 0) * PANIC_BUY_PREMIUM))})
+            </button>
+          </div>
         )}
         {ev?.outcome === 'rejected' && !ev.roundsExhausted && (
           <p className="toast err">제안이 너무 낮아 거절당했습니다. 더 높은 금액을 제시하세요.</p>

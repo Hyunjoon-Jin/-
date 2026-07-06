@@ -10,6 +10,9 @@ export interface SeasonFinanceReport {
   income: { tv: number; matchday: number; sponsor: number; prize: number; total: number };
   expense: { wages: number; operations: number; total: number };
   net: number;
+  /** 라이벌전(더비) 홈 경기 매치데이 프리미엄으로 얻은 추가 수익(신규 개선 항목 23,
+   *  matchday에 이미 합산돼 있음 — 얼마나 붙었는지 확인용). 라이벌전 홈 경기가 없었으면 undefined. */
+  rivalBonus?: number;
 }
 
 /** 리그 최종 순위(0-index)별 상금. 상위일수록 많고, 우승 보너스. */
@@ -58,12 +61,76 @@ export function upgradeStadium(club: Club): StadiumUpgradeResult {
   return { ok: true, cost, newLevel: level + 1 };
 }
 
+/** 아카데미 시설 증축 최대 단계. */
+export const ACADEMY_MAX = 10;
+/** 증축 1단계당 유스 인테이크 잠재력 가산치. */
+const ACADEMY_POTENTIAL_BONUS_PER_LEVEL = 3;
+
+/** 아카데미 시설 등급 → 유스 인테이크 잠재력 가산 보너스. 유스 스태프(인력)의
+ *  effectiveYouth 보너스와는 별개로, 시설(자본재) 투자분만큼 추가로 더해진다. */
+export function academyPotentialBonus(academyLevel = 0): number {
+  return clamp(academyLevel, 0, ACADEMY_MAX) * ACADEMY_POTENTIAL_BONUS_PER_LEVEL;
+}
+
+/** 다음 단계로 증축하는 비용(만원) — 스타디움과 같은 자본 투자 곡선. */
+export function academyUpgradeCost(currentLevel: number): number {
+  return (currentLevel + 1) * (currentLevel + 1) * 30_000;
+}
+
+export interface AcademyUpgradeResult { ok: boolean; cost?: number; newLevel?: number; reason?: string }
+
+/** 아카데미 시설 한 단계 증축. 구단 객체를 직접 변경한다(보유 자금에서 즉시 차감). */
+export function upgradeAcademy(club: Club): AcademyUpgradeResult {
+  const level = club.finance.academyLevel ?? 0;
+  if (level >= ACADEMY_MAX) return { ok: false, reason: `이미 최대 시설(레벨 ${ACADEMY_MAX})입니다.` };
+  const cost = academyUpgradeCost(level);
+  if (club.finance.balance < cost) return { ok: false, reason: '보유 자금이 부족합니다.' };
+  club.finance.balance -= cost;
+  club.finance.academyLevel = level + 1;
+  return { ok: true, cost, newLevel: level + 1 };
+}
+
+/** 훈련장(피지컬 트레이닝) 시설 증축 최대 단계(신규 개선 항목 21). */
+export const TRAINING_GROUND_MAX = 10;
+/** 증축 1단계당 부상 확률 배율 감소치(레벨10 = -20%p, 즉 0.8배). */
+const TRAINING_GROUND_INJURY_REDUCTION_PER_LEVEL = 0.02;
+
+/** 훈련장 시설 등급 → 부상 확률 배율(1.0~0.8, 레벨이 오를수록 낮아짐). 의료 스태프
+ *  (인력)의 effectiveMedical 보정과는 별개로, 시설(자본재) 투자분만큼 추가로 곱해진다. */
+export function trainingGroundInjuryFactor(trainingGroundLevel = 0): number {
+  return 1 - clamp(trainingGroundLevel, 0, TRAINING_GROUND_MAX) * TRAINING_GROUND_INJURY_REDUCTION_PER_LEVEL;
+}
+
+/** 다음 단계로 증축하는 비용(만원) — 다른 시설과 같은 자본 투자 곡선. */
+export function trainingGroundUpgradeCost(currentLevel: number): number {
+  return (currentLevel + 1) * (currentLevel + 1) * 30_000;
+}
+
+export interface TrainingGroundUpgradeResult { ok: boolean; cost?: number; newLevel?: number; reason?: string }
+
+/** 훈련장 시설 한 단계 증축. 구단 객체를 직접 변경한다(보유 자금에서 즉시 차감). */
+export function upgradeTrainingGround(club: Club): TrainingGroundUpgradeResult {
+  const level = club.finance.trainingGroundLevel ?? 0;
+  if (level >= TRAINING_GROUND_MAX) return { ok: false, reason: `이미 최대 시설(레벨 ${TRAINING_GROUND_MAX})입니다.` };
+  const cost = trainingGroundUpgradeCost(level);
+  if (club.finance.balance < cost) return { ok: false, reason: '보유 자금이 부족합니다.' };
+  club.finance.balance -= cost;
+  club.finance.trainingGroundLevel = level + 1;
+  return { ok: true, cost, newLevel: level + 1 };
+}
+
+/** 라이벌전(더비) 홈 경기 매치데이 프리미엄 배율(신규 개선 항목 23) — 평소보다 열기가
+ *  뜨거워 관중이 몰려, 그 경기만큼은 입장 수입이 이 배율만큼 더 오른다. */
+export const RIVAL_MATCHDAY_PREMIUM = 1.4;
+
 /**
  * 시즌 재정 정산.
  * @param finalPosition 리그 최종 순위 (0-index).
  * @param nClubs 리그 구단 수.
  * @param homeGames 홈 경기 수 (기본: nClubs - 1, 더블 라운드로빈 한 시즌 홈경기).
  * @param recentFormRatio 최근 폼 승점 비율(0~1) — 매치데이 수익에 반영(생략 시 보정 없음).
+ * @param rivalHomeMatches 이번 시즌 라이벌 상대로 치른 홈 경기 수(보통 0 또는 1) — 그만큼
+ *   매치데이 수익에 RIVAL_MATCHDAY_PREMIUM 프리미엄이 추가로 붙는다(신규 개선 항목 23).
  */
 export function settleSeason(
   club: Club,
@@ -71,14 +138,16 @@ export function settleSeason(
   nClubs: number,
   homeGames = nClubs - 1,
   recentFormRatio?: number,
+  rivalHomeMatches = 0,
 ): SeasonFinanceReport {
   const rep = club.finance.reputation;
 
   // 수입 (중계는 균등 분배분 + 평판 비례분 → 약팀도 최소 보장)
   const tv = 45_000 + rep * 48_000;
-  const matchday = Math.round(
-    homeGames * rep * 5_000 * attendanceFormFactor(recentFormRatio) * stadiumMatchdayMultiplier(club.finance.stadiumLevel),
-  ); // 입장 수입
+  const perGameMatchday =
+    rep * 5_000 * attendanceFormFactor(recentFormRatio) * stadiumMatchdayMultiplier(club.finance.stadiumLevel);
+  const rivalBonus = Math.round(perGameMatchday * clamp(rivalHomeMatches, 0, homeGames) * (RIVAL_MATCHDAY_PREMIUM - 1));
+  const matchday = Math.round(perGameMatchday * homeGames) + rivalBonus; // 입장 수입(라이벌전 프리미엄 포함)
   const sponsor = Math.round(Math.pow(rep, 1.5) * 5_500);
   const prize = leaguePrize(finalPosition, nClubs);
   const incomeTotal = tv + matchday + sponsor + prize;
@@ -104,7 +173,92 @@ export function settleSeason(
     income: { tv, matchday, sponsor, prize, total: incomeTotal },
     expense: { wages, operations, total: expenseTotal },
     net,
+    rivalBonus: rivalBonus > 0 ? rivalBonus : undefined,
   };
+}
+
+/**
+ * 스폰서 계약(유니폼/스타디움 명명권) — 아래의 성과 기반 시즌 목표 보너스와는 별개로,
+ * 한 번 체결하면 성과와 무관하게 정해진 시즌 동안 고정 수익을 매 시즌 보장하는
+ * 장기 계약(신규 개선 항목 24). 체결 시점의 평판(과 스타디움 명명권의 경우 스타디움
+ * 규모)에 수익이 고정되므로, 평판이 오르기 전에 미리 체결하면 손해, 오른 뒤 체결하면
+ * 이득이라는 타이밍 판단이 생긴다.
+ */
+export type SponsorContractKind = 'kit' | 'stadiumNaming';
+
+export const SPONSOR_CONTRACT_LABEL: Record<SponsorContractKind, string> = {
+  kit: '유니폼 스폰서',
+  stadiumNaming: '스타디움 명명권',
+};
+
+/** 계약 기간(시즌) — 만료되면 재계약(재체결)이 필요하다. */
+export const SPONSOR_CONTRACT_LENGTH_SEASONS = 3;
+
+/** 체결 수수료(에이전트/법무 비용) — 연간 수익의 이 배율만큼 즉시 차감된다. */
+export const SPONSOR_CONTRACT_SIGN_FEE_MULTIPLIER = 1.5;
+
+/** 명명권 계약이 가능한 최소 스타디움 증축 단계 — 이름을 붙일 만한 규모는 돼야 한다. */
+export const SPONSOR_CONTRACT_STADIUM_MIN_LEVEL = 1;
+
+const SPONSOR_CONTRACT_BASE: Record<SponsorContractKind, number> = {
+  kit: 6_000,
+  stadiumNaming: 5_000,
+};
+const SPONSOR_CONTRACT_PER_REP: Record<SponsorContractKind, number> = {
+  kit: 900,
+  stadiumNaming: 700,
+};
+
+/** 계약 체결 시 시즌당 고정 수익(만원) — 스타디움 명명권은 스타디움 규모만큼 추가로 붙는다. */
+export function sponsorContractPayout(kind: SponsorContractKind, reputation: number, stadiumLevel = 0): number {
+  const raw = SPONSOR_CONTRACT_BASE[kind] + reputation * SPONSOR_CONTRACT_PER_REP[kind];
+  return Math.round(kind === 'stadiumNaming' ? raw * stadiumMatchdayMultiplier(stadiumLevel) : raw);
+}
+
+export interface SponsorContract {
+  kind: SponsorContractKind;
+  seasonsRemaining: number;
+  /** 체결 시점에 고정된 시즌당 수익(만원) — 이후 평판이 변해도 갱신 전까지 그대로다. */
+  payoutPerSeason: number;
+}
+
+export interface SponsorContractSignResult { ok: boolean; reason?: string; cost?: number; contract?: SponsorContract }
+
+/** 스폰서 계약 신규 체결 — 같은 종류의 계약이 이미 진행 중이면 만료 전까지 중복 체결 불가. */
+export function signSponsorContract(club: Club, kind: SponsorContractKind): SponsorContractSignResult {
+  const existing = club.finance.sponsorContracts ?? [];
+  if (existing.some((c) => c.kind === kind)) {
+    return { ok: false, reason: `이미 ${SPONSOR_CONTRACT_LABEL[kind]} 계약이 진행 중입니다.` };
+  }
+  if (kind === 'stadiumNaming' && (club.finance.stadiumLevel ?? 0) < SPONSOR_CONTRACT_STADIUM_MIN_LEVEL) {
+    return { ok: false, reason: '스타디움을 먼저 증축해야 명명권 계약을 체결할 수 있습니다.' };
+  }
+  const payoutPerSeason = sponsorContractPayout(kind, club.finance.reputation, club.finance.stadiumLevel);
+  const cost = Math.round(payoutPerSeason * SPONSOR_CONTRACT_SIGN_FEE_MULTIPLIER);
+  if (club.finance.balance < cost) return { ok: false, reason: '체결 수수료를 낼 자금이 부족합니다.' };
+  club.finance.balance -= cost;
+  const contract: SponsorContract = { kind, seasonsRemaining: SPONSOR_CONTRACT_LENGTH_SEASONS, payoutPerSeason };
+  club.finance.sponsorContracts = [...existing, contract];
+  return { ok: true, cost, contract };
+}
+
+export interface SponsorContractTickResult { income: number; expired: SponsorContract[] }
+
+/** 매 시즌 정산 시 호출 — 활성 계약분 수익을 합산하고 잔여 시즌을 차감, 만료된 계약은
+ *  목록에서 제거한다(재계약하지 않으면 그 종류의 수익이 끊긴다). */
+export function tickSponsorContracts(club: Club): SponsorContractTickResult {
+  const contracts = club.finance.sponsorContracts ?? [];
+  let income = 0;
+  const remaining: SponsorContract[] = [];
+  const expired: SponsorContract[] = [];
+  for (const c of contracts) {
+    income += c.payoutPerSeason;
+    const seasonsRemaining = c.seasonsRemaining - 1;
+    if (seasonsRemaining > 0) remaining.push({ ...c, seasonsRemaining });
+    else expired.push(c);
+  }
+  club.finance.sponsorContracts = remaining;
+  return { income, expired };
 }
 
 /**
@@ -151,4 +305,17 @@ export function evaluateSponsorGoal(goal: SponsorGoal, res: SponsorGoalResult): 
     case 'top4Finish': return res.top4Finish;
     case 'cupWon': return res.cupWon;
   }
+}
+
+/** 연속 달성 1회당 가산 배율. */
+const SPONSOR_STREAK_BONUS_PER_STREAK = 0.1;
+/** 이 이상은 더 쌓여도 배율이 늘지 않는다(무한 인플레이션 방지). */
+const SPONSOR_STREAK_CAP = 5;
+
+/**
+ * 스폰서 보너스 목표를 연속으로 달성할수록 다음 보너스가 커지는 배율(1.0~1.5).
+ * streak는 "이번 목표를 달성하기 직전까지의" 연속 달성 횟수(0부터 시작).
+ */
+export function sponsorStreakMultiplier(streak: number): number {
+  return 1 + Math.min(streak, SPONSOR_STREAK_CAP) * SPONSOR_STREAK_BONUS_PER_STREAK;
 }

@@ -5,7 +5,7 @@
  */
 import type { Rng } from './rng.js';
 import { clamp } from './math.js';
-import type { BoardStyle } from './types.js';
+import type { BoardPersona, BoardStyle } from './types.js';
 
 export type DemandKind = 'cutWages' | 'winCup' | 'clubTopScorer' | 'topHalfFinish';
 
@@ -90,4 +90,44 @@ export function evaluateDemand(demand: BoardDemand, res: DemandResult): boolean 
 /** 요구 달성/실패에 따른 신뢰도 변화량(+reward / −penalty). */
 export function demandConfidence(demand: BoardDemand, met: boolean): number {
   return met ? demand.reward : -demand.penalty;
+}
+
+// ── 이사회 요구 재협상(신규 개선 항목 22) ────────────────────
+
+/** 재협상 시 즉시 지불하는 신뢰도 비용(성공 여부와 무관하게, 조급한 이사회의 거절 제외). */
+export const RENEGOTIATE_BASE_COST = 5;
+/** 공격적 성향 이사회는 재협상에도 더 비싼 대가를 요구한다. */
+const RENEGOTIATE_STYLE_COST_MUL: Record<BoardStyle, number> = { conservative: 1, aggressive: 1.4 };
+/** 조급한 이사회가 재협상 요청 자체를 거절할 확률(이 경우 비용도 들지 않는다). */
+export const RENEGOTIATE_IMPATIENT_REFUSE_CHANCE = 0.4;
+/** 재협상 성공 시 보상/벌점이 이 배율로 줄어든다(요구 강도 완화). */
+export const RENEGOTIATE_REDUCTION = 0.5;
+
+export interface RenegotiateResult {
+  ok: boolean;
+  reason?: string;
+  /** 성공 시 완화된 새 요구. */
+  newDemand?: BoardDemand;
+  /** 즉시 지불한 신뢰도 비용(거절당하면 0). */
+  confidenceCost: number;
+}
+
+/**
+ * 이사회 특별 요구 재협상 요청 — 감독이 먼저 나서서 요구 강도(보상·벌점 양쪽)를
+ * 낮춰달라고 요청한다. 조급한(impatient) 이사회는 확률적으로 아예 거절할 수 있고,
+ * 공격적(aggressive) 성향 이사회는 응해주더라도 더 비싼 신뢰도 비용을 매긴다.
+ * 시즌당 1회로 제한하는 것은 호출부(앱)의 책임이다.
+ */
+export function renegotiateDemand(demand: BoardDemand, rng: Rng, persona?: BoardPersona): RenegotiateResult {
+  if (persona?.patience === 'impatient' && rng.next() < RENEGOTIATE_IMPATIENT_REFUSE_CHANCE) {
+    return { ok: false, reason: '조급한 이사회가 재협상 요청을 거절했습니다.', confidenceCost: 0 };
+  }
+  const costMul = persona?.style ? RENEGOTIATE_STYLE_COST_MUL[persona.style] : 1;
+  const confidenceCost = Math.round(RENEGOTIATE_BASE_COST * costMul);
+  const newDemand: BoardDemand = {
+    kind: demand.kind,
+    reward: Math.round(demand.reward * RENEGOTIATE_REDUCTION),
+    penalty: Math.round(demand.penalty * RENEGOTIATE_REDUCTION),
+  };
+  return { ok: true, newDemand, confidenceCost };
 }
