@@ -327,3 +327,61 @@ export function upgradeStaff(club: Club, kind: StaffKind): UpgradeResult {
   }
   return { ok: true, cost, newLevel };
 }
+
+// ── 스태프 이적시장 (고도화 항목10) ──────────────────────────
+
+/** 스태프 영입 제안 시 지불할 이적료(만원) — 레벨과 특기 등급에 비례한다. */
+export function staffMarketValue(level: number, member: StaffMember | undefined): number {
+  const base = Math.pow(level / STAFF_MAX, 2) * 500_000;
+  const traitMul = member?.trait ? 1 + STAFF_TRAIT_TIER_BONUS[member.traitTier ?? 'veteran'] * 0.1 : 1;
+  return Math.round(base * traitMul);
+}
+
+/** 특기 없는 인물이 이적 제안을 받아들일 기본 확률. */
+const STAFF_POACH_BASE_ACCEPT_CHANCE = 0.7;
+/** 특기 있는 인재는 원 소속 구단이 쉽게 놓아주지 않는다. */
+const STAFF_POACH_TRAITED_ACCEPT_CHANCE = 0.35;
+
+export interface StaffPoachResult { ok: boolean; reason?: string; fee?: number; poachedName?: string }
+
+/**
+ * 다른 구단의 실명 스태프를 영입 제안한다(고도화 항목10) — 이적료를 지불하면
+ * 그 인물이 내 구단의 해당 직책으로 옮겨오고, 원 소속 구단에는 같은 레벨의 새
+ * 인물이 채워진다. 특기 있는 인재는 상대가 더 자주 거절한다(결정론적 해시).
+ * 내 구단의 해당 레벨은 영입한 인물의 레벨보다 낮았다면 그 레벨로 즉시 올라간다.
+ */
+export function poachStaff(
+  clubs: Club[], myClubId: string, targetClubId: string, kind: NamedStaffKind, rng: Rng,
+): StaffPoachResult {
+  if (myClubId === targetClubId) return { ok: false, reason: '같은 구단에서는 영입할 수 없습니다.' };
+  const me = clubs.find((c) => c.id === myClubId);
+  const target = clubs.find((c) => c.id === targetClubId);
+  if (!me || !target) return { ok: false, reason: '구단을 찾을 수 없습니다.' };
+  const targetMember = target.staff.members?.[kind];
+  if (!targetMember) return { ok: false, reason: '해당 직책에 영입할 인물이 없습니다.' };
+  const targetLevel = target.staff[kind];
+  const fee = staffMarketValue(targetLevel, targetMember);
+  if (me.finance.balance < fee) return { ok: false, reason: '보유 자금이 부족합니다.' };
+
+  const acceptChance = targetMember.trait ? STAFF_POACH_TRAITED_ACCEPT_CHANCE : STAFF_POACH_BASE_ACCEPT_CHANCE;
+  if (!rng.roll(acceptChance)) {
+    return { ok: false, reason: `${target.name}이(가) ${targetMember.name}의 이적을 거절했습니다.` };
+  }
+
+  me.finance.balance -= fee;
+  target.finance.balance += fee;
+  target.finance.transferBudget += fee;
+
+  me.staff[kind] = Math.max(me.staff[kind], targetLevel);
+  const myMembers = me.staff.members ?? (me.staff.members = {});
+  const poachedName = targetMember.name;
+  myMembers[kind] = targetMember;
+
+  // hireStaffMember는 clubId·직책·레벨만으로 결정되므로, 레벨이 그대로면 방금
+  // 떠난 바로 그 인물을 다시 뽑아버린다. hireReplacementStaffMember(rng 솔트 포함)를
+  // 써서 항상 다른 후임이 나오도록 한다.
+  const targetMembers = target.staff.members ?? (target.staff.members = {});
+  targetMembers[kind] = hireReplacementStaffMember(target.id, kind, targetLevel, rng);
+
+  return { ok: true, fee, poachedName };
+}

@@ -41,6 +41,7 @@ import {
   upgradeStaff as engineUpgradeStaff, upgradeStadium as engineUpgradeStadium,
   upgradeTrainingGround as engineUpgradeTrainingGround,
   negotiateStaffRaise as engineNegotiateStaffRaise,
+  poachStaff as enginePoachStaff,
   upgradeAcademy as engineUpgradeAcademy, formatMoney,
   loyaltyDiscount,
   computeTeamStrength, currentAbility, recentForm, buildScoutingReport, lineOf,
@@ -369,6 +370,14 @@ export function myTactic(state: GameState): Tactic {
 const transferSeed = (s: GameState) => s.seed + s.season * 1000 + 1;
 const seasonSeed = (s: GameState) => s.seed + s.season * 1000 + 2;
 const offseasonSeed = (s: GameState) => s.seed + s.season * 1000 + 3;
+
+/** 문자열을 정수 시드로 뭉개는 경량 해시(암호학적 용도 아님) — 스태프 영입 제안(고도화
+ *  항목10)처럼 상대 구단id를 시드에 섞어 넣어야 하는 곳에 쓴다. */
+function simpleStrSeed(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return h;
+}
 
 /** live 스냅샷 → 엔진 SeasonState 복원 (내 부 구단만 부착). */
 function toSeasonState(state: GameState) {
@@ -1267,7 +1276,7 @@ export function myLoanedOutPlayers(state: GameState): { player: Player; loanClub
   return out;
 }
 
-const STAFF_LABEL: Record<string, string> = {
+export const STAFF_LABEL: Record<string, string> = {
   coaching: '총괄 코치', medical: '의료', scouting: '스카우팅', youth: '유스',
   coachGk: 'GK 코치', coachAttack: '공격 코치', coachDefense: '수비 코치', coachPhysical: '피지컬 코치',
   reserveCoach: '리저브 전담 코치',
@@ -1299,6 +1308,23 @@ export function negotiateStaffRaiseAction(state: GameState, kind: NamedStaffKind
   return {
     state: { ...state }, ok: true,
     message: `${STAFF_LABEL[kind]} ${r.staffName} 연봉 인상 협상 타결 (−${formatMoney(r.cost!)}, 계약 연장)`,
+  };
+}
+
+/** 다른 구단의 실명 스태프를 영입 제안한다(고도화 항목10) — 이적료를 지불하면 그
+ *  인물이 우리 구단으로 옮겨오고, 상대 구단엔 같은 레벨의 새 인물이 채워진다.
+ *  특기 있는 인재는 더 자주 거절하므로, attempt를 늘려 재시도할 수 있다(성사
+ *  여부는 매번 다시 판정 — 같은 attempt로는 항상 같은 결과). */
+export function poachStaffAction(
+  state: GameState, targetClubId: string, kind: NamedStaffKind, attempt = 0,
+): ActionOutcome {
+  if (state.live) return { state, ok: false, message: '이적은 프리시즌에만 가능합니다.' };
+  const seed = offseasonSeed(state) + simpleStrSeed(`${targetClubId}:${kind}`) + attempt * 97;
+  const r = enginePoachStaff(state.clubs, state.myClubId, targetClubId, kind, new Rng(seed));
+  if (!r.ok) return { state: { ...state }, ok: false, message: r.reason! };
+  return {
+    state: { ...state }, ok: true,
+    message: `${STAFF_LABEL[kind]} ${r.poachedName} 영입 완료 (−${formatMoney(r.fee!)})`,
   };
 }
 

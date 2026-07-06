@@ -134,8 +134,9 @@ export {
   STAFF_TRAIT_TIER_BONUS, STAFF_TRAIT_TIER_LABEL,
   negotiateStaffRaise, staffRaiseCost, STAFF_RAISE_ELIGIBLE_YEARS, STAFF_RAISE_EXTENSION_YEARS,
   staffRetireChance, STAFF_RETIRE_MIN_AGE, STAFF_RETIRE_HARD_AGE,
+  poachStaff, staffMarketValue,
   type StaffKind, type UpgradeResult, type SpecialistCoachKind, type NamedStaffKind,
-  type StaffDepartureEvent, type StaffRaiseResult, type StaffRetirementEvent,
+  type StaffDepartureEvent, type StaffRaiseResult, type StaffRetirementEvent, type StaffPoachResult,
 } from './staffActions.js';
 export {
   enforceFinancialFairPlay, inFinancialCrisis, wageBudget, annualWageBill,

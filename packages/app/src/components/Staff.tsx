@@ -3,10 +3,11 @@ import {
   Activity, Handshake,
   type LucideIcon,
 } from 'lucide-react';
-import { myClub, type GameState, type ActionOutcome } from '../game.js';
+import { useState } from 'react';
+import { myClub, STAFF_LABEL, type GameState, type ActionOutcome } from '../game.js';
 import {
   upgradeCost, STAFF_MAX, formatMoney, specialistCoachLevel, STAFF_TRAIT_LABEL, STAFF_TRAIT_DESC,
-  STAFF_TRAIT_TIER_LABEL, STAFF_TRAIT_TIER_BONUS,
+  STAFF_TRAIT_TIER_LABEL, STAFF_TRAIT_TIER_BONUS, staffMarketValue,
   STADIUM_MAX, stadiumUpgradeCost, stadiumMatchdayMultiplier,
   ACADEMY_MAX, academyUpgradeCost, academyPotentialBonus, staffTraitSynergyBonus,
   staffRaiseCost, STAFF_RAISE_ELIGIBLE_YEARS, ACADEMY_FOCUS_POTENTIAL_BONUS_PER_LEVEL,
@@ -29,6 +30,7 @@ interface Props {
   onNegotiateRaise: (kind: NamedStaffKind) => ActionOutcome;
   onSetAcademyFocus: (focus: Line | undefined) => void;
   onSignSponsorContract: (kind: SponsorContractKind) => ActionOutcome;
+  onPoachStaff: (targetClubId: string, kind: NamedStaffKind, attempt: number) => ActionOutcome;
 }
 
 const SPONSOR_CONTRACT_KINDS: SponsorContractKind[] = ['kit', 'stadiumNaming'];
@@ -73,9 +75,83 @@ const INJURY_RISK_LABEL: Record<InjuryRiskTier, { text: string; cls: string }> =
 /** 리포트에 표시할 최대 인원 — 스쿼드 전체가 아니라 위험도 상위만 보여준다. */
 const INJURY_RISK_REPORT_SIZE = 8;
 
+/** 스태프 이적시장(고도화 항목10) — 라이벌 구단이 보유한 실명 스태프를 영입 제안한다. */
+function StaffMarketPanel({ game, onPoachStaff }: {
+  game: GameState;
+  onPoachStaff: (targetClubId: string, kind: NamedStaffKind, attempt: number) => ActionOutcome;
+}) {
+  const toast = useResultToast();
+  const club = myClub(game);
+  const [kind, setKind] = useState<NamedStaffKind>('coaching');
+  const [attempts, setAttempts] = useState<Record<string, number>>({});
+
+  const candidates = game.clubs
+    .filter((c) => c.id !== game.myClubId)
+    .map((c) => ({ club: c, member: c.staff.members?.[kind], level: c.staff[kind] }))
+    .filter((c): c is { club: typeof c.club; member: NonNullable<typeof c.member>; level: number } => c.member !== undefined)
+    .sort((a, b) => b.level - a.level)
+    .slice(0, 10);
+
+  return (
+    <div className="mentor-panel">
+      <h3>🔁 스태프 이적시장</h3>
+      <div className="mentor-form">
+        <select value={kind} onChange={(e) => setKind(e.target.value as NamedStaffKind)}>
+          {NAMED_KINDS.map((k) => <option key={k} value={k}>{STAFF_LABEL[k]}</option>)}
+        </select>
+      </div>
+      {candidates.length === 0 ? (
+        <p className="muted small">다른 구단에 영입할 만한 인물이 없습니다.</p>
+      ) : (
+        <table className="data-table compact">
+          <thead>
+            <tr><th>구단</th><th>인물</th><th>레벨</th><th>특기</th><th>이적료</th><th></th></tr>
+          </thead>
+          <tbody>
+            {candidates.map(({ club: c, member, level }) => {
+              const fee = staffMarketValue(level, member);
+              const key = `${c.id}:${kind}`;
+              const attempt = attempts[key] ?? 0;
+              return (
+                <tr key={c.id}>
+                  <td className="name">{c.name}</td>
+                  <td>{member.name}</td>
+                  <td>{level}</td>
+                  <td className="muted small">
+                    {member.trait
+                      ? `${STAFF_TRAIT_TIER_LABEL[member.traitTier ?? 'veteran']} ${STAFF_TRAIT_LABEL[member.trait]}`
+                      : '—'}
+                  </td>
+                  <td>{formatMoney(fee)}</td>
+                  <td>
+                    <button
+                      className="btn-small"
+                      disabled={club.finance.balance < fee}
+                      onClick={() => {
+                        const r = onPoachStaff(c.id, kind, attempt);
+                        toast(r);
+                        setAttempts((prev) => ({ ...prev, [key]: attempt + 1 }));
+                      }}
+                    >
+                      영입 제안
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+      <p className="muted small">
+        특기 있는 인재는 원 소속 구단이 더 자주 거절합니다. 거절돼도 다시 시도할 수 있습니다.
+      </p>
+    </div>
+  );
+}
+
 export function Staff({
   game, onUpgrade, onUpgradeStadium, onUpgradeAcademy, onUpgradeTrainingGround, onNegotiateRaise, onSetAcademyFocus,
-  onSignSponsorContract,
+  onSignSponsorContract, onPoachStaff,
 }: Props) {
   const club = myClub(game);
   const toast = useResultToast();
@@ -265,6 +341,8 @@ export function Staff({
           </button>
         </div>
       </div>
+
+      <StaffMarketPanel game={game} onPoachStaff={onPoachStaff} />
 
       <div className="injury-risk-report">
         <h3>
