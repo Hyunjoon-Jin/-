@@ -20,7 +20,7 @@ import {
   summarizeStats, aggregatePlayerStats, topScorers as engineTopScorers, recentPlayerForm,
   seasonSquadSnapshot,
   createCup, playCupRound as enginePlayCupRound, playCupToEnd, isCupOver, nextCupPairings,
-  CUP_FINAL_ROUND_NAME,
+  CUP_FINAL_ROUND_NAME, findCupUpsets,
   applyPromotionRelegation, clubsInDivision, runInternationalBreak,
   runInternationalTournament, TOURNAMENT_INTERVAL_SEASONS, checkInternationalRetirements,
   confidenceDelta, applyConfidence, isSacked, START_CONFIDENCE, boardStatus, boardTierUpgradeBonus,
@@ -553,8 +553,13 @@ export function finishSeason(state: GameState): GameState {
   // 4) 컵 자동 완료 + 우승 상금 (전 구단)
   let cupChampionId: string | undefined;
   let cupChampionName: string | undefined;
+  // 컵대회 이변(자이언트 킬링, 신규 개선 항목 29) — 내 구단이 이변의 주인공이거나
+  // 희생양인 경기만 골라 시즌 요약에 남긴다(전체 대회 이변은 앱 표시 범위 밖).
+  let myCupUpsets: ReturnType<typeof findCupUpsets> = [];
   if (state.cup) {
     const finishedCup = playCupToEnd(state.cup, state.clubs, tacticMap(state));
+    myCupUpsets = findCupUpsets(state.clubs, finishedCup)
+      .filter((u) => u.winnerId === state.myClubId || u.loserId === state.myClubId);
     if (finishedCup.championId) {
       cupChampionId = finishedCup.championId;
       const champClub = state.clubs.find((c) => c.id === finishedCup.championId);
@@ -868,6 +873,7 @@ export function finishSeason(state: GameState): GameState {
     sponsorContractExpired,
     boldPrediction: boldPredictionResult,
     watchlistContractAlerts: watchlistContractAlerts.length > 0 ? watchlistContractAlerts : undefined,
+    cupUpsets: myCupUpsets.length > 0 ? myCupUpsets : undefined,
   };
 
   const repaired = repairTactic(myClub(state), myTactic(state));

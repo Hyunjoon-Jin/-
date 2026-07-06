@@ -76,8 +76,8 @@ export {
 export { runTransferWindow, type TransferDeal } from './transfer.js';
 export {
   createCup, playCupRound, playCupToEnd, isCupOver, cupSurvivors, nextCupPairings,
-  CUP_FINAL_ROUND_NAME,
-  type CupState, type CupRound, type CupTie, type CupPairing, type NextCupRound,
+  CUP_FINAL_ROUND_NAME, CUP_UPSET_REP_GAP, findCupUpsets,
+  type CupState, type CupRound, type CupTie, type CupPairing, type NextCupRound, type CupUpsetEvent,
 } from './cup.js';
 export {
   applyPromotionRelegation, clubsInDivision, type PromRelResult,

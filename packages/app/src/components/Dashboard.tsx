@@ -329,6 +329,27 @@ export function Dashboard({
       ),
     });
   }
+  if (last?.cupUpsets !== undefined && last.cupUpsets.length > 0) {
+    seasonBanners.push({
+      key: 'cupUpsets', priority: 5.8,
+      node: (
+        <>
+          {last.cupUpsets.map((u) => {
+            const won = u.winnerId === game.myClubId;
+            return (
+              <Banner key={`${u.round}-${u.winnerId}-${u.loserId}`} tone={won ? 'success' : 'danger'}>
+                {won
+                  ? <>🎉 <b>이변의 주인공!</b> {u.round}에서 <b>{u.loserName}</b>을(를) 꺾었습니다
+                      (평판 격차 {u.repGap}).</>
+                  : <>😱 <b>이변의 희생양…</b> {u.round}에서 <b>{u.winnerName}</b>에게 발목을 잡혔습니다
+                      (평판 격차 {u.repGap}).</>}
+              </Banner>
+            );
+          })}
+        </>
+      ),
+    });
+  }
   if (last?.boardTierBonus !== undefined) {
     seasonBanners.push({
       key: 'boardTierBonus', priority: 3,

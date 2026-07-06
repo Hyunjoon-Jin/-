@@ -207,3 +207,43 @@ export function playCupToEnd(cup: CupState, clubs: Club[], tactics?: TacticMap):
   }
   return cur;
 }
+
+/** 이변(자이언트 킬링, 신규 개선 항목 29)으로 칠 최소 평판 격차 — 승자가 패자보다
+ *  이만큼(이상) 평판이 낮으면 이변으로 판정한다. */
+export const CUP_UPSET_REP_GAP = 4;
+
+export interface CupUpsetEvent {
+  round: string;
+  winnerId: string;
+  winnerName: string;
+  loserId: string;
+  loserName: string;
+  /** 패자 평판 − 승자 평판(양수, 클수록 더 큰 이변). */
+  repGap: number;
+}
+
+/**
+ * 컵대회 전 라운드를 훑어, 평판이 낮은 쪽이 이긴 이변 경기를 모두 찾는다.
+ * 부전승(awayId===null)은 대상에서 제외된다.
+ */
+export function findCupUpsets(clubs: Club[], cup: CupState): CupUpsetEvent[] {
+  const byId = new Map(clubs.map((c) => [c.id, c]));
+  const out: CupUpsetEvent[] = [];
+  for (const round of cup.rounds) {
+    for (const tie of round.ties) {
+      if (tie.awayId === null) continue;
+      const loserId = tie.winnerId === tie.homeId ? tie.awayId : tie.homeId;
+      const winner = byId.get(tie.winnerId);
+      const loser = byId.get(loserId);
+      if (!winner || !loser) continue;
+      const repGap = loser.finance.reputation - winner.finance.reputation;
+      if (repGap >= CUP_UPSET_REP_GAP) {
+        out.push({
+          round: round.name, winnerId: winner.id, winnerName: winner.name,
+          loserId: loser.id, loserName: loser.name, repGap,
+        });
+      }
+    }
+  }
+  return out;
+}

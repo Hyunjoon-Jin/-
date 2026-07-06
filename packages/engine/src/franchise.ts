@@ -9,6 +9,7 @@ import { POSITIONS } from './types.js';
 import { simulateSeason, type TableRow } from './league.js';
 import { settleSeason, type SeasonFinanceReport, type SponsorContractKind } from './finance.js';
 import type { BoldPredictionResult } from './board.js';
+import type { CupUpsetEvent } from './cup.js';
 import { runTransferWindow, type TransferDeal } from './transfer.js';
 import { progressPlayer } from './progression.js';
 import { generateAcademyIntake, generateYouthPlayer, assignSquadNumber } from './generate.js';
@@ -169,6 +170,9 @@ export interface SeasonSummary {
   /** 이적 관심 목록(신규 개선 항목 27, 앱 전용)에 올린 선수 중 이번 시즌 계약이 마지막
    *  해로 접어든 선수 알림. */
   watchlistContractAlerts?: { playerId: string; name: string; clubName: string }[];
+  /** 이번 시즌 컵대회에서 내 구단이 이변의 주인공이거나 희생양이었던 경기(신규 개선
+   *  항목 29, 앱 전용). */
+  cupUpsets?: CupUpsetEvent[];
 }
 
 /** 유스 졸업생 동문 네트워크(신규 개선 항목 18) — 과거 우리 리저브 출신으로 1군
