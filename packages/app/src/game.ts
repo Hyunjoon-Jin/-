@@ -16,6 +16,7 @@ import {
   sellOffers, acceptSellOffer,
   loanPlayerOut, recallLoanPlayer, applyLoanWageSubsidies, swapPlayers,
   renegotiateLoanWageShare as engineRenegotiateLoanWageShare, type LoanWageRenegotiationDirection,
+  renegotiateBuybackClause as engineRenegotiateBuybackClause, type BuybackRenegotiationDirection,
   type OfferEvaluation, type SellOffer, type LoanTerms, type LoanReturnEvent, type LoanObligationEvent,
   summarizeStats, aggregatePlayerStats, topScorers as engineTopScorers, recentPlayerForm,
   seasonSquadSnapshot,
@@ -1156,6 +1157,21 @@ export function buyback(state: GameState, playerId: string): ActionOutcome {
   return {
     state: afterSquadChange(state), ok: true,
     message: `${r.playerName} 바이백 완료 (${r.sellerName} → 우리 구단, ${formatMoney(r.fee!)})`,
+  };
+}
+
+/** 바이백 조항 금액 재협상을 요청한다(고도화 항목5). 시즌당 1회만 시도할 수 있으며,
+ *  선수 시가가 조항 금액 대비 충분히 오르내렸을 때만 상대측이 요청을 받아들인다. */
+export function renegotiateBuybackClauseAction(
+  state: GameState, playerId: string, direction: BuybackRenegotiationDirection,
+): ActionOutcome {
+  if (state.live) return { state, ok: false, message: '이적은 프리시즌에만 가능합니다.' };
+  const r = engineRenegotiateBuybackClause(state.clubs, playerId, direction);
+  if (!r.ok) return { state: { ...state }, ok: false, message: r.reason! };
+  return {
+    state: { ...state },
+    ok: true,
+    message: `바이백 조항 금액이 ${formatMoney(r.newFee!)}(으)로 조정되었습니다.`,
   };
 }
 

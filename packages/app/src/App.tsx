@@ -4,7 +4,7 @@ import {
   startSeason, playRound, playRestOfSeason, finishSeason, advanceFullSeason,
   playCupRound, playContinentalCupRound, negotiate, buyAt, buyViaReleaseClause, offersFor, acceptSell, release, upgradeStaffAction,
   negotiateStaffRaiseAction,
-  buyback,
+  buyback, renegotiateBuybackClauseAction,
   attachAddOn,
   exerciseBuyOption,
   panicBuyAction,
@@ -195,6 +195,12 @@ export function App() {
   const handleBuyback = (id: string): ActionOutcome => {
     const outcome = buyback(game, id);
     if (outcome.ok) update(outcome.state);
+    return outcome;
+  };
+
+  const handleRenegotiateBuyback = (id: string, direction: 'increase' | 'decrease'): ActionOutcome => {
+    const outcome = renegotiateBuybackClauseAction(game, id, direction);
+    update(outcome.state);
     return outcome;
   };
 
@@ -424,6 +430,7 @@ export function App() {
                 onSelect={setDetailPlayer}
                 onNegotiationBreakdown={(id) => update(recordNegotiationBreakdown(game, id))}
                 onBuyback={handleBuyback}
+                onRenegotiateBuyback={handleRenegotiateBuyback}
                 onAttachAddOn={handleAttachAddOn}
                 onPanicBuy={handlePanicBuy}
                 onRivalSnipe={handleRivalSnipe}

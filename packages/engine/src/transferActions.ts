@@ -654,6 +654,57 @@ export function exerciseBuyback(clubs: Club[], myClubId: string, playerId: strin
   return { ok: true, fee, sellerName: currentClub.name, playerName: player.name };
 }
 
+export type BuybackRenegotiationDirection = 'increase' | 'decrease';
+
+/** 재협상 1회당 바이백 금액이 오르내리는 비율(고도화 항목5). */
+export const BUYBACK_RENEGOTIATION_STEP = 0.2;
+/** 현재 구단이 "선수 가치가 크게 올랐다"며 인상을 요청할 수 있는 배율 기준
+ *  (시가가 바이백 금액의 이 배율 이상이어야 정당하다고 받아들여진다). */
+export const BUYBACK_VALUE_INCREASE_RATIO = 1.3;
+/** 원 소속(권리 보유) 구단이 "선수 가치가 떨어졌다"며 인하를 요청할 수 있는 배율
+ *  기준(시가가 바이백 금액의 이 배율 이하여야 정당하다고 받아들여진다). */
+export const BUYBACK_VALUE_DECREASE_RATIO = 0.7;
+
+export interface BuybackRenegotiationResult { ok: boolean; reason?: string; newFee?: number }
+
+/**
+ * 바이백 조항 금액 재협상(고도화 항목5) — 서명 시 고정됐던 금액을 시즌 중 한 번
+ * 조정 요청할 수 있다. 현재 구단이 인상(increase)을 요청하면 선수의 시가가 조항
+ * 금액보다 충분히 올랐을 때만(그렇지 않으면 헐값에 놓아줄 이유가 없다는 논리)
+ * 받아들여지고, 원 소속 구단이 인하(decrease)를 요청하면 시가가 조항 금액보다
+ * 충분히 떨어졌을 때만(그래야 실제로 되사올 유인이 생긴다는 논리) 받아들여진다.
+ * 시즌당 1회 제한.
+ */
+export function renegotiateBuybackClause(
+  clubs: Club[], playerId: string, direction: BuybackRenegotiationDirection,
+): BuybackRenegotiationResult {
+  const currentClub = clubs.find((c) => c.players.some((p) => p.id === playerId));
+  if (!currentClub) return { ok: false, reason: '해당 선수를 찾을 수 없습니다.' };
+  const player = currentClub.players.find((p) => p.id === playerId)!;
+  if (!player.buybackClause) return { ok: false, reason: '바이백 조항이 없는 선수입니다.' };
+  if (player.buybackRenegotiatedThisSeason) {
+    return { ok: false, reason: '이번 시즌에는 이미 바이백 조항 재협상을 시도했습니다.' };
+  }
+  player.buybackRenegotiatedThisSeason = true;
+  const value = marketValue(player);
+  const currentFee = player.buybackClause.fee;
+
+  if (direction === 'increase') {
+    if (value < currentFee * BUYBACK_VALUE_INCREASE_RATIO) {
+      return { ok: false, reason: '선수 가치가 아직 크게 오르지 않아 원 소속 구단이 인상 요청을 거절했습니다.' };
+    }
+    const newFee = Math.round(currentFee * (1 + BUYBACK_RENEGOTIATION_STEP));
+    player.buybackClause = { ...player.buybackClause, fee: newFee };
+    return { ok: true, newFee };
+  }
+  if (value > currentFee * BUYBACK_VALUE_DECREASE_RATIO) {
+    return { ok: false, reason: '선수 가치가 아직 충분히 떨어지지 않아 현재 구단이 인하 요청을 거절했습니다.' };
+  }
+  const newFee = Math.round(currentFee * (1 - BUYBACK_RENEGOTIATION_STEP));
+  player.buybackClause = { ...player.buybackClause, fee: newFee };
+  return { ok: true, newFee };
+}
+
 // ── 성과 기반 후불 이적료 (Add-on, 신규 개선 항목 3 → 고도화 항목4: 다단계화) ──
 
 export interface AddOnAttachResult { ok: boolean; reason?: string }

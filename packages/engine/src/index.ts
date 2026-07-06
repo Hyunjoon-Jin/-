@@ -117,11 +117,14 @@ export {
   LOAN_OBLIGATION_MIN_APPS, LOAN_OBLIGATION_MAX_APPS,
   renegotiateLoanWageShare, LOAN_WAGE_RENEGOTIATION_STEP,
   LOAN_WAGE_LOW_APPS_THRESHOLD, LOAN_WAGE_HIGH_APPS_THRESHOLD,
+  renegotiateBuybackClause, BUYBACK_RENEGOTIATION_STEP,
+  BUYBACK_VALUE_INCREASE_RATIO, BUYBACK_VALUE_DECREASE_RATIO,
   type TransferTarget, type BuyResult, type SellResult,
   type OfferOutcome, type OfferEvaluation, type SellOffer,
   type LoanTerms, type LoanResult, type SwapResult, type AgentPersonality, type BuybackResult,
   type AddOnAttachResult, type LoanBuyOptionResult, type AgentRelationsTier, type RivalSnipeResult,
   type LoanWageRenegotiationDirection, type LoanWageRenegotiationResult,
+  type BuybackRenegotiationDirection, type BuybackRenegotiationResult,
 } from './transferActions.js';
 export {
   upgradeStaff, upgradeCost, STAFF_KINDS, STAFF_MAX,

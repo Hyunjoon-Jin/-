@@ -535,6 +535,7 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
       if (player.buybackClause) {
         player.buybackClause.seasonsRemaining -= 1;
         if (player.buybackClause.seasonsRemaining <= 0) player.buybackClause = undefined;
+        else player.buybackRenegotiatedThisSeason = false; // 새 시즌엔 다시 재협상 시도 가능(고도화 항목5)
       }
 
       // 로열티(신규 개선 항목 10) — 이적 없이 이 구단에서 시즌을 마쳤으니 1시즌 가산.

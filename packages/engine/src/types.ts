@@ -165,6 +165,10 @@ export interface Player {
   /** 바이백 조항(신규 개선 항목 2) — 판매 시 원 소속 구단이 향후 정해진 금액으로
    *  되사올 수 있는 권리를 남긴다. seasonsRemaining이 0이 되면 자동 소멸. */
   buybackClause?: { clubId: string; fee: number; seasonsRemaining: number };
+  /** 이번 시즌에 이미 바이백 조항 금액 재협상을 시도했는지(고도화 항목5, 시즌당 1회
+   *  제한). 시즌이 넘어가고 조항이 계속 유효하면 초기화된다. 구버전 세이브는 없을 수
+   *  있어 optional(없으면 아직 시도 안 함 취급). */
+  buybackRenegotiatedThisSeason?: boolean;
   /** 성과 기반 후불 이적료(Add-on, 신규 개선 항목 3 → 고도화 항목4에서 다단계화) —
    *  새 구단에서 이번 시즌 성과 지표(출전/득점/도움/클린시트)가 각 티어 기준에
    *  도달할 때마다 해당 티어 몫만 원 소속 구단에 지급하고, 그 티어만 소멸한다(다른

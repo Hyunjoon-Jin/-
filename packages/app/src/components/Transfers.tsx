@@ -28,6 +28,7 @@ interface Props {
   onOffers: (playerId: string) => SellOffer[];
   onAcceptSell: (playerId: string, buyerId: string, buybackFee?: number) => ActionOutcome;
   onBuyback: (playerId: string) => ActionOutcome;
+  onRenegotiateBuyback: (playerId: string, direction: 'increase' | 'decrease') => ActionOutcome;
   onAttachAddOn: (playerId: string, tiers: AddOnTier[]) => ActionOutcome;
   onRelease: (playerId: string) => ActionOutcome;
   onLoanOut: (playerId: string, toClubId: string, terms: LoanTerms) => ActionOutcome;
@@ -97,7 +98,7 @@ export function Transfers(props: Props) {
 function TransferMarket({
   game, onNegotiate, onBuyAt, onBuyViaReleaseClause, onOffers, onAcceptSell, onRelease,
   onLoanOut, onLoanIn, onRecallLoan, onExerciseBuyOption, onSwap, onSelect, onNegotiationBreakdown,
-  onBuyback, onAttachAddOn, onPanicBuy, onRivalSnipe, onToggleWatchlist, onRenegotiateLoanWage,
+  onBuyback, onRenegotiateBuyback, onAttachAddOn, onPanicBuy, onRivalSnipe, onToggleWatchlist, onRenegotiateLoanWage,
 }: Props) {
   const club = myClub(game);
   const toast = useToast();
@@ -310,13 +311,23 @@ function TransferMarket({
                           </button>
                         )}
                         {t.player.buybackClause?.clubId === game.myClubId && (
-                          <button
-                            className="btn-small clause-buy"
-                            title={`바이백 조항 ${formatMoney(t.player.buybackClause.fee)}로 즉시 재영입`}
-                            onClick={(e) => { e.stopPropagation(); setBuyingBack(t); }}
-                          >
-                            바이백
-                          </button>
+                          <>
+                            <button
+                              className="btn-small clause-buy"
+                              title={`바이백 조항 ${formatMoney(t.player.buybackClause.fee)}로 즉시 재영입`}
+                              onClick={(e) => { e.stopPropagation(); setBuyingBack(t); }}
+                            >
+                              바이백
+                            </button>
+                            <button
+                              className="btn-small"
+                              disabled={t.player.buybackRenegotiatedThisSeason}
+                              title="선수 가치가 충분히 떨어졌다면 바이백 금액 인하를 요청할 수 있습니다"
+                              onClick={(e) => { e.stopPropagation(); act(onRenegotiateBuyback(t.player.id, 'decrease')); }}
+                            >
+                              인하 요청
+                            </button>
+                          </>
                         )}
                         <button
                           className="btn-small"
@@ -382,6 +393,14 @@ function TransferMarket({
                         🔓
                       </span>
                     )}
+                    {p.buybackClause !== undefined && (
+                      <span
+                        className="clause-badge"
+                        title={`원 소속 구단이 ${formatMoney(p.buybackClause.fee)}에 되사올 수 있는 바이백 조항이 걸려 있습니다`}
+                      >
+                        🔁🔓
+                      </span>
+                    )}
                   </td>
                   <td><span className={`pos-chip pos-${lineOf(p.position).toLowerCase()}`}>{p.position}</span></td>
                   <td>{p.age}</td>
@@ -405,6 +424,16 @@ function TransferMarket({
                         >
                           임대보내기
                         </button>
+                        {p.buybackClause !== undefined && (
+                          <button
+                            className="btn-small"
+                            disabled={p.buybackRenegotiatedThisSeason}
+                            title="선수 가치가 충분히 올랐다면 바이백 금액 인상을 요청할 수 있습니다"
+                            onClick={(e) => { e.stopPropagation(); act(onRenegotiateBuyback(p.id, 'increase')); }}
+                          >
+                            인상 요청
+                          </button>
+                        )}
                       </>
                     ) : (
                       <>
