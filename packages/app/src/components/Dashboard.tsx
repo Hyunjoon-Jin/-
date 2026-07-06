@@ -7,7 +7,7 @@ import {
 import {
   formatMoney, currentAbility, wageBudget, annualWageBill, inFinancialCrisis,
   boardStatus, DEMAND_LABEL, SPONSOR_GOAL_LABEL, sponsorStreakMultiplier, SPONSOR_CONTRACT_LABEL,
-  boldPredictionTarget,
+  boldPredictionTarget, ADD_ON_CONDITION_LABEL,
   type BoardStatus, type ManagerPersona, type BoardPersona, type Line, type NamedStaffKind,
 } from '@soccer-tycoon/engine';
 import { Landmark } from 'lucide-react';
@@ -366,11 +366,11 @@ export function Dashboard({
       key: 'addOnPayouts', priority: 6.7,
       node: (
         <Banner tone="warning" title="💰 성과 기반 후불 이적료 발동">
-          {last.addOnPayouts.map((a) => (
-            <p key={a.playerId}>
+          {last.addOnPayouts.map((a, i) => (
+            <p key={`${a.playerId}-${i}`}>
               {a.fromClubId === game.myClubId
-                ? <><b>{a.name}</b> 선수가 조건을 달성해 <b>{a.toClubName}</b>에 추가 이적료 <b>{formatMoney(a.fee)}</b>을(를) 지급했습니다.</>
-                : <><b>{a.name}</b> 선수가 <b>{a.fromClubName}</b>에서 조건을 달성해 추가 이적료 <b>{formatMoney(a.fee)}</b>을(를) 받았습니다.</>}
+                ? <><b>{a.name}</b> 선수가 {ADD_ON_CONDITION_LABEL[a.tierKind]} {a.tierThreshold} 조건을 달성해 <b>{a.toClubName}</b>에 추가 이적료 <b>{formatMoney(a.fee)}</b>을(를) 지급했습니다.</>
+                : <><b>{a.name}</b> 선수가 <b>{a.fromClubName}</b>에서 {ADD_ON_CONDITION_LABEL[a.tierKind]} {a.tierThreshold} 조건을 달성해 추가 이적료 <b>{formatMoney(a.fee)}</b>을(를) 받았습니다.</>}
             </p>
           ))}
         </Banner>

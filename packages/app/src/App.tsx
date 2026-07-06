@@ -21,7 +21,7 @@ import {
   declareBoldPredictionAction,
   type GameState, type ActionOutcome, type WatchSetup, type Difficulty, type MediaEvent,
 } from './game.js';
-import type { Tactic, MatchResult, LoanTerms } from '@soccer-tycoon/engine';
+import type { Tactic, MatchResult, LoanTerms, AddOnTier } from '@soccer-tycoon/engine';
 import { createSaveStore } from './storage.js';
 import { recordSackedStint } from './career.js';
 import { StartScreen } from './components/StartScreen.js';
@@ -198,10 +198,8 @@ export function App() {
     return outcome;
   };
 
-  const handleAttachAddOn = (
-    id: string, appearances: number | undefined, goals: number | undefined, fee: number,
-  ): ActionOutcome => {
-    const outcome = attachAddOn(game, id, appearances, goals, fee);
+  const handleAttachAddOn = (id: string, tiers: AddOnTier[]): ActionOutcome => {
+    const outcome = attachAddOn(game, id, tiers);
     if (outcome.ok) update(outcome.state);
     return outcome;
   };

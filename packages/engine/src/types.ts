@@ -57,6 +57,18 @@ export type Line = 'GK' | 'DEF' | 'MID' | 'ATT';
 
 // ── 선수 ──────────────────────────────────────────────────
 
+/** 성과 기반 후불 이적료(Add-on) 조항의 발동 조건 종류(고도화 항목4). */
+export type AddOnConditionKind = 'appearances' | 'goals' | 'assists' | 'cleanSheets';
+
+/** Add-on 조항의 개별 지급 티어 — threshold(해당 시즌 누적치)에 도달하면 fee가
+ *  1회 지급된다. 여러 티어를 조합하면 단계별 성과급이 된다(예: 10골 5천만원,
+ *  20골 추가 1억원). */
+export interface AddOnTier {
+  kind: AddOnConditionKind;
+  threshold: number;
+  fee: number;
+}
+
 export interface Player {
   id: string;
   name: string;
@@ -112,6 +124,12 @@ export interface Player {
   internationalRetired?: boolean;
   /** 이번 시즌 득점(리그+컵). 시즌 경계 리셋. */
   seasonGoals: number;
+  /** 이번 시즌 도움(리그+컵). 시즌 경계 리셋. 구버전 세이브는 없을 수 있어
+   *  optional(없으면 0 취급, 고도화 항목4: Add-on 조항 다단계화). */
+  seasonAssists?: number;
+  /** 이번 시즌 클린시트(무실점 경기, GK만 해당). 시즌 경계 리셋. 구버전 세이브는
+   *  없을 수 있어 optional(없으면 0 취급, 고도화 항목4). */
+  seasonCleanSheets?: number;
   /** 통산 선발 출전 수(전 시즌 누적). */
   careerApps: number;
   /** 통산 득점(전 시즌 누적). */
@@ -147,10 +165,13 @@ export interface Player {
   /** 바이백 조항(신규 개선 항목 2) — 판매 시 원 소속 구단이 향후 정해진 금액으로
    *  되사올 수 있는 권리를 남긴다. seasonsRemaining이 0이 되면 자동 소멸. */
   buybackClause?: { clubId: string; fee: number; seasonsRemaining: number };
-  /** 성과 기반 후불 이적료(Add-on, 신규 개선 항목 3) — 새 구단에서 이번 시즌 출전
-   *  또는 득점이 조건에 도달하면 원 소속 구단에 추가 이적료를 지급하고 소멸한다.
-   *  두 조건 중 하나만 있어도 되며, 있는 조건 중 하나라도 달성하면 발동한다. */
-  addOnClause?: { sellerClubId: string; appearances?: number; goals?: number; fee: number };
+  /** 성과 기반 후불 이적료(Add-on, 신규 개선 항목 3 → 고도화 항목4에서 다단계화) —
+   *  새 구단에서 이번 시즌 성과 지표(출전/득점/도움/클린시트)가 각 티어 기준에
+   *  도달할 때마다 해당 티어 몫만 원 소속 구단에 지급하고, 그 티어만 소멸한다(다른
+   *  티어는 별도로 계속 유효). 모든 티어가 지급되면 조항 자체가 사라진다.
+   *  paidTierIndexes는 이미 지급된 티어의 tiers 배열 인덱스(중복 지급 방지).
+   *  구버전 세이브는 tiers가 없을 수 있어 그 경우 아무 티어도 발동하지 않는다. */
+  addOnClause?: { sellerClubId: string; tiers: AddOnTier[]; paidTierIndexes?: number[] };
 }
 
 export type TrainingFocus =

@@ -9,8 +9,9 @@ import {
   MAX_NEGOTIATION_ROUNDS, LOAN_MIN_SEASONS, LOAN_MAX_SEASONS,
   LOAN_OBLIGATION_MIN_APPS, LOAN_OBLIGATION_MAX_APPS, agentPersonality, BUYBACK_MAX_SEASONS,
   PANIC_BUY_PREMIUM,
+  ADD_ON_MAX_TIERS, ADD_ON_CONDITION_LABEL,
   type Line, type Player, type OfferEvaluation, type TransferTarget, type SellOffer, type LoanTerms,
-  type AgentPersonality, type AgentRelationsTier,
+  type AgentPersonality, type AgentRelationsTier, type AddOnTier, type AddOnConditionKind,
 } from '@soccer-tycoon/engine';
 import { ScoutingSummary } from './PlayerDetail.js';
 import { useModalA11y } from './useModalA11y.js';
@@ -27,9 +28,7 @@ interface Props {
   onOffers: (playerId: string) => SellOffer[];
   onAcceptSell: (playerId: string, buyerId: string, buybackFee?: number) => ActionOutcome;
   onBuyback: (playerId: string) => ActionOutcome;
-  onAttachAddOn: (
-    playerId: string, appearances: number | undefined, goals: number | undefined, fee: number,
-  ) => ActionOutcome;
+  onAttachAddOn: (playerId: string, tiers: AddOnTier[]) => ActionOutcome;
   onRelease: (playerId: string) => ActionOutcome;
   onLoanOut: (playerId: string, toClubId: string, terms: LoanTerms) => ActionOutcome;
   onLoanIn: (playerId: string, fromClubId: string, terms: LoanTerms) => ActionOutcome;
@@ -898,9 +897,7 @@ function SellModal({
   player: Player;
   offers: SellOffer[];
   onAcceptSell: (playerId: string, buyerId: string, buybackFee?: number) => ActionOutcome;
-  onAttachAddOn: (
-    playerId: string, appearances: number | undefined, goals: number | undefined, fee: number,
-  ) => ActionOutcome;
+  onAttachAddOn: (playerId: string, tiers: AddOnTier[]) => ActionOutcome;
   onResult: (m: Msg) => void;
   onClose: () => void;
 }) {
@@ -909,18 +906,25 @@ function SellModal({
   const value = marketValue(player);
   const [buybackFee, setBuybackFee] = useState(() => Math.round(value * 1.15));
   const [addOnEnabled, setAddOnEnabled] = useState(false);
-  const [addOnAppsEnabled, setAddOnAppsEnabled] = useState(true);
-  const [addOnApps, setAddOnApps] = useState(15);
-  const [addOnGoalsEnabled, setAddOnGoalsEnabled] = useState(false);
-  const [addOnGoals, setAddOnGoals] = useState(10);
-  const [addOnFee, setAddOnFee] = useState(() => Math.round(value * 0.2));
-  const addOnValid = !addOnEnabled || addOnAppsEnabled || addOnGoalsEnabled;
+  const [addOnTiers, setAddOnTiers] = useState<AddOnTier[]>([
+    { kind: 'appearances', threshold: 15, fee: Math.round(value * 0.2) },
+  ]);
+  function updateTier(idx: number, patch: Partial<AddOnTier>) {
+    setAddOnTiers((prev) => prev.map((t, i) => (i === idx ? { ...t, ...patch } : t)));
+  }
+  function addTier() {
+    setAddOnTiers((prev) => (
+      prev.length >= ADD_ON_MAX_TIERS ? prev : [...prev, { kind: 'goals', threshold: 10, fee: Math.round(value * 0.3) }]
+    ));
+  }
+  function removeTier(idx: number) {
+    setAddOnTiers((prev) => prev.filter((_, i) => i !== idx));
+  }
+  const addOnValid = !addOnEnabled || addOnTiers.length > 0;
   const accept = (buyerId: string) => {
     const r = onAcceptSell(player.id, buyerId, buybackEnabled ? buybackFee : undefined);
-    if (r.ok && addOnEnabled && (addOnAppsEnabled || addOnGoalsEnabled)) {
-      const a = onAttachAddOn(
-        player.id, addOnAppsEnabled ? addOnApps : undefined, addOnGoalsEnabled ? addOnGoals : undefined, addOnFee,
-      );
+    if (r.ok && addOnEnabled && addOnTiers.length > 0) {
+      const a = onAttachAddOn(player.id, addOnTiers);
       onResult({ text: a.ok ? `${r.message} · ${a.message}` : `${r.message} (Add-on 조항 실패: ${a.message})`, ok: r.ok });
       return;
     }
@@ -972,44 +976,41 @@ function SellModal({
                 type="checkbox" checked={addOnEnabled}
                 onChange={(e) => setAddOnEnabled(e.target.checked)}
               />
-              성과 기반 후불 이적료(Add-on) 조항 추가(출전/득점 조건 달성 시 추가 이적료 수령)
+              성과 기반 후불 이적료(Add-on) 조항 추가(다단계 가능 — 조건 달성 시마다 해당 단계 이적료 수령)
             </label>
             {addOnEnabled && (
-              <>
-                <label className="loan-field">
-                  <input
-                    type="checkbox" checked={addOnAppsEnabled}
-                    onChange={(e) => setAddOnAppsEnabled(e.target.checked)}
-                  />
-                  출전 조건
-                  <input
-                    type="number" min={1} value={addOnApps} disabled={!addOnAppsEnabled}
-                    onChange={(e) => setAddOnApps(Math.max(1, Number(e.target.value)))}
-                  />
-                  경기
-                </label>
-                <label className="loan-field">
-                  <input
-                    type="checkbox" checked={addOnGoalsEnabled}
-                    onChange={(e) => setAddOnGoalsEnabled(e.target.checked)}
-                  />
-                  득점 조건
-                  <input
-                    type="number" min={1} value={addOnGoals} disabled={!addOnGoalsEnabled}
-                    onChange={(e) => setAddOnGoals(Math.max(1, Number(e.target.value)))}
-                  />
-                  골
-                </label>
-                <label className="loan-field">
-                  추가 이적료
-                  <input
-                    type="number" min={0} step={1000} value={addOnFee}
-                    onChange={(e) => setAddOnFee(Number(e.target.value))}
-                  />
-                  만원
-                </label>
-                {!addOnValid && <p className="toast err">출전 또는 득점 조건 중 하나는 선택해야 합니다.</p>}
-              </>
+              <div className="add-on-tiers">
+                {addOnTiers.map((tier, idx) => (
+                  <div className="add-on-tier-row" key={idx}>
+                    <span className="muted small">{idx + 1}단계</span>
+                    <select
+                      value={tier.kind}
+                      onChange={(e) => updateTier(idx, { kind: e.target.value as AddOnConditionKind })}
+                    >
+                      {(Object.keys(ADD_ON_CONDITION_LABEL) as AddOnConditionKind[]).map((k) => (
+                        <option key={k} value={k}>{ADD_ON_CONDITION_LABEL[k]}</option>
+                      ))}
+                    </select>
+                    <input
+                      type="number" min={1} value={tier.threshold}
+                      onChange={(e) => updateTier(idx, { threshold: Math.max(1, Number(e.target.value)) })}
+                    />
+                    <span className="muted small">달성 시</span>
+                    <input
+                      type="number" min={0} step={1000} value={tier.fee}
+                      onChange={(e) => updateTier(idx, { fee: Math.max(0, Number(e.target.value)) })}
+                    />
+                    <span className="muted small">만원</span>
+                    {addOnTiers.length > 1 && (
+                      <button type="button" className="btn-small danger" onClick={() => removeTier(idx)}>삭제</button>
+                    )}
+                  </div>
+                ))}
+                {addOnTiers.length < ADD_ON_MAX_TIERS && (
+                  <button type="button" className="btn-small" onClick={addTier}>+ 단계 추가</button>
+                )}
+                {!addOnValid && <p className="toast err">조건을 하나 이상 지정해야 합니다.</p>}
+              </div>
             )}
             <p className="muted small">{offers.length}개 구단이 입찰했습니다. 원하는 제안을 수락하세요.</p>
             <table className="data-table compact">

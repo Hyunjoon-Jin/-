@@ -1019,6 +1019,15 @@ h3 { font-size: 14px; margin: 0 0 10px; color: var(--muted); text-transform: upp
   background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
   border-radius: 6px; padding: 6px 8px; font-size: 13px;
 }
+.add-on-tiers { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+.add-on-tier-row {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 13px;
+}
+.add-on-tier-row select, .add-on-tier-row input[type="number"] {
+  background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+  border-radius: 6px; padding: 4px 6px; font-size: 13px;
+}
+.add-on-tier-row input[type="number"] { width: 70px; }
 
 /* ── 커스텀 포메이션 에디터(F14) ── */
 .modal.formation-editor-modal { max-width: 560px; }

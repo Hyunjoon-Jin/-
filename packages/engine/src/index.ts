@@ -108,6 +108,7 @@ export {
   askingPrice, evaluateOffer, sellOffers, acceptSellOffer,
   loanPlayerOut, recallLoanPlayer, applyLoanWageSubsidies, swapPlayers, agentPersonality,
   exerciseBuyback, BUYBACK_MAX_SEASONS, attachAddOnClause, exerciseLoanBuyOption,
+  ADD_ON_MAX_TIERS, ADD_ON_CONDITION_LABEL, addOnConditionValue,
   agentRelationsOf, agentRelationsTier,
   applyNegotiationBreakdownPenalty, decayAgentRelations, AGENT_RELATIONS_DECAY_RATIO,
   AGENT_RELATIONS_MIN, AGENT_RELATIONS_MAX, AGENT_RELATIONS_DEFAULT, AGENT_RELATIONS_BREAKDOWN_PENALTY,

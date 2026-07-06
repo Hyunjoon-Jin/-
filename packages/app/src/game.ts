@@ -9,7 +9,7 @@ import {
   commitResult, simulateMatch, simulateSeason, defaultTactic, applyMatchEffects,
   buyPlayer, buyPlayerAt, buyPlayerViaReleaseClause, evaluateOffer, sellPlayer, releasePlayer,
   transferTargets,
-  exerciseBuyback, attachAddOnClause, exerciseLoanBuyOption,
+  exerciseBuyback, attachAddOnClause, exerciseLoanBuyOption, type AddOnTier,
   agentRelationsOf, agentRelationsTier, applyNegotiationBreakdownPenalty, decayAgentRelations,
   panicBuy as enginePanicBuy, PANIC_BUY_PREMIUM, executeRivalSnipe,
   type AgentRelationsTier,
@@ -1159,12 +1159,10 @@ export function buyback(state: GameState, playerId: string): ActionOutcome {
   };
 }
 
-/** 방금 판매한 선수에게 성과 기반 후불 이적료(Add-on) 조항을 붙인다(신규 개선 항목 3) —
- *  판매(acceptSell) 직후 별도로 호출해 조건을 지정한다. */
-export function attachAddOn(
-  state: GameState, playerId: string, appearances: number | undefined, goals: number | undefined, fee: number,
-): ActionOutcome {
-  const r = attachAddOnClause(state.clubs, playerId, state.myClubId, appearances, goals, fee);
+/** 방금 판매한 선수에게 성과 기반 후불 이적료(Add-on) 조항을 붙인다(신규 개선 항목 3,
+ *  고도화 항목4에서 다단계화) — 판매(acceptSell) 직후 별도로 호출해 티어를 지정한다. */
+export function attachAddOn(state: GameState, playerId: string, tiers: AddOnTier[]): ActionOutcome {
+  const r = attachAddOnClause(state.clubs, playerId, state.myClubId, tiers);
   if (!r.ok) return { state, ok: false, message: r.reason! };
   return { state: { ...state }, ok: true, message: '성과 기반 후불 이적료 조항을 추가했습니다.' };
 }

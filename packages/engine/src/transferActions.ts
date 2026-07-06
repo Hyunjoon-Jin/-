@@ -2,7 +2,7 @@
  * 사용자 주도 이적 액션 (economy.md 5장 — 플레이어 직접 영입/판매/방출).
  * AI 이적(transfer.ts)과 분리. 프리시즌에 호출되며 구단 객체를 직접 변경한다.
  */
-import type { Club, Line, Player } from './types.js';
+import type { Club, Line, Player, AddOnConditionKind, AddOnTier } from './types.js';
 import { lineOf } from './teamStrength.js';
 import { currentAbility } from './derived.js';
 import { marketValue, weeklyWage, agentFee } from './valuation.js';
@@ -654,30 +654,48 @@ export function exerciseBuyback(clubs: Club[], myClubId: string, playerId: strin
   return { ok: true, fee, sellerName: currentClub.name, playerName: player.name };
 }
 
-// ── 성과 기반 후불 이적료 (Add-on, 신규 개선 항목 3) ──────────
+// ── 성과 기반 후불 이적료 (Add-on, 신규 개선 항목 3 → 고도화 항목4: 다단계화) ──
 
 export interface AddOnAttachResult { ok: boolean; reason?: string }
 
+/** Add-on 조항에 붙일 수 있는 최대 티어 수(고도화 항목4). */
+export const ADD_ON_MAX_TIERS = 3;
+
+export const ADD_ON_CONDITION_LABEL: Record<AddOnConditionKind, string> = {
+  appearances: '출전', goals: '득점', assists: '도움', cleanSheets: '클린시트',
+};
+
+/** 선수의 이번 시즌 누적치 중 Add-on 조건 종류에 해당하는 값을 읽는다. */
+export function addOnConditionValue(player: Player, kind: AddOnConditionKind): number {
+  switch (kind) {
+    case 'appearances': return player.seasonApps;
+    case 'goals': return player.seasonGoals;
+    case 'assists': return player.seasonAssists ?? 0;
+    case 'cleanSheets': return player.seasonCleanSheets ?? 0;
+  }
+}
+
 /**
  * 방금 판매한 선수에게 성과 기반 후불 이적료(Add-on) 조항을 붙인다 — 이번 시즌 새
- * 소속 구단에서 출전 또는 득점이 지정한 조건에 처음 도달하면 원 소속 구단에 추가
- * 이적료가 지급된다(오프시즌 경계에 정산, franchise.ts 참고). 판매 자체(이적료
- * 정산)와 분리된 별도 호출이라 acceptSellOffer/buyPlayerAt 등 어떤 영입 경로
- * 뒤에도 붙일 수 있다.
+ * 소속 구단에서 지정한 티어 조건(출전/득점/도움/클린시트 누적치)에 도달할 때마다
+ * 그 티어 몫만큼 원 소속 구단에 추가 이적료가 지급된다(오프시즌 경계에 정산,
+ * franchise.ts 참고). 여러 티어를 섞어 다단계 성과급을 구성할 수 있다(최대
+ * ADD_ON_MAX_TIERS개). 판매 자체(이적료 정산)와 분리된 별도 호출이라
+ * acceptSellOffer/buyPlayerAt 등 어떤 영입 경로 뒤에도 붙일 수 있다.
  */
 export function attachAddOnClause(
-  clubs: Club[], playerId: string, sellerClubId: string,
-  appearances: number | undefined, goals: number | undefined, fee: number,
+  clubs: Club[], playerId: string, sellerClubId: string, tiers: AddOnTier[],
 ): AddOnAttachResult {
-  if (appearances === undefined && goals === undefined) {
-    return { ok: false, reason: '출전 또는 득점 조건 중 하나는 지정해야 합니다.' };
+  if (tiers.length === 0) return { ok: false, reason: '조건을 하나 이상 지정해야 합니다.' };
+  if (tiers.length > ADD_ON_MAX_TIERS) return { ok: false, reason: `조건은 최대 ${ADD_ON_MAX_TIERS}개까지 지정할 수 있습니다.` };
+  if (tiers.some((t) => !(t.threshold > 0) || !(t.fee > 0))) {
+    return { ok: false, reason: '조건 기준과 금액은 0보다 커야 합니다.' };
   }
-  if (!(fee > 0)) return { ok: false, reason: '금액이 올바르지 않습니다.' };
   const club = clubs.find((c) => c.players.some((p) => p.id === playerId));
   if (!club) return { ok: false, reason: '선수를 찾을 수 없습니다.' };
   if (club.id === sellerClubId) return { ok: false, reason: '같은 구단에는 조항을 붙일 수 없습니다.' };
   const player = club.players.find((p) => p.id === playerId)!;
-  player.addOnClause = { sellerClubId, appearances, goals, fee };
+  player.addOnClause = { sellerClubId, tiers };
   return { ok: true };
 }
 

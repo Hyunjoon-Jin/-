@@ -116,12 +116,16 @@ function tickRecoveryWindows(p: Club['players'][number]): void {
   if (!p.reinjuryRiskMatches && !p.recoveryAttrMatches) p.injuryBodyPart = undefined;
 }
 
-/** 이번 경기 득점 → 선수 시즌 득점 누적(통산 집계의 소스). */
-function accumulateGoals(club: Club, stats: MatchResult['playerStats']['home']): void {
+/** 이번 경기 득점·도움·클린시트 → 선수 시즌 누적(통산 집계·Add-on 조항 판정의 소스,
+ *  고도화 항목4: 도움·클린시트 누적 추가). */
+function accumulateSeasonStats(club: Club, stats: MatchResult['playerStats']['home']): void {
   const byId = new Map(club.players.map((p) => [p.id, p]));
   for (const st of stats) {
     const p = byId.get(st.playerId);
-    if (p && st.goals > 0) p.seasonGoals = (p.seasonGoals ?? 0) + st.goals;
+    if (!p) continue;
+    if (st.goals > 0) p.seasonGoals = (p.seasonGoals ?? 0) + st.goals;
+    if (st.assists > 0) p.seasonAssists = (p.seasonAssists ?? 0) + st.assists;
+    if (st.cleanSheet) p.seasonCleanSheets = (p.seasonCleanSheets ?? 0) + 1;
   }
 }
 
@@ -157,7 +161,7 @@ export function applyMatchEffects(
   const awayInjuries = result.injuries.filter((e) => e.side === 'away');
   applySide(home, homeTactic, homeOutcome, homeInjuries);
   applySide(away, awayTactic, awayOutcome, awayInjuries);
-  accumulateGoals(home, result.playerStats.home);
-  accumulateGoals(away, result.playerStats.away);
+  accumulateSeasonStats(home, result.playerStats.home);
+  accumulateSeasonStats(away, result.playerStats.away);
   processDiscipline(home, away, result.cards);
 }
