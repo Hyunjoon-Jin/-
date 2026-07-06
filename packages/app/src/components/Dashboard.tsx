@@ -8,6 +8,7 @@ import {
   formatMoney, currentAbility, wageBudget, annualWageBill, inFinancialCrisis,
   boardStatus, DEMAND_LABEL, SPONSOR_GOAL_LABEL, sponsorStreakMultiplier, SPONSOR_CONTRACT_LABEL,
   boldPredictionTarget, ADD_ON_CONDITION_LABEL,
+  FAN_SATISFACTION_DEFAULT, FAN_PROTEST_THRESHOLD,
   type BoardStatus, type ManagerPersona, type BoardPersona, type Line, type NamedStaffKind,
 } from '@soccer-tycoon/engine';
 import { Landmark } from 'lucide-react';
@@ -65,6 +66,7 @@ export function Dashboard({
   const squadAvgCA =
     club.players.reduce((s, p) => s + currentAbility(p), 0) / club.players.length;
   const wageBill = club.players.reduce((s, p) => s + p.wage, 0);
+  const fanSatisfaction = club.finance.fanSatisfaction ?? FAN_SATISFACTION_DEFAULT;
 
   const myReport = last?.finance.get(club.id);
   const firstRun = game.history.length === 0 && !game.live;
@@ -434,6 +436,19 @@ export function Dashboard({
       ),
     });
   }
+  if (last?.fanProtest) {
+    seasonBanners.push({
+      key: 'fanProtest', priority: 1.9,
+      node: (
+        <Banner tone="danger" title="📢 팬 시위">
+          <p>
+            팬 만족도가 바닥나며 서포터즈가 시위에 나섰습니다 — 현재 만족도{' '}
+            <b>{last.fanSatisfaction}</b>. 다음 시즌 매치데이 수익이 한동안 줄어듭니다.
+          </p>
+        </Banner>
+      ),
+    });
+  }
   seasonBanners.sort((a, b) => a.priority - b.priority);
 
   const [showAllBanners, setShowAllBanners] = useState(false);
@@ -597,6 +612,10 @@ export function Dashboard({
         <Card title="주급 총액" value={`${formatMoney(wageBill)} / 주`} />
         <Card title="스쿼드 평균 CA" value={squadAvgCA.toFixed(0)} />
         <Card title="스쿼드 인원" value={`${club.players.length}명`} />
+        <Card
+          title="팬 만족도"
+          value={`${fanSatisfaction}${fanSatisfaction < FAN_PROTEST_THRESHOLD ? ' 😠' : fanSatisfaction >= 80 ? ' 😀' : ''} / 100`}
+        />
       </div>
 
       <section className="panel">

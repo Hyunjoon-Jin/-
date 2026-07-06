@@ -196,6 +196,10 @@ export interface SeasonSummary {
   /** 이번 시즌 종료 시 내 구단 회장이 교체돼 이사회 성향이 바뀐 경우(고도화 항목17,
    *  앱 전용). 대부분의 시즌은 undefined. */
   boardPersonaChange?: BoardPersonaChangeEvent;
+  /** 이번 시즌 종료 시점 내 구단 팬 만족도(0~100, 고도화 항목18, 앱 전용). */
+  fanSatisfaction?: number;
+  /** 팬 만족도가 문턱 미만으로 떨어져 시위가 발생했는지(고도화 항목18, 앱 전용). */
+  fanProtest?: boolean;
 }
 
 /** 유스 졸업생 동문 네트워크(신규 개선 항목 18) — 과거 우리 리저브 출신으로 1군

@@ -294,7 +294,19 @@ export interface ClubFinance {
   /** 체결한 스폰서 계약(유니폼/스타디움 명명권, 신규 개선 항목 24) — 성과와 무관하게
    *  매 시즌 고정 수익을 지급하는 장기 계약. 구버전 세이브는 없을 수 있어 optional. */
   sponsorContracts?: SponsorContract[];
+  /** 티켓 가격 등급(고도화 항목18) — 비쌀수록 매치데이 수익은 늘지만 팬 만족도는 깎인다.
+   *  구버전 세이브는 없을 수 있어 optional(없으면 'normal' = 기존과 동일한 수익). */
+  ticketPriceTier?: TicketPriceTier;
+  /** 팬 만족도(0~100, 고도화 항목18) — 성적·티켓가·영입 소식에 반응한다. 구버전 세이브는
+   *  없을 수 있어 optional(없으면 FAN_SATISFACTION_DEFAULT로 취급). */
+  fanSatisfaction?: number;
+  /** 팬 만족도가 문턱 미만으로 떨어져 시위가 발생한 상태(고도화 항목18) — 다음 시즌
+   *  정산에서 매치데이 수익 페널티가 한 번 적용된 뒤 자동으로 꺼진다. */
+  fanProtestActive?: boolean;
 }
+
+/** 티켓 가격 등급(고도화 항목18) — finance.ts의 매치데이 수익 배율·팬 만족도 계산에 쓰인다. */
+export type TicketPriceTier = 'low' | 'normal' | 'high';
 
 /** 이사회의 인내심 성향 — 목표 미달 시 얼마나 가혹하게 반응하는가(board.ts). */
 export type BoardPatience = 'patient' | 'impatient';

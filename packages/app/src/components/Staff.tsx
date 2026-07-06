@@ -15,8 +15,9 @@ import {
   TRAINING_GROUND_MAX, trainingGroundUpgradeCost, trainingGroundInjuryFactor,
   SPONSOR_CONTRACT_LABEL, SPONSOR_CONTRACT_LENGTH_SEASONS, SPONSOR_CONTRACT_SIGN_FEE_MULTIPLIER,
   SPONSOR_CONTRACT_STADIUM_MIN_LEVEL, sponsorContractPayout,
+  TICKET_PRICE_MATCHDAY_MULTIPLIER, FAN_SATISFACTION_DEFAULT,
   type StaffKind, type SpecialistCoachKind, type NamedStaffKind, type Club, type Line, type InjuryRiskTier,
-  type SponsorContractKind,
+  type SponsorContractKind, type TicketPriceTier,
 } from '@soccer-tycoon/engine';
 import { useResultToast } from '../toast.js';
 import { InfoTip } from './InfoTip.js';
@@ -31,7 +32,11 @@ interface Props {
   onSetAcademyFocus: (focus: Line | undefined) => void;
   onSignSponsorContract: (kind: SponsorContractKind) => ActionOutcome;
   onPoachStaff: (targetClubId: string, kind: NamedStaffKind, attempt: number) => ActionOutcome;
+  onSetTicketPrice: (tier: TicketPriceTier) => ActionOutcome;
 }
+
+const TICKET_PRICE_TIERS: TicketPriceTier[] = ['low', 'normal', 'high'];
+const TICKET_PRICE_LABEL: Record<TicketPriceTier, string> = { low: '저가', normal: '보통', high: '고가' };
 
 const SPONSOR_CONTRACT_KINDS: SponsorContractKind[] = ['kit', 'stadiumNaming', 'sleeve'];
 
@@ -151,7 +156,7 @@ function StaffMarketPanel({ game, onPoachStaff }: {
 
 export function Staff({
   game, onUpgrade, onUpgradeStadium, onUpgradeAcademy, onUpgradeTrainingGround, onNegotiateRaise, onSetAcademyFocus,
-  onSignSponsorContract, onPoachStaff,
+  onSignSponsorContract, onPoachStaff, onSetTicketPrice,
 }: Props) {
   const club = myClub(game);
   const toast = useResultToast();
@@ -479,6 +484,37 @@ export function Staff({
                   onClick={() => toast(onSignSponsorContract(kind))}
                 >
                   {active ? '계약 중' : `체결 (${formatMoney(previewCost)})`}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="ticket-price">
+        <h3>
+          <Handshake size={18} strokeWidth={1.75} /> 티켓 가격
+          <InfoTip title="티켓 가격">
+            비쌀수록 매치데이 수익은 늘지만 팬 만족도(현재 {club.finance.fanSatisfaction ?? FAN_SATISFACTION_DEFAULT})가
+            깎입니다. 만족도가 너무 낮아지면 시위가 발생해 다음 시즌 매치데이 수익이 한동안 줄어듭니다.
+          </InfoTip>
+        </h3>
+        <div className="staff-cards">
+          {TICKET_PRICE_TIERS.map((tier) => {
+            const active = (club.finance.ticketPriceTier ?? 'normal') === tier;
+            return (
+              <div className="staff-card" key={tier}>
+                <div className="staff-icon"><Handshake size={32} strokeWidth={1.75} /></div>
+                <div className="staff-name">{TICKET_PRICE_LABEL[tier]}</div>
+                <div className="staff-effect muted">
+                  매치데이 수익 ×{TICKET_PRICE_MATCHDAY_MULTIPLIER[tier].toFixed(2)}
+                </div>
+                <button
+                  className="btn-advance staff-btn"
+                  disabled={active}
+                  onClick={() => toast(onSetTicketPrice(tier))}
+                >
+                  {active ? '적용 중' : '적용'}
                 </button>
               </div>
             );

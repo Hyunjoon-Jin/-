@@ -11,6 +11,7 @@ import {
   resolveRivalSnipe,
   recordNegotiationBreakdown,
   upgradeStadiumAction, upgradeAcademyAction, upgradeTrainingGroundAction, signSponsorContractAction,
+  setTicketPriceAction,
   toggleWatchlistAction,
   loanOut, loanIn, recallLoan, swapDeal, renegotiateLoanWageShareAction,
   setTrainingFocus, setTrainingPosition, renewContract, setAcademyFocus,
@@ -414,6 +415,7 @@ export function App() {
                 onNegotiateRaise={(kind) => runAction(negotiateStaffRaiseAction, kind)}
                 onPoachStaff={handlePoachStaff}
                 onSetAcademyFocus={(focus) => update(setAcademyFocus(game, focus))}
+                onSetTicketPrice={(tier) => runAction(setTicketPriceAction, tier)}
               />
             )}
             {tab === 'history' && <History game={game} />}

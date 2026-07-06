@@ -70,9 +70,12 @@ export {
   TRAINING_GROUND_MAX, trainingGroundInjuryFactor, trainingGroundUpgradeCost, upgradeTrainingGround,
   SPONSOR_CONTRACT_LABEL, SPONSOR_CONTRACT_LENGTH_SEASONS, SPONSOR_CONTRACT_SIGN_FEE_MULTIPLIER,
   SPONSOR_CONTRACT_STADIUM_MIN_LEVEL, sponsorContractPayout, signSponsorContract, tickSponsorContracts,
+  TICKET_PRICE_MATCHDAY_MULTIPLIER, FAN_PROTEST_MATCHDAY_PENALTY, FAN_SATISFACTION_DEFAULT,
+  FAN_PROTEST_THRESHOLD, fanSatisfactionDelta, updateFanSatisfaction, setTicketPriceTier,
   type SeasonFinanceReport, type SponsorGoal, type SponsorGoalKind, type SponsorGoalResult,
   type StadiumUpgradeResult, type AcademyUpgradeResult, type TrainingGroundUpgradeResult,
   type SponsorContract, type SponsorContractKind, type SponsorContractSignResult, type SponsorContractTickResult,
+  type FanSatisfactionInput, type FanSatisfactionResult,
 } from './finance.js';
 export { runTransferWindow, AI_MAX_DEALS_PER_CLUB, type TransferDeal } from './transfer.js';
 export {

@@ -32,6 +32,8 @@ import {
   generateSponsorGoal, evaluateSponsorGoal, SPONSOR_GOAL_LABEL, sponsorStreakMultiplier, type SponsorGoal,
   signSponsorContract as engineSignSponsorContract, tickSponsorContracts, SPONSOR_CONTRACT_LABEL,
   type SponsorContractKind,
+  updateFanSatisfaction, setTicketPriceTier as engineSetTicketPriceTier,
+  FAN_SATISFACTION_DEFAULT, FAN_PROTEST_THRESHOLD, type TicketPriceTier,
   matchWeather, type Weather,
   annualWageBill, wageBudget,
   matchOutcomeKind, mediaToneOptions, shouldTriggerMediaEvent, applyMediaTone,
@@ -753,6 +755,15 @@ export function finishSeason(state: GameState): GameState {
     position: myPosition, objective: state.objective, promoted, relegated, netFinance: myNet,
   }, boardPersona);
 
+  // 팬 만족도(고도화 항목18) — 목표 대비 성적·티켓가·신규 영입에 반응한다. 문턱 미만으로
+  // 떨어지면 시위가 발생해 다음 시즌 매치데이 수익에 한 번 페널티가 붙는다(엔진에서 처리).
+  const mySignings = state.live.transfers.filter((t) => t.toClubId === state.myClubId).length;
+  const fanSatisfactionResult = updateFanSatisfaction(myClub(state), {
+    performanceDelta: state.objective - myPosition,
+    ticketPriceTier: myClub(state).finance.ticketPriceTier ?? 'normal',
+    newSignings: mySignings,
+  });
+
   // 대담한 목표 공개 선언 평가(신규 개선 항목 25) — 선언했었다면 신뢰도 가감치가
   // 이사회 신뢰도 갱신에 그대로 더해진다.
   let boldPredictionResult: BoldPredictionResult | undefined;
@@ -898,6 +909,8 @@ export function finishSeason(state: GameState): GameState {
     addOnPayouts: myAddOnPayouts,
     mentorGraduations: myMentorGraduations.length > 0 ? myMentorGraduations : undefined,
     boardPersonaChange: myBoardPersonaChange,
+    fanSatisfaction: fanSatisfactionResult.fanSatisfaction,
+    fanProtest: fanSatisfactionResult.protest,
     reserveLeagueTable: reserveLeagueTable.length > 0 ? reserveLeagueTable : undefined,
     reservePlayerStats: myReservePlayerStats.length > 0 ? myReservePlayerStats : undefined,
     sponsorContractExpired,
@@ -1384,6 +1397,16 @@ export function signSponsorContractAction(state: GameState, kind: SponsorContrac
     state: { ...state }, ok: true,
     message: `${SPONSOR_CONTRACT_LABEL[kind]} 계약 체결 완료 (−${formatMoney(r.cost!)}, 시즌당 +${formatMoney(r.contract!.payoutPerSeason)})`,
   };
+}
+
+const TICKET_PRICE_TIER_LABEL: Record<TicketPriceTier, string> = {
+  low: '저가', normal: '보통', high: '고가',
+};
+
+/** 티켓 가격 등급 변경(고도화 항목18) — 비쌀수록 매치데이 수익은 늘지만 팬 만족도는 깎인다. */
+export function setTicketPriceAction(state: GameState, tier: TicketPriceTier): ActionOutcome {
+  engineSetTicketPriceTier(myClub(state), tier);
+  return { state: { ...state }, ok: true, message: `티켓 가격을 ${TICKET_PRICE_TIER_LABEL[tier]}(으)로 설정했습니다.` };
 }
 
 // ── 조회 헬퍼 ──
