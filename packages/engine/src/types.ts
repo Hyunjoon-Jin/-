@@ -57,6 +57,18 @@ export type Line = 'GK' | 'DEF' | 'MID' | 'ATT';
 
 // ── 선수 ──────────────────────────────────────────────────
 
+/** 성과 기반 후불 이적료(Add-on) 조항의 발동 조건 종류(고도화 항목4). */
+export type AddOnConditionKind = 'appearances' | 'goals' | 'assists' | 'cleanSheets';
+
+/** Add-on 조항의 개별 지급 티어 — threshold(해당 시즌 누적치)에 도달하면 fee가
+ *  1회 지급된다. 여러 티어를 조합하면 단계별 성과급이 된다(예: 10골 5천만원,
+ *  20골 추가 1억원). */
+export interface AddOnTier {
+  kind: AddOnConditionKind;
+  threshold: number;
+  fee: number;
+}
+
 export interface Player {
   id: string;
   name: string;
@@ -112,6 +124,12 @@ export interface Player {
   internationalRetired?: boolean;
   /** 이번 시즌 득점(리그+컵). 시즌 경계 리셋. */
   seasonGoals: number;
+  /** 이번 시즌 도움(리그+컵). 시즌 경계 리셋. 구버전 세이브는 없을 수 있어
+   *  optional(없으면 0 취급, 고도화 항목4: Add-on 조항 다단계화). */
+  seasonAssists?: number;
+  /** 이번 시즌 클린시트(무실점 경기, GK만 해당). 시즌 경계 리셋. 구버전 세이브는
+   *  없을 수 있어 optional(없으면 0 취급, 고도화 항목4). */
+  seasonCleanSheets?: number;
   /** 통산 선발 출전 수(전 시즌 누적). */
   careerApps: number;
   /** 통산 득점(전 시즌 누적). */
@@ -132,6 +150,10 @@ export interface Player {
   loanSeasonsRemaining?: number;
   /** 임대 기간 중 주급을 원 소속 구단이 분담하는 비율(0~1) — 나머지는 임대 구단이 부담. */
   loanWageShareByParent?: number;
+  /** 이번 시즌에 이미 임대 주급 분담률 재협상을 시도했는지(고도화 항목3, 시즌당 1회
+   *  제한). 시즌이 넘어가고 임대가 계속되면 초기화된다. 구버전 세이브는 없을 수 있어
+   *  optional(없으면 아직 시도 안 함 취급). */
+  loanWageRenegotiatedThisSeason?: boolean;
   /** 임대 의무완전이적 조항 — 이번 임대 시즌 출전(seasonApps)이 기준에 도달하면 임대
    *  잔여 기간과 무관하게 시즌 종료 시 이 이적료로 완전 이적 전환(계약상 의무이므로
    *  자금 부족과 무관하게 강제 집행 — 이후 재정 위기 로직이 필요 시 뒷수습한다). */
@@ -143,10 +165,17 @@ export interface Player {
   /** 바이백 조항(신규 개선 항목 2) — 판매 시 원 소속 구단이 향후 정해진 금액으로
    *  되사올 수 있는 권리를 남긴다. seasonsRemaining이 0이 되면 자동 소멸. */
   buybackClause?: { clubId: string; fee: number; seasonsRemaining: number };
-  /** 성과 기반 후불 이적료(Add-on, 신규 개선 항목 3) — 새 구단에서 이번 시즌 출전
-   *  또는 득점이 조건에 도달하면 원 소속 구단에 추가 이적료를 지급하고 소멸한다.
-   *  두 조건 중 하나만 있어도 되며, 있는 조건 중 하나라도 달성하면 발동한다. */
-  addOnClause?: { sellerClubId: string; appearances?: number; goals?: number; fee: number };
+  /** 이번 시즌에 이미 바이백 조항 금액 재협상을 시도했는지(고도화 항목5, 시즌당 1회
+   *  제한). 시즌이 넘어가고 조항이 계속 유효하면 초기화된다. 구버전 세이브는 없을 수
+   *  있어 optional(없으면 아직 시도 안 함 취급). */
+  buybackRenegotiatedThisSeason?: boolean;
+  /** 성과 기반 후불 이적료(Add-on, 신규 개선 항목 3 → 고도화 항목4에서 다단계화) —
+   *  새 구단에서 이번 시즌 성과 지표(출전/득점/도움/클린시트)가 각 티어 기준에
+   *  도달할 때마다 해당 티어 몫만 원 소속 구단에 지급하고, 그 티어만 소멸한다(다른
+   *  티어는 별도로 계속 유효). 모든 티어가 지급되면 조항 자체가 사라진다.
+   *  paidTierIndexes는 이미 지급된 티어의 tiers 배열 인덱스(중복 지급 방지).
+   *  구버전 세이브는 tiers가 없을 수 있어 그 경우 아무 티어도 발동하지 않는다. */
+  addOnClause?: { sellerClubId: string; tiers: AddOnTier[]; paidTierIndexes?: number[] };
 }
 
 export type TrainingFocus =
@@ -283,11 +312,13 @@ export interface Club {
   /** 유저가 직접 지정한 멘토-멘티 쌍(B14) — 같은 라인 자동 멘토링보다 강한 성장
    *  보너스를 준다(상한 인원 제한). 구버전 세이브는 없을 수 있어 optional. */
   mentorPairings?: MentorPairing[];
-  /** 에이전트 관계 지수(0~100, 신규 개선 항목 6) — 이 구단이 이적 시장에서 에이전트들과
-   *  쌓아온 신뢰. 순조로운 영입 협상이 성사될 때마다 조금씩 오르고, 협상이 완전히
-   *  결렬되면 크게 깎인다. 높을수록 다음 협상의 하한·역제안이 유리해진다. 구버전
-   *  세이브는 없을 수 있어 optional(없으면 AGENT_RELATIONS_DEFAULT = 중립 취급). */
-  agentRelations?: number;
+  /** 에이전트 관계 지수(0~100)를 상대 구단(협상 상대 선수의 소속 구단)별로 관리한다
+   *  (고도화 항목1 — 신규 개선 항목 6을 세분화). 특정 구단과 순조롭게 거래할수록 그
+   *  구단과의 다음 협상만 유리해지고, 결렬되면 그 구단과의 관계만 크게 깎인다 — 한
+   *  구단과 잘 지낸다고 다른 모든 구단과의 관계가 좋아지지 않는다. 거래가 없는 채로
+   *  시즌이 지나면 서서히 중립으로 회귀한다. 구버전 세이브는 없을 수 있어
+   *  optional(없으면 상대 구단마다 AGENT_RELATIONS_DEFAULT = 중립 취급). */
+  agentRelationsByClub?: Record<string, number>;
 }
 
 /** 유저가 직접 지정한 멘토-멘티 쌍(B14). */

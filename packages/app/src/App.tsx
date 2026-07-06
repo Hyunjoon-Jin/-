@@ -4,7 +4,7 @@ import {
   startSeason, playRound, playRestOfSeason, finishSeason, advanceFullSeason,
   playCupRound, playContinentalCupRound, negotiate, buyAt, buyViaReleaseClause, offersFor, acceptSell, release, upgradeStaffAction,
   negotiateStaffRaiseAction,
-  buyback,
+  buyback, renegotiateBuybackClauseAction,
   attachAddOn,
   exerciseBuyOption,
   panicBuyAction,
@@ -12,7 +12,7 @@ import {
   recordNegotiationBreakdown,
   upgradeStadiumAction, upgradeAcademyAction, upgradeTrainingGroundAction, signSponsorContractAction,
   toggleWatchlistAction,
-  loanOut, loanIn, recallLoan, swapDeal,
+  loanOut, loanIn, recallLoan, swapDeal, renegotiateLoanWageShareAction,
   setTrainingFocus, setTrainingPosition, renewContract, setAcademyFocus,
   watchSetup, matchPreview, commitWatchedRound,
   watchCupSetup, cupPreview, commitWatchedCupRound,
@@ -21,7 +21,7 @@ import {
   declareBoldPredictionAction,
   type GameState, type ActionOutcome, type WatchSetup, type Difficulty, type MediaEvent,
 } from './game.js';
-import type { Tactic, MatchResult, LoanTerms } from '@soccer-tycoon/engine';
+import type { Tactic, MatchResult, LoanTerms, AddOnTier } from '@soccer-tycoon/engine';
 import { createSaveStore } from './storage.js';
 import { recordSackedStint } from './career.js';
 import { StartScreen } from './components/StartScreen.js';
@@ -198,10 +198,14 @@ export function App() {
     return outcome;
   };
 
-  const handleAttachAddOn = (
-    id: string, appearances: number | undefined, goals: number | undefined, fee: number,
-  ): ActionOutcome => {
-    const outcome = attachAddOn(game, id, appearances, goals, fee);
+  const handleRenegotiateBuyback = (id: string, direction: 'increase' | 'decrease'): ActionOutcome => {
+    const outcome = renegotiateBuybackClauseAction(game, id, direction);
+    update(outcome.state);
+    return outcome;
+  };
+
+  const handleAttachAddOn = (id: string, tiers: AddOnTier[]): ActionOutcome => {
+    const outcome = attachAddOn(game, id, tiers);
     if (outcome.ok) update(outcome.state);
     return outcome;
   };
@@ -239,6 +243,12 @@ export function App() {
   const handleExerciseBuyOption = (id: string): ActionOutcome => {
     const outcome = exerciseBuyOption(game, id);
     if (outcome.ok) update(outcome.state);
+    return outcome;
+  };
+
+  const handleRenegotiateLoanWage = (id: string, direction: 'increase' | 'decrease'): ActionOutcome => {
+    const outcome = renegotiateLoanWageShareAction(game, id, direction);
+    update(outcome.state);
     return outcome;
   };
 
@@ -415,10 +425,12 @@ export function App() {
                 onLoanIn={handleLoanIn}
                 onRecallLoan={handleRecallLoan}
                 onExerciseBuyOption={handleExerciseBuyOption}
+                onRenegotiateLoanWage={handleRenegotiateLoanWage}
                 onSwap={handleSwap}
                 onSelect={setDetailPlayer}
                 onNegotiationBreakdown={(id) => update(recordNegotiationBreakdown(game, id))}
                 onBuyback={handleBuyback}
+                onRenegotiateBuyback={handleRenegotiateBuyback}
                 onAttachAddOn={handleAttachAddOn}
                 onPanicBuy={handlePanicBuy}
                 onRivalSnipe={handleRivalSnipe}

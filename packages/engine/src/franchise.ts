@@ -3,7 +3,7 @@
  * 한 시즌 = 이적 창 → 리그 경기 → 재정 정산 → 선수 성장/노화 → 은퇴·유스 유입.
  * 게임의 시간축을 닫는 핵심 루프.
  */
-import type { Club, Player, Position } from './types.js';
+import type { Club, Player, Position, AddOnConditionKind } from './types.js';
 import type { BoardStatus } from './board.js';
 import { POSITIONS } from './types.js';
 import { simulateSeason, type TableRow } from './league.js';
@@ -13,7 +13,7 @@ import type { CupUpsetEvent } from './cup.js';
 import { runTransferWindow, type TransferDeal } from './transfer.js';
 import { progressPlayer } from './progression.js';
 import { generateAcademyIntake, generateYouthPlayer, assignSquadNumber } from './generate.js';
-import { applyLoanWageSubsidies, MIN_SQUAD } from './transferActions.js';
+import { applyLoanWageSubsidies, addOnConditionValue, MIN_SQUAD } from './transferActions.js';
 import { enforceFinancialFairPlay } from './financeControl.js';
 import {
   runInternationalBreak, runInternationalTournament, TOURNAMENT_INTERVAL_SEASONS, checkInternationalRetirements,
@@ -318,7 +318,8 @@ export interface LoanObligationEvent {
   fee: number;
 }
 
-/** 성과 기반 후불 이적료(Add-on) 발동 이벤트(신규 개선 항목 3). */
+/** 성과 기반 후불 이적료(Add-on) 발동 이벤트(신규 개선 항목 3, 고도화 항목4에서
+ *  다단계화 — 한 시즌에 티어 여러 개가 동시에 터지면 이벤트도 티어 수만큼 생긴다). */
 export interface AddOnEvent {
   playerId: string;
   name: string;
@@ -330,6 +331,9 @@ export interface AddOnEvent {
   toClubId: string;
   toClubName: string;
   fee: number;
+  /** 이번에 발동한 티어의 조건 종류·기준(고도화 항목4). */
+  tierKind: AddOnConditionKind;
+  tierThreshold: number;
 }
 
 export interface OffseasonResult {
@@ -479,7 +483,11 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
       }
 
       player.loanSeasonsRemaining = (player.loanSeasonsRemaining ?? 1) - 1;
-      if (player.loanSeasonsRemaining > 0) { staying.push(player); continue; }
+      if (player.loanSeasonsRemaining > 0) {
+        player.loanWageRenegotiatedThisSeason = false; // 새 시즌엔 다시 재협상 시도 가능(고도화 항목3)
+        staying.push(player);
+        continue;
+      }
       if (!parent) { staying.push(player); continue; } // 원 소속 구단이 사라진 극단적 경우 현 구단에 잔류
       loanReturns.push({
         playerId: player.id, name: player.name, position: player.position,
@@ -527,6 +535,7 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
       if (player.buybackClause) {
         player.buybackClause.seasonsRemaining -= 1;
         if (player.buybackClause.seasonsRemaining <= 0) player.buybackClause = undefined;
+        else player.buybackRenegotiatedThisSeason = false; // 새 시즌엔 다시 재협상 시도 가능(고도화 항목5)
       }
 
       // 로열티(신규 개선 항목 10) — 이적 없이 이 구단에서 시즌을 마쳤으니 1시즌 가산.
@@ -562,26 +571,31 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
       if (beforeGoals === 0 && (player.seasonGoals ?? 0) > 0) {
         debutEvents.push({ playerId: player.id, name: player.name, clubId: club.id, clubName: club.name, kind: 'firstGoal' });
       }
-      // 성과 기반 후불 이적료(Add-on, 신규 개선 항목 3) — 이번 시즌 출전·득점 중 지정된
-      // 조건에 하나라도 도달하면 원 소속 구단에 즉시 지급하고 조항을 소멸시킨다.
-      if (player.addOnClause) {
+      // 성과 기반 후불 이적료(Add-on, 신규 개선 항목 3, 고도화 항목4에서 다단계화) —
+      // 이번 시즌 누적치가 각 티어 기준에 도달할 때마다 그 티어 몫만 지급하고 그
+      // 티어만 소멸시킨다. 모든 티어가 지급되면 조항 자체가 사라진다.
+      if (player.addOnClause && player.addOnClause.tiers?.length) {
         const clause = player.addOnClause;
-        const appsHit = clause.appearances !== undefined && player.seasonApps >= clause.appearances;
-        const goalsHit = clause.goals !== undefined && (player.seasonGoals ?? 0) >= clause.goals;
-        if (appsHit || goalsHit) {
-          const seller = clubById.get(clause.sellerClubId);
+        const seller = clubById.get(clause.sellerClubId);
+        const paid = new Set(clause.paidTierIndexes ?? []);
+        clause.tiers.forEach((tier, idx) => {
+          if (paid.has(idx)) return;
+          if (addOnConditionValue(player, tier.kind) < tier.threshold) return;
           if (seller) {
-            club.finance.balance -= clause.fee;
-            seller.finance.balance += clause.fee;
-            seller.finance.transferBudget += clause.fee;
+            club.finance.balance -= tier.fee;
+            seller.finance.balance += tier.fee;
+            seller.finance.transferBudget += tier.fee;
             addOnPayouts.push({
               playerId: player.id, name: player.name, position: player.position,
               fromClubId: club.id, fromClubName: club.name, toClubId: seller.id, toClubName: seller.name,
-              fee: clause.fee,
+              fee: tier.fee, tierKind: tier.kind, tierThreshold: tier.threshold,
             });
           }
-          player.addOnClause = undefined;
-        }
+          paid.add(idx);
+        });
+        player.addOnClause = paid.size >= clause.tiers.length
+          ? undefined
+          : { ...clause, paidTierIndexes: [...paid] };
       }
       // 새 시즌은 풀 컨디션·부상/징계 리셋으로 시작
       player.condition = 1;
@@ -594,6 +608,8 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
       player.suspensionMatches = 0;
       player.seasonApps = 0;
       player.seasonGoals = 0;
+      player.seasonAssists = 0;
+      player.seasonCleanSheets = 0;
     }
 
     // 은퇴 (스냅샷 보존 후 제거 — 통산 기록은 은퇴와 함께 사라지므로 여기서 캡처)

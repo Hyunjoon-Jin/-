@@ -2,7 +2,7 @@
  * 사용자 주도 이적 액션 (economy.md 5장 — 플레이어 직접 영입/판매/방출).
  * AI 이적(transfer.ts)과 분리. 프리시즌에 호출되며 구단 객체를 직접 변경한다.
  */
-import type { Club, Line, Player } from './types.js';
+import type { Club, Line, Player, AddOnConditionKind, AddOnTier } from './types.js';
 import { lineOf } from './teamStrength.js';
 import { currentAbility } from './derived.js';
 import { marketValue, weeklyWage, agentFee } from './valuation.js';
@@ -50,15 +50,54 @@ const AGENT_RELATIONS_BUY_GAIN = 2;
 export const AGENT_RELATIONS_BREAKDOWN_PENALTY = 8;
 /** 관계 지수 편차(중립 대비) 1점당 하한 비율·역제안 완고함에 주는 보정폭. */
 const AGENT_RELATIONS_ADJ_PER_POINT = 0.001;
+/** 시즌마다 거래가 없던 상대 구단과의 관계가 중립으로 회귀하는 비율(고도화 항목1). */
+export const AGENT_RELATIONS_DECAY_RATIO = 0.1;
 
-/** 구단의 현재 에이전트 관계 지수(없으면 중립값). */
-export function agentRelationsOf(club: Club): number {
-  return clamp(club.agentRelations ?? AGENT_RELATIONS_DEFAULT, AGENT_RELATIONS_MIN, AGENT_RELATIONS_MAX);
+/** 구단의 특정 상대 구단(협상 상대 선수의 소속 구단)에 대한 현재 에이전트 관계 지수(없으면 중립값). */
+export function agentRelationsOf(club: Club, counterpartClubId: string): number {
+  return clamp(
+    club.agentRelationsByClub?.[counterpartClubId] ?? AGENT_RELATIONS_DEFAULT,
+    AGENT_RELATIONS_MIN, AGENT_RELATIONS_MAX,
+  );
 }
 
 /** 관계 지수가 협상에 주는 보정치 — 중립(50)보다 좋으면 양수(하한↓·완고함↓), 나쁘면 음수. */
-function agentRelationsAdjustment(club: Club): number {
-  return (agentRelationsOf(club) - AGENT_RELATIONS_DEFAULT) * AGENT_RELATIONS_ADJ_PER_POINT;
+function agentRelationsAdjustment(club: Club, counterpartClubId: string): number {
+  return (agentRelationsOf(club, counterpartClubId) - AGENT_RELATIONS_DEFAULT) * AGENT_RELATIONS_ADJ_PER_POINT;
+}
+
+/** 특정 상대 구단과의 관계 지수를 delta만큼 조정(0~100 clamp), 구단 객체를 직접 변경. */
+function adjustAgentRelations(club: Club, counterpartClubId: string, delta: number): void {
+  const next = clamp(agentRelationsOf(club, counterpartClubId) + delta, AGENT_RELATIONS_MIN, AGENT_RELATIONS_MAX);
+  club.agentRelationsByClub = { ...(club.agentRelationsByClub ?? {}), [counterpartClubId]: next };
+}
+
+/** 협상이 완전히 결렬됐을 때(evaluateOffer의 roundsExhausted) 호출 — 그 상대 구단과의
+ *  관계만 깎인다(다른 구단과의 관계는 무관). */
+export function applyNegotiationBreakdownPenalty(club: Club, counterpartClubId: string): void {
+  adjustAgentRelations(club, counterpartClubId, -AGENT_RELATIONS_BREAKDOWN_PENALTY);
+}
+
+/**
+ * 매 시즌 오프시즌에 호출 — 이번 시즌 거래가 없던 상대 구단과의 관계는 서서히 중립으로
+ * 회귀한다(고도화 항목1: 나쁜 관계도 시간이 지나면 서서히 풀리고, 좋은 관계도 계속
+ * 거래하지 않으면 서서히 식는다). 충분히 중립에 가까워진 항목은 기록에서 지워
+ * 데이터가 무한정 쌓이지 않게 한다.
+ */
+export function decayAgentRelations(club: Club): void {
+  const map = club.agentRelationsByClub;
+  if (!map) return;
+  const next: Record<string, number> = {};
+  for (const [counterpartClubId, value] of Object.entries(map)) {
+    const gap = AGENT_RELATIONS_DEFAULT - value;
+    if (gap === 0) continue;
+    // 정수 반올림만으로는 중립 근처에서 고정점(예: 55 ↔ 54.5 반올림)에 갇혀 영영
+    // 수렴하지 못할 수 있어, 최소 1점은 항상 중립 쪽으로 움직이고 목표를 넘지 않게 clamp한다.
+    const step = Math.sign(gap) * Math.max(1, Math.round(Math.abs(gap) * AGENT_RELATIONS_DECAY_RATIO));
+    const decayed = gap > 0 ? Math.min(value + step, AGENT_RELATIONS_DEFAULT) : Math.max(value + step, AGENT_RELATIONS_DEFAULT);
+    if (decayed !== AGENT_RELATIONS_DEFAULT) next[counterpartClubId] = decayed;
+  }
+  club.agentRelationsByClub = next;
 }
 
 export type AgentRelationsTier = 'excellent' | 'good' | 'neutral' | 'poor' | 'hostile';
@@ -230,8 +269,9 @@ export function evaluateOffer(
   const personality = agentPersonality(player);
   const impatience = 1 + Math.min(round, MAX_NEGOTIATION_ROUNDS) * NEGOTIATION_IMPATIENCE_PER_ROUND;
   const asking = Math.round(askingPrice(seller, player) * impatience);
-  // 관계 지수가 좋을수록(신규 개선 항목 6) 하한이 낮아지고 역제안도 덜 완고해진다.
-  const relationsAdj = agentRelationsAdjustment(me);
+  // 관계 지수가 좋을수록(신규 개선 항목 6, 고도화 항목1: 이 매도 구단 한정) 하한이
+  // 낮아지고 역제안도 덜 완고해진다.
+  const relationsAdj = agentRelationsAdjustment(me, seller.id);
   const floorRatio = clamp(FLOOR_RATIO[personality] - relationsAdj, 0.5, 0.98);
   const floor = Math.round(asking * floorRatio);
   let outcome: OfferOutcome;
@@ -306,7 +346,7 @@ export function buyPlayerAt(clubs: Club[], myClubId: string, playerId: string, f
   if (!(fee > 0)) return { ok: false, reason: '이적료가 올바르지 않습니다.' };
   // evaluateOffer와 동일한 하한(호가의 82%, 관계 지수로 보정) — 협상 없이 직접
   // buyPlayerAt을 호출해도 헐값에 선수를 사들이지 못하도록 매도 구단 쪽에서 다시 검증한다.
-  const floorRatio = clamp(0.82 - agentRelationsAdjustment(me), 0.5, 0.98);
+  const floorRatio = clamp(0.82 - agentRelationsAdjustment(me, seller.id), 0.5, 0.98);
   const floor = Math.round(askingPrice(seller, player) * floorRatio);
   if (fee < floor) {
     return { ok: false, reason: '제안액이 너무 낮아 거절당했습니다.' };
@@ -330,7 +370,7 @@ export function buyPlayerAt(clubs: Club[], myClubId: string, playerId: string, f
   player.seasonsAtClub = 0; // 새 구단으로 이적(로열티 초기화, 신규 개선 항목 10)
   me.players.push(player);
   reassignSquadNumber(me, player);
-  me.agentRelations = clamp(agentRelationsOf(me) + AGENT_RELATIONS_BUY_GAIN, AGENT_RELATIONS_MIN, AGENT_RELATIONS_MAX);
+  adjustAgentRelations(me, seller.id, AGENT_RELATIONS_BUY_GAIN);
 
   return { ok: true, fee, agentFee: commission, playerName: player.name };
 }
@@ -614,30 +654,99 @@ export function exerciseBuyback(clubs: Club[], myClubId: string, playerId: strin
   return { ok: true, fee, sellerName: currentClub.name, playerName: player.name };
 }
 
-// ── 성과 기반 후불 이적료 (Add-on, 신규 개선 항목 3) ──────────
+export type BuybackRenegotiationDirection = 'increase' | 'decrease';
+
+/** 재협상 1회당 바이백 금액이 오르내리는 비율(고도화 항목5). */
+export const BUYBACK_RENEGOTIATION_STEP = 0.2;
+/** 현재 구단이 "선수 가치가 크게 올랐다"며 인상을 요청할 수 있는 배율 기준
+ *  (시가가 바이백 금액의 이 배율 이상이어야 정당하다고 받아들여진다). */
+export const BUYBACK_VALUE_INCREASE_RATIO = 1.3;
+/** 원 소속(권리 보유) 구단이 "선수 가치가 떨어졌다"며 인하를 요청할 수 있는 배율
+ *  기준(시가가 바이백 금액의 이 배율 이하여야 정당하다고 받아들여진다). */
+export const BUYBACK_VALUE_DECREASE_RATIO = 0.7;
+
+export interface BuybackRenegotiationResult { ok: boolean; reason?: string; newFee?: number }
+
+/**
+ * 바이백 조항 금액 재협상(고도화 항목5) — 서명 시 고정됐던 금액을 시즌 중 한 번
+ * 조정 요청할 수 있다. 현재 구단이 인상(increase)을 요청하면 선수의 시가가 조항
+ * 금액보다 충분히 올랐을 때만(그렇지 않으면 헐값에 놓아줄 이유가 없다는 논리)
+ * 받아들여지고, 원 소속 구단이 인하(decrease)를 요청하면 시가가 조항 금액보다
+ * 충분히 떨어졌을 때만(그래야 실제로 되사올 유인이 생긴다는 논리) 받아들여진다.
+ * 시즌당 1회 제한.
+ */
+export function renegotiateBuybackClause(
+  clubs: Club[], playerId: string, direction: BuybackRenegotiationDirection,
+): BuybackRenegotiationResult {
+  const currentClub = clubs.find((c) => c.players.some((p) => p.id === playerId));
+  if (!currentClub) return { ok: false, reason: '해당 선수를 찾을 수 없습니다.' };
+  const player = currentClub.players.find((p) => p.id === playerId)!;
+  if (!player.buybackClause) return { ok: false, reason: '바이백 조항이 없는 선수입니다.' };
+  if (player.buybackRenegotiatedThisSeason) {
+    return { ok: false, reason: '이번 시즌에는 이미 바이백 조항 재협상을 시도했습니다.' };
+  }
+  player.buybackRenegotiatedThisSeason = true;
+  const value = marketValue(player);
+  const currentFee = player.buybackClause.fee;
+
+  if (direction === 'increase') {
+    if (value < currentFee * BUYBACK_VALUE_INCREASE_RATIO) {
+      return { ok: false, reason: '선수 가치가 아직 크게 오르지 않아 원 소속 구단이 인상 요청을 거절했습니다.' };
+    }
+    const newFee = Math.round(currentFee * (1 + BUYBACK_RENEGOTIATION_STEP));
+    player.buybackClause = { ...player.buybackClause, fee: newFee };
+    return { ok: true, newFee };
+  }
+  if (value > currentFee * BUYBACK_VALUE_DECREASE_RATIO) {
+    return { ok: false, reason: '선수 가치가 아직 충분히 떨어지지 않아 현재 구단이 인하 요청을 거절했습니다.' };
+  }
+  const newFee = Math.round(currentFee * (1 - BUYBACK_RENEGOTIATION_STEP));
+  player.buybackClause = { ...player.buybackClause, fee: newFee };
+  return { ok: true, newFee };
+}
+
+// ── 성과 기반 후불 이적료 (Add-on, 신규 개선 항목 3 → 고도화 항목4: 다단계화) ──
 
 export interface AddOnAttachResult { ok: boolean; reason?: string }
 
+/** Add-on 조항에 붙일 수 있는 최대 티어 수(고도화 항목4). */
+export const ADD_ON_MAX_TIERS = 3;
+
+export const ADD_ON_CONDITION_LABEL: Record<AddOnConditionKind, string> = {
+  appearances: '출전', goals: '득점', assists: '도움', cleanSheets: '클린시트',
+};
+
+/** 선수의 이번 시즌 누적치 중 Add-on 조건 종류에 해당하는 값을 읽는다. */
+export function addOnConditionValue(player: Player, kind: AddOnConditionKind): number {
+  switch (kind) {
+    case 'appearances': return player.seasonApps;
+    case 'goals': return player.seasonGoals;
+    case 'assists': return player.seasonAssists ?? 0;
+    case 'cleanSheets': return player.seasonCleanSheets ?? 0;
+  }
+}
+
 /**
  * 방금 판매한 선수에게 성과 기반 후불 이적료(Add-on) 조항을 붙인다 — 이번 시즌 새
- * 소속 구단에서 출전 또는 득점이 지정한 조건에 처음 도달하면 원 소속 구단에 추가
- * 이적료가 지급된다(오프시즌 경계에 정산, franchise.ts 참고). 판매 자체(이적료
- * 정산)와 분리된 별도 호출이라 acceptSellOffer/buyPlayerAt 등 어떤 영입 경로
- * 뒤에도 붙일 수 있다.
+ * 소속 구단에서 지정한 티어 조건(출전/득점/도움/클린시트 누적치)에 도달할 때마다
+ * 그 티어 몫만큼 원 소속 구단에 추가 이적료가 지급된다(오프시즌 경계에 정산,
+ * franchise.ts 참고). 여러 티어를 섞어 다단계 성과급을 구성할 수 있다(최대
+ * ADD_ON_MAX_TIERS개). 판매 자체(이적료 정산)와 분리된 별도 호출이라
+ * acceptSellOffer/buyPlayerAt 등 어떤 영입 경로 뒤에도 붙일 수 있다.
  */
 export function attachAddOnClause(
-  clubs: Club[], playerId: string, sellerClubId: string,
-  appearances: number | undefined, goals: number | undefined, fee: number,
+  clubs: Club[], playerId: string, sellerClubId: string, tiers: AddOnTier[],
 ): AddOnAttachResult {
-  if (appearances === undefined && goals === undefined) {
-    return { ok: false, reason: '출전 또는 득점 조건 중 하나는 지정해야 합니다.' };
+  if (tiers.length === 0) return { ok: false, reason: '조건을 하나 이상 지정해야 합니다.' };
+  if (tiers.length > ADD_ON_MAX_TIERS) return { ok: false, reason: `조건은 최대 ${ADD_ON_MAX_TIERS}개까지 지정할 수 있습니다.` };
+  if (tiers.some((t) => !(t.threshold > 0) || !(t.fee > 0))) {
+    return { ok: false, reason: '조건 기준과 금액은 0보다 커야 합니다.' };
   }
-  if (!(fee > 0)) return { ok: false, reason: '금액이 올바르지 않습니다.' };
   const club = clubs.find((c) => c.players.some((p) => p.id === playerId));
   if (!club) return { ok: false, reason: '선수를 찾을 수 없습니다.' };
   if (club.id === sellerClubId) return { ok: false, reason: '같은 구단에는 조항을 붙일 수 없습니다.' };
   const player = club.players.find((p) => p.id === playerId)!;
-  player.addOnClause = { sellerClubId, appearances, goals, fee };
+  player.addOnClause = { sellerClubId, tiers };
   return { ok: true };
 }
 
@@ -793,6 +902,54 @@ export function exerciseLoanBuyOption(clubs: Club[], buyerClubId: string, player
  * 잔고 이체로 분담 효과를 낸다(임대 구단은 정상적으로 전액 주급을 지출하되,
  * 원 소속 구단으로부터 분담분만큼 보전받는 구조).
  */
+/** 임대 주급 분담 재협상 요청 방향(고도화 항목3). */
+export type LoanWageRenegotiationDirection = 'increase' | 'decrease';
+
+/** 재협상 1회당 분담률이 오르내리는 폭. */
+export const LOAN_WAGE_RENEGOTIATION_STEP = 0.15;
+/** 임대 구단이 "선수가 부진하다"며 분담 인상을 요청할 수 있는 시즌 출전 수 상한(이하). */
+export const LOAN_WAGE_LOW_APPS_THRESHOLD = 5;
+/** 원 소속 구단이 "선수가 잘 크고 있다"며 분담 인하를 요청할 수 있는 시즌 출전 수 하한(이상). */
+export const LOAN_WAGE_HIGH_APPS_THRESHOLD = 15;
+
+export interface LoanWageRenegotiationResult { ok: boolean; reason?: string; newShare?: number; }
+
+/**
+ * 임대 주급 분담률 재협상(고도화 항목3) — 서명 시 고정됐던 분담률을 시즌 중 한 번
+ * 조정 요청할 수 있다. 임대 구단이 분담 인상(increase)을 요청하면 이번 시즌 선수가
+ * 충분히 뛰지 못했을 때만(부진해 보이니 원 소속이 동정적으로 더 부담) 받아들여지고,
+ * 원 소속 구단이 분담 인하(decrease)를 요청하면 선수가 충분히 많이 뛰었을 때만(잘
+ * 크고 있으니 부담을 줄여도 되지 않겠냐는 명분) 받아들여진다. 시즌당 1회 제한.
+ */
+export function renegotiateLoanWageShare(
+  clubs: Club[], playerId: string, direction: LoanWageRenegotiationDirection,
+): LoanWageRenegotiationResult {
+  const loanClub = clubs.find((c) => c.players.some((p) => p.id === playerId));
+  if (!loanClub) return { ok: false, reason: '해당 선수를 찾을 수 없습니다.' };
+  const player = loanClub.players.find((p) => p.id === playerId)!;
+  if (!player.loanFromClubId) return { ok: false, reason: '임대 중인 선수가 아닙니다.' };
+  if (player.loanWageRenegotiatedThisSeason) {
+    return { ok: false, reason: '이번 시즌에는 이미 분담률 재협상을 시도했습니다.' };
+  }
+  player.loanWageRenegotiatedThisSeason = true;
+  const currentShare = clamp(player.loanWageShareByParent ?? 0, 0, 1);
+
+  if (direction === 'increase') {
+    if (player.seasonApps > LOAN_WAGE_LOW_APPS_THRESHOLD) {
+      return { ok: false, reason: '선수가 이미 충분히 출전하고 있어 원 소속 구단이 분담 인상을 거절했습니다.' };
+    }
+    const newShare = clamp(currentShare + LOAN_WAGE_RENEGOTIATION_STEP, 0, 1);
+    player.loanWageShareByParent = newShare;
+    return { ok: true, newShare };
+  }
+  if (player.seasonApps < LOAN_WAGE_HIGH_APPS_THRESHOLD) {
+    return { ok: false, reason: '선수가 아직 확실히 자리잡지 못해 임대 구단이 분담 인하를 거절했습니다.' };
+  }
+  const newShare = clamp(currentShare - LOAN_WAGE_RENEGOTIATION_STEP, 0, 1);
+  player.loanWageShareByParent = newShare;
+  return { ok: true, newShare };
+}
+
 export function applyLoanWageSubsidies(clubs: Club[]): void {
   const byId = new Map(clubs.map((c) => [c.id, c]));
   for (const club of clubs) {

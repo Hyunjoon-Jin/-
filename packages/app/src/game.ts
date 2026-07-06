@@ -9,13 +9,14 @@ import {
   commitResult, simulateMatch, simulateSeason, defaultTactic, applyMatchEffects,
   buyPlayer, buyPlayerAt, buyPlayerViaReleaseClause, evaluateOffer, sellPlayer, releasePlayer,
   transferTargets,
-  exerciseBuyback, attachAddOnClause, exerciseLoanBuyOption,
-  agentRelationsOf, agentRelationsTier,
-  AGENT_RELATIONS_MIN, AGENT_RELATIONS_DEFAULT, AGENT_RELATIONS_BREAKDOWN_PENALTY,
+  exerciseBuyback, attachAddOnClause, exerciseLoanBuyOption, type AddOnTier,
+  agentRelationsOf, agentRelationsTier, applyNegotiationBreakdownPenalty, decayAgentRelations,
   panicBuy as enginePanicBuy, PANIC_BUY_PREMIUM, executeRivalSnipe,
   type AgentRelationsTier,
   sellOffers, acceptSellOffer,
   loanPlayerOut, recallLoanPlayer, applyLoanWageSubsidies, swapPlayers,
+  renegotiateLoanWageShare as engineRenegotiateLoanWageShare, type LoanWageRenegotiationDirection,
+  renegotiateBuybackClause as engineRenegotiateBuybackClause, type BuybackRenegotiationDirection,
   type OfferEvaluation, type SellOffer, type LoanTerms, type LoanReturnEvent, type LoanObligationEvent,
   summarizeStats, aggregatePlayerStats, topScorers as engineTopScorers, recentPlayerForm,
   seasonSquadSnapshot,
@@ -338,9 +339,10 @@ export function myClub(state: GameState): Club {
   return state.clubs.find((c) => c.id === state.myClubId)!;
 }
 
-/** 내 구단의 현재 에이전트 관계 지수와 등급(Item6, 이적 시장 UI 표시용). */
-export function myAgentRelations(state: GameState): { value: number; tier: AgentRelationsTier } {
-  const value = agentRelationsOf(myClub(state));
+/** 내 구단과 특정 상대 구단 사이의 현재 에이전트 관계 지수와 등급(Item6, 고도화
+ *  항목1로 상대 구단별 세분화 — 이적 시장 UI 표시용). */
+export function myAgentRelations(state: GameState, counterpartClubId: string): { value: number; tier: AgentRelationsTier } {
+  const value = agentRelationsOf(myClub(state), counterpartClubId);
   return { value, tier: agentRelationsTier(value) };
 }
 
@@ -786,6 +788,10 @@ export function finishSeason(state: GameState): GameState {
     ? sponsorContractTick.expired.map((c) => c.kind)
     : undefined;
 
+  // 에이전트 관계 지수 자연 회복/악화(고도화 항목1) — 이번 시즌 거래가 없던 상대
+  // 구단과의 관계는 서서히 중립으로 되돌아간다.
+  decayAgentRelations(myClub(state));
+
   // 이적 관심 목록(신규 개선 항목 27) 계약 만료 임박 알림 — 오프시즌 처리 후 잔여 계약
   // 연수가 1년 이하로 "새로" 접어든 관심 선수만 알린다(매 시즌 같은 선수로 반복 알림 방지).
   // 이미 팔렸거나 은퇴 등으로 시장에서 사라졌으면 조용히 넘어간다.
@@ -1041,13 +1047,12 @@ export function negotiate(state: GameState, playerId: string, offer: number, rou
 }
 
 /** 밀당이 완전히 결렬됐을 때(evaluateOffer의 roundsExhausted) 호출 — 다음 시즌까지
- *  이 선수와의 재협상을 막고(Item1), 에이전트 관계 지수를 깎는다(Item6). */
+ *  이 선수와의 재협상을 막고(Item1), 그 매도 구단과의 에이전트 관계 지수만 깎는다
+ *  (Item6, 고도화 항목1로 상대 구단별 세분화 — 다른 구단과의 관계는 무관). */
 export function recordNegotiationBreakdown(state: GameState, playerId: string): GameState {
   const club = myClub(state);
-  club.agentRelations = Math.max(
-    AGENT_RELATIONS_MIN,
-    (club.agentRelations ?? AGENT_RELATIONS_DEFAULT) - AGENT_RELATIONS_BREAKDOWN_PENALTY,
-  );
+  const seller = state.clubs.find((c) => c.id !== state.myClubId && c.players.some((p) => p.id === playerId));
+  if (seller) applyNegotiationBreakdownPenalty(club, seller.id);
   return {
     ...state,
     negotiationCooldowns: { ...state.negotiationCooldowns, [playerId]: state.season + 1 },
@@ -1155,12 +1160,25 @@ export function buyback(state: GameState, playerId: string): ActionOutcome {
   };
 }
 
-/** 방금 판매한 선수에게 성과 기반 후불 이적료(Add-on) 조항을 붙인다(신규 개선 항목 3) —
- *  판매(acceptSell) 직후 별도로 호출해 조건을 지정한다. */
-export function attachAddOn(
-  state: GameState, playerId: string, appearances: number | undefined, goals: number | undefined, fee: number,
+/** 바이백 조항 금액 재협상을 요청한다(고도화 항목5). 시즌당 1회만 시도할 수 있으며,
+ *  선수 시가가 조항 금액 대비 충분히 오르내렸을 때만 상대측이 요청을 받아들인다. */
+export function renegotiateBuybackClauseAction(
+  state: GameState, playerId: string, direction: BuybackRenegotiationDirection,
 ): ActionOutcome {
-  const r = attachAddOnClause(state.clubs, playerId, state.myClubId, appearances, goals, fee);
+  if (state.live) return { state, ok: false, message: '이적은 프리시즌에만 가능합니다.' };
+  const r = engineRenegotiateBuybackClause(state.clubs, playerId, direction);
+  if (!r.ok) return { state: { ...state }, ok: false, message: r.reason! };
+  return {
+    state: { ...state },
+    ok: true,
+    message: `바이백 조항 금액이 ${formatMoney(r.newFee!)}(으)로 조정되었습니다.`,
+  };
+}
+
+/** 방금 판매한 선수에게 성과 기반 후불 이적료(Add-on) 조항을 붙인다(신규 개선 항목 3,
+ *  고도화 항목4에서 다단계화) — 판매(acceptSell) 직후 별도로 호출해 티어를 지정한다. */
+export function attachAddOn(state: GameState, playerId: string, tiers: AddOnTier[]): ActionOutcome {
+  const r = attachAddOnClause(state.clubs, playerId, state.myClubId, tiers);
   if (!r.ok) return { state, ok: false, message: r.reason! };
   return { state: { ...state }, ok: true, message: '성과 기반 후불 이적료 조항을 추가했습니다.' };
 }
@@ -1202,6 +1220,21 @@ export function exerciseBuyOption(state: GameState, playerId: string): ActionOut
   const r = exerciseLoanBuyOption(state.clubs, state.myClubId, playerId);
   if (!r.ok) return { state, ok: false, message: r.reason! };
   return { state: afterSquadChange(state), ok: true, message: `${r.playerName} 우선매수옵션 행사 완료 (${formatMoney(r.fee!)})` };
+}
+
+/** 임대 중인 선수의 주급 분담 비율 재협상을 요청한다(고도화 항목3). 시즌당 1회만 시도할
+ *  수 있으며, 출전 시간에 따라 상대측이 요청을 거절할 수도 있다. */
+export function renegotiateLoanWageShareAction(
+  state: GameState, playerId: string, direction: LoanWageRenegotiationDirection,
+): ActionOutcome {
+  if (state.live) return { state, ok: false, message: '이적은 프리시즌에만 가능합니다.' };
+  const r = engineRenegotiateLoanWageShare(state.clubs, playerId, direction);
+  if (!r.ok) return { state: { ...state }, ok: false, message: r.reason! };
+  return {
+    state: { ...state },
+    ok: true,
+    message: `주급 분담 비율이 ${Math.round(r.newShare! * 100)}%로 조정되었습니다.`,
+  };
 }
 
 /**
@@ -1601,6 +1634,19 @@ export function revealPotential(scouting: number, potential: number, scouted = f
     return `${lo}~${hi}`;
   }
   return '?';
+}
+
+/** 에이전트 개성을 정확히 알 수 있는 최소 스카우팅 레벨(고도화 항목2). */
+export const AGENT_PERSONALITY_REVEAL_SCOUTING = 10;
+
+/**
+ * 에이전트 개성 스카우팅 연동(고도화 항목2) — 잠재력 공개(revealPotential)와 같은
+ * 방식으로, 스카우팅 레벨이 이 기준에 못 미치면(파견 정찰도 안 했다면) 정확한 에이전트
+ * 성향을 알 수 없다. 협상 수치 자체엔 항상 실제 개성이 그대로 반영되며, 이는 순전히
+ * 정보 표시(스카우팅 리포트) 문제다.
+ */
+export function isAgentPersonalityRevealed(scouting: number, scouted = false): boolean {
+  return scouted || scouting >= AGENT_PERSONALITY_REVEAL_SCOUTING;
 }
 
 /** 특정 선수를 파견 정찰했는지(B13) — 내 구단 기준. */
