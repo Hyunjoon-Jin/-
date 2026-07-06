@@ -111,14 +111,31 @@ export function Dashboard({
       ),
     });
   }
-  if (last?.milestones !== undefined && last.milestones.length > 0) {
+  const careerMilestones = last?.milestones?.filter((m) => m.kind !== 'positionMastery') ?? [];
+  if (careerMilestones.length > 0) {
     seasonBanners.push({
       key: 'milestones', priority: 2,
       node: (
         <Banner tone="success">
-          {last.milestones.map((m) => (
+          {careerMilestones.map((m) => (
             <p key={`${m.playerId}-${m.kind}-${m.value}`}>
               🎉 <b>{m.name}</b>, 통산 <b>{m.value}{m.kind === 'apps' ? '경기 출전' : '골'}</b> 달성!
+            </p>
+          ))}
+        </Banner>
+      ),
+    });
+  }
+  const positionMilestones = last?.milestones?.filter((m) => m.kind === 'positionMastery') ?? [];
+  if (positionMilestones.length > 0) {
+    seasonBanners.push({
+      key: 'positionMilestones', priority: 2,
+      node: (
+        <Banner tone="info">
+          {positionMilestones.map((m) => (
+            <p key={`${m.playerId}-${m.position}-${m.value}`}>
+              🎯 <b>{m.name}</b>, <b>{m.position}</b> 포지션 전환 훈련 숙련도 <b>{m.value}%</b> 달성!
+              {m.value >= 100 && ' 완전히 전환을 마쳤습니다.'}
             </p>
           ))}
         </Banner>

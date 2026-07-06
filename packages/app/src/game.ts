@@ -1593,6 +1593,7 @@ export type SeasonAwardKind = 'playerOfSeason' | 'topScorer' | 'goldenGlove';
 export type TimelineEntry =
   | { season: number; kind: 'transfer'; fromClubName: string; toClubName: string; fee: number }
   | { season: number; kind: 'milestone'; milestoneKind: 'apps' | 'goals'; value: number }
+  | { season: number; kind: 'positionMilestone'; position: Position; value: number }
   | { season: number; kind: 'retired'; finalAge: number; careerApps: number; careerGoals: number; caps: number }
   | { season: number; kind: 'award'; awardKind: SeasonAwardKind };
 
@@ -1611,7 +1612,10 @@ export function playerTimeline(state: GameState, playerId: string): TimelineEntr
       }
     }
     for (const m of s.milestones ?? []) {
-      if (m.playerId === playerId) {
+      if (m.playerId !== playerId) continue;
+      if (m.kind === 'positionMastery') {
+        entries.push({ season: s.season, kind: 'positionMilestone', position: m.position!, value: m.value });
+      } else {
         entries.push({ season: s.season, kind: 'milestone', milestoneKind: m.kind, value: m.value });
       }
     }

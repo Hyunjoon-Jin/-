@@ -54,7 +54,11 @@ export function retireChance(age: number, naturalFitness: number): number {
 const MILESTONE_APPS = [50, 100, 150, 200, 250, 300];
 const MILESTONE_GOALS = [10, 25, 50, 100, 150, 200];
 
-export type MilestoneKind = 'apps' | 'goals';
+export type MilestoneKind = 'apps' | 'goals' | 'positionMastery';
+
+/** 포지션 전환 훈련(고도화 항목13) 숙련도 마일스톤 임계값(%). 느리게 오르는 숙련도 바 외에
+ *  단계별 달성 알림을 줘 전환 훈련의 진행 상황을 체감하게 한다. */
+export const POSITION_MASTERY_MILESTONES = [30, 60, 90, 100];
 
 /** 통산 마일스톤 달성(이번 시즌에 처음 임계값을 넘은 경우). */
 export interface CareerMilestone {
@@ -63,8 +67,10 @@ export interface CareerMilestone {
   clubId: string;
   clubName: string;
   kind: MilestoneKind;
-  /** 달성한 임계값(예: 100). */
+  /** 달성한 임계값(예: 100, positionMastery는 숙련도 %). */
   value: number;
+  /** kind === 'positionMastery'일 때만 설정 — 전환 훈련 중인 포지션. */
+  position?: Position;
 }
 
 /** before < t ≤ after 인 임계값들(이번 시즌에 새로 넘은 것만). */
@@ -585,7 +591,19 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
         hasMentor(club, player) ? MENTOR_GROWTH_MUL : 1,
         designatedMentorBonus(club, player),
       );
+      // 포지션 전환 마일스톤(고도화 항목13) — progressPlayer가 숙련도를 올리기 전 스냅샷.
+      const trainingPos = player.trainingPosition;
+      const famBefore = trainingPos ? Math.round((player.familiarity[trainingPos] ?? 0.2) * 100) : 0;
       progressPlayer(player, rng, effectiveCoaching(player.position, club.staff), mentorBonus);
+      if (trainingPos) {
+        const famAfter = Math.round((player.familiarity[trainingPos] ?? 0.2) * 100);
+        for (const value of crossedThresholds(famBefore, famAfter, POSITION_MASTERY_MILESTONES)) {
+          milestones.push({
+            playerId: player.id, name: player.name, clubId: club.id, clubName: club.name,
+            kind: 'positionMastery', value, position: trainingPos,
+          });
+        }
+      }
       // 성장 곡선: 이번 시즌 종료 시점 CA 스냅샷(최근 20시즌 유지)
       const hist = player.caHistory ?? (player.caHistory = []);
       hist.push(Math.round(currentAbility(player)));

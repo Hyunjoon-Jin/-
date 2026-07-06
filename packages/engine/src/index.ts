@@ -45,7 +45,7 @@ export {
 } from './traits.js';
 export {
   advanceSeason, runFranchise, runOffseason, retireChance, RETIRE_MIN_AGE,
-  assignMentor, clearMentorPairing, MENTOR_PAIRING_MAX,
+  assignMentor, clearMentorPairing, MENTOR_PAIRING_MAX, POSITION_MASTERY_MILESTONES,
   type SeasonSummary, type OffseasonResult, type RetiredLegend,
   type CareerMilestone, type MilestoneKind, type YouthProspect,
   type DebutEvent, type DebutEventKind, type YouthProspectUpdate, type LoanReturnEvent,
