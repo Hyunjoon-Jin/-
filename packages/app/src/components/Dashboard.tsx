@@ -657,7 +657,12 @@ export function Dashboard({
                   </span>
                 </p>
                 <p className="muted small finance-breakdown">
-                  중계 {formatMoney(myReport.income.tv)} · 매치데이 {formatMoney(myReport.income.matchday)}
+                  중계 {formatMoney(myReport.income.tv)}
+                  <InfoTip title="중계권료">
+                    균등 분배분 + 평판 비례분에, 이번 시즌 최종 순위가 높을수록(1위에 가까울수록)
+                    추가되는 순위 배당이 더해집니다. 시청 수요가 상위권 경기에 몰린다는 가정입니다.
+                  </InfoTip>
+                  {' · '}매치데이 {formatMoney(myReport.income.matchday)}
                   {myReport.rivalBonus !== undefined && (
                     <span> (라이벌전 홈경기 프리미엄 +{formatMoney(myReport.rivalBonus)} 포함)</span>
                   )}

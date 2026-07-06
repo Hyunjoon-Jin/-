@@ -123,6 +123,18 @@ export function upgradeTrainingGround(club: Club): TrainingGroundUpgradeResult {
  *  뜨거워 관중이 몰려, 그 경기만큼은 입장 수입이 이 배율만큼 더 오른다. */
 export const RIVAL_MATCHDAY_PREMIUM = 1.4;
 
+/** 중계권료 순위 배당 계수(고도화 항목16) — 상위권 경기에 시청 수요가 몰린다는 가정으로,
+ *  평판 비례분과 별개로 최종 순위(0-index, 낮을수록 상위)에 비례해 추가 배당한다.
+ *  꼴찌는 가산 없음, 1위는 최대 가산(평판 비례분의 배율로 적용). */
+const TV_RANK_BONUS_PER_REP = 12_000;
+
+/** 중계권료 순위 배당(고도화 항목16) — 균등 분배분·평판 비례분(tv 기본식)과 별개로,
+ *  이번 시즌 최종 순위가 높을수록(1위에 가까울수록) 시청률 배당이 추가로 붙는다. */
+function broadcastRankBonus(finalPosition: number, nClubs: number, rep: number): number {
+  const rankRatio = nClubs > 1 ? 1 - finalPosition / (nClubs - 1) : 1;
+  return Math.round(clamp(rankRatio, 0, 1) * rep * TV_RANK_BONUS_PER_REP);
+}
+
 /**
  * 시즌 재정 정산.
  * @param finalPosition 리그 최종 순위 (0-index).
@@ -142,8 +154,9 @@ export function settleSeason(
 ): SeasonFinanceReport {
   const rep = club.finance.reputation;
 
-  // 수입 (중계는 균등 분배분 + 평판 비례분 → 약팀도 최소 보장)
-  const tv = 45_000 + rep * 48_000;
+  // 수입 (중계는 균등 분배분 + 평판 비례분 → 약팀도 최소 보장. 순위 배당(고도화 항목16)은
+  // 시청률이 상위권 경기에 몰린다는 가정으로 그 위에 추가로 붙는다.)
+  const tv = 45_000 + rep * 48_000 + broadcastRankBonus(finalPosition, nClubs, rep);
   const perGameMatchday =
     rep * 5_000 * attendanceFormFactor(recentFormRatio) * stadiumMatchdayMultiplier(club.finance.stadiumLevel);
   const rivalBonus = Math.round(perGameMatchday * clamp(rivalHomeMatches, 0, homeGames) * (RIVAL_MATCHDAY_PREMIUM - 1));
