@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import {
-  myClub, rivalClub, lastSummary, myLastPosition, managerPersona, contractOptions,
+  myClub, rivalClub, lastSummary, myLastPosition, managerPersona, managerSnsReputation, contractOptions,
   thinSquadLines, LINE_DEPTH_RECOMMENDED,
   DIFFICULTIES, DIVISION_LABELS, type GameState, type ActionOutcome,
 } from '../game.js';
@@ -76,6 +76,7 @@ export function Dashboard({
   const thinLines = thinSquadLines(game);
   const retiredThisSeason = last ? game.legends.filter((l) => l.season === last.season) : [];
   const persona = managerPersona(game);
+  const sns = managerSnsReputation(game);
   const contract = contractOptions(game);
 
   // 시즌 종료 배너를 중요도순으로 담아, 여러 개가 한꺼번에 세로로 쌓이지 않도록
@@ -536,6 +537,13 @@ export function Dashboard({
           <span className="muted"> — {PERSONA_LABEL[persona].desc}</span>
         </Banner>
       )}
+      <Banner tone="info">
+        📱 감독 SNS — 팔로워 <b>{sns.followers.toLocaleString()}</b>명 · 여론 지지율{' '}
+        <b>{sns.approval}</b>%
+        <span className="muted">
+          {' '}(자신감 있는 답변은 화제성을 키우고, 겸손한 답변은 지지율을 쌓습니다)
+        </span>
+      </Banner>
 
       {contract && (
         <Banner tone="gold" title="📝 감독 계약 만료 — 갱신 제안">

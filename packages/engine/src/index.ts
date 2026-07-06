@@ -153,8 +153,9 @@ export {
 } from './scouting.js';
 export {
   matchOutcomeKind, mediaToneOptions, shouldTriggerMediaEvent, applyMediaTone,
-  MEDIA_TONE_STYLE, classifyPersona,
+  MEDIA_TONE_STYLE, classifyPersona, snsReputation, SNS_BASE_FOLLOWERS,
   type MediaEventKind, type MediaTone, type MediaToneOption, type MediaStyle, type ManagerPersona,
+  type SnsReputation,
 } from './media.js';
 export {
   eligibleInstructionKinds, isValidInstruction, findManMarker,

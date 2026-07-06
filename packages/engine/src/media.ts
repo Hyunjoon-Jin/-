@@ -99,3 +99,28 @@ export function applyMediaTone(club: Club, option: MediaToneOption): void {
     p.morale = clamp(p.morale + option.moraleDelta, 0, 1);
   }
 }
+
+/**
+ * 감독 SNS 평판(고도화 항목19) — 누적 인터뷰 톤(bold/humble)을 팔로워 수·여론 지지율로
+ * 시각화한다. 자신감 있는(bold) 답변은 화제성이 커 팔로워는 더 늘지만, 겸손한(humble)
+ * 답변만큼 꾸준히 지지율을 쌓지는 못한다 — 화제성과 신뢰 사이의 트레이드오프.
+ */
+export const SNS_BASE_FOLLOWERS = 800;
+const SNS_FOLLOWERS_PER_BOLD = 150;
+const SNS_FOLLOWERS_PER_HUMBLE = 90;
+const SNS_APPROVAL_BASE = 50;
+const SNS_APPROVAL_PER_TONE_GAP = 2;
+
+export interface SnsReputation {
+  /** 누적 팔로워 수. */
+  followers: number;
+  /** 여론 지지율(0~100) — 겸손한 답변이 쌓일수록 오르고, 자신감 있는 답변이 쌓일수록 내린다. */
+  approval: number;
+}
+
+/** 누적 인터뷰 톤 성향 집계로 SNS 팔로워 수·여론 지지율을 계산(순수 함수). */
+export function snsReputation(boldCount: number, humbleCount: number): SnsReputation {
+  const followers = SNS_BASE_FOLLOWERS + boldCount * SNS_FOLLOWERS_PER_BOLD + humbleCount * SNS_FOLLOWERS_PER_HUMBLE;
+  const approval = clamp(SNS_APPROVAL_BASE + (humbleCount - boldCount) * SNS_APPROVAL_PER_TONE_GAP, 0, 100);
+  return { followers, approval };
+}

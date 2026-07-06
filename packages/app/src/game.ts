@@ -37,7 +37,7 @@ import {
   matchWeather, type Weather,
   annualWageBill, wageBudget,
   matchOutcomeKind, mediaToneOptions, shouldTriggerMediaEvent, applyMediaTone,
-  MEDIA_TONE_STYLE, classifyPersona,
+  MEDIA_TONE_STYLE, classifyPersona, snsReputation, type SnsReputation,
   type BoardDemand, type RetiredLegend,
   type MediaEventKind, type MediaTone, type MediaToneOption, type ManagerPersona,
   upgradeStaff as engineUpgradeStaff, upgradeStadium as engineUpgradeStadium,
@@ -1545,15 +1545,27 @@ export function respondMedia(state: GameState, event: MediaEvent, tone: MediaTon
   };
 }
 
-/** 누적 인터뷰 답변 성향으로 형성된 감독 이미지("아직 형성 안 됨" = neutral). */
-export function managerPersona(state: GameState): ManagerPersona {
+/** 누적 인터뷰 답변을 성향별로 집계(managerPersona/managerSnsReputation 공용). */
+function toneTally(state: GameState): { bold: number; humble: number } {
   let bold = 0;
   let humble = 0;
   for (const [tone, count] of Object.entries(state.mediaToneCounts) as [MediaTone, number][]) {
     if (MEDIA_TONE_STYLE[tone] === 'bold') bold += count;
     else humble += count;
   }
+  return { bold, humble };
+}
+
+/** 누적 인터뷰 답변 성향으로 형성된 감독 이미지("아직 형성 안 됨" = neutral). */
+export function managerPersona(state: GameState): ManagerPersona {
+  const { bold, humble } = toneTally(state);
   return classifyPersona(bold, humble);
+}
+
+/** 감독 SNS 평판(고도화 항목19) — 누적 인터뷰 톤을 팔로워 수·여론 지지율로 시각화. */
+export function managerSnsReputation(state: GameState): SnsReputation {
+  const { bold, humble } = toneTally(state);
+  return snsReputation(bold, humble);
 }
 
 /** 인터뷰를 답변 없이 넘김(효과 없음, 재노출만 방지). */
