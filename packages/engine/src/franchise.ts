@@ -200,6 +200,9 @@ export interface SeasonSummary {
   fanSatisfaction?: number;
   /** 팬 만족도가 문턱 미만으로 떨어져 시위가 발생했는지(고도화 항목18, 앱 전용). */
   fanProtest?: boolean;
+  /** 이사회 목표 연속 달성 스트릭이 이번 시즌 마일스톤을 처음 넘어 장기 프로젝트
+   *  보너스가 지급된 경우(고도화 항목20, 앱 전용). 대부분의 시즌은 undefined. */
+  longTermProjectBonus?: { milestone: number; bonus: number };
 }
 
 /** 유스 졸업생 동문 네트워크(신규 개선 항목 18) — 과거 우리 리저브 출신으로 1군

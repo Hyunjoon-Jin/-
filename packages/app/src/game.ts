@@ -26,6 +26,7 @@ import {
   runInternationalTournament, TOURNAMENT_INTERVAL_SEASONS, checkInternationalRetirements,
   confidenceDelta, applyConfidence, isSacked, START_CONFIDENCE, boardStatus, boardTierUpgradeBonus,
   boldPredictionTarget, evaluateBoldPrediction, type BoldPredictionResult,
+  crossedLongTermProjectMilestone, longTermProjectBonus,
   type BoardStatus,
   generateDemand, evaluateDemand, demandConfidence, DEMAND_LABEL,
   renegotiateDemand as engineRenegotiateDemand,
@@ -171,6 +172,10 @@ export interface GameState {
    *  실패하면 0으로 리셋. 목표가 없는 시즌은 그대로 유지(불이익 없음). 구버전
    *  세이브는 없을 수 있어 optional(없으면 0 취급). */
   sponsorStreak?: number;
+  /** 이사회 목표(objective) 연속 달성 시즌 수(고도화 항목20) — 달성하면 +1, 미달이면
+   *  0으로 리셋. 마일스톤(3/5/7/10)에 처음 도달하면 장기 프로젝트 보너스가 지급된다.
+   *  구버전 세이브는 없을 수 있어 optional(없으면 0 취급). */
+  objectiveStreak?: number;
   /** 내 구단에서 뛰다 은퇴한 선수 아카이브(레전드). */
   legends: ClubLegend[];
   /** 라이벌 구단 id. 게임 시작 시 1회 고정(같은 부 내 평판이 가장 가까운 구단). */
@@ -755,6 +760,21 @@ export function finishSeason(state: GameState): GameState {
     position: myPosition, objective: state.objective, promoted, relegated, netFinance: myNet,
   }, boardPersona);
 
+  // 장기 프로젝트 보너스(고도화 항목20) — 이사회 목표를 연속으로 달성할수록 스트릭이
+  // 쌓이고, 마일스톤(3/5/7/10시즌)에 처음 도달하면 예산 증액이 일회성으로 지급된다.
+  const objectiveMet = myPosition <= state.objective;
+  const objectiveStreakBefore = state.objectiveStreak ?? 0;
+  const nextObjectiveStreak = objectiveMet ? objectiveStreakBefore + 1 : 0;
+  const longTermMilestone = crossedLongTermProjectMilestone(objectiveStreakBefore, nextObjectiveStreak);
+  let longTermProjectResult: { milestone: number; bonus: number } | undefined;
+  if (longTermMilestone !== undefined) {
+    const me = myClub(state);
+    const bonus = longTermProjectBonus(longTermMilestone, me.finance.reputation);
+    me.finance.balance += bonus;
+    me.finance.transferBudget += bonus;
+    longTermProjectResult = { milestone: longTermMilestone, bonus };
+  }
+
   // 팬 만족도(고도화 항목18) — 목표 대비 성적·티켓가·신규 영입에 반응한다. 문턱 미만으로
   // 떨어지면 시위가 발생해 다음 시즌 매치데이 수익에 한 번 페널티가 붙는다(엔진에서 처리).
   const mySignings = state.live.transfers.filter((t) => t.toClubId === state.myClubId).length;
@@ -911,6 +931,7 @@ export function finishSeason(state: GameState): GameState {
     boardPersonaChange: myBoardPersonaChange,
     fanSatisfaction: fanSatisfactionResult.fanSatisfaction,
     fanProtest: fanSatisfactionResult.protest,
+    longTermProjectBonus: longTermProjectResult,
     reserveLeagueTable: reserveLeagueTable.length > 0 ? reserveLeagueTable : undefined,
     reservePlayerStats: myReservePlayerStats.length > 0 ? myReservePlayerStats : undefined,
     sponsorContractExpired,
@@ -934,6 +955,7 @@ export function finishSeason(state: GameState): GameState {
     boldPrediction: undefined,
     sponsorGoal: nextSponsorGoal,
     sponsorStreak: nextSponsorStreak,
+    objectiveStreak: nextObjectiveStreak,
     legends: [...state.legends, ...newLegends],
     rivalRecord,
     rivalMeetings: [...state.rivalMeetings, ...newRivalMeetings],

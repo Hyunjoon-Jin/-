@@ -101,6 +101,7 @@ export {
   BOLD_PREDICTION_MARGIN, BOLD_PREDICTION_BONUS_CONFIDENCE, BOLD_PREDICTION_PENALTY_CONFIDENCE,
   boldPredictionTarget, evaluateBoldPrediction,
   BOARD_PERSONA_CHANGE_CHANCE, maybeChangeBoardPersona,
+  LONG_TERM_PROJECT_MILESTONES, crossedLongTermProjectMilestone, longTermProjectBonus,
   type SeasonConfidenceInput, type BoardStatus, type BoldPredictionResult,
 } from './board.js';
 export {

@@ -85,6 +85,26 @@ export function boardTierUpgradeBonus(prevStatus: BoardStatus, newStatus: BoardS
 }
 
 /**
+ * 장기 프로젝트 보너스(고도화 항목20) — 이사회 목표(objective)를 여러 시즌 연속으로
+ * 달성하면("장기 프로젝트가 궤도에 올랐다") 예산 증액 등 특별 보상을 지급한다.
+ * 단일 시즌 성과 보상(prize, boardTierUpgradeBonus)과 달리 다년간의 꾸준함에 대한
+ * 보상이라, 마일스톤에 처음 도달한 시즌에만 일회성으로 지급된다.
+ */
+export const LONG_TERM_PROJECT_MILESTONES = [3, 5, 7, 10];
+const LONG_TERM_PROJECT_BONUS_PER_MILESTONE = 15_000;
+
+/** 목표 달성 연속 스트릭이 이번 시즌에 새로 마일스톤을 넘었으면 그 값, 아니면 undefined
+ *  (이미 지난 시즌에 넘은 마일스톤을 다시 보상하지 않기 위함 — crossedThresholds와 동일 패턴). */
+export function crossedLongTermProjectMilestone(prevStreak: number, newStreak: number): number | undefined {
+  return LONG_TERM_PROJECT_MILESTONES.find((m) => prevStreak < m && newStreak >= m);
+}
+
+/** 마일스톤 달성 시 지급되는 일회성 보너스 — 평판이 높을수록(더 큰 프로젝트일수록) 가산. */
+export function longTermProjectBonus(milestone: number, reputation: number): number {
+  return Math.round(milestone * LONG_TERM_PROJECT_BONUS_PER_MILESTONE * (1 + reputation / 20));
+}
+
+/**
  * 대담한 목표 공개 선언(신규 개선 항목 25) — 시즌 시작 전(첫 경기 전), 이사회 목표
  * (objective)보다 더 높은 순위를 언론에 공개 선언할 수 있다. 실제로 그 목표까지
  * 달성하면 초과 달성 이상의 추가 신뢰 보너스가 붙고, 반대로 원래 목표조차 놓치면

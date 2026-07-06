@@ -437,6 +437,20 @@ export function Dashboard({
       ),
     });
   }
+  if (last?.longTermProjectBonus !== undefined) {
+    const { milestone, bonus } = last.longTermProjectBonus;
+    seasonBanners.push({
+      key: 'longTermProjectBonus', priority: 1.7,
+      node: (
+        <Banner tone="success" title="🏗️ 장기 프로젝트 보너스">
+          <p>
+            이사회 목표를 <b>{milestone}시즌</b> 연속 달성해 이사회가 장기 프로젝트에
+            신뢰를 보냈습니다 — 예산 <b>+{formatMoney(bonus)}</b>이 지급되었습니다.
+          </p>
+        </Banner>
+      ),
+    });
+  }
   if (last?.fanProtest) {
     seasonBanners.push({
       key: 'fanProtest', priority: 1.9,
