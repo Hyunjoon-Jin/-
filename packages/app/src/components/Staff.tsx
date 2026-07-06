@@ -6,6 +6,7 @@ import {
 import { myClub, type GameState, type ActionOutcome } from '../game.js';
 import {
   upgradeCost, STAFF_MAX, formatMoney, specialistCoachLevel, STAFF_TRAIT_LABEL, STAFF_TRAIT_DESC,
+  STAFF_TRAIT_TIER_LABEL, STAFF_TRAIT_TIER_BONUS,
   STADIUM_MAX, stadiumUpgradeCost, stadiumMatchdayMultiplier,
   ACADEMY_MAX, academyUpgradeCost, academyPotentialBonus, staffTraitSynergyBonus,
   staffRaiseCost, STAFF_RAISE_ELIGIBLE_YEARS, ACADEMY_FOCUS_POTENTIAL_BONUS_PER_LEVEL,
@@ -137,8 +138,11 @@ export function Staff({
                 <div className="staff-member muted small">
                   {member.name} · {member.age}세 · 계약 {member.contractYears}년
                   {member.trait && (
-                    <span className="staff-trait" title={STAFF_TRAIT_DESC[member.trait]}>
-                      ✨ {STAFF_TRAIT_LABEL[member.trait]}
+                    <span
+                      className={`staff-trait staff-trait-${member.traitTier ?? 'veteran'}`}
+                      title={`${STAFF_TRAIT_DESC[member.trait]} (${STAFF_TRAIT_TIER_LABEL[member.traitTier ?? 'veteran']} 등급, +${STAFF_TRAIT_TIER_BONUS[member.traitTier ?? 'veteran']})`}
+                    >
+                      ✨ {STAFF_TRAIT_TIER_LABEL[member.traitTier ?? 'veteran']} {STAFF_TRAIT_LABEL[member.trait]}
                     </span>
                   )}
                 </div>

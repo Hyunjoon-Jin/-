@@ -131,6 +131,7 @@ export {
   SPECIALIST_COACH_KINDS, NAMED_STAFF_KINDS, specialistCoachLevel, effectiveCoaching,
   effectiveMedical, effectiveScouting, effectiveYouth, effectiveReserveCoaching, staffTraitSynergyBonus,
   STAFF_TRAIT_LABEL, STAFF_TRAIT_DESC, STAFF_TRAIT_BONUS,
+  STAFF_TRAIT_TIER_BONUS, STAFF_TRAIT_TIER_LABEL,
   negotiateStaffRaise, staffRaiseCost, STAFF_RAISE_ELIGIBLE_YEARS, STAFF_RAISE_EXTENSION_YEARS,
   staffRetireChance, STAFF_RETIRE_MIN_AGE, STAFF_RETIRE_HARD_AGE,
   type StaffKind, type UpgradeResult, type SpecialistCoachKind, type NamedStaffKind,

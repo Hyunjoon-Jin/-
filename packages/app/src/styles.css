@@ -825,6 +825,8 @@ body {
 .staff-trait {
   display: block; margin-top: 3px; color: var(--accent-2); font-weight: 600; cursor: help;
 }
+.staff-trait-legend { color: var(--color-gold); }
+.staff-trait-novice { opacity: 0.8; }
 .staff-level { font-size: 14px; color: var(--muted); margin-bottom: 8px; }
 .staff-level b { color: var(--text); font-size: 18px; }
 .staff-bar { height: 8px; background: var(--panel-2); border-radius: 4px; overflow: hidden; margin-bottom: 12px; }

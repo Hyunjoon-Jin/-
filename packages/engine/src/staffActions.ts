@@ -5,7 +5,7 @@
  * 직책은 새 인물을 영입하는 것으로 취급해 이름·나이·계약기간이 함께 갱신된다.
  * 비용은 레벨에 따라 증가.
  */
-import type { Club, Position, Staff, StaffMember, StaffTrait } from './types.js';
+import type { Club, Position, Staff, StaffMember, StaffTrait, StaffTraitTier } from './types.js';
 import { FIRST, LAST } from './names.js';
 import { lineOf } from './teamStrength.js';
 import type { Rng } from './rng.js';
@@ -50,8 +50,39 @@ export const STAFF_TRAIT_DESC: Record<StaffTrait, string> = {
 
 /** 새로 영입된 인물이 특기 특성을 가질 확률(같은 조합이면 항상 같은 결과 — 결정론적). */
 const STAFF_TRAIT_CHANCE = 0.45;
-/** 특기 특성이 주는 유효 레벨 가산치. */
+/** 특기 특성이 주는 유효 레벨 가산치(구버전 세이브·등급 미판정 시 기본값 — 등급제
+ *  도입 후로는 veteran 등급과 동일한 값으로 취급된다, 고도화 항목9). */
 export const STAFF_TRAIT_BONUS = 2;
+
+/** 특기 등급별 가산 보너스(고도화 항목9) — 초급 < 중급(기존 STAFF_TRAIT_BONUS와
+ *  동일) < 전설급. */
+export const STAFF_TRAIT_TIER_BONUS: Record<StaffTraitTier, number> = {
+  novice: 1, veteran: STAFF_TRAIT_BONUS, legend: 4,
+};
+export const STAFF_TRAIT_TIER_LABEL: Record<StaffTraitTier, string> = {
+  novice: '초급', veteran: '중급', legend: '전설급',
+};
+/** 특기를 가진 인물의 등급 분포 — 초급이 가장 흔하고 전설급이 가장 희소하다. */
+const STAFF_TRAIT_TIER_NOVICE_CHANCE = 0.5;
+const STAFF_TRAIT_TIER_VETERAN_CHANCE = 0.85; // novice~이 구간까지 veteran, 나머지는 legend
+
+/** 특기 등급 가산 보너스 조회 — trait가 대상 특성과 일치할 때만 등급별 보너스를,
+ *  아니면 0을 반환한다(구버전 세이브는 traitTier가 없을 수 있어 veteran 취급). */
+function traitTierBonus(member: StaffMember | undefined, trait: StaffTrait): number {
+  if (member?.trait !== trait) return 0;
+  return STAFF_TRAIT_TIER_BONUS[member.traitTier ?? 'veteran'];
+}
+
+/** clubId·직책·레벨을 시드로 결정론적인 "특기 및 등급"을 뽑는다(내부 공용 헬퍼). */
+function rollStaffTrait(seedKey: string, kind: NamedStaffKind): { trait?: StaffTrait; traitTier?: StaffTraitTier } {
+  const traitRoll = hashSeed(`${seedKey}:trait`) / 0xFFFFFFFF;
+  if (traitRoll >= STAFF_TRAIT_CHANCE) return {};
+  const tierRoll = hashSeed(`${seedKey}:trait:tier`) / 0xFFFFFFFF;
+  const traitTier: StaffTraitTier = tierRoll < STAFF_TRAIT_TIER_NOVICE_CHANCE
+    ? 'novice'
+    : tierRoll < STAFF_TRAIT_TIER_VETERAN_CHANCE ? 'veteran' : 'legend';
+  return { trait: STAFF_TRAIT_BY_KIND[kind], traitTier };
+}
 
 /** clubId·직책·레벨을 시드로 결정론적인 "새 인물"을 뽑는다 — 같은 조합이면 항상 같은 사람. */
 function hireStaffMember(clubId: string, kind: NamedStaffKind, level: number): StaffMember {
@@ -60,10 +91,9 @@ function hireStaffMember(clubId: string, kind: NamedStaffKind, level: number): S
   const last = LAST[Math.floor(seed / FIRST.length) % LAST.length]!;
   const age = STAFF_AGE_MIN + (seed % STAFF_AGE_RANGE);
   const contractYears = 1 + (seed % STAFF_CONTRACT_YEARS_MAX);
-  // 특기 특성 — 이름/나이와 별개 해시로 판정(같은 조합이면 항상 같은 결과).
-  const traitRoll = hashSeed(`${clubId}:${kind}:${level}:trait`) / 0xFFFFFFFF;
-  const trait = traitRoll < STAFF_TRAIT_CHANCE ? STAFF_TRAIT_BY_KIND[kind] : undefined;
-  return { name: `${first} ${last}`, age, contractYears, trait };
+  // 특기 특성·등급 — 이름/나이와 별개 해시로 판정(같은 조합이면 항상 같은 결과).
+  const { trait, traitTier } = rollStaffTrait(`${clubId}:${kind}:${level}`, kind);
+  return { name: `${first} ${last}`, age, contractYears, trait, traitTier };
 }
 
 /** 계약 만료로 이탈한 실명 스태프의 후임을 뽑는다. hireStaffMember와 달리 rng로 뽑은
@@ -77,9 +107,8 @@ function hireReplacementStaffMember(clubId: string, kind: NamedStaffKind, level:
   const last = LAST[Math.floor(seed / FIRST.length) % LAST.length]!;
   const age = STAFF_AGE_MIN + (seed % STAFF_AGE_RANGE);
   const contractYears = 1 + (seed % STAFF_CONTRACT_YEARS_MAX);
-  const traitRoll = hashSeed(`${clubId}:${kind}:${level}:replacement:${salt}:trait`) / 0xFFFFFFFF;
-  const trait = traitRoll < STAFF_TRAIT_CHANCE ? STAFF_TRAIT_BY_KIND[kind] : undefined;
-  return { name: `${first} ${last}`, age, contractYears, trait };
+  const { trait, traitTier } = rollStaffTrait(`${clubId}:${kind}:${level}:replacement:${salt}`, kind);
+  return { name: `${first} ${last}`, age, contractYears, trait, traitTier };
 }
 
 /** 구단 생성 시 4대 실명 스태프를 초기 레벨 그대로 배정. */
@@ -113,7 +142,7 @@ export function effectiveCoaching(position: Position, staff: Staff): number {
   const posLevel = positionCoachLevel(position, staff);
   const physLevel = specialistCoachLevel(staff, 'coachPhysical');
   const base = posLevel * 0.7 + physLevel * 0.3;
-  const bonus = staff.members?.coaching?.trait === 'developmentGuru' ? STAFF_TRAIT_BONUS : 0;
+  const bonus = traitTierBonus(staff.members?.coaching, 'developmentGuru');
   return base + bonus + staffTraitSynergyBonus(staff);
 }
 
@@ -128,19 +157,19 @@ export function effectiveReserveCoaching(position: Position, staff: Staff): numb
 
 /** 의료 유효 레벨 — 재활 전문가(rehabSpecialist) 특기가 있으면 가산 보너스. */
 export function effectiveMedical(staff: Staff): number {
-  const bonus = staff.members?.medical?.trait === 'rehabSpecialist' ? STAFF_TRAIT_BONUS : 0;
+  const bonus = traitTierBonus(staff.members?.medical, 'rehabSpecialist');
   return staff.medical + bonus + staffTraitSynergyBonus(staff);
 }
 
 /** 스카우팅 유효 레벨 — 유망주 안목(eyeForTalent) 특기가 있으면 가산 보너스. */
 export function effectiveScouting(staff: Staff): number {
-  const bonus = staff.members?.scouting?.trait === 'eyeForTalent' ? STAFF_TRAIT_BONUS : 0;
+  const bonus = traitTierBonus(staff.members?.scouting, 'eyeForTalent');
   return staff.scouting + bonus + staffTraitSynergyBonus(staff);
 }
 
 /** 유스 유효 레벨 — 아카데미 명장(academyMaestro) 특기가 있으면 가산 보너스. */
 export function effectiveYouth(staff: Staff): number {
-  const bonus = staff.members?.youth?.trait === 'academyMaestro' ? STAFF_TRAIT_BONUS : 0;
+  const bonus = traitTierBonus(staff.members?.youth, 'academyMaestro');
   return staff.youth + bonus + staffTraitSynergyBonus(staff);
 }
 
