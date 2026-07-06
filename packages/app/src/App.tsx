@@ -12,7 +12,7 @@ import {
   recordNegotiationBreakdown,
   upgradeStadiumAction, upgradeAcademyAction, upgradeTrainingGroundAction, signSponsorContractAction,
   toggleWatchlistAction,
-  loanOut, loanIn, recallLoan, swapDeal,
+  loanOut, loanIn, recallLoan, swapDeal, renegotiateLoanWageShareAction,
   setTrainingFocus, setTrainingPosition, renewContract, setAcademyFocus,
   watchSetup, matchPreview, commitWatchedRound,
   watchCupSetup, cupPreview, commitWatchedCupRound,
@@ -242,6 +242,12 @@ export function App() {
     return outcome;
   };
 
+  const handleRenegotiateLoanWage = (id: string, direction: 'increase' | 'decrease'): ActionOutcome => {
+    const outcome = renegotiateLoanWageShareAction(game, id, direction);
+    update(outcome.state);
+    return outcome;
+  };
+
   const handleSwap = (myPlayerId: string, otherClubId: string, otherPlayerId: string, cashAdjustment: number): ActionOutcome => {
     const outcome = swapDeal(game, myPlayerId, otherClubId, otherPlayerId, cashAdjustment);
     if (outcome.ok) update(outcome.state);
@@ -415,6 +421,7 @@ export function App() {
                 onLoanIn={handleLoanIn}
                 onRecallLoan={handleRecallLoan}
                 onExerciseBuyOption={handleExerciseBuyOption}
+                onRenegotiateLoanWage={handleRenegotiateLoanWage}
                 onSwap={handleSwap}
                 onSelect={setDetailPlayer}
                 onNegotiationBreakdown={(id) => update(recordNegotiationBreakdown(game, id))}

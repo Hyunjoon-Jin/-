@@ -15,6 +15,7 @@ import {
   type AgentRelationsTier,
   sellOffers, acceptSellOffer,
   loanPlayerOut, recallLoanPlayer, applyLoanWageSubsidies, swapPlayers,
+  renegotiateLoanWageShare as engineRenegotiateLoanWageShare, type LoanWageRenegotiationDirection,
   type OfferEvaluation, type SellOffer, type LoanTerms, type LoanReturnEvent, type LoanObligationEvent,
   summarizeStats, aggregatePlayerStats, topScorers as engineTopScorers, recentPlayerForm,
   seasonSquadSnapshot,
@@ -1205,6 +1206,21 @@ export function exerciseBuyOption(state: GameState, playerId: string): ActionOut
   const r = exerciseLoanBuyOption(state.clubs, state.myClubId, playerId);
   if (!r.ok) return { state, ok: false, message: r.reason! };
   return { state: afterSquadChange(state), ok: true, message: `${r.playerName} 우선매수옵션 행사 완료 (${formatMoney(r.fee!)})` };
+}
+
+/** 임대 중인 선수의 주급 분담 비율 재협상을 요청한다(고도화 항목3). 시즌당 1회만 시도할
+ *  수 있으며, 출전 시간에 따라 상대측이 요청을 거절할 수도 있다. */
+export function renegotiateLoanWageShareAction(
+  state: GameState, playerId: string, direction: LoanWageRenegotiationDirection,
+): ActionOutcome {
+  if (state.live) return { state, ok: false, message: '이적은 프리시즌에만 가능합니다.' };
+  const r = engineRenegotiateLoanWageShare(state.clubs, playerId, direction);
+  if (!r.ok) return { state: { ...state }, ok: false, message: r.reason! };
+  return {
+    state: { ...state },
+    ok: true,
+    message: `주급 분담 비율이 ${Math.round(r.newShare! * 100)}%로 조정되었습니다.`,
+  };
 }
 
 /**

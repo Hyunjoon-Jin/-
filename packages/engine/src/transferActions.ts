@@ -833,6 +833,54 @@ export function exerciseLoanBuyOption(clubs: Club[], buyerClubId: string, player
  * 잔고 이체로 분담 효과를 낸다(임대 구단은 정상적으로 전액 주급을 지출하되,
  * 원 소속 구단으로부터 분담분만큼 보전받는 구조).
  */
+/** 임대 주급 분담 재협상 요청 방향(고도화 항목3). */
+export type LoanWageRenegotiationDirection = 'increase' | 'decrease';
+
+/** 재협상 1회당 분담률이 오르내리는 폭. */
+export const LOAN_WAGE_RENEGOTIATION_STEP = 0.15;
+/** 임대 구단이 "선수가 부진하다"며 분담 인상을 요청할 수 있는 시즌 출전 수 상한(이하). */
+export const LOAN_WAGE_LOW_APPS_THRESHOLD = 5;
+/** 원 소속 구단이 "선수가 잘 크고 있다"며 분담 인하를 요청할 수 있는 시즌 출전 수 하한(이상). */
+export const LOAN_WAGE_HIGH_APPS_THRESHOLD = 15;
+
+export interface LoanWageRenegotiationResult { ok: boolean; reason?: string; newShare?: number; }
+
+/**
+ * 임대 주급 분담률 재협상(고도화 항목3) — 서명 시 고정됐던 분담률을 시즌 중 한 번
+ * 조정 요청할 수 있다. 임대 구단이 분담 인상(increase)을 요청하면 이번 시즌 선수가
+ * 충분히 뛰지 못했을 때만(부진해 보이니 원 소속이 동정적으로 더 부담) 받아들여지고,
+ * 원 소속 구단이 분담 인하(decrease)를 요청하면 선수가 충분히 많이 뛰었을 때만(잘
+ * 크고 있으니 부담을 줄여도 되지 않겠냐는 명분) 받아들여진다. 시즌당 1회 제한.
+ */
+export function renegotiateLoanWageShare(
+  clubs: Club[], playerId: string, direction: LoanWageRenegotiationDirection,
+): LoanWageRenegotiationResult {
+  const loanClub = clubs.find((c) => c.players.some((p) => p.id === playerId));
+  if (!loanClub) return { ok: false, reason: '해당 선수를 찾을 수 없습니다.' };
+  const player = loanClub.players.find((p) => p.id === playerId)!;
+  if (!player.loanFromClubId) return { ok: false, reason: '임대 중인 선수가 아닙니다.' };
+  if (player.loanWageRenegotiatedThisSeason) {
+    return { ok: false, reason: '이번 시즌에는 이미 분담률 재협상을 시도했습니다.' };
+  }
+  player.loanWageRenegotiatedThisSeason = true;
+  const currentShare = clamp(player.loanWageShareByParent ?? 0, 0, 1);
+
+  if (direction === 'increase') {
+    if (player.seasonApps > LOAN_WAGE_LOW_APPS_THRESHOLD) {
+      return { ok: false, reason: '선수가 이미 충분히 출전하고 있어 원 소속 구단이 분담 인상을 거절했습니다.' };
+    }
+    const newShare = clamp(currentShare + LOAN_WAGE_RENEGOTIATION_STEP, 0, 1);
+    player.loanWageShareByParent = newShare;
+    return { ok: true, newShare };
+  }
+  if (player.seasonApps < LOAN_WAGE_HIGH_APPS_THRESHOLD) {
+    return { ok: false, reason: '선수가 아직 확실히 자리잡지 못해 임대 구단이 분담 인하를 거절했습니다.' };
+  }
+  const newShare = clamp(currentShare - LOAN_WAGE_RENEGOTIATION_STEP, 0, 1);
+  player.loanWageShareByParent = newShare;
+  return { ok: true, newShare };
+}
+
 export function applyLoanWageSubsidies(clubs: Club[]): void {
   const byId = new Map(clubs.map((c) => [c.id, c]));
   for (const club of clubs) {

@@ -479,7 +479,11 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
       }
 
       player.loanSeasonsRemaining = (player.loanSeasonsRemaining ?? 1) - 1;
-      if (player.loanSeasonsRemaining > 0) { staying.push(player); continue; }
+      if (player.loanSeasonsRemaining > 0) {
+        player.loanWageRenegotiatedThisSeason = false; // 새 시즌엔 다시 재협상 시도 가능(고도화 항목3)
+        staying.push(player);
+        continue;
+      }
       if (!parent) { staying.push(player); continue; } // 원 소속 구단이 사라진 극단적 경우 현 구단에 잔류
       loanReturns.push({
         playerId: player.id, name: player.name, position: player.position,

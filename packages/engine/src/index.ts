@@ -114,10 +114,13 @@ export {
   panicBuy, PANIC_BUY_PREMIUM, executeRivalSnipe,
   MIN_SQUAD, MAX_SQUAD, MAX_NEGOTIATION_ROUNDS, LOAN_MIN_SEASONS, LOAN_MAX_SEASONS,
   LOAN_OBLIGATION_MIN_APPS, LOAN_OBLIGATION_MAX_APPS,
+  renegotiateLoanWageShare, LOAN_WAGE_RENEGOTIATION_STEP,
+  LOAN_WAGE_LOW_APPS_THRESHOLD, LOAN_WAGE_HIGH_APPS_THRESHOLD,
   type TransferTarget, type BuyResult, type SellResult,
   type OfferOutcome, type OfferEvaluation, type SellOffer,
   type LoanTerms, type LoanResult, type SwapResult, type AgentPersonality, type BuybackResult,
   type AddOnAttachResult, type LoanBuyOptionResult, type AgentRelationsTier, type RivalSnipeResult,
+  type LoanWageRenegotiationDirection, type LoanWageRenegotiationResult,
 } from './transferActions.js';
 export {
   upgradeStaff, upgradeCost, STAFF_KINDS, STAFF_MAX,

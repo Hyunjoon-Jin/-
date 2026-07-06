@@ -132,6 +132,10 @@ export interface Player {
   loanSeasonsRemaining?: number;
   /** 임대 기간 중 주급을 원 소속 구단이 분담하는 비율(0~1) — 나머지는 임대 구단이 부담. */
   loanWageShareByParent?: number;
+  /** 이번 시즌에 이미 임대 주급 분담률 재협상을 시도했는지(고도화 항목3, 시즌당 1회
+   *  제한). 시즌이 넘어가고 임대가 계속되면 초기화된다. 구버전 세이브는 없을 수 있어
+   *  optional(없으면 아직 시도 안 함 취급). */
+  loanWageRenegotiatedThisSeason?: boolean;
   /** 임대 의무완전이적 조항 — 이번 임대 시즌 출전(seasonApps)이 기준에 도달하면 임대
    *  잔여 기간과 무관하게 시즌 종료 시 이 이적료로 완전 이적 전환(계약상 의무이므로
    *  자금 부족과 무관하게 강제 집행 — 이후 재정 위기 로직이 필요 시 뒷수습한다). */

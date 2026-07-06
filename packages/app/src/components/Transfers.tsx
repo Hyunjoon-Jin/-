@@ -35,6 +35,7 @@ interface Props {
   onLoanIn: (playerId: string, fromClubId: string, terms: LoanTerms) => ActionOutcome;
   onRecallLoan: (playerId: string) => ActionOutcome;
   onExerciseBuyOption: (playerId: string) => ActionOutcome;
+  onRenegotiateLoanWage: (playerId: string, direction: 'increase' | 'decrease') => ActionOutcome;
   onSwap: (myPlayerId: string, otherClubId: string, otherPlayerId: string, cashAdjustment: number) => ActionOutcome;
   onSelect: (p: Player) => void;
   onNegotiationBreakdown: (playerId: string) => void;
@@ -97,7 +98,7 @@ export function Transfers(props: Props) {
 function TransferMarket({
   game, onNegotiate, onBuyAt, onBuyViaReleaseClause, onOffers, onAcceptSell, onRelease,
   onLoanOut, onLoanIn, onRecallLoan, onExerciseBuyOption, onSwap, onSelect, onNegotiationBreakdown,
-  onBuyback, onAttachAddOn, onPanicBuy, onRivalSnipe, onToggleWatchlist,
+  onBuyback, onAttachAddOn, onPanicBuy, onRivalSnipe, onToggleWatchlist, onRenegotiateLoanWage,
 }: Props) {
   const club = myClub(game);
   const toast = useToast();
@@ -406,14 +407,26 @@ function TransferMarket({
                           임대보내기
                         </button>
                       </>
-                    ) : p.loanBuyOption !== undefined && (
-                      <button
-                        className="btn-small clause-buy"
-                        title={`우선매수옵션 ${formatMoney(p.loanBuyOption.fee)}로 완전 영입`}
-                        onClick={(e) => { e.stopPropagation(); setExercisingOption(p); }}
-                      >
-                        옵션행사
-                      </button>
+                    ) : (
+                      <>
+                        {p.loanBuyOption !== undefined && (
+                          <button
+                            className="btn-small clause-buy"
+                            title={`우선매수옵션 ${formatMoney(p.loanBuyOption.fee)}로 완전 영입`}
+                            onClick={(e) => { e.stopPropagation(); setExercisingOption(p); }}
+                          >
+                            옵션행사
+                          </button>
+                        )}
+                        <button
+                          className="btn-small"
+                          disabled={p.loanWageRenegotiatedThisSeason}
+                          title="출전 시간이 부족하면 원 소속 구단에 분담 인상을 요청할 수 있습니다"
+                          onClick={(e) => { e.stopPropagation(); act(onRenegotiateLoanWage(p.id, 'increase')); }}
+                        >
+                          분담 인상 요청
+                        </button>
+                      </>
                     )}
                   </td>
                 </tr>
@@ -428,7 +441,9 @@ function TransferMarket({
           <h3>임대 보낸 선수 ({loanedOut.length})</h3>
           <table className="data-table compact">
             <thead>
-              <tr><th>선수</th><th>P</th><th>현재 소속</th><th>복귀까지</th><th>의무완전이적</th><th></th></tr>
+              <tr>
+                <th>선수</th><th>P</th><th>현재 소속</th><th>복귀까지</th><th>주급 분담</th><th>의무완전이적</th><th></th>
+              </tr>
             </thead>
             <tbody>
               {loanedOut.map(({ player: p, loanClubName }) => (
@@ -438,12 +453,21 @@ function TransferMarket({
                   <td><span className={`pos-chip pos-${lineOf(p.position).toLowerCase()}`}>{p.position}</span></td>
                   <td className="muted small">{loanClubName}</td>
                   <td className="muted small">{p.loanSeasonsRemaining ?? 1}시즌 후</td>
+                  <td className="muted small">{Math.round((p.loanWageShareByParent ?? 0) * 100)}%</td>
                   <td className="muted small">
                     {p.loanBuyObligation
                       ? `출전 ${p.seasonApps}/${p.loanBuyObligation.appearances} · ${formatMoney(p.loanBuyObligation.fee)}`
                       : '—'}
                   </td>
-                  <td>
+                  <td className="sell-actions">
+                    <button
+                      className="btn-small"
+                      disabled={p.loanWageRenegotiatedThisSeason}
+                      title="출전 시간이 충분하면 분담 인하를 요청할 수 있습니다"
+                      onClick={(e) => { e.stopPropagation(); act(onRenegotiateLoanWage(p.id, 'decrease')); }}
+                    >
+                      분담 인하 요청
+                    </button>
                     <button className="btn-small danger" onClick={(e) => { e.stopPropagation(); setRecallingId(p.id); }}>
                       회수
                     </button>
