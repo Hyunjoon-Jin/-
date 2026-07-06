@@ -41,4 +41,22 @@ describe('form: 최근 폼 집계', () => {
     expect(f.gf).toBe(0);
     expect(f.ga).toBe(0);
   });
+
+  it('venue를 지정하면 홈/원정 중 해당 구장 경기만 집계한다(고도화 항목23)', () => {
+    // A의 홈 경기: A 2-0 B(승), A 0-3 D(패). A의 원정 경기: C 1-1 A(무), E 0-2 A(승).
+    const home = recentForm(results, 'A', 5, 'home');
+    expect(home.results).toEqual(['W', 'L']);
+    expect(home.points).toBe(3);
+
+    const away = recentForm(results, 'A', 5, 'away');
+    expect(away.results).toEqual(['D', 'W']);
+    expect(away.points).toBe(1 + 3);
+  });
+
+  it('venue 미지정 시 기존과 동일하게 홈/원정 모두 포함한다', () => {
+    const all = recentForm(results, 'A', 5);
+    const home = recentForm(results, 'A', 5, 'home');
+    const away = recentForm(results, 'A', 5, 'away');
+    expect(all.points).toBe(home.points + away.points);
+  });
 });

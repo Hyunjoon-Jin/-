@@ -106,6 +106,7 @@ export function MatchPreview({ preview, rivalClubId }: { preview: Preview; rival
 }
 
 function TeamHead({ team, align }: { team: TeamPreview; align: 'left' | 'right' }) {
+  const venueLabel = align === 'left' ? '홈 최근' : '원정 최근';
   return (
     <div className={`pv-team ${align}`}>
       <div className="pv-name">
@@ -122,6 +123,14 @@ function TeamHead({ team, align }: { team: TeamPreview; align: 'left' | 'right' 
           ))
         )}
       </div>
+      {team.venueForm.results.length > 0 && (
+        <div className="pv-form pv-venue-form" title="AI 전술 결정에 실제로 반영되는 홈/원정 구분 폼(고도화 항목23)">
+          <span className="muted small">{venueLabel}</span>
+          {team.venueForm.results.map((r, i) => (
+            <span key={i} className={`form-dot ${r}`} title={FORM_MARK[r]}>{FORM_MARK[r]}</span>
+          ))}
+        </div>
+      )}
       {team.keyPlayer && (
         <div className="pv-key muted small">
           핵심 {team.keyPlayer.name} · CA {team.keyPlayer.ca}

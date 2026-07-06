@@ -79,13 +79,16 @@ type TacticMap = Map<string, Tactic> | undefined;
 
 /** tactics 맵에 없으면 AI 기본 전술 — 상대 전력·홈/원정·최근 폼을 참고해 매 경기 새로 짠다
  *  (예전엔 전 구단이 항상 같은 4-3-3·중립 슬라이더였다). */
-function tacticFor(
+export function tacticFor(
   club: Club, opponent: Club, isHome: boolean, tactics: TacticMap, results: MatchResult[],
 ): Tactic {
   if (tactics?.has(club.id)) return tactics.get(club.id)!;
   // 표본이 너무 적으면(시즌 초반) 노이즈만 커지므로, 최소 3경기 이상 쌓였을 때만 반영
   // (창 크기가 5 미만이면 5경기 기준으로 정규화해 스케일을 맞춘다).
-  const form = recentForm(results, club.id, 5);
+  // 홈/원정을 가리지 않던 전체 폼 대신, 이번 경기와 같은 구장 조건(홈이면 홈 최근,
+  // 원정이면 원정 최근)의 폼만 반영한다(고도화 항목23) — 홈에서 강하고 원정에서
+  // 약한 팀이 원정에서는 실제로 더 신중하게 임하도록.
+  const form = recentForm(results, club.id, 5, isHome ? 'home' : 'away');
   const recentFormPoints = form.results.length >= 3
     ? (form.points / form.results.length) * 5
     : undefined;
