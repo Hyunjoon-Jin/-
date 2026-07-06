@@ -14,7 +14,7 @@ import { runTransferWindow, type TransferDeal } from './transfer.js';
 import { progressPlayer } from './progression.js';
 import { generateAcademyIntake, generateYouthPlayer, assignSquadNumber } from './generate.js';
 import { applyLoanWageSubsidies, addOnConditionValue, MIN_SQUAD } from './transferActions.js';
-import { enforceFinancialFairPlay } from './financeControl.js';
+import { applyFinancialControl, type FfpStage } from './financeControl.js';
 import {
   runInternationalBreak, runInternationalTournament, TOURNAMENT_INTERVAL_SEASONS, checkInternationalRetirements,
   type InternationalRetirementEvent,
@@ -203,6 +203,9 @@ export interface SeasonSummary {
   /** 이사회 목표 연속 달성 스트릭이 이번 시즌 마일스톤을 처음 넘어 장기 프로젝트
    *  보너스가 지급된 경우(고도화 항목20, 앱 전용). 대부분의 시즌은 undefined. */
   longTermProjectBonus?: { milestone: number; bonus: number };
+  /** 이번 시즌 파이낸셜 페어플레이 단계(고도화 항목21, 앱 전용) — 'ok'가 아니면
+   *  경고/제재/강제매각 중 하나. */
+  ffpStage?: FfpStage;
 }
 
 /** 유스 졸업생 동문 네트워크(신규 개선 항목 18) — 과거 우리 리저브 출신으로 1군
@@ -374,6 +377,8 @@ export interface OffseasonResult {
   intakePlayersByClub: Map<string, Player[]>;
   /** clubId → 재정 위기 강제 매각 인원. */
   fireSalesByClub: Map<string, number>;
+  /** clubId → 이번 시즌 파이낸셜 페어플레이 단계(고도화 항목21, 'ok'=위기 아님). */
+  ffpStageByClub: Map<string, FfpStage>;
   /** 이번 오프시즌에 은퇴한 선수 스냅샷(전 구단). */
   retiredPlayers: RetiredLegend[];
   /** 이번 오프시즌에 처음 임계값을 넘은 통산 마일스톤(전 구단). */
@@ -501,6 +506,7 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
   const intakeByClub = new Map<string, number>();
   const intakePlayersByClub = new Map<string, Player[]>();
   const fireSalesByClub = new Map<string, number>();
+  const ffpStageByClub = new Map<string, FfpStage>();
   const retiredPlayers: RetiredLegend[] = [];
   const milestones: CareerMilestone[] = [];
   const debutEvents: DebutEvent[] = [];
@@ -714,9 +720,11 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
       }
     }
 
-    // 재정 위기 시 강제 매각(파이낸셜 페어플레이)
-    const fire = enforceFinancialFairPlay(club);
-    fireSalesByClub.set(club.id, fire.sold.length);
+    // 재정 위기 시 단계적 조치(파이낸셜 페어플레이, 고도화 항목21) — 1시즌째 경고,
+    // 2시즌째 제재, 3시즌째부터 강제 매각.
+    const ffp = applyFinancialControl(club);
+    fireSalesByClub.set(club.id, ffp.sold.length);
+    ffpStageByClub.set(club.id, ffp.stage);
 
     // 실명 스태프 계약 잔여연수 감소(0이면 확률적으로 이탈·후임 영입, 그 외엔 조용히 재계약)
     const { departures, retirements: staffRetired } = tickStaffContracts(club, rng);
@@ -795,7 +803,7 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
     }
   }
   return {
-    retirements, intakeByClub, intakePlayersByClub, fireSalesByClub, retiredPlayers, milestones,
+    retirements, intakeByClub, intakePlayersByClub, fireSalesByClub, ffpStageByClub, retiredPlayers, milestones,
     debutEvents, loanReturns, loanObligations, reservePromotions, reserveReleasesByClub, staffDepartures,
     staffRetirements, addOnPayouts, reserveLeagueTable, mentorGraduations, reservePlayerStats,
     boardPersonaChanges,

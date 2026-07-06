@@ -146,7 +146,8 @@ export {
 } from './staffActions.js';
 export {
   enforceFinancialFairPlay, inFinancialCrisis, wageBudget, annualWageBill,
-  type FireSaleResult,
+  applyFinancialControl,
+  type FireSaleResult, type FfpStage, type FinancialControlResult,
 } from './financeControl.js';
 export {
   buildScoutingReport, academyNationPool, scoutDispatchCost, dispatchScout,

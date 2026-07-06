@@ -674,6 +674,16 @@ export function Dashboard({
               {last.fireSales !== undefined && last.fireSales > 0 && (
                 <> &nbsp;·&nbsp; <span className="neg">💸 재정 강제 매각: {last.fireSales}명</span></>
               )}
+              {last.ffpStage === 'warning' && (
+                <> &nbsp;·&nbsp; <span className="neg">
+                  ⚠️ 재정 위기 경고 — 이적 예산 동결(다음 시즌도 적자면 제재가 뒤따릅니다)
+                </span></>
+              )}
+              {last.ffpStage === 'sanction' && (
+                <> &nbsp;·&nbsp; <span className="neg">
+                  🚨 재정 위기 제재 — 이적 예산 동결 · 임금 삭감(다음 시즌도 적자면 강제 매각)
+                </span></>
+              )}
               {last.internationalTournamentChampion !== undefined && (
                 <> &nbsp;·&nbsp; 🌍 국제대회 우승: <b>{last.internationalTournamentChampion ?? '무산(참가국 부족)'}</b></>
               )}

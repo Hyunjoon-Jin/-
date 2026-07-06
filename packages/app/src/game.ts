@@ -630,7 +630,7 @@ export function finishSeason(state: GameState): GameState {
   // 개인 기록을 그 명단 기준으로 걸러내려면 오프시즌 처리 전에 미리 스냅샷해야 한다.
   const myReserveIdsThisSeason = new Set((myClub(state).reserves ?? []).map((p) => p.id));
   const {
-    retirements, intakeByClub, intakePlayersByClub, fireSalesByClub, retiredPlayers, milestones, debutEvents,
+    retirements, intakeByClub, intakePlayersByClub, fireSalesByClub, ffpStageByClub, retiredPlayers, milestones, debutEvents,
     loanReturns, loanObligations, reservePromotions, staffDepartures, staffRetirements, addOnPayouts,
     reserveLeagueTable, mentorGraduations, reservePlayerStats, boardPersonaChanges,
   } = runOffseason(state.clubs, new Rng(offseasonSeed(state)));
@@ -896,6 +896,7 @@ export function finishSeason(state: GameState): GameState {
     retirements,
     youthPromotions: intakeByClub.get(state.myClubId),
     fireSales: fireSalesByClub.get(state.myClubId),
+    ffpStage: ffpStageByClub.get(state.myClubId),
     topScorers,
     awards,
     cupChampionId,

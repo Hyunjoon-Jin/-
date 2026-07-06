@@ -55,3 +55,47 @@ export function enforceFinancialFairPlay(club: Club): FireSaleResult {
   }
   return { sold, raised };
 }
+
+/**
+ * 파이낸셜 페어플레이 단계적 절차(고도화 항목21) — 자금이 음수라고 바로 선수를
+ * 강제 매각하는 대신, 연속 적자 시즌 수에 따라 경고 → 제재 → 강제매각 순으로 점점
+ * 무거운 조치를 적용한다. 흑자로 돌아서면 스트릭이 즉시 리셋돼 다시 1단계부터 시작한다.
+ */
+export type FfpStage = 'ok' | 'warning' | 'sanction' | 'forcedSale';
+
+/** 제재 단계에서 적용되는 임금 삭감 비율(강제매각 단계의 0.85배보다 완만하다). */
+const FFP_SANCTION_WAGE_CUT = 0.9;
+
+export interface FinancialControlResult {
+  stage: FfpStage;
+  sold: Player[];
+  raised: number;
+  /** 갱신된 연속 적자 시즌 수(위기가 아니면 0). */
+  crisisStreak: number;
+}
+
+/**
+ * 시즌 종료 시 재정 상태에 따른 단계적 조치를 적용한다(franchise.ts에서 매 시즌 호출).
+ * 1시즌째 적자: 경고(이적 예산 동결). 2시즌째 연속 적자: 제재(예산 동결 + 임금 소폭
+ * 삭감). 3시즌째 이상 연속 적자: 강제매각(enforceFinancialFairPlay, 기존 로직).
+ */
+export function applyFinancialControl(club: Club): FinancialControlResult {
+  if (!inFinancialCrisis(club)) {
+    club.finance.financialCrisisStreak = 0;
+    return { stage: 'ok', sold: [], raised: 0, crisisStreak: 0 };
+  }
+  const crisisStreak = (club.finance.financialCrisisStreak ?? 0) + 1;
+  club.finance.financialCrisisStreak = crisisStreak;
+
+  if (crisisStreak === 1) {
+    club.finance.transferBudget = 0;
+    return { stage: 'warning', sold: [], raised: 0, crisisStreak };
+  }
+  if (crisisStreak === 2) {
+    club.finance.transferBudget = 0;
+    for (const p of club.players) p.wage = Math.round(p.wage * FFP_SANCTION_WAGE_CUT);
+    return { stage: 'sanction', sold: [], raised: 0, crisisStreak };
+  }
+  const { sold, raised } = enforceFinancialFairPlay(club);
+  return { stage: 'forcedSale', sold, raised, crisisStreak };
+}
