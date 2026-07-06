@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   aggregatePlayerStats, topScorers, seasonAwards, summarizeStats, careerScorers, recentPlayerForm,
-  seasonSquadSnapshot, clubDisciplineTable, monthlyManagerAwards,
+  seasonSquadSnapshot, clubDisciplineTable, monthlyManagerAwards, longestStreaks,
 } from '../src/stats.js';
 import { simulateSeason } from '../src/league.js';
 import { generateClub, defaultTactic } from '../src/generate.js';
@@ -264,5 +264,39 @@ describe('stats: 이달의 감독 (고도화 항목24)', () => {
 
   it('경기 결과가 없으면 빈 배열', () => {
     expect(monthlyManagerAwards([], [], 4)).toEqual([]);
+  });
+});
+
+describe('stats: 연승/무패 기록 (고도화 항목25)', () => {
+  it('중간에 패배가 끼면 연승은 끊기지만 무패는 무승부까지 이어간다', () => {
+    const results: MatchResult[] = [
+      mkResult({ homeClubId: 'a', awayClubId: 'x', score: [2, 0] }), // W
+      mkResult({ homeClubId: 'a', awayClubId: 'x', score: [3, 0] }), // W
+      mkResult({ homeClubId: 'a', awayClubId: 'x', score: [1, 1] }), // D → 연승 끊김, 무패는 유지
+      mkResult({ homeClubId: 'a', awayClubId: 'x', score: [0, 2] }), // L → 둘 다 끊김
+      mkResult({ homeClubId: 'a', awayClubId: 'x', score: [1, 0] }), // W
+    ];
+    const s = longestStreaks(results, 'a');
+    expect(s.winStreak).toBe(2);
+    expect(s.unbeatenStreak).toBe(3);
+  });
+
+  it('전승이면 승·무패 기록이 전체 경기 수와 같다', () => {
+    const results: MatchResult[] = [
+      mkResult({ homeClubId: 'a', awayClubId: 'x', score: [1, 0] }),
+      mkResult({ homeClubId: 'x', awayClubId: 'a', score: [0, 1] }),
+      mkResult({ homeClubId: 'a', awayClubId: 'x', score: [2, 0] }),
+    ];
+    const s = longestStreaks(results, 'a');
+    expect(s.winStreak).toBe(3);
+    expect(s.unbeatenStreak).toBe(3);
+  });
+
+  it('출전하지 않은 경기는 건너뛰고, 경기가 전혀 없으면 0', () => {
+    const results: MatchResult[] = [
+      mkResult({ homeClubId: 'x', awayClubId: 'y', score: [1, 0] }),
+    ];
+    expect(longestStreaks(results, 'a')).toEqual({ winStreak: 0, unbeatenStreak: 0 });
+    expect(longestStreaks([], 'a')).toEqual({ winStreak: 0, unbeatenStreak: 0 });
   });
 });

@@ -216,6 +216,8 @@ export function History({ game }: { game: GameState }) {
             {records.mostAssistsSeason && <RecordCard entry={records.mostAssistsSeason} />}
             {records.bestAvgRatingSeason && <RecordCard entry={records.bestAvgRatingSeason} />}
             {records.bestNetIncomeSeason && <RecordCard entry={records.bestNetIncomeSeason} />}
+            {records.bestWinStreak && <RecordCard entry={records.bestWinStreak} />}
+            {records.bestUnbeatenStreak && <RecordCard entry={records.bestUnbeatenStreak} />}
           </div>
         </div>
       )}

@@ -19,7 +19,7 @@ import {
   renegotiateBuybackClause as engineRenegotiateBuybackClause, type BuybackRenegotiationDirection,
   type OfferEvaluation, type SellOffer, type LoanTerms, type LoanReturnEvent, type LoanObligationEvent,
   summarizeStats, aggregatePlayerStats, topScorers as engineTopScorers, recentPlayerForm,
-  seasonSquadSnapshot, clubDisciplineTable, monthlyManagerAwards,
+  seasonSquadSnapshot, clubDisciplineTable, monthlyManagerAwards, longestStreaks,
   createCup, playCupRound as enginePlayCupRound, playCupToEnd, isCupOver, nextCupPairings,
   CUP_FINAL_ROUND_NAME, findCupUpsets,
   applyPromotionRelegation, clubsInDivision, runInternationalBreak,
@@ -491,6 +491,7 @@ export function finishSeason(state: GameState): GameState {
   const { topScorers, awards } = summarizeStats(ss.results, totalRounds(ss));
   const fairPlayTable = clubDisciplineTable(ss.results);
   const monthAwards = monthlyManagerAwards(ss.fixtures, ss.results);
+  const streaks = longestStreaks(ss.results, state.myClubId);
   // 스쿼드 스냅샷: 오프시즌(나이 증가·은퇴) 전에 나이를 캡처해야 "그 시즌 당시" 기록이 된다 —
   // seasonSquadSnapshot이 club.players에서 나이를 직접 읽지 않고 이 맵을 요구하도록
   // 시그니처에서 강제한다.
@@ -903,6 +904,7 @@ export function finishSeason(state: GameState): GameState {
     awards,
     fairPlayTable,
     monthlyManagerAwards: monthAwards.length > 0 ? monthAwards : undefined,
+    streaks,
     cupChampionId,
     cupChampionName,
     division: myDiv,

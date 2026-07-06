@@ -23,9 +23,10 @@ export {
 export {
   aggregatePlayerStats, topScorers, topAssists, playerOfSeason, seasonAwards, summarizeStats,
   careerScorers, recentPlayerForm, seasonSquadSnapshot, goldenGlove, bestXI, clubDisciplineTable,
-  monthlyManagerAwards,
+  monthlyManagerAwards, longestStreaks,
   type PlayerSeasonStat, type SeasonAwards, type CareerStat, type PlayerFormEntry,
   type SeasonSquadEntry, type BestXIEntry, type ClubDisciplineRow, type MonthlyManagerAward,
+  type StreakSummary,
 } from './stats.js';
 export {
   generateClub, generateYouthPlayer, defaultTactic, FORMATION_433, type TacticContext,

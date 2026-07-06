@@ -248,6 +248,39 @@ export function monthlyManagerAwards(
   return awards;
 }
 
+export interface StreakSummary {
+  /** 시즌 내 최장 연승. */
+  winStreak: number;
+  /** 시즌 내 최장 무패(승+무) 연속 기록. */
+  unbeatenStreak: number;
+}
+
+/**
+ * 특정 구단의 시즌 내 최장 연승·무패 기록(고도화 항목25).
+ * results는 진행 순서(과거→최신)라고 가정 — venue 무관, 실제 경기 순서 그대로 훑는다.
+ */
+export function longestStreaks(results: MatchResult[], clubId: string): StreakSummary {
+  let winStreak = 0; let unbeatenStreak = 0;
+  let curWin = 0; let curUnbeaten = 0;
+  for (const r of results) {
+    const isHome = r.homeClubId === clubId;
+    const isAway = r.awayClubId === clubId;
+    if (!isHome && !isAway) continue;
+    const gf = isHome ? r.score[0] : r.score[1];
+    const ga = isHome ? r.score[1] : r.score[0];
+    if (gf > ga) {
+      curWin++; curUnbeaten++;
+    } else if (gf === ga) {
+      curWin = 0; curUnbeaten++;
+    } else {
+      curWin = 0; curUnbeaten = 0;
+    }
+    winStreak = Math.max(winStreak, curWin);
+    unbeatenStreak = Math.max(unbeatenStreak, curUnbeaten);
+  }
+  return { winStreak, unbeatenStreak };
+}
+
 /** clubs 인자는 향후 확장용(현재는 결과만으로 충분). */
 export function summarizeStats(results: MatchResult[], totalRounds: number): {
   topScorers: PlayerSeasonStat[];
