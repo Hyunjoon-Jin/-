@@ -50,15 +50,54 @@ const AGENT_RELATIONS_BUY_GAIN = 2;
 export const AGENT_RELATIONS_BREAKDOWN_PENALTY = 8;
 /** 관계 지수 편차(중립 대비) 1점당 하한 비율·역제안 완고함에 주는 보정폭. */
 const AGENT_RELATIONS_ADJ_PER_POINT = 0.001;
+/** 시즌마다 거래가 없던 상대 구단과의 관계가 중립으로 회귀하는 비율(고도화 항목1). */
+export const AGENT_RELATIONS_DECAY_RATIO = 0.1;
 
-/** 구단의 현재 에이전트 관계 지수(없으면 중립값). */
-export function agentRelationsOf(club: Club): number {
-  return clamp(club.agentRelations ?? AGENT_RELATIONS_DEFAULT, AGENT_RELATIONS_MIN, AGENT_RELATIONS_MAX);
+/** 구단의 특정 상대 구단(협상 상대 선수의 소속 구단)에 대한 현재 에이전트 관계 지수(없으면 중립값). */
+export function agentRelationsOf(club: Club, counterpartClubId: string): number {
+  return clamp(
+    club.agentRelationsByClub?.[counterpartClubId] ?? AGENT_RELATIONS_DEFAULT,
+    AGENT_RELATIONS_MIN, AGENT_RELATIONS_MAX,
+  );
 }
 
 /** 관계 지수가 협상에 주는 보정치 — 중립(50)보다 좋으면 양수(하한↓·완고함↓), 나쁘면 음수. */
-function agentRelationsAdjustment(club: Club): number {
-  return (agentRelationsOf(club) - AGENT_RELATIONS_DEFAULT) * AGENT_RELATIONS_ADJ_PER_POINT;
+function agentRelationsAdjustment(club: Club, counterpartClubId: string): number {
+  return (agentRelationsOf(club, counterpartClubId) - AGENT_RELATIONS_DEFAULT) * AGENT_RELATIONS_ADJ_PER_POINT;
+}
+
+/** 특정 상대 구단과의 관계 지수를 delta만큼 조정(0~100 clamp), 구단 객체를 직접 변경. */
+function adjustAgentRelations(club: Club, counterpartClubId: string, delta: number): void {
+  const next = clamp(agentRelationsOf(club, counterpartClubId) + delta, AGENT_RELATIONS_MIN, AGENT_RELATIONS_MAX);
+  club.agentRelationsByClub = { ...(club.agentRelationsByClub ?? {}), [counterpartClubId]: next };
+}
+
+/** 협상이 완전히 결렬됐을 때(evaluateOffer의 roundsExhausted) 호출 — 그 상대 구단과의
+ *  관계만 깎인다(다른 구단과의 관계는 무관). */
+export function applyNegotiationBreakdownPenalty(club: Club, counterpartClubId: string): void {
+  adjustAgentRelations(club, counterpartClubId, -AGENT_RELATIONS_BREAKDOWN_PENALTY);
+}
+
+/**
+ * 매 시즌 오프시즌에 호출 — 이번 시즌 거래가 없던 상대 구단과의 관계는 서서히 중립으로
+ * 회귀한다(고도화 항목1: 나쁜 관계도 시간이 지나면 서서히 풀리고, 좋은 관계도 계속
+ * 거래하지 않으면 서서히 식는다). 충분히 중립에 가까워진 항목은 기록에서 지워
+ * 데이터가 무한정 쌓이지 않게 한다.
+ */
+export function decayAgentRelations(club: Club): void {
+  const map = club.agentRelationsByClub;
+  if (!map) return;
+  const next: Record<string, number> = {};
+  for (const [counterpartClubId, value] of Object.entries(map)) {
+    const gap = AGENT_RELATIONS_DEFAULT - value;
+    if (gap === 0) continue;
+    // 정수 반올림만으로는 중립 근처에서 고정점(예: 55 ↔ 54.5 반올림)에 갇혀 영영
+    // 수렴하지 못할 수 있어, 최소 1점은 항상 중립 쪽으로 움직이고 목표를 넘지 않게 clamp한다.
+    const step = Math.sign(gap) * Math.max(1, Math.round(Math.abs(gap) * AGENT_RELATIONS_DECAY_RATIO));
+    const decayed = gap > 0 ? Math.min(value + step, AGENT_RELATIONS_DEFAULT) : Math.max(value + step, AGENT_RELATIONS_DEFAULT);
+    if (decayed !== AGENT_RELATIONS_DEFAULT) next[counterpartClubId] = decayed;
+  }
+  club.agentRelationsByClub = next;
 }
 
 export type AgentRelationsTier = 'excellent' | 'good' | 'neutral' | 'poor' | 'hostile';
@@ -230,8 +269,9 @@ export function evaluateOffer(
   const personality = agentPersonality(player);
   const impatience = 1 + Math.min(round, MAX_NEGOTIATION_ROUNDS) * NEGOTIATION_IMPATIENCE_PER_ROUND;
   const asking = Math.round(askingPrice(seller, player) * impatience);
-  // 관계 지수가 좋을수록(신규 개선 항목 6) 하한이 낮아지고 역제안도 덜 완고해진다.
-  const relationsAdj = agentRelationsAdjustment(me);
+  // 관계 지수가 좋을수록(신규 개선 항목 6, 고도화 항목1: 이 매도 구단 한정) 하한이
+  // 낮아지고 역제안도 덜 완고해진다.
+  const relationsAdj = agentRelationsAdjustment(me, seller.id);
   const floorRatio = clamp(FLOOR_RATIO[personality] - relationsAdj, 0.5, 0.98);
   const floor = Math.round(asking * floorRatio);
   let outcome: OfferOutcome;
@@ -306,7 +346,7 @@ export function buyPlayerAt(clubs: Club[], myClubId: string, playerId: string, f
   if (!(fee > 0)) return { ok: false, reason: '이적료가 올바르지 않습니다.' };
   // evaluateOffer와 동일한 하한(호가의 82%, 관계 지수로 보정) — 협상 없이 직접
   // buyPlayerAt을 호출해도 헐값에 선수를 사들이지 못하도록 매도 구단 쪽에서 다시 검증한다.
-  const floorRatio = clamp(0.82 - agentRelationsAdjustment(me), 0.5, 0.98);
+  const floorRatio = clamp(0.82 - agentRelationsAdjustment(me, seller.id), 0.5, 0.98);
   const floor = Math.round(askingPrice(seller, player) * floorRatio);
   if (fee < floor) {
     return { ok: false, reason: '제안액이 너무 낮아 거절당했습니다.' };
@@ -330,7 +370,7 @@ export function buyPlayerAt(clubs: Club[], myClubId: string, playerId: string, f
   player.seasonsAtClub = 0; // 새 구단으로 이적(로열티 초기화, 신규 개선 항목 10)
   me.players.push(player);
   reassignSquadNumber(me, player);
-  me.agentRelations = clamp(agentRelationsOf(me) + AGENT_RELATIONS_BUY_GAIN, AGENT_RELATIONS_MIN, AGENT_RELATIONS_MAX);
+  adjustAgentRelations(me, seller.id, AGENT_RELATIONS_BUY_GAIN);
 
   return { ok: true, fee, agentFee: commission, playerName: player.name };
 }

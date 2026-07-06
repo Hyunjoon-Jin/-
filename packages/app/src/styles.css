@@ -1000,6 +1000,7 @@ h3 { font-size: 14px; margin: 0 0 10px; color: var(--muted); text-transform: upp
 .sell-actions { display: flex; gap: 4px; }
 .market-actions { display: flex; gap: 4px; }
 .clause-badge { margin-left: 5px; font-size: 12px; cursor: help; }
+.relations-dot { margin-left: 5px; font-size: 9px; cursor: help; vertical-align: middle; }
 .clause-buy { border-color: var(--accent-2); color: var(--accent-2); }
 .clause-buy:hover { background: var(--accent-2); color: #06203f; }
 .watch-star-btn { padding: 2px 7px; }

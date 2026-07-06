@@ -123,7 +123,6 @@ function TransferMarket({
 
   const budget = club.finance.transferBudget;
   const scouting = club.staff.scouting;
-  const agentRelations = myAgentRelations(game);
 
   function toggleSquadSort(k: MarketSortKey) {
     if (k === squadSort) { setSquadDir((d) => (d === 1 ? -1 : 1) as SortDir); return; }
@@ -187,12 +186,6 @@ function TransferMarket({
           <span className="muted">이적 예산</span>{' '}
           <b className="budget">{formatMoney(budget)}</b>
           <span className="muted"> · 스쿼드 {club.players.length}명</span>
-          <span
-            className={`market-relations ${AGENT_RELATIONS_LABEL[agentRelations.tier].cls}`}
-            title="에이전트 관계 지수 — 순조로운 영입 협상이 성사될 때마다 조금씩 오르고, 협상이 완전히 결렬되면 크게 깎입니다. 좋을수록 다음 협상의 하한·역제안이 유리해집니다."
-          >
-            {' · '}에이전트 관계 {AGENT_RELATIONS_LABEL[agentRelations.tier].text} ({agentRelations.value.toFixed(0)})
-          </span>
         </div>
       </div>
 
@@ -245,7 +238,9 @@ function TransferMarket({
               </tr>
             </thead>
             <tbody>
-              {targets.map((t) => (
+              {targets.map((t) => {
+                const relations = myAgentRelations(game, t.clubId);
+                return (
                 <tr
                   key={t.player.id}
                   className="clickable"
@@ -273,7 +268,13 @@ function TransferMarket({
                       </span>
                     )}
                   </td>
-                  <td className="muted small">{t.clubName}</td>
+                  <td className="muted small">
+                    {t.clubName}
+                    <span
+                      className={`relations-dot ${AGENT_RELATIONS_LABEL[relations.tier].cls}`}
+                      title={`이 구단과의 에이전트 관계: ${AGENT_RELATIONS_LABEL[relations.tier].text} (${relations.value.toFixed(0)}) — 순조로운 영입이 성사될 때마다 이 구단과의 관계만 오르고, 거래 없이 시즌이 지나면 서서히 중립으로 돌아갑니다.`}
+                    >●</span>
+                  </td>
                   <td><span className={`pos-chip pos-${lineOf(t.player.position).toLowerCase()}`}>{t.player.position}</span></td>
                   <td>{t.player.age}</td>
                   <td><b>{currentAbility(t.player).toFixed(0)}</b></td>
@@ -331,7 +332,8 @@ function TransferMarket({
                     )}
                   </td>
                 </tr>
-              ))}
+                );
+              })}
               {targets.length === 0 && (
                 <tr><td colSpan={8} className="muted">조건에 맞는 매물이 없습니다.</td></tr>
               )}
@@ -455,6 +457,7 @@ function TransferMarket({
           budget={budget}
           scouting={scouting}
           scouted={isScouted(game, negotiating.player.id)}
+          relations={myAgentRelations(game, negotiating.clubId)}
           round={roundsUsed[negotiating.player.id] ?? 0}
           onRoundChange={(r) => setRoundsUsed((prev) => ({ ...prev, [negotiating.player.id]: r }))}
           onNegotiate={onNegotiate}
@@ -1015,13 +1018,15 @@ function SellModal({
 }
 
 function NegotiationModal({
-  target, budget, scouting, scouted, round: initialRound, onRoundChange, onNegotiate, onBuyAt, onResult, onClose,
-  onNegotiationBreakdown, onPanicBuy, onRivalSnipe,
+  target, budget, scouting, scouted, relations, round: initialRound, onRoundChange, onNegotiate, onBuyAt, onResult,
+  onClose, onNegotiationBreakdown, onPanicBuy, onRivalSnipe,
 }: {
   target: TransferTarget;
   budget: number;
   scouting: number;
   scouted: boolean;
+  /** 이 매도 구단과의 에이전트 관계 지수(고도화 항목1) — 하한·역제안 완고함에 영향을 준다. */
+  relations: { value: number; tier: AgentRelationsTier };
   /** 이 선수와의 협상에서 지금까지 진행된 역제안 횟수(0-base, 모달을 닫아도 유지). */
   round: number;
   onRoundChange: (round: number) => void;
@@ -1097,6 +1102,13 @@ function NegotiationModal({
               {AGENT_PERSONALITY_LABEL[agentPersonality(player)]}
             </span></>
           )}
+          {' · '}
+          <span
+            className={`market-relations ${AGENT_RELATIONS_LABEL[relations.tier].cls}`}
+            title="이 구단과의 에이전트 관계 지수 — 순조로운 영입 협상이 성사될 때마다 이 구단과의 관계만 오르고, 협상이 완전히 결렬되면 크게 깎입니다. 좋을수록 하한·역제안이 유리해집니다."
+          >
+            {target.clubName}와(과)의 관계 {AGENT_RELATIONS_LABEL[relations.tier].text} ({relations.value.toFixed(0)})
+          </span>
         </p>
         <ScoutingSummary report={buildScoutingReport(player, scouting)} title="🔎 스카우팅 평가" />
         <div className="neg-facts">

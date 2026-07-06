@@ -109,6 +109,7 @@ export {
   loanPlayerOut, recallLoanPlayer, applyLoanWageSubsidies, swapPlayers, agentPersonality,
   exerciseBuyback, BUYBACK_MAX_SEASONS, attachAddOnClause, exerciseLoanBuyOption,
   agentRelationsOf, agentRelationsTier,
+  applyNegotiationBreakdownPenalty, decayAgentRelations, AGENT_RELATIONS_DECAY_RATIO,
   AGENT_RELATIONS_MIN, AGENT_RELATIONS_MAX, AGENT_RELATIONS_DEFAULT, AGENT_RELATIONS_BREAKDOWN_PENALTY,
   panicBuy, PANIC_BUY_PREMIUM, executeRivalSnipe,
   MIN_SQUAD, MAX_SQUAD, MAX_NEGOTIATION_ROUNDS, LOAN_MIN_SEASONS, LOAN_MAX_SEASONS,

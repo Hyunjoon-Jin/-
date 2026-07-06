@@ -62,11 +62,11 @@ describe('신규 개선 항목 7: 이적 마감시한 패닉 바이(D-day 프리
     const me = clubs[0]!;
     const other = clubs[1]!;
     const player = pickPlayer(other);
-    const before = agentRelationsOf(me);
+    const before = agentRelationsOf(me, other.id);
 
     const r = panicBuy(clubs, myId, player.id);
     expect(r.ok).toBe(true);
-    expect(agentRelationsOf(me)).toBeGreaterThan(before);
+    expect(agentRelationsOf(me, other.id)).toBeGreaterThan(before);
   });
 
   it('일반 협상(evaluateOffer)과 달리 라운드·역제안 없이 항상 한 번에 확정된다', () => {

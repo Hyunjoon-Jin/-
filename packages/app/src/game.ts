@@ -10,8 +10,7 @@ import {
   buyPlayer, buyPlayerAt, buyPlayerViaReleaseClause, evaluateOffer, sellPlayer, releasePlayer,
   transferTargets,
   exerciseBuyback, attachAddOnClause, exerciseLoanBuyOption,
-  agentRelationsOf, agentRelationsTier,
-  AGENT_RELATIONS_MIN, AGENT_RELATIONS_DEFAULT, AGENT_RELATIONS_BREAKDOWN_PENALTY,
+  agentRelationsOf, agentRelationsTier, applyNegotiationBreakdownPenalty, decayAgentRelations,
   panicBuy as enginePanicBuy, PANIC_BUY_PREMIUM, executeRivalSnipe,
   type AgentRelationsTier,
   sellOffers, acceptSellOffer,
@@ -338,9 +337,10 @@ export function myClub(state: GameState): Club {
   return state.clubs.find((c) => c.id === state.myClubId)!;
 }
 
-/** 내 구단의 현재 에이전트 관계 지수와 등급(Item6, 이적 시장 UI 표시용). */
-export function myAgentRelations(state: GameState): { value: number; tier: AgentRelationsTier } {
-  const value = agentRelationsOf(myClub(state));
+/** 내 구단과 특정 상대 구단 사이의 현재 에이전트 관계 지수와 등급(Item6, 고도화
+ *  항목1로 상대 구단별 세분화 — 이적 시장 UI 표시용). */
+export function myAgentRelations(state: GameState, counterpartClubId: string): { value: number; tier: AgentRelationsTier } {
+  const value = agentRelationsOf(myClub(state), counterpartClubId);
   return { value, tier: agentRelationsTier(value) };
 }
 
@@ -786,6 +786,10 @@ export function finishSeason(state: GameState): GameState {
     ? sponsorContractTick.expired.map((c) => c.kind)
     : undefined;
 
+  // 에이전트 관계 지수 자연 회복/악화(고도화 항목1) — 이번 시즌 거래가 없던 상대
+  // 구단과의 관계는 서서히 중립으로 되돌아간다.
+  decayAgentRelations(myClub(state));
+
   // 이적 관심 목록(신규 개선 항목 27) 계약 만료 임박 알림 — 오프시즌 처리 후 잔여 계약
   // 연수가 1년 이하로 "새로" 접어든 관심 선수만 알린다(매 시즌 같은 선수로 반복 알림 방지).
   // 이미 팔렸거나 은퇴 등으로 시장에서 사라졌으면 조용히 넘어간다.
@@ -1041,13 +1045,12 @@ export function negotiate(state: GameState, playerId: string, offer: number, rou
 }
 
 /** 밀당이 완전히 결렬됐을 때(evaluateOffer의 roundsExhausted) 호출 — 다음 시즌까지
- *  이 선수와의 재협상을 막고(Item1), 에이전트 관계 지수를 깎는다(Item6). */
+ *  이 선수와의 재협상을 막고(Item1), 그 매도 구단과의 에이전트 관계 지수만 깎는다
+ *  (Item6, 고도화 항목1로 상대 구단별 세분화 — 다른 구단과의 관계는 무관). */
 export function recordNegotiationBreakdown(state: GameState, playerId: string): GameState {
   const club = myClub(state);
-  club.agentRelations = Math.max(
-    AGENT_RELATIONS_MIN,
-    (club.agentRelations ?? AGENT_RELATIONS_DEFAULT) - AGENT_RELATIONS_BREAKDOWN_PENALTY,
-  );
+  const seller = state.clubs.find((c) => c.id !== state.myClubId && c.players.some((p) => p.id === playerId));
+  if (seller) applyNegotiationBreakdownPenalty(club, seller.id);
   return {
     ...state,
     negotiationCooldowns: { ...state.negotiationCooldowns, [playerId]: state.season + 1 },
