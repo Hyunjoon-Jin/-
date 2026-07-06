@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
   myClub, lastSummary, revealPotential, myLoanedOutPlayers, isScouted, myAgentRelations,
-  isWatchlisted,
+  isWatchlisted, isAgentPersonalityRevealed,
   type GameState, type ActionOutcome,
 } from '../game.js';
 import {
@@ -58,6 +58,10 @@ const LINE_FILTERS: { key: LineFilter; label: string }[] = [
 const AGENT_PERSONALITY_LABEL: Record<AgentPersonality, string | null> = {
   hardliner: '💪 강경파 에이전트', moderate: null, flexible: '🤝 유연한 에이전트',
 };
+/** 스카우팅이 부족해 개성을 모를 때(고도화 항목2) 표시 — hardliner/flexible만 배지가
+ *  뜨는 위 라벨과 달리, 모르는 상태는 실제 개성과 무관하게 항상 이 배지를 보여줘야
+ *  "배지가 없으면 moderate"라는 정보 유출을 막는다. */
+const AGENT_PERSONALITY_UNKNOWN_LABEL = '❓ 에이전트 성향 미상';
 
 /** 에이전트 관계 지수(Item6) 등급별 라벨·스타일. */
 const AGENT_RELATIONS_LABEL: Record<AgentRelationsTier, { text: string; cls: string }> = {
@@ -1097,10 +1101,14 @@ function NegotiationModal({
         <p className="neg-sub muted">
           {player.position} · {player.age}세 · CA <b>{currentAbility(player).toFixed(0)}</b>
           {' · '}잠재 {revealPotential(scouting, player.potential, scouted)}
-          {AGENT_PERSONALITY_LABEL[agentPersonality(player)] && (
-            <> · <span className={`agent-badge agent-${agentPersonality(player)}`}>
-              {AGENT_PERSONALITY_LABEL[agentPersonality(player)]}
-            </span></>
+          {isAgentPersonalityRevealed(scouting, scouted) ? (
+            AGENT_PERSONALITY_LABEL[agentPersonality(player)] && (
+              <> · <span className={`agent-badge agent-${agentPersonality(player)}`}>
+                {AGENT_PERSONALITY_LABEL[agentPersonality(player)]}
+              </span></>
+            )
+          ) : (
+            <> · <span className="agent-badge agent-unknown">{AGENT_PERSONALITY_UNKNOWN_LABEL}</span></>
           )}
           {' · '}
           <span

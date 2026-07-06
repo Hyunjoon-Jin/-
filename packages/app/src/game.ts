@@ -1606,6 +1606,19 @@ export function revealPotential(scouting: number, potential: number, scouted = f
   return '?';
 }
 
+/** 에이전트 개성을 정확히 알 수 있는 최소 스카우팅 레벨(고도화 항목2). */
+export const AGENT_PERSONALITY_REVEAL_SCOUTING = 10;
+
+/**
+ * 에이전트 개성 스카우팅 연동(고도화 항목2) — 잠재력 공개(revealPotential)와 같은
+ * 방식으로, 스카우팅 레벨이 이 기준에 못 미치면(파견 정찰도 안 했다면) 정확한 에이전트
+ * 성향을 알 수 없다. 협상 수치 자체엔 항상 실제 개성이 그대로 반영되며, 이는 순전히
+ * 정보 표시(스카우팅 리포트) 문제다.
+ */
+export function isAgentPersonalityRevealed(scouting: number, scouted = false): boolean {
+  return scouted || scouting >= AGENT_PERSONALITY_REVEAL_SCOUTING;
+}
+
 /** 특정 선수를 파견 정찰했는지(B13) — 내 구단 기준. */
 export function isScouted(state: GameState, playerId: string): boolean {
   return myClub(state).scoutedPlayerIds?.includes(playerId) ?? false;
