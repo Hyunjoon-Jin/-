@@ -625,7 +625,7 @@ export function finishSeason(state: GameState): GameState {
   const {
     retirements, intakeByClub, intakePlayersByClub, fireSalesByClub, retiredPlayers, milestones, debutEvents,
     loanReturns, loanObligations, reservePromotions, staffDepartures, staffRetirements, addOnPayouts,
-    reserveLeagueTable, mentorGraduations, reservePlayerStats,
+    reserveLeagueTable, mentorGraduations, reservePlayerStats, boardPersonaChanges,
   } = runOffseason(state.clubs, new Rng(offseasonSeed(state)));
   // 내 구단 리저브 선수의 이번 시즌 리저브 리그 개인 기록(고도화 항목11)
   const myReservePlayerStats = reservePlayerStats.filter((s) => myReserveIdsThisSeason.has(s.playerId));
@@ -651,6 +651,8 @@ export function finishSeason(state: GameState): GameState {
   const myMentorGraduations: MentorGraduationEvent[] = mentorGraduations.filter(
     (g) => g.clubId === state.myClubId,
   );
+  // 내 구단 회장이 교체돼 이사회 성향이 바뀐 소식(고도화 항목17)
+  const myBoardPersonaChange = boardPersonaChanges.find((e) => e.clubId === state.myClubId);
   // 내 구단에서 은퇴한 선수는 레전드 아카이브에 영구 보존
   const newLegends: ClubLegend[] = retiredPlayers
     .filter((r) => r.clubId === state.myClubId)
@@ -895,6 +897,7 @@ export function finishSeason(state: GameState): GameState {
     boardTierBonus: boardBonusResult,
     addOnPayouts: myAddOnPayouts,
     mentorGraduations: myMentorGraduations.length > 0 ? myMentorGraduations : undefined,
+    boardPersonaChange: myBoardPersonaChange,
     reserveLeagueTable: reserveLeagueTable.length > 0 ? reserveLeagueTable : undefined,
     reservePlayerStats: myReservePlayerStats.length > 0 ? myReservePlayerStats : undefined,
     sponsorContractExpired,

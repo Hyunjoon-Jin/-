@@ -417,6 +417,23 @@ export function Dashboard({
       ),
     });
   }
+  if (last?.boardPersonaChange !== undefined) {
+    const change = last.boardPersonaChange;
+    seasonBanners.push({
+      key: 'boardPersonaChange', priority: 1.8,
+      node: (
+        <Banner tone="info" title="🪑 회장 교체">
+          <p>
+            새 회장이 취임하며 이사회 성향이 바뀌었습니다 —{' '}
+            <b>{PATIENCE_LABEL[change.oldPersona.patience]} · {STYLE_LABEL[change.oldPersona.style]}</b>
+            {' '}에서{' '}
+            <b>{PATIENCE_LABEL[change.newPersona.patience]} · {STYLE_LABEL[change.newPersona.style]}</b>
+            {' '}(으)로 바뀌었습니다.
+          </p>
+        </Banner>
+      ),
+    });
+  }
   seasonBanners.sort((a, b) => a.priority - b.priority);
 
   const [showAllBanners, setShowAllBanners] = useState(false);

@@ -51,6 +51,7 @@ export {
   type DebutEvent, type DebutEventKind, type YouthProspectUpdate, type LoanReturnEvent,
   type LoanObligationEvent, type ReservePromotionEvent, type MentorAssignResult, type AddOnEvent,
   type AcademyAlumnusUpdate, type MentorGraduationEvent, type MentorGraduationReason,
+  type BoardPersonaChangeEvent,
 } from './franchise.js';
 export { TUNING } from './tuning.js';
 export { DERIVED_WEIGHTS, type DerivedKey } from './roleWeights.js';
@@ -96,6 +97,7 @@ export {
   boardStatus, isSacked, boardTierUpgradeBonus,
   BOLD_PREDICTION_MARGIN, BOLD_PREDICTION_BONUS_CONFIDENCE, BOLD_PREDICTION_PENALTY_CONFIDENCE,
   boldPredictionTarget, evaluateBoldPrediction,
+  BOARD_PERSONA_CHANGE_CHANCE, maybeChangeBoardPersona,
   type SeasonConfidenceInput, type BoardStatus, type BoldPredictionResult,
 } from './board.js';
 export {

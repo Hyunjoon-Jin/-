@@ -6,6 +6,7 @@
  */
 import { clamp } from './math.js';
 import type { BoardPatience, BoardStyle, BoardPersona } from './types.js';
+import type { Rng } from './rng.js';
 
 /** 시작 신뢰도(중립보다 약간 높게). */
 export const START_CONFIDENCE = 55;
@@ -123,4 +124,32 @@ export function evaluateBoldPrediction(
     ? BOLD_PREDICTION_BONUS_CONFIDENCE
     : missedObjective ? -BOLD_PREDICTION_PENALTY_CONFIDENCE : 0;
   return { declaredTarget, met, missedObjective, confidenceAdjust };
+}
+
+/**
+ * 회장 교체 이벤트(고도화 항목17) — 이사회 페르소나(patience/style)는 지금까지 구단
+ * 생성 시 한 번 고정되면 게임이 끝날 때까지 그대로였다. 시즌 종료 시 저확률로 회장이
+ * 바뀌며 새 이사회 성향이 정해지는 서사를 추가해, 오래 플레이해도 이사회 대응 전략이
+ * 고정되지 않게 한다.
+ */
+export const BOARD_PERSONA_CHANGE_CHANCE = 0.06;
+
+const ALL_BOARD_PERSONAS: BoardPersona[] = [
+  { patience: 'patient', style: 'conservative' },
+  { patience: 'patient', style: 'aggressive' },
+  { patience: 'impatient', style: 'conservative' },
+  { patience: 'impatient', style: 'aggressive' },
+];
+
+/**
+ * 시즌 종료 시 저확률로 회장이 교체되며 이사회 성향이 새로 정해진다. "교체"라는
+ * 서사가 성립하려면 실제로 달라져야 하므로, 현재와 다른 조합 중에서만 뽑는다.
+ * 발생하지 않으면(대부분의 시즌) undefined.
+ */
+export function maybeChangeBoardPersona(current: BoardPersona, rng: Rng): BoardPersona | undefined {
+  if (!rng.roll(BOARD_PERSONA_CHANGE_CHANCE)) return undefined;
+  const candidates = ALL_BOARD_PERSONAS.filter((p) => (
+    p.patience !== current.patience || p.style !== current.style
+  ));
+  return candidates[rng.int(0, candidates.length - 1)];
 }
