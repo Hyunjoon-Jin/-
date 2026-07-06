@@ -1,12 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import {
   aggregatePlayerStats, topScorers, seasonAwards, summarizeStats, careerScorers, recentPlayerForm,
-  seasonSquadSnapshot, clubDisciplineTable,
+  seasonSquadSnapshot, clubDisciplineTable, monthlyManagerAwards,
 } from '../src/stats.js';
 import { simulateSeason } from '../src/league.js';
 import { generateClub, defaultTactic } from '../src/generate.js';
 import { Rng } from '../src/rng.js';
 import type { Club, MatchResult } from '../src/types.js';
+import type { Fixture } from '../src/schedule.js';
 
 function season(seed = 1) {
   const rng = new Rng(seed);
@@ -216,5 +217,52 @@ describe('stats: 시즌 스쿼드 스냅샷', () => {
       expect(entry.age).toBe(ages.get(entry.playerId));
       expect(entry.age).not.toBe(club.players.find((p) => p.id === entry.playerId)!.age);
     }
+  });
+});
+
+describe('stats: 이달의 감독 (고도화 항목24)', () => {
+  function fx(round: number, homeId: string, awayId: string): Fixture {
+    return { round, homeId, awayId };
+  }
+
+  it('블록(기본 4라운드)별로 승점(동률이면 득실차) 최고 구단을 뽑는다', () => {
+    const fixtures: Fixture[] = [
+      fx(1, 'a', 'b'), fx(2, 'b', 'a'), fx(3, 'a', 'b'), fx(4, 'b', 'a'),
+      fx(5, 'a', 'b'), fx(6, 'b', 'a'), fx(7, 'a', 'b'), fx(8, 'b', 'a'),
+    ];
+    const results: MatchResult[] = [
+      // 1~4라운드: A가 전승
+      mkResult({ homeClubId: 'a', awayClubId: 'b', homeClubName: 'A', awayClubName: 'B', score: [2, 0] }),
+      mkResult({ homeClubId: 'b', awayClubId: 'a', homeClubName: 'B', awayClubName: 'A', score: [0, 3] }),
+      mkResult({ homeClubId: 'a', awayClubId: 'b', homeClubName: 'A', awayClubName: 'B', score: [1, 0] }),
+      mkResult({ homeClubId: 'b', awayClubId: 'a', homeClubName: 'B', awayClubName: 'A', score: [0, 1] }),
+      // 5~8라운드: B가 전승
+      mkResult({ homeClubId: 'a', awayClubId: 'b', homeClubName: 'A', awayClubName: 'B', score: [0, 2] }),
+      mkResult({ homeClubId: 'b', awayClubId: 'a', homeClubName: 'B', awayClubName: 'A', score: [3, 0] }),
+      mkResult({ homeClubId: 'a', awayClubId: 'b', homeClubName: 'A', awayClubName: 'B', score: [0, 1] }),
+      mkResult({ homeClubId: 'b', awayClubId: 'a', homeClubName: 'B', awayClubName: 'A', score: [1, 0] }),
+    ];
+
+    const awards = monthlyManagerAwards(fixtures, results, 4);
+    expect(awards).toHaveLength(2);
+    expect(awards[0]).toMatchObject({ blockIndex: 1, fromRound: 1, toRound: 4, clubId: 'a', points: 12 });
+    expect(awards[1]).toMatchObject({ blockIndex: 2, fromRound: 5, toRound: 8, clubId: 'b', points: 12 });
+  });
+
+  it('총 라운드 수가 블록 크기로 안 나뉘면 마지막 블록은 남은 라운드만으로 집계한다', () => {
+    const fixtures: Fixture[] = [fx(1, 'a', 'b'), fx(2, 'b', 'a'), fx(3, 'a', 'b')];
+    const results: MatchResult[] = [
+      mkResult({ homeClubId: 'a', awayClubId: 'b', score: [1, 0] }),
+      mkResult({ homeClubId: 'b', awayClubId: 'a', score: [0, 1] }),
+      mkResult({ homeClubId: 'a', awayClubId: 'b', score: [2, 2] }),
+    ];
+    const awards = monthlyManagerAwards(fixtures, results, 4);
+    expect(awards).toHaveLength(1);
+    expect(awards[0]!.fromRound).toBe(1);
+    expect(awards[0]!.toRound).toBe(3);
+  });
+
+  it('경기 결과가 없으면 빈 배열', () => {
+    expect(monthlyManagerAwards([], [], 4)).toEqual([]);
   });
 });

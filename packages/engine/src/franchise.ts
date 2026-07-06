@@ -31,7 +31,7 @@ import { recentForm } from './form.js';
 import { clamp } from './math.js';
 import {
   summarizeStats, aggregatePlayerStats, type PlayerSeasonStat, type SeasonAwards, type SeasonSquadEntry,
-  type ClubDisciplineRow,
+  type ClubDisciplineRow, type MonthlyManagerAward,
 } from './stats.js';
 import { Rng } from './rng.js';
 
@@ -209,6 +209,9 @@ export interface SeasonSummary {
   ffpStage?: FfpStage;
   /** 시즌 페어플레이(징계) 순위표(고도화 항목22, 앱 전용) — 같은 부 전 구단, 카드 수 오름차순. */
   fairPlayTable?: ClubDisciplineRow[];
+  /** 이달의 감독(고도화 항목24, 앱 전용) — 실제 달력 대신 4라운드씩 묶어 구간별 최고
+   *  성적 구단을 나열. 시즌 진행 라운드 수만큼 블록이 나온다. */
+  monthlyManagerAwards?: MonthlyManagerAward[];
 }
 
 /** 유스 졸업생 동문 네트워크(신규 개선 항목 18) — 과거 우리 리저브 출신으로 1군

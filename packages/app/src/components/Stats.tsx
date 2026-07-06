@@ -2,7 +2,7 @@ import { BarChart3 } from 'lucide-react';
 import {
   liveTopScorers, liveSquadStats, lastSummary, myClub, type GameState,
 } from '../game.js';
-import type { PlayerSeasonStat, BestXIEntry, ClubDisciplineRow } from '@soccer-tycoon/engine';
+import type { PlayerSeasonStat, BestXIEntry, ClubDisciplineRow, MonthlyManagerAward } from '@soccer-tycoon/engine';
 import { ratingClass } from '../rating.js';
 import { EmptyState } from './EmptyState.js';
 
@@ -13,6 +13,7 @@ export function Stats({ game }: { game: GameState }) {
   const squad = live ? liveSquadStats(game) : lastSeasonSquad(game);
   const awards = live ? null : lastSummary(game)?.awards;
   const fairPlayTable = live ? null : lastSummary(game)?.fairPlayTable;
+  const monthlyAwards = live ? null : lastSummary(game)?.monthlyManagerAwards;
   const heading = live ? `시즌 ${game.season} (진행 중)` : lastSummary(game) ? `시즌 ${lastSummary(game)!.season} 최종` : null;
 
   if (!heading) {
@@ -81,7 +82,36 @@ export function Stats({ game }: { game: GameState }) {
           <FairPlayTable rows={fairPlayTable} myClubId={game.myClubId} />
         </div>
       )}
+
+      {monthlyAwards && monthlyAwards.length > 0 && (
+        <div>
+          <h3>🏆 이달의 감독</h3>
+          <MonthlyManagerSection awards={monthlyAwards} myClubId={game.myClubId} />
+        </div>
+      )}
     </div>
+  );
+}
+
+function MonthlyManagerSection({ awards, myClubId }: { awards: MonthlyManagerAward[]; myClubId: string }) {
+  return (
+    <table className="data-table compact">
+      <thead>
+        <tr>
+          <th>구간</th><th>구단</th><th>승점</th><th>득실차</th>
+        </tr>
+      </thead>
+      <tbody>
+        {awards.map((a) => (
+          <tr key={a.blockIndex} className={a.clubId === myClubId ? 'mine' : ''}>
+            <td className="muted small">{a.fromRound}~{a.toRound}R</td>
+            <td className="name">{a.clubName}</td>
+            <td><b>{a.points}</b></td>
+            <td>{a.gd > 0 ? `+${a.gd}` : a.gd}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
 

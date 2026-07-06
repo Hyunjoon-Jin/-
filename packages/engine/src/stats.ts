@@ -5,6 +5,7 @@
  */
 import type { Club, MatchResult, Position, Tactic } from './types.js';
 import { lineOf } from './teamStrength.js';
+import type { Fixture } from './schedule.js';
 
 export interface PlayerSeasonStat {
   playerId: string;
@@ -193,6 +194,58 @@ export function clubDisciplineTable(results: MatchResult[]): ClubDisciplineRow[]
     }
   }
   return [...map.values()].sort((a, b) => a.totalCards - b.totalCards || a.redCards - b.redCards);
+}
+
+export interface MonthlyManagerAward {
+  /** 블록 순번(1부터) — 실제 달력이 없어 라운드를 blockSize개씩 묶은 것. */
+  blockIndex: number;
+  fromRound: number;
+  toRound: number;
+  clubId: string;
+  clubName: string;
+  points: number;
+  gd: number;
+  gf: number;
+}
+
+/**
+ * 이달의 감독(고도화 항목24) — 실제 달력 대신 라운드를 blockSize개씩 묶어(기본 4라운드)
+ * 그 구간 승점(동률이면 득실차·득점) 최고 구단을 뽑는다. fixtures[i]와 results[i]가
+ * 1:1 대응한다는 SeasonState 규약을 그대로 활용(round 조회용).
+ */
+export function monthlyManagerAwards(
+  fixtures: Fixture[], results: MatchResult[], blockSize = 4,
+): MonthlyManagerAward[] {
+  const totalRounds = fixtures.reduce((m, f) => Math.max(m, f.round), 0);
+  const awards: MonthlyManagerAward[] = [];
+  for (let from = 1; from <= totalRounds; from += blockSize) {
+    const to = Math.min(from + blockSize - 1, totalRounds);
+    const acc = new Map<string, { clubName: string; points: number; gf: number; ga: number }>();
+    const bump = (clubId: string, clubName: string, gf: number, ga: number): void => {
+      let a = acc.get(clubId);
+      if (!a) { a = { clubName, points: 0, gf: 0, ga: 0 }; acc.set(clubId, a); }
+      a.points += gf > ga ? 3 : gf === ga ? 1 : 0;
+      a.gf += gf; a.ga += ga;
+    };
+    for (let i = 0; i < results.length && i < fixtures.length; i++) {
+      const fx = fixtures[i]!;
+      if (fx.round < from || fx.round > to) continue;
+      const r = results[i]!;
+      bump(r.homeClubId, r.homeClubName, r.score[0], r.score[1]);
+      bump(r.awayClubId, r.awayClubName, r.score[1], r.score[0]);
+    }
+    if (acc.size === 0) continue;
+    const [bestId, best] = [...acc.entries()]
+      .sort((a, b) => b[1].points - a[1].points
+        || (b[1].gf - b[1].ga) - (a[1].gf - a[1].ga)
+        || b[1].gf - a[1].gf)[0]!;
+    awards.push({
+      blockIndex: awards.length + 1, fromRound: from, toRound: to,
+      clubId: bestId, clubName: best.clubName, points: best.points,
+      gd: best.gf - best.ga, gf: best.gf,
+    });
+  }
+  return awards;
 }
 
 /** clubs 인자는 향후 확장용(현재는 결과만으로 충분). */
