@@ -19,7 +19,7 @@ import { TUNING } from './tuning.js';
 import { hasTrait } from './traits.js';
 import { rollInjury, medicalBias, reinjuryRiskFactor, fatigueRiskFactor, chronicInjuryFactor } from './injury.js';
 import { effectiveMedical } from './staffActions.js';
-import { trainingGroundInjuryFactor } from './finance.js';
+import { trainingGroundInjuryFactor, STADIUM_MAX } from './finance.js';
 import {
   findManMarker, manMarkWeightMultiplier, manMarkXgMultiplier, isValidInstruction,
   CUT_INSIDE_WEIGHT_MUL, CUT_INSIDE_XG_MUL,
@@ -45,6 +45,26 @@ interface Side {
   attackers: Player[];
 }
 
+/** 스타디움 등급이 이 값일 때 관중 규모로 인한 추가 보너스가 0(기존 고정 배율과 동일). */
+const STADIUM_NEUTRAL_LEVEL = 0;
+/** 팬 만족도가 이 값일 때 분위기로 인한 추가 보너스가 0 — FAN_SATISFACTION_DEFAULT와 맞춰
+ *  구버전 세이브·신규 구단(둘 다 기본값)에서 기존 고정 배율(1.06)과 완전히 동일하게 동작한다. */
+const FAN_NEUTRAL_SATISFACTION = 60;
+
+/**
+ * 관중 수·팬 만족도 연동 홈 어드밴티지(고도화 항목43) — 스타디움이 클수록,
+ * 팬 만족도가 높을수록 관중의 응원 효과가 커진다는 가정으로 기존 고정 배율(1.06)에
+ * 소폭 가감한다. 스타디움 등급 0·팬 만족도 60(둘 다 기본값)이면 보정치가 정확히
+ * 0이 되어 구버전 세이브·신규 구단에서 기존 동작과 100% 동일하다.
+ */
+export function dynamicHomeAdvantage(club: Club): number {
+  const stadiumLevel = clamp(club.finance.stadiumLevel ?? STADIUM_NEUTRAL_LEVEL, 0, STADIUM_MAX);
+  const fanSatisfaction = clamp(club.finance.fanSatisfaction ?? FAN_NEUTRAL_SATISFACTION, 0, 100);
+  const stadiumBonus = (stadiumLevel / STADIUM_MAX) * 0.03;
+  const fanBonus = ((fanSatisfaction - FAN_NEUTRAL_SATISFACTION) / 100) * 0.04;
+  return clamp(TUNING.homeAdvantage + stadiumBonus + fanBonus, 1.0, 1.12);
+}
+
 function buildSide(
   club: Club, tactic: Tactic, isHome: boolean, isBigMatch: boolean, opponentFormation?: string,
   weather: Weather = 'clear',
@@ -53,8 +73,9 @@ function buildSide(
   if (isHome) {
     // computeTeamStrength가 이미 [0,110]으로 클램프하므로, 이후 배율을 적용한 뒤
     // 다시 클램프해 문서화된 상한을 실제로 넘지 않도록 한다.
-    strength.attack = clamp(strength.attack * TUNING.homeAdvantage, 0, 110);
-    strength.creation = clamp(strength.creation * TUNING.homeAdvantage, 0, 110);
+    const homeAdvantage = dynamicHomeAdvantage(club);
+    strength.attack = clamp(strength.attack * homeAdvantage, 0, 110);
+    strength.creation = clamp(strength.creation * homeAdvantage, 0, 110);
   }
   // 날씨(신규 개선 항목 26) — 양 팀 모두에게 동일하게 적용(홈 이점과 별개로 곱산).
   strength.attack = clamp(strength.attack * WEATHER_ATTACK_MULTIPLIER[weather], 0, 110);
