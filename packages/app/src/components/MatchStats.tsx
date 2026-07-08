@@ -9,7 +9,7 @@ import { ratingClass } from '../rating.js';
  * 보여주고 있어 중복을 피하고자 여기서만 렌더링한다.
  */
 function MatchHighlights({ result }: { result: MatchResult }) {
-  const goals = result.events.filter((e) => e.outcome === 'GOAL');
+  const goals = result.events.filter((e) => e.outcome === 'GOAL' || e.outcome === 'OWN_GOAL');
   const motm = [...result.playerStats.home, ...result.playerStats.away]
     .find((s) => s.playerId === result.motmPlayerId);
   return (
@@ -20,7 +20,9 @@ function MatchHighlights({ result }: { result: MatchResult }) {
           {goals.map((g) => (
             <li key={`${g.minute}-${g.playerId}`}>
               <span className="feed-min">{g.minute}'</span>
-              <span>⚽ {g.playerName}{g.assistPlayerName ? ` (도움 ${g.assistPlayerName})` : ''}</span>
+              <span>
+                {g.isOwnGoal ? `🥅 ${g.playerName} (자책골)` : `⚽ ${g.playerName}${g.assistPlayerName ? ` (도움 ${g.assistPlayerName})` : ''}`}
+              </span>
             </li>
           ))}
         </ul>

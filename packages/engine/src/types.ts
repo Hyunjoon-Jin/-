@@ -373,7 +373,7 @@ export interface TeamStrength {
 }
 
 export type ChanceType = 'open' | 'cross' | 'setpiece';
-export type ShotOutcome = 'GOAL' | 'SAVE' | 'OFF_TARGET' | 'BLOCKED';
+export type ShotOutcome = 'GOAL' | 'SAVE' | 'OFF_TARGET' | 'BLOCKED' | 'OWN_GOAL';
 
 export interface MatchEvent {
   minute: number;
@@ -385,6 +385,9 @@ export interface MatchEvent {
   /** 득점(outcome==='GOAL')에 어시스트가 붙었을 때만 설정. */
   assistPlayerId?: string;
   assistPlayerName?: string;
+  /** 자책골(고도화 항목42) — true면 playerId/playerName은 수비 측(실점 귀책) 선수를
+   *  가리키고, side는 여전히 득점이 반영되는(득점을 얻는) 공격 측이다. */
+  isOwnGoal?: boolean;
 }
 
 export type CardType = 'yellow' | 'red';
@@ -408,6 +411,8 @@ export interface PlayerMatchStat {
   assists: number;
   /** GK 슬롯으로 뛴 선수가 무실점으로 경기를 마쳤는지(골든글러브 집계용). GK가 아니면 미설정. */
   cleanSheet?: boolean;
+  /** 이 경기에서 범한 자책골 수(고도화 항목42). 없으면 0으로 취급. */
+  ownGoals?: number;
 }
 
 export interface InjuryEvent {

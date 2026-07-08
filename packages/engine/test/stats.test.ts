@@ -18,12 +18,16 @@ function season(seed = 1) {
 }
 
 describe('stats: 시즌 통계 집계', () => {
-  it('집계 득점 합이 실제 경기 득점 합과 일치한다', () => {
+  it('집계 득점 합(자책골 제외) + 자책골 수가 실제 경기 득점 합과 일치한다', () => {
+    // 자책골(고도화 항목42)은 스코어보드에는 반영되지만 어느 선수의 "득점"으로도
+    // 집계되지 않는다(실제 축구 통계 관례와 동일) — 따라서 개인 득점 합만으로는
+    // 팀 득점 합과 일치하지 않을 수 있고, 자책골 수만큼의 차이가 정확히 나야 한다.
     const { matches } = season(11);
     const stats = aggregatePlayerStats(matches);
     const aggGoals = stats.reduce((s, p) => s + p.goals, 0);
+    const ownGoals = matches.reduce((s, m) => s + m.events.filter((e) => e.outcome === 'OWN_GOAL').length, 0);
     const matchGoals = matches.reduce((s, m) => s + m.score[0] + m.score[1], 0);
-    expect(aggGoals).toBe(matchGoals);
+    expect(aggGoals + ownGoals).toBe(matchGoals);
   });
 
   it('출전 수·평점 범위가 타당하다', () => {

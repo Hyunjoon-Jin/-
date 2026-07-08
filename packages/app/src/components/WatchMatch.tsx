@@ -28,7 +28,7 @@ const TICK_MS = 130;
 const SUB_LIMIT = 3;
 
 const OUTCOME: Record<string, string> = {
-  GOAL: '⚽ 골!', SAVE: '🧤 선방', OFF_TARGET: '➡️ 빗나감', BLOCKED: '🛡️ 블록',
+  GOAL: '⚽ 골!', SAVE: '🧤 선방', OFF_TARGET: '➡️ 빗나감', BLOCKED: '🛡️ 블록', OWN_GOAL: '🥅 자책골',
 };
 
 type QuickTacticValues = Pick<Tactic, 'mentality' | 'tempo' | 'pressing' | 'width' | 'defensiveLine'>;
@@ -113,7 +113,7 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
 
   function applyMinute(target: number, evs: MatchEvent[]) {
     const last = evs[evs.length - 1];
-    const goal = evs.find((e) => e.outcome === 'GOAL');
+    const goal = evs.find((e) => e.outcome === 'GOAL' || e.outcome === 'OWN_GOAL');
     const ball = last
       ? { x: last.side === 'home' ? 0.84 : 0.16, y: 0.28 + Math.random() * 0.44 }
       : { x: 0.4 + Math.random() * 0.2, y: 0.34 + Math.random() * 0.32 };
@@ -127,7 +127,7 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
       goalFlashTimerRef.current = setTimeout(() => setGoalFlash(null), GOAL_FLASH_MS);
     }
     setStats(live.stats());
-    const notable = evs.filter((e) => e.outcome === 'GOAL' || e.outcome === 'SAVE');
+    const notable = evs.filter((e) => e.outcome === 'GOAL' || e.outcome === 'OWN_GOAL' || e.outcome === 'SAVE');
     if (notable.length) setFeed((f) => [...notable.reverse(), ...f]);
   }
 
@@ -412,7 +412,8 @@ function Feed({
       {items.map((it) => it.kind === 'match' ? (
         <li
           key={`match-${it.ev.minute}-${it.ev.playerId}`}
-          className={it.ev.outcome === 'GOAL' ? (it.ev.side === userSide ? 'goal mine' : 'goal') : ''}
+          className={(it.ev.outcome === 'GOAL' || it.ev.outcome === 'OWN_GOAL')
+            ? (it.ev.side === userSide ? 'goal mine' : 'goal') : ''}
         >
           <span className="feed-min">{it.ev.minute}'</span>
           <span className="feed-text">{it.ev.playerName} — {OUTCOME[it.ev.outcome]}</span>

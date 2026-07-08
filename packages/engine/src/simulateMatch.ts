@@ -137,8 +137,14 @@ function pickChanceType(tactic: Tactic, rng: Rng): ChanceType {
  *   평균치(10) 대비 마무리 배율을 소폭 보정해, 세트피스 전문가를 모으면 실제로
  *   코너·프리킥 득점력이 오르도록 한다(이전엔 이 능력치가 시뮬에 전혀 반영되지 않았음).
  */
+/**
+ * @param ownGoalShare 자책골로 재분류할 확률 몫(고도화 항목42) — BLOCKED 몫에서
+ *   떼어낸다. 같은 r 굴림을 그대로 재사용하므로 RNG 소비량은 늘지 않는다
+ *   (자책골이 실제로 나온 경우에만 이후 별도 처리에서 추가 로직이 붙는다).
+ */
 function resolveShot(
   attack: number, gk: number, chance: ChanceType, rng: Rng, setPieceSkill?: number, individualMul = 1,
+  ownGoalShare = 0,
 ): ShotOutcome {
   const base = TUNING.baseXg[chance];
   let finishMul = (1 + (attack - 50) * TUNING.finishK) * individualMul;
@@ -152,7 +158,38 @@ function resolveShot(
   const r = rng.next();
   if (r < s.save) return 'SAVE';
   if (r < s.save + s.offTarget) return 'OFF_TARGET';
+  if (r < s.save + s.offTarget + ownGoalShare) return 'OWN_GOAL';
   return 'BLOCKED';
+}
+
+/** 자책골 기본 확률 몫(BLOCKED 몫 중 일부, 고도화 항목42) — 수비 책임자의
+ *  decisions/positioning이 낮을수록 배율로 확대된다. */
+const OWN_GOAL_BASE_SHARE = 0.01;
+
+/**
+ * 수비진 중 decisions·positioning 평균이 가장 낮은(실점 유발 위험이 가장 큰) 선수를
+ * 결정론적으로 골라 자책골 책임을 귀속시킨다(고도화 항목42) — 무작위 추첨이 아니라
+ * 라인업만의 함수라 추가 RNG 소비가 없다. DEF 라인 출전자가 없으면(극단적 포메이션)
+ * GK를 제외한 출전 전원 중에서 고른다.
+ */
+export function weakestDefender(def: Side): Player | null {
+  const byId = new Map(def.club.players.map((p) => [p.id, p]));
+  const defenders = def.tactic.lineup
+    .filter((s) => lineOf(s.position) === 'DEF')
+    .map((s) => byId.get(s.playerId))
+    .filter((p): p is Player => p !== undefined && isAvailable(p));
+  const pool = defenders.length > 0
+    ? defenders
+    : def.club.players.filter((p) => isAvailable(p) && p.position !== 'GK');
+  if (pool.length === 0) return null;
+  const errorScore = (p: Player) => (p.attributes.decisions + p.attributes.positioning) / 2;
+  return pool.reduce((worst, p) => (errorScore(p) < errorScore(worst) ? p : worst));
+}
+
+/** decisions·positioning 평균이 낮을수록 자책골 몫을 확대하는 배율(0.5~2.0배). */
+export function ownGoalRiskMultiplier(p: Player): number {
+  const avg = (p.attributes.decisions + p.attributes.positioning) / 2;
+  return clamp((20 - avg) / 10, 0.5, 2);
 }
 
 // ── 공유 컨텍스트 ──────────────────────────────────────────
@@ -336,9 +373,14 @@ export function stepMinute(ctx: MatchContext, minute: number): MatchEvent | null
     ? shooter.attributes.setPiece + (hasTrait(shooter, 'setPieceSpecialist') ? 3 : 0)
     : undefined;
   const individualMul = individualXgMultiplier(shooter, att, def);
-  const outcome = resolveShot(attAttack, def.strength.gk, chance, rng, setPieceSkill, individualMul);
+  // 자책골(고도화 항목42) 몫 — 수비 라인 중 가장 실점 유발 위험이 큰 선수의 특성으로 확대.
+  const defErrorProne = weakestDefender(def);
+  const ownGoalShare = defErrorProne ? OWN_GOAL_BASE_SHARE * ownGoalRiskMultiplier(defErrorProne) : 0;
+  const outcome = resolveShot(attAttack, def.strength.gk, chance, rng, setPieceSkill, individualMul, ownGoalShare);
 
   let assister: Player | null = null;
+  let eventPlayerId = shooter.id;
+  let eventPlayerName = shooter.name;
   if (outcome === 'GOAL') {
     att.goals++;
     st.goals++;
@@ -349,6 +391,15 @@ export function stepMinute(ctx: MatchContext, minute: number): MatchEvent | null
       ast.assists++;
       ast.rating = clamp(ast.rating + 0.5, 0, 10);
     }
+  } else if (outcome === 'OWN_GOAL') {
+    // 자책골: 득점은 공격 측(att)에 귀속되지만, 득점 주체는 수비 측(def) 선수다.
+    // 원래 슈터는 자기 득점·평점 보너스를 받지 않는다(단순히 상황을 만든 것뿐).
+    att.goals++;
+    const og = ensureStat(ctx, defErrorProne!);
+    og.ownGoals = (og.ownGoals ?? 0) + 1;
+    og.rating = clamp(og.rating - 1.0, 0, 10);
+    eventPlayerId = defErrorProne!.id;
+    eventPlayerName = defErrorProne!.name;
   } else if (outcome === 'OFF_TARGET') {
     st.rating = clamp(st.rating - 0.1, 0, 10);
   }
@@ -358,10 +409,11 @@ export function stepMinute(ctx: MatchContext, minute: number): MatchEvent | null
     side: homeHasBall ? 'home' : 'away',
     chanceType: chance,
     outcome,
-    playerId: shooter.id,
-    playerName: shooter.name,
+    playerId: eventPlayerId,
+    playerName: eventPlayerName,
     assistPlayerId: assister?.id,
     assistPlayerName: assister?.name,
+    isOwnGoal: outcome === 'OWN_GOAL' ? true : undefined,
   };
   ctx.events.push(ev);
   return ev;

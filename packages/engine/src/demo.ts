@@ -23,6 +23,7 @@ const outcomeLabel: Record<ShotOutcome, string> = {
   SAVE: '🧤 선방',
   OFF_TARGET: '➡️ 빗나감',
   BLOCKED: '🛡️ 블록',
+  OWN_GOAL: '🥅 자책골',
 };
 
 function fmt(n: number): string {
