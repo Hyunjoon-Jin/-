@@ -31,7 +31,7 @@ import { recentForm } from './form.js';
 import { clamp } from './math.js';
 import {
   summarizeStats, aggregatePlayerStats, type PlayerSeasonStat, type SeasonAwards, type SeasonSquadEntry,
-  type ClubDisciplineRow, type MonthlyManagerAward, type StreakSummary, type BiggestWin,
+  type ClubDisciplineRow, type MonthlyManagerAward, type MonthlyPlayerAward, type StreakSummary, type BiggestWin,
 } from './stats.js';
 import { Rng } from './rng.js';
 
@@ -215,6 +215,9 @@ export interface SeasonSummary {
   /** 이달의 감독(고도화 항목24, 앱 전용) — 실제 달력 대신 4라운드씩 묶어 구간별 최고
    *  성적 구단을 나열. 시즌 진행 라운드 수만큼 블록이 나온다. */
   monthlyManagerAwards?: MonthlyManagerAward[];
+  /** 이달의 선수(고도화 항목37, 앱 전용) — monthlyManagerAwards와 같은 블록 구간별로
+   *  최소 출전 이상인 선수 중 평균 평점 최고 선수를 나열. */
+  monthlyPlayerAwards?: MonthlyPlayerAward[];
   /** 이번 시즌 내 구단의 최장 연승·무패 기록(고도화 항목25, 앱 전용). */
   streaks?: StreakSummary;
   /** 이번 시즌 라운드별 내 구단 순위 추이(고도화 항목26, 앱 전용) — 라운드 순서대로. */

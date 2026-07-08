@@ -20,7 +20,8 @@ import {
   renegotiateBuybackClause as engineRenegotiateBuybackClause, type BuybackRenegotiationDirection,
   type OfferEvaluation, type SellOffer, type LoanTerms, type LoanReturnEvent, type LoanObligationEvent,
   summarizeStats, aggregatePlayerStats, topScorers as engineTopScorers, recentPlayerForm,
-  seasonSquadSnapshot, clubDisciplineTable, monthlyManagerAwards, longestStreaks, biggestWinMargin,
+  seasonSquadSnapshot, clubDisciplineTable, monthlyManagerAwards, monthlyPlayerAwards,
+  longestStreaks, biggestWinMargin,
   createCup, playCupRound as enginePlayCupRound, playCupToEnd, isCupOver, nextCupPairings,
   CUP_FINAL_ROUND_NAME, findCupUpsets,
   applyPromotionRelegation, clubsInDivision, runInternationalBreak,
@@ -530,6 +531,7 @@ export function finishSeason(state: GameState): GameState {
   const { topScorers, awards } = summarizeStats(ss.results, totalRounds(ss));
   const fairPlayTable = clubDisciplineTable(ss.results);
   const monthAwards = monthlyManagerAwards(ss.fixtures, ss.results);
+  const monthPlayerAwards = monthlyPlayerAwards(ss.fixtures, ss.results);
   const streaks = longestStreaks(ss.results, state.myClubId);
   const myPositionHistory = enginePositionHistory(ss.clubs, ss.fixtures, ss.results, state.myClubId);
   const myBiggestWin = biggestWinMargin(ss.results, state.myClubId);
@@ -971,6 +973,7 @@ export function finishSeason(state: GameState): GameState {
     awards,
     fairPlayTable,
     monthlyManagerAwards: monthAwards.length > 0 ? monthAwards : undefined,
+    monthlyPlayerAwards: monthPlayerAwards.length > 0 ? monthPlayerAwards : undefined,
     streaks,
     positionHistory: myPositionHistory,
     biggestWin: myBiggestWin,

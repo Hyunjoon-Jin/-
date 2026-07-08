@@ -2,7 +2,9 @@ import { BarChart3 } from 'lucide-react';
 import {
   liveTopScorers, liveSquadStats, lastSummary, myClub, type GameState,
 } from '../game.js';
-import type { PlayerSeasonStat, BestXIEntry, ClubDisciplineRow, MonthlyManagerAward } from '@soccer-tycoon/engine';
+import type {
+  PlayerSeasonStat, BestXIEntry, ClubDisciplineRow, MonthlyManagerAward, MonthlyPlayerAward,
+} from '@soccer-tycoon/engine';
 import { ratingClass } from '../rating.js';
 import { EmptyState } from './EmptyState.js';
 
@@ -14,6 +16,7 @@ export function Stats({ game }: { game: GameState }) {
   const awards = live ? null : lastSummary(game)?.awards;
   const fairPlayTable = live ? null : lastSummary(game)?.fairPlayTable;
   const monthlyAwards = live ? null : lastSummary(game)?.monthlyManagerAwards;
+  const monthlyPlayerAwards = live ? null : lastSummary(game)?.monthlyPlayerAwards;
   const positionHistory = live ? null : lastSummary(game)?.positionHistory;
   const divisionSize = live ? 0 : (lastSummary(game)?.table.length ?? 0);
   const heading = live ? `시즌 ${game.season} (진행 중)` : lastSummary(game) ? `시즌 ${lastSummary(game)!.season} 최종` : null;
@@ -98,6 +101,13 @@ export function Stats({ game }: { game: GameState }) {
           <MonthlyManagerSection awards={monthlyAwards} myClubId={game.myClubId} />
         </div>
       )}
+
+      {monthlyPlayerAwards && monthlyPlayerAwards.length > 0 && (
+        <div>
+          <h3>⭐ 이달의 선수</h3>
+          <MonthlyPlayerSection awards={monthlyPlayerAwards} myClubId={game.myClubId} />
+        </div>
+      )}
     </div>
   );
 }
@@ -154,6 +164,30 @@ function MonthlyManagerSection({ awards, myClubId }: { awards: MonthlyManagerAwa
             <td className="name">{a.clubName}</td>
             <td><b>{a.points}</b></td>
             <td>{a.gd > 0 ? `+${a.gd}` : a.gd}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+/** 이달의 선수(고도화 항목37) — 이달의 감독과 같은 블록 구간별로 평균 평점 최고 선수. */
+function MonthlyPlayerSection({ awards, myClubId }: { awards: MonthlyPlayerAward[]; myClubId: string }) {
+  return (
+    <table className="data-table compact">
+      <thead>
+        <tr>
+          <th>구간</th><th>선수</th><th>소속</th><th>평점</th><th>출전</th>
+        </tr>
+      </thead>
+      <tbody>
+        {awards.map((a) => (
+          <tr key={a.blockIndex} className={a.clubId === myClubId ? 'mine' : ''}>
+            <td className="muted small">{a.fromRound}~{a.toRound}R</td>
+            <td className="name">{a.name}</td>
+            <td className="muted">{a.clubName}</td>
+            <td className={ratingClass(a.avgRating)}><b>{a.avgRating.toFixed(1)}</b></td>
+            <td className="muted small">{a.apps}경기</td>
           </tr>
         ))}
       </tbody>

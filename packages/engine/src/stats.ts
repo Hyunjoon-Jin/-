@@ -248,6 +248,61 @@ export function monthlyManagerAwards(
   return awards;
 }
 
+export interface MonthlyPlayerAward {
+  /** 블록 순번(1부터) — monthlyManagerAwards와 동일한 라운드 구간. */
+  blockIndex: number;
+  fromRound: number;
+  toRound: number;
+  playerId: string;
+  name: string;
+  clubId: string;
+  clubName: string;
+  avgRating: number;
+  apps: number;
+}
+
+/**
+ * 이달의 선수(고도화 항목37) — monthlyManagerAwards와 동일하게 라운드를
+ * blockSize개씩 묶어, 그 구간에 minApps경기 이상 출전한 선수 중 평균 평점
+ * 최고인 선수를 뽑는다(동률이면 출전 수, 그다음 이름순으로 결정론적으로 결정).
+ */
+export function monthlyPlayerAwards(
+  fixtures: Fixture[], results: MatchResult[], blockSize = 4, minApps = 2,
+): MonthlyPlayerAward[] {
+  const totalRounds = fixtures.reduce((m, f) => Math.max(m, f.round), 0);
+  const awards: MonthlyPlayerAward[] = [];
+  for (let from = 1; from <= totalRounds; from += blockSize) {
+    const to = Math.min(from + blockSize - 1, totalRounds);
+    const acc = new Map<string, { name: string; clubId: string; clubName: string; totalRating: number; apps: number }>();
+    const bump = (clubId: string, clubName: string, stats: { playerId: string; name: string; rating: number }[]) => {
+      for (const s of stats) {
+        let a = acc.get(s.playerId);
+        if (!a) { a = { name: s.name, clubId, clubName, totalRating: 0, apps: 0 }; acc.set(s.playerId, a); }
+        a.totalRating += s.rating; a.apps += 1;
+      }
+    };
+    for (let i = 0; i < results.length && i < fixtures.length; i++) {
+      const fx = fixtures[i]!;
+      if (fx.round < from || fx.round > to) continue;
+      const r = results[i]!;
+      bump(r.homeClubId, r.homeClubName, r.playerStats.home);
+      bump(r.awayClubId, r.awayClubName, r.playerStats.away);
+    }
+    const eligible = [...acc.entries()].filter(([, a]) => a.apps >= minApps);
+    if (eligible.length === 0) continue;
+    const [bestId, best] = eligible.sort((a, b) =>
+      (b[1].totalRating / b[1].apps) - (a[1].totalRating / a[1].apps)
+      || b[1].apps - a[1].apps
+      || a[1].name.localeCompare(b[1].name))[0]!;
+    awards.push({
+      blockIndex: awards.length + 1, fromRound: from, toRound: to,
+      playerId: bestId, name: best.name, clubId: best.clubId, clubName: best.clubName,
+      avgRating: best.totalRating / best.apps, apps: best.apps,
+    });
+  }
+  return awards;
+}
+
 export interface StreakSummary {
   /** 시즌 내 최장 연승. */
   winStreak: number;

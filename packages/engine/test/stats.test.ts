@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   aggregatePlayerStats, topScorers, seasonAwards, summarizeStats, careerScorers, recentPlayerForm,
-  seasonSquadSnapshot, clubDisciplineTable, monthlyManagerAwards, longestStreaks, biggestWinMargin,
+  seasonSquadSnapshot, clubDisciplineTable, monthlyManagerAwards, monthlyPlayerAwards,
+  longestStreaks, biggestWinMargin,
 } from '../src/stats.js';
 import { simulateSeason } from '../src/league.js';
 import { generateClub, defaultTactic } from '../src/generate.js';
@@ -264,6 +265,66 @@ describe('stats: 이달의 감독 (고도화 항목24)', () => {
 
   it('경기 결과가 없으면 빈 배열', () => {
     expect(monthlyManagerAwards([], [], 4)).toEqual([]);
+  });
+});
+
+function mkPlayerStat(playerId: string, name: string, rating: number) {
+  return { playerId, name, position: 'MF' as const, rating, shots: 0, goals: 0, assists: 0 };
+}
+
+describe('stats: 이달의 선수 (고도화 항목37)', () => {
+  function fx(round: number, homeId: string, awayId: string): Fixture {
+    return { round, homeId, awayId };
+  }
+
+  it('블록별로 최소 출전(minApps) 이상인 선수 중 평균 평점 최고 선수를 뽑는다', () => {
+    const fixtures: Fixture[] = [
+      fx(1, 'a', 'b'), fx(2, 'b', 'a'), fx(3, 'a', 'b'), fx(4, 'b', 'a'),
+    ];
+    const results: MatchResult[] = [
+      mkResult({
+        homeClubId: 'a', awayClubId: 'b', homeClubName: 'A', awayClubName: 'B',
+        playerStats: { home: [mkPlayerStat('p1', 'P1', 9)], away: [mkPlayerStat('p2', 'P2', 5)] },
+      }),
+      mkResult({
+        homeClubId: 'b', awayClubId: 'a', homeClubName: 'B', awayClubName: 'A',
+        playerStats: { home: [mkPlayerStat('p2', 'P2', 5)], away: [mkPlayerStat('p1', 'P1', 8)] },
+      }),
+      mkResult({
+        homeClubId: 'a', awayClubId: 'b', homeClubName: 'A', awayClubName: 'B',
+        playerStats: { home: [mkPlayerStat('p1', 'P1', 7)], away: [mkPlayerStat('p2', 'P2', 5)] },
+      }),
+      mkResult({
+        homeClubId: 'b', awayClubId: 'a', homeClubName: 'B', awayClubName: 'A',
+        playerStats: { home: [mkPlayerStat('p2', 'P2', 5)], away: [mkPlayerStat('p1', 'P1', 9)] },
+      }),
+    ];
+    const awards = monthlyPlayerAwards(fixtures, results, 4, 2);
+    expect(awards).toHaveLength(1);
+    expect(awards[0]).toMatchObject({ blockIndex: 1, fromRound: 1, toRound: 4, playerId: 'p1', apps: 4 });
+    expect(awards[0]!.avgRating).toBeCloseTo((9 + 8 + 7 + 9) / 4, 5);
+  });
+
+  it('minApps 미만인 선수는 평점이 더 높아도 제외된다', () => {
+    const fixtures: Fixture[] = [fx(1, 'a', 'b'), fx(2, 'a', 'b')];
+    const results: MatchResult[] = [
+      mkResult({
+        homeClubId: 'a', awayClubId: 'b',
+        playerStats: { home: [mkPlayerStat('p1', 'P1', 10)], away: [mkPlayerStat('p2', 'P2', 6)] },
+      }),
+      mkResult({
+        homeClubId: 'a', awayClubId: 'b',
+        playerStats: { home: [], away: [mkPlayerStat('p2', 'P2', 6)] },
+      }),
+    ];
+    // p1은 1경기(평점10)뿐이라 minApps=2 기준 제외 → p2(2경기, 평점6)가 선정.
+    const awards = monthlyPlayerAwards(fixtures, results, 4, 2);
+    expect(awards).toHaveLength(1);
+    expect(awards[0]!.playerId).toBe('p2');
+  });
+
+  it('경기 결과가 없으면 빈 배열', () => {
+    expect(monthlyPlayerAwards([], [], 4, 2)).toEqual([]);
   });
 });
 
