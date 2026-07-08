@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   aggregatePlayerStats, topScorers, seasonAwards, summarizeStats, careerScorers, recentPlayerForm,
-  seasonSquadSnapshot, clubDisciplineTable, monthlyManagerAwards, longestStreaks,
+  seasonSquadSnapshot, clubDisciplineTable, monthlyManagerAwards, longestStreaks, biggestWinMargin,
 } from '../src/stats.js';
 import { simulateSeason } from '../src/league.js';
 import { generateClub, defaultTactic } from '../src/generate.js';
@@ -298,5 +298,36 @@ describe('stats: 연승/무패 기록 (고도화 항목25)', () => {
     ];
     expect(longestStreaks(results, 'a')).toEqual({ winStreak: 0, unbeatenStreak: 0 });
     expect(longestStreaks([], 'a')).toEqual({ winStreak: 0, unbeatenStreak: 0 });
+  });
+});
+
+describe('stats: 최다 득점차 승리 기록 (고도화 항목27)', () => {
+  it('득점차가 가장 큰 승리 경기를 뽑는다(홈/원정 모두 반영)', () => {
+    const results: MatchResult[] = [
+      mkResult({ homeClubId: 'a', awayClubId: 'x', homeClubName: 'A', awayClubName: 'X', score: [2, 1] }), // +1
+      mkResult({ homeClubId: 'y', awayClubId: 'a', homeClubName: 'Y', awayClubName: 'A', score: [0, 4] }), // +4(원정)
+      mkResult({ homeClubId: 'a', awayClubId: 'z', homeClubName: 'A', awayClubName: 'Z', score: [1, 1] }), // 무
+      mkResult({ homeClubId: 'a', awayClubId: 'w', homeClubName: 'A', awayClubName: 'W', score: [0, 2] }), // 패
+    ];
+    const best = biggestWinMargin(results, 'a');
+    expect(best).toEqual({ margin: 4, opponentName: 'Y', myGoals: 4, oppGoals: 0 });
+  });
+
+  it('득점차가 같으면 총 득점이 더 많은 경기를 우선한다', () => {
+    const results: MatchResult[] = [
+      mkResult({ homeClubId: 'a', awayClubId: 'x', homeClubName: 'A', awayClubName: 'X', score: [2, 0] }), // +2, 합2
+      mkResult({ homeClubId: 'a', awayClubId: 'y', homeClubName: 'A', awayClubName: 'Y', score: [4, 2] }), // +2, 합6
+    ];
+    const best = biggestWinMargin(results, 'a');
+    expect(best).toEqual({ margin: 2, opponentName: 'Y', myGoals: 4, oppGoals: 2 });
+  });
+
+  it('승리한 경기가 없으면 undefined', () => {
+    const results: MatchResult[] = [
+      mkResult({ homeClubId: 'a', awayClubId: 'x', score: [0, 0] }),
+      mkResult({ homeClubId: 'a', awayClubId: 'x', score: [0, 1] }),
+    ];
+    expect(biggestWinMargin(results, 'a')).toBeUndefined();
+    expect(biggestWinMargin([], 'a')).toBeUndefined();
   });
 });

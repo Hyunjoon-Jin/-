@@ -31,7 +31,7 @@ import { recentForm } from './form.js';
 import { clamp } from './math.js';
 import {
   summarizeStats, aggregatePlayerStats, type PlayerSeasonStat, type SeasonAwards, type SeasonSquadEntry,
-  type ClubDisciplineRow, type MonthlyManagerAward, type StreakSummary,
+  type ClubDisciplineRow, type MonthlyManagerAward, type StreakSummary, type BiggestWin,
 } from './stats.js';
 import { Rng } from './rng.js';
 
@@ -216,6 +216,8 @@ export interface SeasonSummary {
   streaks?: StreakSummary;
   /** 이번 시즌 라운드별 내 구단 순위 추이(고도화 항목26, 앱 전용) — 라운드 순서대로. */
   positionHistory?: number[];
+  /** 이번 시즌 내 구단의 최다 득점차 승리(고도화 항목27, 앱 전용). 승리가 없으면 undefined. */
+  biggestWin?: BiggestWin;
 }
 
 /** 유스 졸업생 동문 네트워크(신규 개선 항목 18) — 과거 우리 리저브 출신으로 1군

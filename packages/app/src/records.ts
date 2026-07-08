@@ -24,6 +24,8 @@ export interface ClubRecords {
   bestWinStreak?: ClubRecordEntry;
   /** 역대 최장 무패(고도화 항목25). */
   bestUnbeatenStreak?: ClubRecordEntry;
+  /** 역대 최다 득점차 승리(고도화 항목27). */
+  bestWinMargin?: ClubRecordEntry;
 }
 
 /** 내 구단 역대 기록 산출(진행 중인 재임 한정). */
@@ -38,6 +40,7 @@ export function computeClubRecords(game: GameState): ClubRecords {
   let bestNet: { net: number; clubName: string; season: number } | null = null;
   let bestWinStreak: { streak: number; clubName: string; season: number } | null = null;
   let bestUnbeatenStreak: { streak: number; clubName: string; season: number } | null = null;
+  let bestWinMargin: { margin: number; opponentName: string; myGoals: number; oppGoals: number; season: number } | null = null;
 
   for (const s of game.history) {
     for (const p of s.squad ?? []) {
@@ -71,6 +74,9 @@ export function computeClubRecords(game: GameState): ClubRecords {
     if (s.streaks && (!bestUnbeatenStreak || s.streaks.unbeatenStreak > bestUnbeatenStreak.streak)) {
       bestUnbeatenStreak = { streak: s.streaks.unbeatenStreak, clubName: myRow?.name ?? '', season: s.season };
     }
+    if (s.biggestWin && (!bestWinMargin || s.biggestWin.margin > bestWinMargin.margin)) {
+      bestWinMargin = { ...s.biggestWin, season: s.season };
+    }
   }
 
   return {
@@ -97,6 +103,13 @@ export function computeClubRecords(game: GameState): ClubRecords {
       : undefined,
     bestUnbeatenStreak: bestUnbeatenStreak && bestUnbeatenStreak.streak > 0
       ? { label: '역대 최장 무패', holder: bestUnbeatenStreak.clubName, detail: `${bestUnbeatenStreak.streak}경기`, season: bestUnbeatenStreak.season }
+      : undefined,
+    bestWinMargin: bestWinMargin
+      ? {
+        label: '역대 최다 득점차 승리', holder: `vs ${bestWinMargin.opponentName}`,
+        detail: `${bestWinMargin.myGoals}-${bestWinMargin.oppGoals}(+${bestWinMargin.margin})`,
+        season: bestWinMargin.season,
+      }
       : undefined,
   };
 }

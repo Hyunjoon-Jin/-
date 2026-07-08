@@ -281,6 +281,34 @@ export function longestStreaks(results: MatchResult[], clubId: string): StreakSu
   return { winStreak, unbeatenStreak };
 }
 
+export interface BiggestWin {
+  margin: number;
+  opponentName: string;
+  myGoals: number;
+  oppGoals: number;
+}
+
+/**
+ * 시즌 내 특정 구단의 최다 득점차 승리(고도화 항목27). 승리한 경기가 없으면 undefined.
+ * 득점차가 같으면 총 득점이 더 많은 경기를 우선한다.
+ */
+export function biggestWinMargin(results: MatchResult[], clubId: string): BiggestWin | undefined {
+  let best: BiggestWin | undefined;
+  for (const r of results) {
+    const isHome = r.homeClubId === clubId;
+    const isAway = r.awayClubId === clubId;
+    if (!isHome && !isAway) continue;
+    const myGoals = isHome ? r.score[0] : r.score[1];
+    const oppGoals = isHome ? r.score[1] : r.score[0];
+    if (myGoals <= oppGoals) continue;
+    const margin = myGoals - oppGoals;
+    if (!best || margin > best.margin || (margin === best.margin && myGoals > best.myGoals)) {
+      best = { margin, opponentName: isHome ? r.awayClubName : r.homeClubName, myGoals, oppGoals };
+    }
+  }
+  return best;
+}
+
 /** clubs 인자는 향후 확장용(현재는 결과만으로 충분). */
 export function summarizeStats(results: MatchResult[], totalRounds: number): {
   topScorers: PlayerSeasonStat[];
