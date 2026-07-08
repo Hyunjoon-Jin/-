@@ -95,6 +95,8 @@ export interface CupPairing {
   awayId: string;
   /** 이 경기의 시뮬 시드(관전 시 동일 시드로 LiveMatch 구성). */
   seed: number;
+  /** 이 대진에서 홈 구단이 시드 배정(상위 평판 포트) 쪽이었는지 — 추첨식 UI 표시용. */
+  homeSeeded: boolean;
 }
 
 export interface NextCupRound {
@@ -104,9 +106,23 @@ export interface NextCupRound {
   pairings: CupPairing[];
 }
 
+function shuffled<T>(arr: T[], rng: Rng): T[] {
+  const out = [...arr];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = rng.int(0, i);
+    [out[i], out[j]] = [out[j]!, out[i]!];
+  }
+  return out;
+}
+
 /**
  * 다음 라운드 대진(순수 함수, 상태 변경 없음).
  * 관전 셋업을 위해 앱이 내 경기와 시드를 미리 알 수 있게 한다.
+ *
+ * 고도화 항목32: 실제 컵대회 추첨식처럼, 생존자를 평판 상위/하위 두 포트로
+ * 나눠(상위 포트끼리 조기 격돌 방지) 각 포트 내부는 시드로 무작위 셔플한 뒤
+ * 포트 간 1:1로 뽑는다. 기존엔 상위-하위를 순번대로 고정 매칭해 평판만 같으면
+ * 매 시즌 대진표 모양이 완전히 동일했다.
  */
 export function nextCupPairings(cup: CupState, clubs: Club[]): NextCupRound | null {
   if (cup.championId) return null;
@@ -135,9 +151,22 @@ export function nextCupPairings(cup: CupState, clubs: Club[]): NextCupRound | nu
   }
 
   const m = arr.length;
+  const half = m / 2;
+  const seededPot = shuffled(arr.slice(0, half), new Rng(seedBase + 1));
+  const unseededPot = shuffled(arr.slice(half), new Rng(seedBase + 2));
+  const homeCoin = new Rng(seedBase + 3);
+
   const pairings: CupPairing[] = [];
-  for (let i = 0; i < m / 2; i++) {
-    pairings.push({ homeId: arr[i]!, awayId: arr[m - 1 - i]!, seed: seedBase + i });
+  for (let i = 0; i < half; i++) {
+    const seedTeam = seededPot[i]!;
+    const otherTeam = unseededPot[i]!;
+    const seedIsHome = homeCoin.roll(0.5);
+    pairings.push({
+      homeId: seedIsHome ? seedTeam : otherTeam,
+      awayId: seedIsHome ? otherTeam : seedTeam,
+      seed: seedBase + i,
+      homeSeeded: seedIsHome,
+    });
   }
   return { roundName: roundName(survivors.length), byeId, pairings };
 }

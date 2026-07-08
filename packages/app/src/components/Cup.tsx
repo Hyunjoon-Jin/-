@@ -191,9 +191,15 @@ function CupBracket({
                     const involvesMe = pr.homeId === mine || pr.awayId === mine;
                     return (
                       <div key={pi} className={`tie-card pending ${involvesMe ? 'mine' : ''}`}>
-                        <span className="tie-side">{nameOf(pr.homeId)}</span>
+                        <span className="tie-side">
+                          {nameOf(pr.homeId)}
+                          {pr.homeSeeded && <span className="seed-tag" title="추첨 시드">S</span>}
+                        </span>
                         <span className="tie-score muted small">vs</span>
-                        <span className="tie-side away">{nameOf(pr.awayId)}</span>
+                        <span className="tie-side away">
+                          {nameOf(pr.awayId)}
+                          {!pr.homeSeeded && <span className="seed-tag" title="추첨 시드">S</span>}
+                        </span>
                       </div>
                     );
                   })}

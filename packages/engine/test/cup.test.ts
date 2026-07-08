@@ -183,3 +183,47 @@ describe('cup: 녹아웃 토너먼트', () => {
     expect(tie.winnerId).toBe(pr.awayId);
   });
 });
+
+describe('cup: 시드 추첨식 — 포트 분리 후 무작위 추첨 (고도화 항목32)', () => {
+  it('평판 상위 절반(시드 포트)과 하위 절반(비시드 포트)끼리만 맞붙는다', () => {
+    const clubs = makeClubs(12, 21);
+    const cup = createCup(clubs, 200);
+    const byId = new Map(clubs.map((c) => [c.id, c]));
+    const sorted = [...cup.participantIds].sort(
+      (a, b) => byId.get(b)!.finance.reputation - byId.get(a)!.finance.reputation,
+    );
+    const seededHalf = new Set(sorted.slice(0, sorted.length / 2));
+    const unseededHalf = new Set(sorted.slice(sorted.length / 2));
+
+    const next = nextCupPairings(cup, clubs)!;
+    for (const pr of next.pairings) {
+      const homeIsSeeded = seededHalf.has(pr.homeId);
+      const awayIsSeeded = seededHalf.has(pr.awayId);
+      // 한쪽은 시드 포트, 다른 한쪽은 비시드 포트여야 한다(같은 포트끼리는 안 붙음).
+      expect(homeIsSeeded).not.toBe(awayIsSeeded);
+      expect(homeIsSeeded || unseededHalf.has(pr.homeId)).toBe(true);
+      expect(pr.homeSeeded).toBe(homeIsSeeded);
+    }
+  });
+
+  it('같은 시드면 대진(홈/원정 배정 포함)이 동일하다 (재현성)', () => {
+    const a = nextCupPairings(createCup(makeClubs(12, 30), 500), makeClubs(12, 30))!;
+    const b = nextCupPairings(createCup(makeClubs(12, 30), 500), makeClubs(12, 30))!;
+    expect(a.pairings.map((p) => [p.homeId, p.awayId, p.homeSeeded])).toEqual(
+      b.pairings.map((p) => [p.homeId, p.awayId, p.homeSeeded]),
+    );
+  });
+
+  it('시드가 다르면 포트 내 짝짓기 순서가 달라질 수 있다(고정 순번 매칭이 아님)', () => {
+    const clubs = makeClubs(12, 40);
+    const seeds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    const shapes = new Set(
+      seeds.map((s) => {
+        const next = nextCupPairings(createCup(clubs, s), clubs)!;
+        return next.pairings.map((p) => `${p.homeId}-${p.awayId}`).join('|');
+      }),
+    );
+    // 시드마다 셔플 결과가 달라, 최소 2가지 이상의 서로 다른 대진 모양이 나와야 한다.
+    expect(shapes.size).toBeGreaterThan(1);
+  });
+});

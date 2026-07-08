@@ -749,6 +749,11 @@ body {
 .tie-side { text-align: right; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tie-side.away { text-align: left; }
 .tie-side.won { color: var(--text); font-weight: 700; }
+.seed-tag {
+  display: inline-block; margin-left: 4px; font-size: 9px; font-weight: 700;
+  color: var(--accent-2); border: 1px solid var(--accent-2); border-radius: 3px;
+  padding: 0 3px; vertical-align: middle;
+}
 .tie-score { background: var(--panel-2); border-radius: 4px; padding: 1px 7px; font-weight: 700; font-size: 12px; white-space: nowrap; }
 .tie-card.bye { grid-template-columns: 1fr auto; }
 .tie-card.mine.win { background: #1f3a26; border-color: #2fa84f; }
