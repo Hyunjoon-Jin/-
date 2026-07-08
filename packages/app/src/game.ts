@@ -57,6 +57,7 @@ import {
   type PlayerFormEntry, type Player, type YouthProspect, type YouthProspectUpdate,
   type TeamStrength, type FormSummary, type ScoutingReport, type Line, type Position,
   type StaffDepartureEvent, type StaffRetirementEvent, type AcademyAlumnusUpdate,
+  type StaffTrait, type StaffTraitTier,
   type AddOnEvent, type MentorGraduationEvent,
 } from '@soccer-tycoon/engine';
 import { makeDefaultTactic, repairTactic } from './tactics.js';
@@ -180,6 +181,9 @@ export interface GameState {
   objectiveStreak?: number;
   /** 내 구단에서 뛰다 은퇴한 선수 아카이브(레전드). */
   legends: ClubLegend[];
+  /** 내 구단에서 은퇴한 실명 스태프 아카이브(고도화 항목36, 스태프 명예의 전당).
+   *  구버전 세이브는 없을 수 있어 optional(없으면 빈 배열 취급). */
+  staffLegends?: StaffLegend[];
   /** 라이벌 구단 id. 게임 시작 시 1회 고정(같은 부 내 평판이 가장 가까운 구단). */
   rivalClubId: string;
   /** 라이벌 구단전 통산 전적(내 구단 기준). */
@@ -253,6 +257,17 @@ export interface RivalMeeting {
 
 /** 은퇴 스냅샷(RetiredLegend) + 은퇴한 시즌(내 구단 재임 기준). */
 export interface ClubLegend extends RetiredLegend {
+  season: number;
+}
+
+/** 실명 스태프 은퇴 스냅샷 + 은퇴 시즌(고도화 항목36, 스태프 명예의 전당). */
+export interface StaffLegend {
+  kind: NamedStaffKind;
+  name: string;
+  finalAge: number;
+  level: number;
+  trait?: StaffTrait;
+  traitTier?: StaffTraitTier;
   season: number;
 }
 
@@ -712,6 +727,11 @@ export function finishSeason(state: GameState): GameState {
   const newLegends: ClubLegend[] = retiredPlayers
     .filter((r) => r.clubId === state.myClubId)
     .map((r) => ({ ...r, season: state.season }));
+  // 내 구단에서 은퇴한 실명 스태프는 명예의 전당에 영구 보존(고도화 항목36)
+  const newStaffLegends: StaffLegend[] = myStaffRetirements.map((r) => ({
+    kind: r.kind, name: r.name, finalAge: r.finalAge, level: r.level,
+    trait: r.trait, traitTier: r.traitTier, season: state.season,
+  }));
   // 내 구단 선수의 이번 시즌 통산 마일스톤(시즌 요약에 첨부)
   const myMilestones = milestones.filter((m) => m.clubId === state.myClubId);
   // 내 구단 유스 배출 소개(잠재력 높은 순, 시즌 요약에 첨부)
@@ -1014,6 +1034,7 @@ export function finishSeason(state: GameState): GameState {
     sponsorStreak: nextSponsorStreak,
     objectiveStreak: nextObjectiveStreak,
     legends: [...state.legends, ...newLegends],
+    staffLegends: [...(state.staffLegends ?? []), ...newStaffLegends],
     rivalRecord,
     rivalMeetings: [...state.rivalMeetings, ...newRivalMeetings],
     headToHead,

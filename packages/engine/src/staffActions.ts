@@ -215,6 +215,10 @@ export interface StaffRetirementEvent {
   name: string;
   finalAge: number;
   replacementName: string;
+  /** 은퇴 시점의 직책 레벨(고도화 항목36, 명예의 전당 표시용). */
+  level: number;
+  trait?: StaffTrait;
+  traitTier?: StaffTraitTier;
 }
 
 export interface StaffTickResult {
@@ -238,9 +242,12 @@ export function tickStaffContracts(club: Club, rng: Rng): StaffTickResult {
     if (m.age >= STAFF_RETIRE_HARD_AGE || rng.roll(staffRetireChance(m.age))) {
       const retiredName = m.name;
       const finalAge = m.age;
+      const { trait, traitTier } = m;
       const replacement = hireReplacementStaffMember(club.id, kind, level, rng);
       club.staff.members[kind] = replacement;
-      retirements.push({ kind, name: retiredName, finalAge, replacementName: replacement.name });
+      retirements.push({
+        kind, name: retiredName, finalAge, replacementName: replacement.name, level, trait, traitTier,
+      });
       continue;
     }
     m.contractYears -= 1;

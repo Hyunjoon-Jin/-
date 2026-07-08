@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { Landmark } from 'lucide-react';
 import { myClub, rivalClub, DIVISION_LABELS, type GameState } from '../game.js';
-import { careerScorers, type SeasonSquadEntry } from '@soccer-tycoon/engine';
+import {
+  careerScorers, STAFF_TRAIT_LABEL, STAFF_TRAIT_TIER_LABEL, type SeasonSquadEntry, type NamedStaffKind,
+} from '@soccer-tycoon/engine';
 import { computeClubRecords, type ClubRecordEntry } from '../records.js';
 import { useModalA11y } from './useModalA11y.js';
 import { onKeyActivate } from '../a11y.js';
@@ -9,8 +11,13 @@ import { EmptyState } from './EmptyState.js';
 
 const RESULT_LABEL: Record<'win' | 'draw' | 'loss', string> = { win: '승', draw: '무', loss: '패' };
 
+/** 실명 스태프 직책 한글 라벨(고도화 항목36) — Staff.tsx의 표기와 통일. */
+const STAFF_KIND_LABEL: Record<NamedStaffKind, string> = {
+  coaching: '총괄 코치', medical: '의료', scouting: '스카우팅', youth: '유스',
+};
+
 type HistorySeason = GameState['history'][number];
-type HistoryTab = 'seasons' | 'titles' | 'scorers' | 'records' | 'legends' | 'rivals';
+type HistoryTab = 'seasons' | 'titles' | 'scorers' | 'records' | 'legends' | 'staffLegends' | 'rivals';
 
 export function History({ game }: { game: GameState }) {
   const club = myClub(game);
@@ -71,6 +78,7 @@ export function History({ game }: { game: GameState }) {
     { key: 'scorers', label: '통산 득점 순위', show: leaders.length > 0 },
     { key: 'records', label: '역대 기록집', show: hasRecords },
     { key: 'legends', label: '레전드', show: game.legends.length > 0 },
+    { key: 'staffLegends', label: '스태프 레전드', show: (game.staffLegends?.length ?? 0) > 0 },
     { key: 'rivals', label: '라이벌전', show: game.rivalMeetings.length > 0 },
   ];
   const availableTabs = tabDefs.filter((t) => t.show);
@@ -240,6 +248,31 @@ export function History({ game }: { game: GameState }) {
                   <td className="muted">{l.careerApps}</td>
                   <td><b>{l.careerGoals}</b></td>
                   <td className="muted">{l.caps > 0 ? `${l.caps}경` : '-'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {activeTab === 'staffLegends' && (game.staffLegends?.length ?? 0) > 0 && (
+        <div className="legends">
+          <h3>🎖️ 스태프 명예의 전당 <span className="muted small">(은퇴 스태프 · {club.name})</span></h3>
+          <table className="data-table compact">
+            <thead>
+              <tr><th>은퇴 시즌</th><th>이름</th><th>직책</th><th>은퇴 나이</th><th>레벨</th><th>특기</th></tr>
+            </thead>
+            <tbody>
+              {[...game.staffLegends!].reverse().map((l, i) => (
+                <tr key={`${l.season}-${l.kind}-${i}`}>
+                  <td className="muted small">{l.season}</td>
+                  <td className="name">{l.name}</td>
+                  <td>{STAFF_KIND_LABEL[l.kind]}</td>
+                  <td>{l.finalAge}</td>
+                  <td className="muted">{l.level}</td>
+                  <td className="muted small">
+                    {l.trait ? `${STAFF_TRAIT_TIER_LABEL[l.traitTier ?? 'veteran']} ${STAFF_TRAIT_LABEL[l.trait]}` : '-'}
+                  </td>
                 </tr>
               ))}
             </tbody>

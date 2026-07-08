@@ -67,4 +67,15 @@ describe('신규 개선 항목 17: 스태프 은퇴', () => {
     const { retirements } = tickStaffContracts(club, new Rng(2));
     expect(retirements).toEqual([]);
   });
+
+  it('은퇴 이벤트에 은퇴 시점의 직책 레벨과 특기(있었다면)가 담긴다(고도화 항목36, 명예의 전당용)', () => {
+    const club = generateClub(new Rng(3), 'c', 'C', 10);
+    club.staff.members!.coaching!.age = STAFF_RETIRE_HARD_AGE - 1;
+    const before = { ...club.staff.members!.coaching! };
+    const { retirements } = tickStaffContracts(club, new Rng(0));
+    const event = retirements.find((r) => r.kind === 'coaching')!;
+    expect(event.level).toBe(club.staff.coaching);
+    expect(event.trait).toBe(before.trait);
+    expect(event.traitTier).toBe(before.traitTier);
+  });
 });
