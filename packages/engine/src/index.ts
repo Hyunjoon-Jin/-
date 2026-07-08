@@ -37,7 +37,7 @@ export { simulateSeason, type SeasonResult } from './league.js';
 export { doubleRoundRobin, type Fixture } from './schedule.js';
 export {
   createSeasonState, isSeasonOver, totalRounds, currentRound,
-  playNext, playRound, playToEnd, computeTable, commitResult, tacticFor,
+  playNext, playRound, playToEnd, computeTable, commitResult, tacticFor, positionHistory,
   type SeasonState, type TableRow,
 } from './season.js';
 export { progressPlayer } from './progression.js';

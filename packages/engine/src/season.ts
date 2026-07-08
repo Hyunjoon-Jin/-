@@ -201,3 +201,26 @@ export function computeTable(s: SeasonState): TableRow[] {
     return a.clubId.localeCompare(b.clubId);
   });
 }
+
+/**
+ * 시즌 순위 추이(고도화 항목26) — 매 라운드가 끝난 시점의 특정 구단 순위를 라운드
+ * 순서대로 나열한다. computeTable과 동일한 동점자 규칙을 그대로 재사용하도록,
+ * 라운드까지의 결과만으로 임시 SeasonState를 구성해 computeTable을 호출한다.
+ */
+export function positionHistory(
+  clubs: Club[], fixtures: Fixture[], results: MatchResult[], clubId: string,
+): number[] {
+  const totalRounds = fixtures.reduce((m, f) => Math.max(m, f.round), 0);
+  const history: number[] = [];
+  for (let round = 1; round <= totalRounds; round++) {
+    const upTo: MatchResult[] = [];
+    for (let i = 0; i < results.length && i < fixtures.length; i++) {
+      if (fixtures[i]!.round <= round) upTo.push(results[i]!);
+    }
+    if (upTo.length === 0) continue;
+    const table = computeTable({ clubs, fixtures, results: upTo, cursor: 0, baseSeed: 0 });
+    const pos = table.findIndex((r) => r.clubId === clubId) + 1;
+    if (pos > 0) history.push(pos);
+  }
+  return history;
+}

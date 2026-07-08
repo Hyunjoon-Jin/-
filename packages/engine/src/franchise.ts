@@ -214,6 +214,8 @@ export interface SeasonSummary {
   monthlyManagerAwards?: MonthlyManagerAward[];
   /** 이번 시즌 내 구단의 최장 연승·무패 기록(고도화 항목25, 앱 전용). */
   streaks?: StreakSummary;
+  /** 이번 시즌 라운드별 내 구단 순위 추이(고도화 항목26, 앱 전용) — 라운드 순서대로. */
+  positionHistory?: number[];
 }
 
 /** 유스 졸업생 동문 네트워크(신규 개선 항목 18) — 과거 우리 리저브 출신으로 1군

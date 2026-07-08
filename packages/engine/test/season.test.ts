@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { doubleRoundRobin } from '../src/schedule.js';
 import {
   createSeasonState, playRound, playNext, playToEnd, computeTable,
-  isSeasonOver, totalRounds, currentRound, tacticFor,
+  isSeasonOver, totalRounds, currentRound, tacticFor, positionHistory,
   type SeasonState,
 } from '../src/season.js';
 import { simulateSeason } from '../src/league.js';
@@ -10,6 +10,7 @@ import { generateClub, defaultTactic } from '../src/generate.js';
 import { recentForm } from '../src/form.js';
 import { Rng } from '../src/rng.js';
 import type { Club, MatchResult } from '../src/types.js';
+import type { Fixture } from '../src/schedule.js';
 
 /** computeTable에 필요한 필드만 채운 최소 가짜 결과(경기 시뮬레이션 없이 순위표 로직만 검증). */
 function fakeResult(homeId: string, awayId: string, score: [number, number]): MatchResult {
@@ -181,5 +182,36 @@ describe('tacticFor: AI 전술이 홈/원정 폼을 구분해 반영한다(고�
     const fixed = defaultTactic(clubA);
     const tactics = new Map([[clubA.id, fixed]]);
     expect(tacticFor(clubA, clubB, true, tactics, [])).toBe(fixed);
+  });
+});
+
+describe('positionHistory: 시즌 순위 추이 (고도화 항목26)', () => {
+  function fx(round: number, homeId: string, awayId: string): Fixture {
+    return { round, homeId, awayId };
+  }
+
+  it('라운드가 끝날 때마다 순위가 갱신되고, 최종 순위는 computeTable과 일치한다', () => {
+    const [a, b, c] = makeClubs(3, 200);
+    const fixtures: Fixture[] = [
+      fx(1, a.id, b.id), fx(1, c.id, a.id),
+      fx(2, b.id, c.id), fx(2, a.id, b.id),
+    ];
+    // A가 라운드1엔 이겨서 선두, 라운드2엔 져서 순위가 내려가는 시나리오.
+    const results: MatchResult[] = [
+      fakeResult(a.id, b.id, [2, 0]), // A 승
+      fakeResult(c.id, a.id, [0, 0]), // 무관 매치(다른 조합)
+      fakeResult(b.id, c.id, [1, 1]),
+      fakeResult(a.id, b.id, [0, 3]), // A 패
+    ];
+    const history = positionHistory([a, b, c], fixtures, results, a.id);
+    expect(history).toHaveLength(2);
+    const finalTable = computeTable({ clubs: [a, b, c], fixtures, results, cursor: 0, baseSeed: 0 });
+    const finalPos = finalTable.findIndex((r) => r.clubId === a.id) + 1;
+    expect(history[history.length - 1]).toBe(finalPos);
+  });
+
+  it('경기가 없으면 빈 배열', () => {
+    const [a, b] = makeClubs(2, 201);
+    expect(positionHistory([a, b], [], [], a.id)).toEqual([]);
   });
 });

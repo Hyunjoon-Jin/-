@@ -14,6 +14,8 @@ export function Stats({ game }: { game: GameState }) {
   const awards = live ? null : lastSummary(game)?.awards;
   const fairPlayTable = live ? null : lastSummary(game)?.fairPlayTable;
   const monthlyAwards = live ? null : lastSummary(game)?.monthlyManagerAwards;
+  const positionHistory = live ? null : lastSummary(game)?.positionHistory;
+  const divisionSize = live ? 0 : (lastSummary(game)?.table.length ?? 0);
   const heading = live ? `시즌 ${game.season} (진행 중)` : lastSummary(game) ? `시즌 ${lastSummary(game)!.season} 최종` : null;
 
   if (!heading) {
@@ -76,6 +78,13 @@ export function Stats({ game }: { game: GameState }) {
         </div>
       </div>
 
+      {positionHistory && positionHistory.length > 1 && divisionSize > 1 && (
+        <div>
+          <h3>📈 시즌 순위 추이</h3>
+          <PositionSparkline history={positionHistory} divisionSize={divisionSize} />
+        </div>
+      )}
+
       {fairPlayTable && fairPlayTable.length > 0 && (
         <div>
           <h3>🟨 페어플레이 순위</h3>
@@ -90,6 +99,43 @@ export function Stats({ game }: { game: GameState }) {
         </div>
       )}
     </div>
+  );
+}
+
+/** 시즌 라운드별 내 구단 순위 추이(고도화 항목26) — 1위가 위로 오도록 y축을 뒤집는다. */
+function PositionSparkline({ history, divisionSize }: { history: number[]; divisionSize: number }) {
+  const w = 320; const h = 64; const padX = 10; const padY = 10;
+  const n = history.length;
+  const x = (i: number) => padX + (i * (w - 2 * padX)) / (n - 1);
+  const y = (pos: number) => padY + ((pos - 1) * (h - 2 * padY)) / Math.max(1, divisionSize - 1);
+  const points = history.map((p, i) => `${x(i)},${y(p)}`).join(' ');
+  const bestPos = Math.min(...history);
+  const bestIdx = history.indexOf(bestPos);
+  const lastIdx = n - 1;
+  return (
+    <svg
+      viewBox={`0 0 ${w} ${h}`} width="100%" height={h} className="position-sparkline" role="img"
+      aria-label={`시즌 순위 추이(${divisionSize}개 구단 중): ${history.join(' → ')}위`}
+    >
+      <polyline
+        points={points} fill="none" stroke="var(--accent)" strokeWidth="2"
+        strokeLinecap="round" strokeLinejoin="round"
+      />
+      {history.map((p, i) => (
+        <circle
+          key={i} cx={x(i)} cy={y(p)} r={i === bestIdx || i === lastIdx ? 3.5 : 2}
+          fill={i === lastIdx ? 'var(--accent-2)' : 'var(--accent)'}
+        >
+          <title>{`${i + 1}R: ${p}위`}</title>
+        </circle>
+      ))}
+      <text x={x(0)} y={y(history[0]!) - 6} className="sparkline-label" textAnchor="start">
+        {history[0]}위
+      </text>
+      <text x={x(lastIdx)} y={y(history[lastIdx]!) - 6} className="sparkline-label" textAnchor="end">
+        최종 {history[lastIdx]}위
+      </text>
+    </svg>
   );
 }
 

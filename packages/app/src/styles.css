@@ -700,6 +700,9 @@ body {
 .stats-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
 .stats-cols h3 { margin-top: 0; }
 
+.position-sparkline { display: block; max-width: 420px; }
+.sparkline-label { font-size: 11px; font-weight: 700; fill: var(--muted); }
+
 .best-xi { margin-bottom: 20px; }
 .best-xi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
 .best-xi-card {
