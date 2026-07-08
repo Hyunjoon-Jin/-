@@ -84,7 +84,7 @@ export {
 export { runTransferWindow, AI_MAX_DEALS_PER_CLUB, type TransferDeal } from './transfer.js';
 export {
   createCup, playCupRound, playCupToEnd, isCupOver, cupSurvivors, nextCupPairings,
-  CUP_FINAL_ROUND_NAME, CUP_UPSET_REP_GAP, findCupUpsets,
+  CUP_FINAL_ROUND_NAME, CUP_SEMIFINAL_ROUND_NAME, CUP_UPSET_REP_GAP, findCupUpsets, cupTieAggregate,
   type CupState, type CupRound, type CupTie, type CupPairing, type NextCupRound, type CupUpsetEvent,
 } from './cup.js';
 export {

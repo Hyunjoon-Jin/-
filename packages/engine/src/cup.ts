@@ -1,8 +1,10 @@
 /**
  * 컵대회 (단판 녹아웃 토너먼트).
- * 리그와 병행. 매 라운드 생존 구단을 평판순 정렬해 상위-하위로 대진,
+ * 리그와 병행. 매 라운드 생존 구단을 시드 포트로 나눠 추첨식으로 대진,
  * 단판 승부(무승부는 승부차기=동전)로 승자를 가린다. 홀수면 최상위 시드 부전승.
- * 경기 인프라(simulateMatch)와 상태 변화(applyMatchEffects)를 재사용한다.
+ * twoLegKnockout이 설정된 컵(대륙컵)은 준결승·결승만 2레그 홈&어웨이 합산제로
+ * 진행한다(고도화 항목33). 경기 인프라(simulateMatch)와 상태 변화
+ * (applyMatchEffects)를 재사용한다.
  */
 import type { Club, MatchResult, Tactic } from './types.js';
 import { simulateMatchWithAiTactics } from './aiInMatch.js';
@@ -19,6 +21,12 @@ export interface CupTie {
   /** 승부차기로 결정됐는지. */
   penalties: boolean;
   winnerId: string;
+  /**
+   * 2레그(홈&어웨이 합산) 방식일 때만 존재 — 2차전 스코어(homeId/awayId 기준,
+   * 원정 다득점 규정 계산용). homeScore/awayScore는 항상 1차전 스코어를
+   * 나타낸다(고도화 항목33).
+   */
+  secondLeg?: { homeGoals: number; awayGoals: number };
 }
 
 export interface CupRound {
@@ -32,13 +40,19 @@ export interface CupState {
   rounds: CupRound[];
   baseSeed: number;
   championId: string | null;
+  /**
+   * true면 준결승·결승을 단판이 아닌 2레그(홈&어웨이 합산, 동률 시 원정 다득점
+   * 우선, 그래도 동률이면 승부차기)로 진행한다. 대륙컵 전용(고도화 항목33) —
+   * 국내컵은 지정하지 않아 기존과 동일한 단판 방식을 유지한다.
+   */
+  twoLegKnockout?: boolean;
 }
 
-export function createCup(clubs: Club[], baseSeed: number): CupState {
+export function createCup(clubs: Club[], baseSeed: number, twoLegKnockout?: boolean): CupState {
   const participantIds = [...clubs]
     .sort((a, b) => b.finance.reputation - a.finance.reputation)
     .map((c) => c.id);
-  return { participantIds, rounds: [], baseSeed, championId: null };
+  return { participantIds, rounds: [], baseSeed, championId: null, twoLegKnockout };
 }
 
 /**
@@ -65,6 +79,8 @@ export function cupSurvivors(cup: CupState): string[] {
 
 /** 결승 라운드 이름 — 문자열 리터럴을 여러 곳에 하드코딩하지 않도록 공유. */
 export const CUP_FINAL_ROUND_NAME = '결승';
+/** 준결승 라운드 이름 — 2레그 여부 판정(고도화 항목33)에도 사용. */
+export const CUP_SEMIFINAL_ROUND_NAME = '준결승';
 
 /**
  * 라운드 이름 — 이번 라운드 시작 시 생존자 수 기준, 결승까지 남은 라운드 수로
@@ -188,7 +204,10 @@ export function playCupRound(
   const byId = new Map(clubs.map((c) => [c.id, c]));
   const seedBase = cupSeedBase(cup);
   const ties: CupTie[] = [];
-  const isFinal = roundName(survivors.length) === CUP_FINAL_ROUND_NAME;
+  const thisRoundName = roundName(survivors.length);
+  const isFinal = thisRoundName === CUP_FINAL_ROUND_NAME;
+  const isTwoLeg = !!cup.twoLegKnockout
+    && (thisRoundName === CUP_FINAL_ROUND_NAME || thisRoundName === CUP_SEMIFINAL_ROUND_NAME);
 
   if (next.byeId) {
     ties.push({ homeId: next.byeId, awayId: null, homeScore: null, awayScore: null, penalties: false, winnerId: next.byeId });
@@ -199,7 +218,7 @@ export function playCupRound(
     const away = byId.get(pr.awayId)!;
     const homeTactic = tacticFor(home, away, true, isFinal, tactics);
     const awayTactic = tacticFor(away, home, false, isFinal, tactics);
-    const result =
+    const leg1 =
       watched && watched.homeClubId === pr.homeId && watched.awayClubId === pr.awayId
         ? watched
         : simulateMatchWithAiTactics({
@@ -208,23 +227,79 @@ export function playCupRound(
             seed: pr.seed,
             isBigMatch: isFinal,
           });
-    let winnerId: string;
-    let penalties = false;
-    if (result.score[0] > result.score[1]) winnerId = pr.homeId;
-    else if (result.score[1] > result.score[0]) winnerId = pr.awayId;
-    else {
-      penalties = true;
-      winnerId = new Rng(pr.seed + 500).roll(0.5) ? pr.homeId : pr.awayId;
-    }
-    applyMatchEffects(home, homeTactic, away, awayTactic, result,
+    applyMatchEffects(home, homeTactic, away, awayTactic, leg1,
       new Rng(seedBase * 2 + i + 7919));
-    ties.push({ homeId: pr.homeId, awayId: pr.awayId, homeScore: result.score[0], awayScore: result.score[1], penalties, winnerId });
+
+    if (!isTwoLeg) {
+      let winnerId: string;
+      let penalties = false;
+      if (leg1.score[0] > leg1.score[1]) winnerId = pr.homeId;
+      else if (leg1.score[1] > leg1.score[0]) winnerId = pr.awayId;
+      else {
+        penalties = true;
+        winnerId = new Rng(pr.seed + 500).roll(0.5) ? pr.homeId : pr.awayId;
+      }
+      ties.push({ homeId: pr.homeId, awayId: pr.awayId, homeScore: leg1.score[0], awayScore: leg1.score[1], penalties, winnerId });
+      return;
+    }
+
+    // 2차전 — 원정팀(away)이 홈에서 개최(고도화 항목33). 전술은 개최지 기준으로 다시 산정.
+    const leg2HomeTactic = tacticFor(away, home, true, isFinal, tactics);
+    const leg2AwayTactic = tacticFor(home, away, false, isFinal, tactics);
+    const leg2 = simulateMatchWithAiTactics({
+      home: { club: away, tactic: leg2HomeTactic },
+      away: { club: home, tactic: leg2AwayTactic },
+      seed: pr.seed + 5_000_011,
+      isBigMatch: isFinal,
+    });
+    applyMatchEffects(away, leg2HomeTactic, home, leg2AwayTactic, leg2,
+      new Rng(seedBase * 2 + i + 7919 + 5_000_013));
+
+    const secondLegHomeGoals = leg2.score[1]; // 원 홈팀이 2차전(원정)에서 넣은 골
+    const secondLegAwayGoals = leg2.score[0]; // 원 원정팀이 2차전(홈)에서 넣은 골
+    const { winnerId, penalties } = resolveTwoLegWinner(
+      leg1.score[0], leg1.score[1], secondLegHomeGoals, secondLegAwayGoals,
+      pr.homeId, pr.awayId, new Rng(pr.seed + 5_000_500),
+    );
+    ties.push({
+      homeId: pr.homeId, awayId: pr.awayId, homeScore: leg1.score[0], awayScore: leg1.score[1],
+      penalties, winnerId, secondLeg: { homeGoals: secondLegHomeGoals, awayGoals: secondLegAwayGoals },
+    });
   });
 
   const rounds = [...cup.rounds, { name: roundName(survivors.length), ties }];
   const newSurvivors = ties.map((t) => t.winnerId);
   const championId = newSurvivors.length === 1 ? newSurvivors[0]! : null;
   return { ...cup, rounds, championId };
+}
+
+/** 2레그 타이의 합계 스코어(homeId/awayId 기준). 단판이면 null(고도화 항목33). */
+export function cupTieAggregate(tie: CupTie): [number, number] | null {
+  if (!tie.secondLeg || tie.homeScore === null || tie.awayScore === null) return null;
+  return [tie.homeScore + tie.secondLeg.homeGoals, tie.awayScore + tie.secondLeg.awayGoals];
+}
+
+/**
+ * 2레그 타이의 승자 판정(순수 함수, 고도화 항목33). 합계 득점 우선, 동률이면
+ * 원정 다득점(홈팀은 2차전 원정 골, 원정팀은 1차전 원정 골) 우선, 그래도
+ * 동률이면 승부차기(동전 던지기).
+ */
+export function resolveTwoLegWinner(
+  leg1HomeGoals: number, leg1AwayGoals: number,
+  leg2HomeGoals: number, leg2AwayGoals: number,
+  homeId: string, awayId: string, penaltyRng: Rng,
+): { winnerId: string; penalties: boolean } {
+  const aggHome = leg1HomeGoals + leg2HomeGoals;
+  const aggAway = leg1AwayGoals + leg2AwayGoals;
+  if (aggHome > aggAway) return { winnerId: homeId, penalties: false };
+  if (aggAway > aggHome) return { winnerId: awayId, penalties: false };
+
+  const awayGoalsHome = leg2HomeGoals; // 홈팀이 원정(2차전)에서 넣은 골
+  const awayGoalsAway = leg1AwayGoals; // 원정팀이 원정(1차전)에서 넣은 골
+  if (awayGoalsHome > awayGoalsAway) return { winnerId: homeId, penalties: false };
+  if (awayGoalsAway > awayGoalsHome) return { winnerId: awayId, penalties: false };
+
+  return { winnerId: penaltyRng.roll(0.5) ? homeId : awayId, penalties: true };
 }
 
 /** 끝까지 진행(자동 완료). */

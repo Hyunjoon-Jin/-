@@ -755,6 +755,7 @@ body {
   padding: 0 3px; vertical-align: middle;
 }
 .tie-score { background: var(--panel-2); border-radius: 4px; padding: 1px 7px; font-weight: 700; font-size: 12px; white-space: nowrap; }
+.tie-legs { font-weight: 400; font-size: 10px; }
 .tie-card.bye { grid-template-columns: 1fr auto; }
 .tie-card.mine.win { background: #1f3a26; border-color: #2fa84f; }
 .tie-card.mine.loss { background: #3a2020; border-color: var(--color-danger); }

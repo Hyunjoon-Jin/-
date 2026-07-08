@@ -422,6 +422,7 @@ export function startSeason(state: GameState): GameState {
     ? createCup(
         continentalQualifierIds.map((id) => state.clubs.find((c) => c.id === id)!),
         state.seed + state.season * 1000 + 8,
+        true, // 고도화 항목33: 대륙컵은 준결승·결승만 2레그(홈&어웨이 합산)
       )
     : null;
   // 이적 창 마감 직후 스쿼드 기준 언론 예상 순위(시즌 내내 고정).
