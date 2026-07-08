@@ -17,7 +17,7 @@ import { applyLoanWageSubsidies, addOnConditionValue, MIN_SQUAD } from './transf
 import { applyFinancialControl, type FfpStage } from './financeControl.js';
 import {
   runInternationalBreak, runInternationalTournament, TOURNAMENT_INTERVAL_SEASONS, checkInternationalRetirements,
-  type InternationalRetirementEvent,
+  type InternationalRetirementEvent, type ClubTournamentHighlight,
 } from './international.js';
 import { simulateReserveSeason, type ReserveTableRow } from './reserveLeague.js';
 import { currentAbility } from './derived.js';
@@ -161,6 +161,9 @@ export interface SeasonSummary {
   /** 이번 시즌 비정기 국제대회(월드컵/유로급, C15)가 열렸다면 우승 국가. 참가 자격국 부족 시 null.
    *  값이 undefined면 이번 시즌엔 대회가 열리지 않고 정기 A매치 차출만 있었다는 뜻. */
   internationalTournamentChampion?: string | null;
+  /** 국제대회가 열린 시즌, 내 구단 소속 국가대표의 성적 하이라이트(고도화 항목31, 앱 전용) —
+   *  내 구단에 차출된 선수가 없으면 undefined. */
+  internationalTournamentHighlight?: ClubTournamentHighlight;
   /** 대륙컵 우승 구단(D17, 병행 대회 — 1부 상위 성적 구단만 참가). 앱 전용, 헤드리스엔 미설정. */
   continentalCupChampionId?: string;
   continentalCupChampionName?: string;

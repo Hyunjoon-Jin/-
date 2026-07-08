@@ -685,7 +685,18 @@ export function Dashboard({
                 </span></>
               )}
               {last.internationalTournamentChampion !== undefined && (
-                <> &nbsp;·&nbsp; 🌍 국제대회 우승: <b>{last.internationalTournamentChampion ?? '무산(참가국 부족)'}</b></>
+                <> &nbsp;·&nbsp; 🌍 국제대회 우승: <b>{last.internationalTournamentChampion ?? '무산(참가국 부족)'}</b>
+                  {last.internationalTournamentHighlight && (
+                    <span className="muted small">
+                      {' '}(우리 구단 국가대표 소속국: {last.internationalTournamentHighlight.myNations.join(', ')}
+                      {last.internationalTournamentHighlight.won
+                        ? ' · 🏆 우승에 기여!'
+                        : last.internationalTournamentHighlight.furthestRoundName
+                          ? ` · ${last.internationalTournamentHighlight.furthestRoundName}에서 탈락`
+                          : ''})
+                    </span>
+                  )}
+                </>
               )}
               {last.nationalCallUps !== undefined && last.nationalCallUps > 0 && (
                 <> &nbsp;·&nbsp; 🎽 국가대표 차출: <b>{last.nationalCallUps}명</b>

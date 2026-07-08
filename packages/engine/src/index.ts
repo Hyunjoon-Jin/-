@@ -96,8 +96,10 @@ export {
 export {
   selectCallUps, runInternationalBreak, runInternationalTournament, TOURNAMENT_INTERVAL_SEASONS,
   checkInternationalRetirements, internationalRetireChance, INTL_RETIRE_MIN_AGE, INTL_RETIRE_MIN_CAPS,
+  clubTournamentHighlight,
   type CallUp, type InternationalResult, type InternationalTournamentResult,
   type TournamentRound, type TournamentTie, type InternationalRetirementEvent,
+  type ClubTournamentHighlight,
 } from './international.js';
 export {
   START_CONFIDENCE, SACK_THRESHOLD, confidenceDelta, applyConfidence,

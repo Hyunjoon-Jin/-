@@ -25,6 +25,7 @@ import {
   CUP_FINAL_ROUND_NAME, findCupUpsets,
   applyPromotionRelegation, clubsInDivision, runInternationalBreak,
   runInternationalTournament, TOURNAMENT_INTERVAL_SEASONS, checkInternationalRetirements,
+  clubTournamentHighlight, type ClubTournamentHighlight,
   confidenceDelta, applyConfidence, isSacked, START_CONFIDENCE, boardStatus, boardTierUpgradeBonus,
   boldPredictionTarget, evaluateBoldPrediction, type BoldPredictionResult,
   crossedLongTermProjectMilestone, longTermProjectBonus,
@@ -714,10 +715,12 @@ export function finishSeason(state: GameState): GameState {
   const isTournamentSeason = state.season % TOURNAMENT_INTERVAL_SEASONS === 0;
   let intl: { byClub: Map<string, number> };
   let internationalTournamentChampion: string | null | undefined;
+  let internationalTournamentHighlight: ClubTournamentHighlight | undefined;
   if (isTournamentSeason) {
     const tournament = runInternationalTournament(state.clubs, new Rng(offseasonSeed(state) + 777));
     intl = tournament;
     internationalTournamentChampion = tournament.championNation;
+    internationalTournamentHighlight = clubTournamentHighlight(tournament, state.myClubId);
   } else {
     intl = runInternationalBreak(state.clubs, new Rng(offseasonSeed(state) + 777));
   }
@@ -918,6 +921,7 @@ export function finishSeason(state: GameState): GameState {
     nationalCallUps: myCallUps,
     nationalInjuries: myIntlInjuries,
     internationalTournamentChampion,
+    internationalTournamentHighlight,
     demand: demandResult,
     squad: mySquad,
     milestones: myMilestones,
