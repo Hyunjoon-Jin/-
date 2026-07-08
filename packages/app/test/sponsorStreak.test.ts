@@ -3,7 +3,10 @@ import { startGame, advanceFullSeason } from '../src/game.js';
 
 describe('시즌 요약: 스폰서 목표 연속 달성 스트릭 (C-new2)', () => {
   it('목표를 달성한 시즌에는 sponsorStreak이 늘고, 실패하면 0으로 리셋된다', () => {
-    let g = startGame(2026, 'c0');
+    // 시드 2026은 고도화 항목28(피로 연동 부상 위험)이 반영된 이후 이 구단이 15시즌
+    // 내내 부상 누적으로 전력이 처져 스폰서 목표를 한 번도 달성하지 못하는 경로로
+    // 바뀌었다 — 스트릭 증가/리셋 자체를 볼 수 없는 시드라 검증 목적에 맞는 시드로 교체.
+    let g = startGame(2028, 'c0');
     let sawIncrease = false;
     let sawReset = false;
     let prevStreak = g.sponsorStreak ?? 0;

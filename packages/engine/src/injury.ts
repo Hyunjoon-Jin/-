@@ -72,6 +72,26 @@ export function reinjuryRiskFactor(remaining?: number): number {
 /** 복귀 후 부상 부위 연관 능력치가 회복될 때까지 걸리는 경기 수. */
 export const RECOVERY_ATTR_WINDOW = 4;
 
+// ── 피로 연동 부상 위험(고도화 항목28) ──────────────────────
+// 지금까지는 컨디션(피로)이 아무리 낮아도 부상 확률이 전혀 달라지지 않았다 —
+// 지친 선수와 팔팔한 선수가 부상 위험 면에서 동일했던 셈. 이 구간 이하로
+// 피로가 쌓이면 위험이 최대 배율까지 선형으로 커지도록 보정한다.
+
+/** matchEffects.ts TUNING.minCondition(컨디션 하한)과 같은 값 — 순수 조회 함수인
+ *  이 파일이 matchEffects를 import하지 않도록 상수만 동일하게 맞춘다. */
+const CONDITION_FLOOR = 0.35;
+/** 이 컨디션 이상이면 피로로 인한 추가 부상 위험이 없다. */
+const FATIGUE_RISK_THRESHOLD = 0.7;
+/** 컨디션이 하한까지 떨어졌을 때의 최대 배율. */
+const FATIGUE_RISK_MAX_MUL = 2;
+
+/** 컨디션(0~1) → 부상 확률 배율. 임계값 이상이면 1(영향 없음), 하한에 가까울수록 최대 배율까지 선형 증가. */
+export function fatigueRiskFactor(condition: number): number {
+  if (condition >= FATIGUE_RISK_THRESHOLD) return 1;
+  const ratio = (FATIGUE_RISK_THRESHOLD - condition) / (FATIGUE_RISK_THRESHOLD - CONDITION_FLOOR);
+  return 1 + (FATIGUE_RISK_MAX_MUL - 1) * clamp(ratio, 0, 1);
+}
+
 /** 의료 레벨(1~20)에 따른 원시 배율 편향(10=1.0, 20≈0.7, 1≈1.27) — 회복 기간·
  *  부상 발생 확률 계수가 공유하는 베이스 공식. 호출부마다 다른 범위로 clamp한다. */
 export function medicalBias(medical: number): number {
@@ -139,7 +159,8 @@ export function predictedInjuryRiskPerMatch(player: Player, medical: number, tra
   const traitMul = hasTrait(player, 'ironMan') ? 0.5 : hasTrait(player, 'injuryProne') ? 1.7 : 1;
   const trainingMul = player.trainingFocus === 'conditioning' ? 0.85 : 1;
   const reinjuryMul = reinjuryRiskFactor(player.reinjuryRiskMatches);
-  return TUNING.injuryTriggerChance * medFactor * facilityFactor * traitMul * trainingMul * reinjuryMul;
+  const fatigueMul = fatigueRiskFactor(player.condition);
+  return TUNING.injuryTriggerChance * medFactor * facilityFactor * traitMul * trainingMul * reinjuryMul * fatigueMul;
 }
 
 export interface InjuryRiskEntry {

@@ -17,7 +17,7 @@ import { Rng } from './rng.js';
 import { clamp, logistic } from './math.js';
 import { TUNING } from './tuning.js';
 import { hasTrait } from './traits.js';
-import { rollInjury, medicalBias, reinjuryRiskFactor } from './injury.js';
+import { rollInjury, medicalBias, reinjuryRiskFactor, fatigueRiskFactor } from './injury.js';
 import { effectiveMedical } from './staffActions.js';
 import { trainingGroundInjuryFactor } from './finance.js';
 import {
@@ -418,7 +418,9 @@ export function generateInjuries(ctx: MatchContext): InjuryEvent[] {
       const trainingMul = p.trainingFocus === 'conditioning' ? 0.85 : 1;
       // 복귀 직후 재부상 위험 구간(REINJURY_RISK_WINDOW 경기) — 구간이 끝나갈수록 1.0으로 감쇠.
       const reinjuryMul = reinjuryRiskFactor(p.reinjuryRiskMatches);
-      const injMul = traitMul * trainingMul * reinjuryMul;
+      // 지친(컨디션 낮은) 선수는 부상 위험이 더 크다(고도화 항목28).
+      const fatigueMul = fatigueRiskFactor(p.condition);
+      const injMul = traitMul * trainingMul * reinjuryMul * fatigueMul;
       if (!rng.roll(TUNING.injuryTriggerChance * medFactor * facilityFactor * injMul)) continue;
       const inj = rollInjury(rng, medical);
       injuries.push({

@@ -15,7 +15,7 @@ export { applyMatchEffects } from './matchEffects.js';
 export { decideAiHalftimeTactic, simulateMatchWithAiTactics } from './aiInMatch.js';
 export {
   rollInjury, SEVERITY_LABEL, type Injury, type InjurySeverity, type BodyPart,
-  REINJURY_RISK_WINDOW, RECOVERY_ATTR_WINDOW, reinjuryRiskFactor,
+  REINJURY_RISK_WINDOW, RECOVERY_ATTR_WINDOW, reinjuryRiskFactor, fatigueRiskFactor,
   predictedInjuryRiskPerMatch, buildInjuryRiskReport, injuryRiskTier,
   buildInjuryRecoveryReport,
   type InjuryRiskTier, type InjuryRiskEntry, type InjuryRecoveryStatus,

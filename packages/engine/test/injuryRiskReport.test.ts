@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  predictedInjuryRiskPerMatch, buildInjuryRiskReport, injuryRiskTier,
+  predictedInjuryRiskPerMatch, buildInjuryRiskReport, injuryRiskTier, fatigueRiskFactor,
 } from '../src/injury.js';
 import { generateClub } from '../src/generate.js';
 import { Rng } from '../src/rng.js';
@@ -86,5 +86,28 @@ describe('신규 개선 항목 20: 의료진 부상 예측 리포트', () => {
     expect(entry.isInjuryProne).toBe(true);
     expect(entry.isIronMan).toBe(false);
     expect(entry.reinjuryWindowRemaining).toBe(3);
+  });
+
+  it('컨디션이 임계값(0.7) 이상이면 피로로 인한 위험 배율이 없다(고도화 항목28)', () => {
+    expect(fatigueRiskFactor(1)).toBe(1);
+    expect(fatigueRiskFactor(0.7)).toBe(1);
+  });
+
+  it('컨디션이 낮을수록 위험 배율이 선형으로 커지고, 하한(0.35)에서 최대 배율이다', () => {
+    const mid = fatigueRiskFactor(0.525); // 0.7과 0.35의 중간
+    expect(mid).toBeGreaterThan(1);
+    expect(mid).toBeLessThan(2);
+    expect(fatigueRiskFactor(0.35)).toBeCloseTo(2, 5);
+    expect(fatigueRiskFactor(0.2)).toBeCloseTo(2, 5); // 하한 밑이어도 배율은 그대로 clamp
+  });
+
+  it('지친(컨디션 낮은) 선수는 예측 부상 확률이 더 높다', () => {
+    const club = makeClub();
+    const p = club.players[0]!;
+    p.condition = 1;
+    const fresh = predictedInjuryRiskPerMatch(p, 10);
+    p.condition = 0.35;
+    const tired = predictedInjuryRiskPerMatch(p, 10);
+    expect(tired).toBeGreaterThan(fresh);
   });
 });
