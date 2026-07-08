@@ -42,6 +42,34 @@ export interface SeasonAwards {
   goldenGlove?: { playerId: string; name: string; clubName: string; cleanSheets: number };
   /** 시즌 베스트 XI(GK 1 · DEF 4 · MID 3 · ATT 3, 최소 출전 이상 중 라인별 평균 평점 최고). */
   bestXI?: BestXIEntry[];
+  /** 시즌 최다 맨오브더매치(고도화 항목38). */
+  mostMotm?: { playerId: string; name: string; clubName: string; count: number };
+}
+
+export interface MotmTallyEntry {
+  playerId: string;
+  name: string;
+  clubName: string;
+  count: number;
+}
+
+/**
+ * 시즌 맨오브더매치 집계(고도화 항목38) — 경기마다 이미 계산되는
+ * MatchResult.motmPlayerId를 선수별로 세어 내림차순 정렬한다(동률이면 이름순으로
+ * 결정론적으로 정렬).
+ */
+export function motmTally(results: MatchResult[]): MotmTallyEntry[] {
+  const map = new Map<string, MotmTallyEntry>();
+  for (const r of results) {
+    if (!r.motmPlayerId) continue;
+    const stat = [...r.playerStats.home, ...r.playerStats.away].find((s) => s.playerId === r.motmPlayerId);
+    if (!stat) continue;
+    const clubName = r.playerStats.home.includes(stat) ? r.homeClubName : r.awayClubName;
+    let e = map.get(r.motmPlayerId);
+    if (!e) { e = { playerId: r.motmPlayerId, name: stat.name, clubName, count: 0 }; map.set(r.motmPlayerId, e); }
+    e.count++;
+  }
+  return [...map.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
 }
 
 interface Acc {
@@ -371,7 +399,9 @@ export function summarizeStats(results: MatchResult[], totalRounds: number): {
 } {
   const stats = aggregatePlayerStats(results);
   const minApps = Math.max(1, Math.floor(totalRounds / 2));
-  return { topScorers: topScorers(stats, 10), awards: seasonAwards(stats, minApps) };
+  const awards = seasonAwards(stats, minApps);
+  const mostMotm = motmTally(results)[0];
+  return { topScorers: topScorers(stats, 10), awards: mostMotm ? { ...awards, mostMotm } : awards };
 }
 
 export interface CareerStat {

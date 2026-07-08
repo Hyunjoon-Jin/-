@@ -25,10 +25,10 @@ export {
 export {
   aggregatePlayerStats, topScorers, topAssists, playerOfSeason, seasonAwards, summarizeStats,
   careerScorers, recentPlayerForm, seasonSquadSnapshot, goldenGlove, bestXI, clubDisciplineTable,
-  monthlyManagerAwards, monthlyPlayerAwards, longestStreaks, biggestWinMargin,
+  monthlyManagerAwards, monthlyPlayerAwards, motmTally, longestStreaks, biggestWinMargin,
   type PlayerSeasonStat, type SeasonAwards, type CareerStat, type PlayerFormEntry,
   type SeasonSquadEntry, type BestXIEntry, type ClubDisciplineRow, type MonthlyManagerAward,
-  type MonthlyPlayerAward, type StreakSummary, type BiggestWin,
+  type MonthlyPlayerAward, type MotmTallyEntry, type StreakSummary, type BiggestWin,
 } from './stats.js';
 export {
   generateClub, generateYouthPlayer, defaultTactic, FORMATION_433, type TacticContext,

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   aggregatePlayerStats, topScorers, seasonAwards, summarizeStats, careerScorers, recentPlayerForm,
-  seasonSquadSnapshot, clubDisciplineTable, monthlyManagerAwards, monthlyPlayerAwards,
+  seasonSquadSnapshot, clubDisciplineTable, monthlyManagerAwards, monthlyPlayerAwards, motmTally,
   longestStreaks, biggestWinMargin,
 } from '../src/stats.js';
 import { simulateSeason } from '../src/league.js';
@@ -60,6 +60,13 @@ describe('stats: 시즌 통계 집계', () => {
     const { topScorers: ts, awards } = summarizeStats(matches, 14);
     expect(ts.length).toBeLessThanOrEqual(10);
     expect(awards).toBeDefined();
+  });
+
+  it('summarizeStats의 어워드에 시즌 최다 MOTM(mostMotm)이 포함된다(고도화 항목38)', () => {
+    const { matches } = season(77);
+    const { awards } = summarizeStats(matches, 14);
+    expect(awards.mostMotm).toBeDefined();
+    expect(awards.mostMotm!.count).toBeGreaterThan(0);
   });
 });
 
@@ -325,6 +332,44 @@ describe('stats: 이달의 선수 (고도화 항목37)', () => {
 
   it('경기 결과가 없으면 빈 배열', () => {
     expect(monthlyPlayerAwards([], [], 4, 2)).toEqual([]);
+  });
+});
+
+describe('stats: 시즌 MOTM 집계 (고도화 항목38)', () => {
+  it('경기별 motmPlayerId 횟수를 세어 내림차순으로 정렬한다', () => {
+    const results: MatchResult[] = [
+      mkResult({
+        homeClubId: 'a', awayClubId: 'b', homeClubName: 'A', awayClubName: 'B',
+        playerStats: { home: [mkPlayerStat('p1', 'P1', 9)], away: [mkPlayerStat('p2', 'P2', 5)] },
+        motmPlayerId: 'p1',
+      }),
+      mkResult({
+        homeClubId: 'a', awayClubId: 'b', homeClubName: 'A', awayClubName: 'B',
+        playerStats: { home: [mkPlayerStat('p1', 'P1', 9)], away: [mkPlayerStat('p2', 'P2', 5)] },
+        motmPlayerId: 'p1',
+      }),
+      mkResult({
+        homeClubId: 'a', awayClubId: 'b', homeClubName: 'A', awayClubName: 'B',
+        playerStats: { home: [mkPlayerStat('p1', 'P1', 5)], away: [mkPlayerStat('p2', 'P2', 9)] },
+        motmPlayerId: 'p2',
+      }),
+    ];
+    const tally = motmTally(results);
+    expect(tally).toEqual([
+      { playerId: 'p1', name: 'P1', clubName: 'A', count: 2 },
+      { playerId: 'p2', name: 'P2', clubName: 'B', count: 1 },
+    ]);
+  });
+
+  it('motmPlayerId가 없는 경기는 집계에서 제외된다', () => {
+    const results: MatchResult[] = [
+      mkResult({ playerStats: { home: [mkPlayerStat('p1', 'P1', 5)], away: [] } }),
+    ];
+    expect(motmTally(results)).toEqual([]);
+  });
+
+  it('경기 결과가 없으면 빈 배열', () => {
+    expect(motmTally([])).toEqual([]);
   });
 });
 
