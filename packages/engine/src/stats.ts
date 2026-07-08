@@ -6,6 +6,7 @@
 import type { Club, MatchResult, Position, Tactic } from './types.js';
 import { lineOf } from './teamStrength.js';
 import type { Fixture } from './schedule.js';
+import type { Weather } from './weather.js';
 
 export interface PlayerSeasonStat {
   playerId: string;
@@ -390,6 +391,38 @@ export function biggestWinMargin(results: MatchResult[], clubId: string): Bigges
     }
   }
   return best;
+}
+
+export interface WeatherRecordRow {
+  weather: Weather;
+  wins: number;
+  draws: number;
+  losses: number;
+}
+
+/**
+ * 특정 구단의 시즌 내 날씨별 전적(고도화 항목40) — 맑음/비/강풍 각각의 승무패.
+ * weather가 없는(구버전) 경기는 집계에서 제외한다. 경기 수가 0인 날씨는 결과에서 생략.
+ */
+export function weatherRecordByClub(results: MatchResult[], clubId: string): WeatherRecordRow[] {
+  const tally = new Map<Weather, { wins: number; draws: number; losses: number }>();
+  for (const r of results) {
+    if (!r.weather) continue;
+    const isHome = r.homeClubId === clubId;
+    const isAway = r.awayClubId === clubId;
+    if (!isHome && !isAway) continue;
+    const gf = isHome ? r.score[0] : r.score[1];
+    const ga = isHome ? r.score[1] : r.score[0];
+    let row = tally.get(r.weather);
+    if (!row) { row = { wins: 0, draws: 0, losses: 0 }; tally.set(r.weather, row); }
+    if (gf > ga) row.wins++;
+    else if (gf === ga) row.draws++;
+    else row.losses++;
+  }
+  const order: Weather[] = ['clear', 'rain', 'windy'];
+  return order
+    .filter((w) => tally.has(w))
+    .map((w) => ({ weather: w, ...tally.get(w)! }));
 }
 
 /** clubs 인자는 향후 확장용(현재는 결과만으로 충분). */

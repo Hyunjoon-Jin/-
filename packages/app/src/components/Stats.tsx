@@ -4,7 +4,9 @@ import {
 } from '../game.js';
 import type {
   PlayerSeasonStat, BestXIEntry, ClubDisciplineRow, MonthlyManagerAward, MonthlyPlayerAward,
+  WeatherRecordRow,
 } from '@soccer-tycoon/engine';
+import { WEATHER_LABEL } from '@soccer-tycoon/engine';
 import { ratingClass } from '../rating.js';
 import { EmptyState } from './EmptyState.js';
 
@@ -18,6 +20,7 @@ export function Stats({ game }: { game: GameState }) {
   const monthlyAwards = live ? null : lastSummary(game)?.monthlyManagerAwards;
   const monthlyPlayerAwards = live ? null : lastSummary(game)?.monthlyPlayerAwards;
   const positionHistory = live ? null : lastSummary(game)?.positionHistory;
+  const weatherRecord = live ? null : lastSummary(game)?.weatherRecord;
   const divisionSize = live ? 0 : (lastSummary(game)?.table.length ?? 0);
   const heading = live ? `시즌 ${game.season} (진행 중)` : lastSummary(game) ? `시즌 ${lastSummary(game)!.season} 최종` : null;
 
@@ -115,7 +118,35 @@ export function Stats({ game }: { game: GameState }) {
           <MonthlyPlayerSection awards={monthlyPlayerAwards} myClubId={game.myClubId} />
         </div>
       )}
+
+      {weatherRecord && weatherRecord.length > 0 && (
+        <div>
+          <h3>🌦️ 날씨별 전적</h3>
+          <WeatherRecordTable rows={weatherRecord} />
+        </div>
+      )}
     </div>
+  );
+}
+
+/** 날씨별 전적(고도화 항목40) — 맑음/비/강풍 각각의 승무패. */
+function WeatherRecordTable({ rows }: { rows: WeatherRecordRow[] }) {
+  return (
+    <table className="data-table compact">
+      <thead>
+        <tr><th>날씨</th><th>승</th><th>무</th><th>패</th></tr>
+      </thead>
+      <tbody>
+        {rows.map((r) => (
+          <tr key={r.weather}>
+            <td>{WEATHER_LABEL[r.weather]}</td>
+            <td>{r.wins}</td>
+            <td>{r.draws}</td>
+            <td>{r.losses}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
 

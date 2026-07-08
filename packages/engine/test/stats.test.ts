@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   aggregatePlayerStats, topScorers, seasonAwards, summarizeStats, careerScorers, recentPlayerForm,
   seasonSquadSnapshot, clubDisciplineTable, monthlyManagerAwards, monthlyPlayerAwards, motmTally,
-  longestStreaks, biggestWinMargin,
+  longestStreaks, biggestWinMargin, weatherRecordByClub,
 } from '../src/stats.js';
 import { simulateSeason } from '../src/league.js';
 import { generateClub, defaultTactic } from '../src/generate.js';
@@ -435,5 +435,43 @@ describe('stats: 최다 득점차 승리 기록 (고도화 항목27)', () => {
     ];
     expect(biggestWinMargin(results, 'a')).toBeUndefined();
     expect(biggestWinMargin([], 'a')).toBeUndefined();
+  });
+});
+
+describe('stats: 날씨별 전적 (고도화 항목40)', () => {
+  it('구단의 경기를 날씨별로 승무패 집계한다', () => {
+    const results: MatchResult[] = [
+      mkResult({ homeClubId: 'a', awayClubId: 'x', score: [2, 0], weather: 'clear' }), // W(맑음)
+      mkResult({ homeClubId: 'x', awayClubId: 'a', score: [1, 1], weather: 'clear' }), // D(맑음, 원정)
+      mkResult({ homeClubId: 'a', awayClubId: 'x', score: [0, 1], weather: 'rain' }), // L(비)
+      mkResult({ homeClubId: 'a', awayClubId: 'x', score: [3, 0], weather: 'rain' }), // W(비)
+      mkResult({ homeClubId: 'a', awayClubId: 'x', score: [1, 0], weather: 'windy' }), // W(강풍)
+    ];
+    expect(weatherRecordByClub(results, 'a')).toEqual([
+      { weather: 'clear', wins: 1, draws: 1, losses: 0 },
+      { weather: 'rain', wins: 1, draws: 0, losses: 1 },
+      { weather: 'windy', wins: 1, draws: 0, losses: 0 },
+    ]);
+  });
+
+  it('weather가 없는 경기(구버전 세이브)는 집계에서 제외한다', () => {
+    const results: MatchResult[] = [
+      mkResult({ homeClubId: 'a', awayClubId: 'x', score: [2, 0] }), // weather 미설정
+    ];
+    expect(weatherRecordByClub(results, 'a')).toEqual([]);
+  });
+
+  it('경기가 없는 날씨는 결과 배열에서 생략한다', () => {
+    const results: MatchResult[] = [
+      mkResult({ homeClubId: 'a', awayClubId: 'x', score: [1, 0], weather: 'clear' }),
+    ];
+    expect(weatherRecordByClub(results, 'a')).toEqual([{ weather: 'clear', wins: 1, draws: 0, losses: 0 }]);
+  });
+
+  it('해당 구단이 참여하지 않은 경기는 제외한다', () => {
+    const results: MatchResult[] = [
+      mkResult({ homeClubId: 'x', awayClubId: 'y', score: [1, 0], weather: 'rain' }),
+    ];
+    expect(weatherRecordByClub(results, 'a')).toEqual([]);
   });
 });
