@@ -1018,6 +1018,7 @@ export function finishSeason(state: GameState): GameState {
     boldPrediction: boldPredictionResult,
     watchlistContractAlerts: watchlistContractAlerts.length > 0 ? watchlistContractAlerts : undefined,
     cupUpsets: myCupUpsets.length > 0 ? myCupUpsets : undefined,
+    boardConfidenceAfter: boardConfidence,
   };
 
   const repaired = repairTactic(myClub(state), myTactic(state));

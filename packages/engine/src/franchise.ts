@@ -224,6 +224,9 @@ export interface SeasonSummary {
   positionHistory?: number[];
   /** 이번 시즌 내 구단의 최다 득점차 승리(고도화 항목27, 앱 전용). 승리가 없으면 undefined. */
   biggestWin?: BiggestWin;
+  /** 이번 시즌 종료 시점의 이사회 신뢰도(고도화 항목39, 앱 전용) — 감독 재임 전체의
+   *  신뢰도 추이 스파크라인에 쓰인다. */
+  boardConfidenceAfter?: number;
 }
 
 /** 유스 졸업생 동문 네트워크(신규 개선 항목 18) — 과거 우리 리저브 출신으로 1군

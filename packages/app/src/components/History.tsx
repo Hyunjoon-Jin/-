@@ -64,6 +64,10 @@ export function History({ game }: { game: GameState }) {
   const titleTable = [...titleCount.values()].sort((a, b) => b.count - a.count || a.division - b.division);
 
   const leaders = careerScorers(game.clubs, 15);
+  // 이사회 신뢰도 추이(고도화 항목39) — 값이 없는 구버전 세이브 시즌은 건너뛴다.
+  const boardConfidenceHistory = seasons
+    .map((s) => s.boardConfidenceAfter)
+    .filter((v): v is number => v !== undefined);
 
   const [squadSeason, setSquadSeason] = useState<
     { s: HistorySeason; leagueWon: boolean; cupWon: boolean } | null
@@ -122,6 +126,12 @@ export function History({ game }: { game: GameState }) {
       {activeTab === 'seasons' && (
         <div>
           <h3>역대 시즌</h3>
+          {boardConfidenceHistory.length > 1 && (
+            <div className="board-confidence-trend">
+              <div className="sparkline-title muted small">이사회 신뢰도 추이(재임 전체)</div>
+              <BoardConfidenceSparkline values={boardConfidenceHistory} />
+            </div>
+          )}
           <table className="data-table compact">
             <thead>
               <tr><th>시즌</th><th>부</th><th>리그 우승</th><th>컵 우승</th><th>득점왕</th><th>내 순위</th><th>이사회 요구</th><th>스폰서 목표</th><th></th></tr>
@@ -316,6 +326,42 @@ export function History({ game }: { game: GameState }) {
         />
       )}
     </div>
+  );
+}
+
+/** 이사회 신뢰도 추이 스파크라인(고도화 항목39) — 감독 재임 전체 시즌 순서대로,
+ *  0~100 고정 스케일(값이 높을수록 위로). */
+function BoardConfidenceSparkline({ values }: { values: number[] }) {
+  const w = 320; const h = 64; const padX = 10; const padY = 10;
+  const n = values.length;
+  const x = (i: number) => padX + (i * (w - 2 * padX)) / Math.max(1, n - 1);
+  const y = (v: number) => padY + ((100 - v) * (h - 2 * padY)) / 100;
+  const points = values.map((v, i) => `${x(i)},${y(v)}`).join(' ');
+  const lastIdx = n - 1;
+  return (
+    <svg
+      viewBox={`0 0 ${w} ${h}`} width="100%" height={h} className="position-sparkline" role="img"
+      aria-label={`이사회 신뢰도 추이: ${values.join(' → ')}`}
+    >
+      <polyline
+        points={points} fill="none" stroke="var(--accent)" strokeWidth="2"
+        strokeLinecap="round" strokeLinejoin="round"
+      />
+      {values.map((v, i) => (
+        <circle
+          key={i} cx={x(i)} cy={y(v)} r={i === lastIdx ? 3.5 : 2}
+          fill={i === lastIdx ? 'var(--accent-2)' : 'var(--accent)'}
+        >
+          <title>{`시즌 ${i + 1}: 신뢰도 ${v}`}</title>
+        </circle>
+      ))}
+      <text x={x(0)} y={y(values[0]!) - 6} className="sparkline-label" textAnchor="start">
+        {values[0]}
+      </text>
+      <text x={x(lastIdx)} y={y(values[lastIdx]!) - 6} className="sparkline-label" textAnchor="end">
+        최종 {values[lastIdx]}
+      </text>
+    </svg>
   );
 }
 
