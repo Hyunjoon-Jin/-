@@ -89,9 +89,10 @@ function shooterWeight(p: Player, att: Side, def: Side): number {
   return w;
 }
 
-function pickShooter(att: Side, def: Side, rng: Rng, chance: ChanceType): Player | null {
-  const available = att.club.players.filter(isAvailable);
-  const pool = att.attackers.length > 0 ? att.attackers : available;
+function pickShooter(att: Side, def: Side, rng: Rng, chance: ChanceType, sentOff: Set<string>): Player | null {
+  const available = att.club.players.filter((p) => isAvailable(p) && !sentOff.has(p.id));
+  const attackersOnField = att.attackers.filter((p) => !sentOff.has(p.id));
+  const pool = attackersOnField.length > 0 ? attackersOnField : available;
   if (pool.length === 0) return null;
   if (chance === 'setpiece' && att.tactic.setPieceTakerId) {
     const taker = pool.find((p) => p.id === att.tactic.setPieceTakerId);
@@ -170,6 +171,9 @@ export interface MatchContext {
   /** 부상 판정(킥오프 시점 라인업 기준, 고정). 하프타임/긴급 교체로도 바뀌지 않는다 —
    *  라이브 관전 중 노출한 예정 스케줄과 최종 결과가 항상 일치해야 하기 때문. */
   injuries: InjuryEvent[];
+  /** 카드 판정(킥오프 시점 라인업 기준, 고정 — 부상과 동일 패턴). 레드카드는 stepMinute이
+   *  그 분(minute)부터 실시간으로 참조해 인원수 열세를 전력에 반영한다(고도화 항목41). */
+  cards: CardEvent[];
   /** 이번 경기 동안 실제로 라인업에 있었던 전원(킥오프 + 하프타임 교체로 들어온 선수 누적,
    *  선수 id 기준 중복 제거). 카드·최종 평점은 "최종 라인업"이 아니라 이 목록 기준으로
    *  집계해야, 전반에 뛰다 하프타임에 교체된 선수도 정당하게 카드·평점 대상이 되고
@@ -200,11 +204,15 @@ export function createContext(setup: MatchSetup): MatchContext {
     pPossHome: 0.5,
     seed: setup.seed,
     injuries: [],
+    cards: [],
     playedLineups: { home: [...setup.home.tactic.lineup], away: [...setup.away.tactic.lineup] },
     isBigMatch,
     weather,
   };
   ctx.injuries = generateInjuries(ctx);
+  // 카드도 부상과 마찬가지로 킥오프 라인업 기준 고정 — 이 시점의 playedLineups는 아직
+  // 하프타임 교체가 반영되기 전이라 자연히 선발 XI만 대상이 된다.
+  ctx.cards = generateCards(ctx);
   recomputePossession(ctx);
   return ctx;
 }
@@ -258,16 +266,33 @@ function pickWeighted<T>(items: T[], weight: (t: T) => number, rng: Rng): T | nu
 }
 
 /** 득점 시 어시스트 제공자 선정 — 시야·패스가 좋을수록, 플레이메이커 특성이 있으면 가중. */
-function pickAssister(att: Side, shooter: Player, chance: ChanceType, rng: Rng): Player | null {
+function pickAssister(att: Side, shooter: Player, chance: ChanceType, rng: Rng, sentOff: Set<string>): Player | null {
   if (!rng.roll(ASSIST_CHANCE[chance])) return null;
   const pool = att.club.players.filter(
-    (p) => isAvailable(p) && p.position !== 'GK' && p.id !== shooter.id,
+    (p) => isAvailable(p) && p.position !== 'GK' && p.id !== shooter.id && !sentOff.has(p.id),
   );
   return pickWeighted(
     pool,
     (p) => 1 + (p.attributes.vision + p.attributes.passing) / 10 + (hasTrait(p, 'playmaker') ? 2 : 0),
     rng,
   );
+}
+
+/** 레드카드 1장당 팀 전력(공격·창조력·수비) 배율(고도화 항목41) — 인원수 열세를
+ *  단순화해 균일 배율로 반영한다. 드물게 2장 이상 나오면 거듭 곱해진다. */
+const RED_CARD_STRENGTH_MULTIPLIER = 0.88;
+
+/** 특정 분(minute) 시점까지 side에 발생한 레드카드로 퇴장한 선수 id 집합. */
+function sentOffIds(cards: CardEvent[], side: 'home' | 'away', minute: number): Set<string> {
+  const ids = new Set<string>();
+  for (const c of cards) {
+    if (c.type === 'red' && c.side === side && c.minute <= minute) ids.add(c.playerId);
+  }
+  return ids;
+}
+
+export function manDownMultiplier(sentOffCount: number): number {
+  return sentOffCount > 0 ? Math.pow(RED_CARD_STRENGTH_MULTIPLIER, sentOffCount) : 1;
 }
 
 /** 한 분(틱) 진행. 생성된 이벤트가 있으면 반환(없으면 null). */
@@ -278,9 +303,17 @@ export function stepMinute(ctx: MatchContext, minute: number): MatchEvent | null
   const def = homeHasBall ? ctx.away : ctx.home;
   att.possessionTicks++;
 
+  const attSentOff = sentOffIds(ctx.cards, homeHasBall ? 'home' : 'away', minute);
+  const defSentOff = sentOffIds(ctx.cards, homeHasBall ? 'away' : 'home', minute);
+  const attMul = manDownMultiplier(attSentOff.size);
+  const defMul = manDownMultiplier(defSentOff.size);
+  const attAttack = att.strength.attack * attMul;
+  const attCreation = att.strength.creation * attMul;
+  const defDefense = def.strength.defense * defMul;
+
   const pAdvance = clamp(
     TUNING.advanceBase +
-      TUNING.strengthSwing * (logistic(TUNING.advanceK * (att.strength.creation - def.strength.defense)) - 0.5),
+      TUNING.strengthSwing * (logistic(TUNING.advanceK * (attCreation - defDefense)) - 0.5),
     0.02, 0.95,
   );
   if (!rng.roll(pAdvance)) return null;
@@ -289,13 +322,13 @@ export function stepMinute(ctx: MatchContext, minute: number): MatchEvent | null
 
   const pShot = clamp(
     TUNING.shotBase +
-      TUNING.strengthSwing * (logistic(TUNING.shotK * (att.strength.attack - def.strength.defense)) - 0.5),
+      TUNING.strengthSwing * (logistic(TUNING.shotK * (attAttack - defDefense)) - 0.5),
     0.02, 0.95,
   );
   if (!rng.roll(pShot)) return null;
 
-  const shooter = pickShooter(att, def, rng, chance);
-  if (!shooter) return null; // 가용 선수가 전무(전원 부상·정지)한 극단적 상황 — 이번 틱은 무산
+  const shooter = pickShooter(att, def, rng, chance, attSentOff);
+  if (!shooter) return null; // 가용 선수가 전무(전원 부상·정지·퇴장)한 극단적 상황 — 이번 틱은 무산
   const st = ensureStat(ctx, shooter);
   att.shots++;
   st.shots++;
@@ -303,14 +336,14 @@ export function stepMinute(ctx: MatchContext, minute: number): MatchEvent | null
     ? shooter.attributes.setPiece + (hasTrait(shooter, 'setPieceSpecialist') ? 3 : 0)
     : undefined;
   const individualMul = individualXgMultiplier(shooter, att, def);
-  const outcome = resolveShot(att.strength.attack, def.strength.gk, chance, rng, setPieceSkill, individualMul);
+  const outcome = resolveShot(attAttack, def.strength.gk, chance, rng, setPieceSkill, individualMul);
 
   let assister: Player | null = null;
   if (outcome === 'GOAL') {
     att.goals++;
     st.goals++;
     st.rating = clamp(st.rating + 1.2, 0, 10);
-    assister = pickAssister(att, shooter, chance, rng);
+    assister = pickAssister(att, shooter, chance, rng, attSentOff);
     if (assister) {
       const ast = ensureStat(ctx, assister);
       ast.assists++;
@@ -365,6 +398,11 @@ function finalizeRatings(ctx: MatchContext): void {
  * 카드 생성 (징계). 경기 rng와 독립된 시드로 결정론적 생성.
  * 이번 경기에 실제로 뛴 선수 전원(하프타임 교체 포함) 대상, 적극성(aggression)이
  * 높을수록 카드 확률↑.
+ */
+/**
+ * 카드 판정 — 부상과 동일하게 킥오프 시점(ctx.playedLineups가 아직 선발 XI만
+ * 담고 있을 때)에 한 번만 계산해 ctx.cards에 고정한다(고도화 항목41). 레드카드는
+ * stepMinute이 해당 분(minute)부터 실시간으로 참조해 인원수 열세를 전력에 반영한다.
  */
 function generateCards(ctx: MatchContext): CardEvent[] {
   const cards: CardEvent[] = [];
@@ -439,7 +477,7 @@ export function generateInjuries(ctx: MatchContext): InjuryEvent[] {
 export function finalize(ctx: MatchContext): MatchResult {
   finalizeRatings(ctx);
   const { home, away } = ctx;
-  const cards = generateCards(ctx);
+  const cards = ctx.cards; // 킥오프 시점에 확정(고도화 항목41 — stepMinute이 이미 실시간 참조)
   const injuries = ctx.injuries; // 킥오프 시점에 확정(생성 시점 무관하게 항상 동일)
   const totalTicks = home.possessionTicks + away.possessionTicks || 1;
   const possession: [number, number] = [
