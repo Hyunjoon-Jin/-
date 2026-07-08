@@ -57,6 +57,15 @@ function scoutingInsight(mine: TeamStrength, opp: TeamStrength): string {
   return parts.length === 0 ? '두 팀의 전력이 전반적으로 비슷합니다.' : `${parts.join(' · ')}.`;
 }
 
+/** 상대 전적 한 줄 요약(고도화 항목34) — "통산 3승 1무 2패 (최근: 2:1 승, 24시즌 리그)". */
+function headToHeadSummary(h2h: NonNullable<Preview['opponentHeadToHead']>): string {
+  const { wins, draws, losses, lastMeeting } = h2h;
+  const resultLabel = lastMeeting.myGoals > lastMeeting.oppGoals ? '승'
+    : lastMeeting.myGoals < lastMeeting.oppGoals ? '패' : '무';
+  const compLabel = lastMeeting.competition === 'league' ? '리그' : '컵';
+  return `통산 ${wins}승 ${draws}무 ${losses}패 (최근: ${lastMeeting.myGoals}:${lastMeeting.oppGoals} ${resultLabel}, ${lastMeeting.season}시즌 ${compLabel})`;
+}
+
 export function MatchPreview({ preview, rivalClubId }: { preview: Preview; rivalClubId?: string }) {
   const { home, away } = preview;
   const isDerby = rivalClubId !== undefined && (home.clubId === rivalClubId || away.clubId === rivalClubId);
@@ -72,6 +81,11 @@ export function MatchPreview({ preview, rivalClubId }: { preview: Preview; rival
         </span>
       </h3>
       {isDerby && <div className="derby-banner">🔥 라이벌전</div>}
+      {preview.opponentHeadToHead && (
+        <div className="pv-h2h muted small" title="상대 구단과의 리그·국내컵 통산 전적(고도화 항목34)">
+          🆚 {opp.name} 상대 전적 · {headToHeadSummary(preview.opponentHeadToHead)}
+        </div>
+      )}
       <div className="pv-teams">
         <TeamHead team={home} align="left" />
         <span className="pv-vs">VS</span>

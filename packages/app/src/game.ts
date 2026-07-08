@@ -200,6 +200,27 @@ export interface GameState {
   /** 이적 관심 목록(신규 개선 항목 27)에 올린 타 구단 선수 id — 시즌을 넘어 유지되며,
    *  계약 만료가 임박하면 시즌 종료 시 알림이 뜬다. */
   transferWatchlist?: string[];
+  /**
+   * 상대 구단별 통산 전적(고도화 항목34) — clubId → 그 구단과의 리그·국내컵 누적
+   * 전적. 라이벌(rivalRecord)은 지정된 한 구단만 추적하는 데 비해, 이건 실제로
+   * 맞붙어 본 모든 상대를 포괄한다. 구버전 세이브엔 없을 수 있어 optional.
+   */
+  headToHead?: Record<string, HeadToHeadRecord>;
+}
+
+/** 상대 구단 1곳과의 통산 전적(고도화 항목34). */
+export interface HeadToHeadRecord {
+  wins: number;
+  draws: number;
+  losses: number;
+  /** 가장 최근 맞대결(마지막에 갱신된 것). */
+  lastMeeting: {
+    season: number;
+    home: boolean;
+    myGoals: number;
+    oppGoals: number;
+    competition: 'league' | 'cup';
+  };
 }
 
 /** 선수의 한 시즌 평균 평점 스냅샷. */
@@ -523,14 +544,31 @@ export function finishSeason(state: GameState): GameState {
   // 라이벌전 전적 갱신(같은 부에서 맞붙은 경우만 — 다른 부일 땐 이번 시즌 대결 없음).
   const rivalRecord = { ...state.rivalRecord };
   const newRivalMeetings: RivalMeeting[] = [];
+  // 상대 구단별 통산 전적(고도화 항목34) — 라이벌 한정이 아닌 실제로 맞붙은 모든
+  // 상대가 대상. 리그전은 여기서, 국내컵은 아래 4) 블록에서 갱신한다.
+  const headToHead: Record<string, HeadToHeadRecord> = { ...(state.headToHead ?? {}) };
+  const recordHeadToHead = (
+    oppId: string, home: boolean, myGoals: number, oppGoals: number, competition: 'league' | 'cup',
+  ) => {
+    const prev = headToHead[oppId];
+    headToHead[oppId] = {
+      wins: (prev?.wins ?? 0) + (myGoals > oppGoals ? 1 : 0),
+      draws: (prev?.draws ?? 0) + (myGoals === oppGoals ? 1 : 0),
+      losses: (prev?.losses ?? 0) + (myGoals < oppGoals ? 1 : 0),
+      lastMeeting: { season: state.season, home, myGoals, oppGoals, competition },
+    };
+  };
   for (const r of ss.results) {
-    const isDerby =
-      (r.homeClubId === state.myClubId && r.awayClubId === state.rivalClubId) ||
-      (r.awayClubId === state.myClubId && r.homeClubId === state.rivalClubId);
-    if (!isDerby) continue;
     const home = r.homeClubId === state.myClubId;
+    const away = r.awayClubId === state.myClubId;
+    if (!home && !away) continue;
+    const oppId = home ? r.awayClubId : r.homeClubId;
     const myGoals = home ? r.score[0] : r.score[1];
     const oppGoals = home ? r.score[1] : r.score[0];
+    recordHeadToHead(oppId, home, myGoals, oppGoals, 'league');
+
+    const isDerby = oppId === state.rivalClubId;
+    if (!isDerby) continue;
     let result: RivalMeeting['result'];
     if (myGoals > oppGoals) { rivalRecord.wins++; result = 'win'; }
     else if (myGoals < oppGoals) { rivalRecord.losses++; result = 'loss'; }
@@ -595,17 +633,19 @@ export function finishSeason(state: GameState): GameState {
         champClub.finance.transferBudget += CUP_PRIZE;
       }
     }
-    // 컵에서도 라이벌과 맞붙었다면 전적에 포함(승부차기는 항상 승/패 — 무승부 없음).
+    // 컵 맞대결 전적 갱신(승부차기는 항상 승/패 — 무승부 없음). 라이벌은 rivalRecord에도 겹쳐 기록.
     for (const round of finishedCup.rounds) {
       for (const tie of round.ties) {
         if (tie.awayId === null) continue;
-        const isDerby =
-          (tie.homeId === state.myClubId && tie.awayId === state.rivalClubId) ||
-          (tie.awayId === state.myClubId && tie.homeId === state.rivalClubId);
-        if (!isDerby) continue;
+        const isMine = tie.homeId === state.myClubId || tie.awayId === state.myClubId;
+        if (!isMine) continue;
         const home = tie.homeId === state.myClubId;
         const myGoals = home ? tie.homeScore! : tie.awayScore!;
         const oppGoals = home ? tie.awayScore! : tie.homeScore!;
+        const oppId = home ? tie.awayId : tie.homeId;
+        recordHeadToHead(oppId, home, myGoals, oppGoals, 'cup');
+
+        if (oppId !== state.rivalClubId) continue;
         const result: RivalMeeting['result'] = tie.winnerId === state.myClubId ? 'win' : 'loss';
         if (result === 'win') rivalRecord.wins++; else rivalRecord.losses++;
         newRivalMeetings.push({
@@ -976,6 +1016,7 @@ export function finishSeason(state: GameState): GameState {
     legends: [...state.legends, ...newLegends],
     rivalRecord,
     rivalMeetings: [...state.rivalMeetings, ...newRivalMeetings],
+    headToHead,
     contractSeasonsLeft: state.contractSeasonsLeft - 1,
     ratingHistory,
     live: null,
@@ -1948,6 +1989,8 @@ export interface MatchPreview {
   away: TeamPreview;
   /** 경기 날씨(신규 개선 항목 26) — 킥오프 전에도 미리 확인 가능. */
   weather: Weather;
+  /** 상대 구단과의 통산 전적(고도화 항목34) — 맞대결 기록이 없으면 undefined. */
+  opponentHeadToHead?: HeadToHeadRecord;
 }
 
 /** 선발(전술 라인업) 중 현재 능력 최고 선수. */
@@ -1991,10 +2034,12 @@ function buildPreviewFrom(state: GameState, setup: MatchSetup): MatchPreview | n
       keyPlayerReport: kp ? buildScoutingReport(kp, isMine ? 20 : myScouting) : null,
     };
   };
+  const opponentClubId = setup.home.club.id === state.myClubId ? setup.away.club.id : setup.home.club.id;
   return {
     home: build(setup.home.club, setup.home.tactic, setup.away.tactic.formation, true),
     away: build(setup.away.club, setup.away.tactic, setup.home.tactic.formation, false),
     weather: matchWeather(setup.seed, setup.home.club.id, setup.away.club.id),
+    opponentHeadToHead: state.headToHead?.[opponentClubId],
   };
 }
 
