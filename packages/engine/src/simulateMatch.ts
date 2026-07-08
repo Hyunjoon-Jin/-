@@ -17,7 +17,7 @@ import { Rng } from './rng.js';
 import { clamp, logistic } from './math.js';
 import { TUNING } from './tuning.js';
 import { hasTrait } from './traits.js';
-import { rollInjury, medicalBias, reinjuryRiskFactor, fatigueRiskFactor } from './injury.js';
+import { rollInjury, medicalBias, reinjuryRiskFactor, fatigueRiskFactor, chronicInjuryFactor } from './injury.js';
 import { effectiveMedical } from './staffActions.js';
 import { trainingGroundInjuryFactor } from './finance.js';
 import {
@@ -420,7 +420,9 @@ export function generateInjuries(ctx: MatchContext): InjuryEvent[] {
       const reinjuryMul = reinjuryRiskFactor(p.reinjuryRiskMatches);
       // 지친(컨디션 낮은) 선수는 부상 위험이 더 크다(고도화 항목28).
       const fatigueMul = fatigueRiskFactor(p.condition);
-      const injMul = traitMul * trainingMul * reinjuryMul * fatigueMul;
+      // 통산 부상이 잦았던 선수는 앞으로도 부상 위험이 더 크다(고도화 항목29).
+      const chronicMul = chronicInjuryFactor(p.careerInjuryCount ?? 0);
+      const injMul = traitMul * trainingMul * reinjuryMul * fatigueMul * chronicMul;
       if (!rng.roll(TUNING.injuryTriggerChance * medFactor * facilityFactor * injMul)) continue;
       const inj = rollInjury(rng, medical);
       injuries.push({

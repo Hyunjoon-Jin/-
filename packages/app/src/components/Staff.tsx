@@ -353,9 +353,10 @@ export function Staff({
         <h3>
           🩺 의료진 부상 예측 리포트
           <InfoTip title="부상 예측 리포트">
-            의료 스태프 레벨·선수 특성(부상 잦음/강철 체력)·훈련 포커스·최근 복귀 후 재부상
-            위험 구간을 종합해 다음 경기 부상 발생 확률을 예측합니다. 실제 판정과 같은
-            공식을 그대로 사용하지만, 결과 자체를 바꾸지는 않는 참고용 수치입니다.
+            의료 스태프 레벨·선수 특성(부상 잦음/강철 체력)·훈련 포커스·컨디션(피로)·통산
+            부상 이력·최근 복귀 후 재부상 위험 구간을 종합해 다음 경기 부상 발생 확률을
+            예측합니다. 실제 판정과 같은 공식을 그대로 사용하지만, 결과 자체를 바꾸지는
+            않는 참고용 수치입니다.
           </InfoTip>
         </h3>
         {injuryRiskReport.length === 0 ? (
@@ -368,6 +369,9 @@ export function Staff({
                 {r.isInjuryProne && ' 🤕'}
                 {r.isIronMan && ' 💪'}
                 {r.reinjuryWindowRemaining > 0 && ' 🔁'}
+                {r.isChronicallyInjured && (
+                  <span className="chronic-injury-badge" title="통산 부상이 잦은 편입니다"> 📋</span>
+                )}
               </span>
               <div className="bar-track">
                 <div className="bar-fill" style={{ width: `${Math.min(100, r.riskPerMatch * 400)}%` }} />

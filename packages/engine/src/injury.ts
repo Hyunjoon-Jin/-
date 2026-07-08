@@ -92,6 +92,23 @@ export function fatigueRiskFactor(condition: number): number {
   return 1 + (FATIGUE_RISK_MAX_MUL - 1) * clamp(ratio, 0, 1);
 }
 
+// ── 만성 부상 이력(고도화 항목29) ──────────────────────────
+// 통산 부상 횟수(careerInjuryCount)는 지금까지 시장 가치(valuation.ts)에만 반영되고
+// 실제 부상 확률에는 전혀 영향이 없었다 — "부상이 잦았던 선수"라는 딱지가 몸값에만
+// 붙던 셈. valuation.ts의 injuryHistoryFactor와 같은 취지로, 처음 몇 건은 누구나
+// 겪을 수 있는 정상 범위로 보아 배율이 없고 이후 건마다 위험이 조금씩 커진다.
+
+/** 이 건수까지는 통산 부상이 잦은 편으로 취급하지 않는다(정상 범위). */
+export const CHRONIC_INJURY_FREE_COUNT = 2;
+const CHRONIC_INJURY_STEP = 0.08;
+const CHRONIC_INJURY_MAX_MUL = 1.6;
+
+/** 통산 부상 횟수 → 부상 확률 배율. 최소 1(영향 없음)~최대 CHRONIC_INJURY_MAX_MUL. */
+export function chronicInjuryFactor(careerInjuryCount: number): number {
+  const penalized = Math.max(0, careerInjuryCount - CHRONIC_INJURY_FREE_COUNT);
+  return clamp(1 + penalized * CHRONIC_INJURY_STEP, 1, CHRONIC_INJURY_MAX_MUL);
+}
+
 /** 의료 레벨(1~20)에 따른 원시 배율 편향(10=1.0, 20≈0.7, 1≈1.27) — 회복 기간·
  *  부상 발생 확률 계수가 공유하는 베이스 공식. 호출부마다 다른 범위로 clamp한다. */
 export function medicalBias(medical: number): number {
@@ -160,7 +177,9 @@ export function predictedInjuryRiskPerMatch(player: Player, medical: number, tra
   const trainingMul = player.trainingFocus === 'conditioning' ? 0.85 : 1;
   const reinjuryMul = reinjuryRiskFactor(player.reinjuryRiskMatches);
   const fatigueMul = fatigueRiskFactor(player.condition);
-  return TUNING.injuryTriggerChance * medFactor * facilityFactor * traitMul * trainingMul * reinjuryMul * fatigueMul;
+  const chronicMul = chronicInjuryFactor(player.careerInjuryCount ?? 0);
+  return TUNING.injuryTriggerChance * medFactor * facilityFactor * traitMul * trainingMul
+    * reinjuryMul * fatigueMul * chronicMul;
 }
 
 export interface InjuryRiskEntry {
@@ -174,6 +193,8 @@ export interface InjuryRiskEntry {
   isConditioningFocus: boolean;
   /** 재부상 위험 구간에 남은 경기 수(0이면 해당 없음). */
   reinjuryWindowRemaining: number;
+  /** 통산 부상 이력이 정상 범위(CHRONIC_INJURY_FREE_COUNT)를 넘어 잦은 편인지(고도화 항목29). */
+  isChronicallyInjured: boolean;
 }
 
 /** 부상 중이거나 정지 중인 선수는 이번 경기에 뛰지 않으므로 리포트에서 제외한다
@@ -193,6 +214,7 @@ export function buildInjuryRiskReport(club: Club): InjuryRiskEntry[] {
       isIronMan: hasTrait(p, 'ironMan'),
       isConditioningFocus: p.trainingFocus === 'conditioning',
       reinjuryWindowRemaining: clamp(p.reinjuryRiskMatches ?? 0, 0, REINJURY_RISK_WINDOW),
+      isChronicallyInjured: (p.careerInjuryCount ?? 0) > CHRONIC_INJURY_FREE_COUNT,
     }))
     .sort((a, b) => b.riskPerMatch - a.riskPerMatch);
 }

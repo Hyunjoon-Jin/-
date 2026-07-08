@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   predictedInjuryRiskPerMatch, buildInjuryRiskReport, injuryRiskTier, fatigueRiskFactor,
+  chronicInjuryFactor, CHRONIC_INJURY_FREE_COUNT,
 } from '../src/injury.js';
 import { generateClub } from '../src/generate.js';
 import { Rng } from '../src/rng.js';
@@ -109,5 +110,37 @@ describe('신규 개선 항목 20: 의료진 부상 예측 리포트', () => {
     p.condition = 0.35;
     const tired = predictedInjuryRiskPerMatch(p, 10);
     expect(tired).toBeGreaterThan(fresh);
+  });
+
+  it('통산 부상이 정상 범위(고도화 항목29 기준값) 이내면 배율이 없다', () => {
+    expect(chronicInjuryFactor(0)).toBe(1);
+    expect(chronicInjuryFactor(CHRONIC_INJURY_FREE_COUNT)).toBe(1);
+  });
+
+  it('통산 부상이 정상 범위를 넘으면 건수가 늘수록 배율이 커지고, 상한에서 clamp된다', () => {
+    const one = chronicInjuryFactor(CHRONIC_INJURY_FREE_COUNT + 1);
+    const two = chronicInjuryFactor(CHRONIC_INJURY_FREE_COUNT + 2);
+    expect(one).toBeGreaterThan(1);
+    expect(two).toBeGreaterThan(one);
+    expect(chronicInjuryFactor(100)).toBe(chronicInjuryFactor(50)); // 상한 이후로는 동일(clamp)
+  });
+
+  it('통산 부상 이력이 잦은 선수는 예측 부상 확률이 더 높다', () => {
+    const club = makeClub();
+    const p = club.players[0]!;
+    p.careerInjuryCount = 0;
+    const clean = predictedInjuryRiskPerMatch(p, 10);
+    p.careerInjuryCount = CHRONIC_INJURY_FREE_COUNT + 5;
+    const chronic = predictedInjuryRiskPerMatch(p, 10);
+    expect(chronic).toBeGreaterThan(clean);
+  });
+
+  it('buildInjuryRiskReport는 만성 부상 이력 플래그를 포함한다', () => {
+    const club = makeClub();
+    club.players[0]!.careerInjuryCount = CHRONIC_INJURY_FREE_COUNT + 3;
+    club.players[1]!.careerInjuryCount = 0;
+    const report = buildInjuryRiskReport(club);
+    expect(report.find((r) => r.playerId === club.players[0]!.id)!.isChronicallyInjured).toBe(true);
+    expect(report.find((r) => r.playerId === club.players[1]!.id)!.isChronicallyInjured).toBe(false);
   });
 });
