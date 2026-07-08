@@ -11,7 +11,8 @@ export {
   playerDerived, currentAbility, isInjured, isSuspended, isAvailable, familiarityAt,
   type DerivedRatings,
 } from './derived.js';
-export { applyMatchEffects } from './matchEffects.js';
+export { applyMatchEffects, ROTATION_WARNING_THRESHOLD } from './matchEffects.js';
+export { buildRotationWarningReport, type RotationWarningEntry } from './rotation.js';
 export { decideAiHalftimeTactic, simulateMatchWithAiTactics } from './aiInMatch.js';
 export {
   rollInjury, SEVERITY_LABEL, type Injury, type InjurySeverity, type BodyPart,

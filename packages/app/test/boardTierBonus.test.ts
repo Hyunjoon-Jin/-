@@ -3,7 +3,10 @@ import { startGame, advanceFullSeason, myClub } from '../src/game.js';
 
 describe('시즌 요약: 이사회 신뢰 등급 상승 투자 보너스 (C-new1)', () => {
   it('여러 시즌 진행 중 신뢰 등급이 오르면 boardTierBonus가 실리고 자금이 늘어난다', () => {
-    let g = startGame(2026, 'c0');
+    // 시드 2026은 고도화 항목30(로테이션 필요 경고 — 과사용 시 추가 피로)이 반영된
+    // 이후 시즌 궤적이 바뀌어 20시즌 내내 신뢰 등급이 오르지 않는 경로로 바뀌었다 —
+    // 검증 목적에 맞는 시드로 교체.
+    let g = startGame(2028, 'c0');
     let sawBonus = false;
     for (let i = 0; i < 20 && !sawBonus; i++) {
       const before = myClub(g).finance.balance;

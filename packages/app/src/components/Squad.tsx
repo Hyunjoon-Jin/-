@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
   formatMoney, currentAbility, marketValue, isInjured, isSuspended, lineOf, MENTOR_PAIRING_MAX, hasTrait,
+  ROTATION_WARNING_THRESHOLD,
   type Club, type Player, type Line,
 } from '@soccer-tycoon/engine';
 import { onKeyActivate } from '../a11y.js';
@@ -123,9 +124,15 @@ function ConditionCell({ player }: { player: Player }) {
   }
   const pct = Math.round(player.condition * 100);
   const cls = pct >= 80 ? 'cond-good' : pct >= 55 ? 'cond-mid' : 'cond-low';
+  const needsRotation = (player.consecutiveStarts ?? 0) > ROTATION_WARNING_THRESHOLD;
   return (
     <span className={`cond ${cls}`}>
       {pct}%
+      {needsRotation && (
+        <span className="rotation-warning" title={`${player.consecutiveStarts}경기 연속 선발 — 로테이션이 필요합니다`}>
+          {' '}🔄
+        </span>
+      )}
       <RecoveryHint player={player} />
     </span>
   );

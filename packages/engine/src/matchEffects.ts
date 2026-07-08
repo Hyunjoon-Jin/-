@@ -31,6 +31,11 @@ const TUNING = {
   captainMissingPenalty: 0.02,
 } as const;
 
+/** 이 경기 수를 넘겨 연속 선발 출전하면 로테이션 경고 대상이자 추가 피로가 붙는다(고도화 항목30). */
+export const ROTATION_WARNING_THRESHOLD = 6;
+/** 과사용 구간의 추가 피로 배율. */
+const OVERUSE_FATIGUE_MUL = 1.2;
+
 type Outcome = 'W' | 'D' | 'L';
 
 /** 압박·템포가 중립(0.5)보다 높을수록 체력 소모가 커진다 — 강도를 올린 대가.
@@ -58,6 +63,7 @@ function applySide(club: Club, tactic: Tactic, outcome: Outcome, injuries: Injur
   for (const p of club.players) {
     if (p.injuryMatches > 0) {
       // 부상 회복 카운트다운 (출전/피로 없음)
+      p.consecutiveStarts = 0; // 결장했으니 로테이션 경고 카운트 리셋(고도화 항목30)
       p.injuryMatches--;
       if (p.injuryMatches === 0) {
         p.condition = Math.max(p.condition, TUNING.returnCondition);
@@ -70,6 +76,7 @@ function applySide(club: Club, tactic: Tactic, outcome: Outcome, injuries: Injur
       }
     } else if (starters.has(p.id)) {
       p.seasonApps++; // 선발 출전 기록(사기·재계약 판단)
+      p.consecutiveStarts = (p.consecutiveStarts ?? 0) + 1; // 로테이션 경고(고도화 항목30)
       // 부 포지션으로 뛰면 실전 경험으로 해당 포지션 숙련도가 서서히 오른다(전담 훈련보다는 느림).
       const slot = slotByPlayer.get(p.id);
       if (slot && slot !== p.position) {
@@ -83,9 +90,11 @@ function applySide(club: Club, tactic: Tactic, outcome: Outcome, injuries: Injur
       }
       // 특성: 철강왕(피로↓).
       const fatMul = hasTrait(p, 'ironMan') ? 0.6 : 1;
+      // 로테이션 없이 계속 뛰면(과사용) 그만큼 더 지친다(고도화 항목30).
+      const overuseMul = p.consecutiveStarts > ROTATION_WARNING_THRESHOLD ? OVERUSE_FATIGUE_MUL : 1;
       // 선발: 피로 누적 (스태미너 높을수록 덜 지침, 회복 공식과 동일한 분모).
       // 압박·템포를 중립 이상으로 올리면(고강도 전술) 그만큼 더 지친다.
-      const fatigue = TUNING.fatigueBase * (1 - p.attributes.stamina / 20) * fatMul * fatigueMul;
+      const fatigue = TUNING.fatigueBase * (1 - p.attributes.stamina / 20) * fatMul * fatigueMul * overuseMul;
       p.condition = Math.max(TUNING.minCondition, p.condition - fatigue);
       // 부상 반영 (판정은 simulateMatch.generateInjuries가 이미 확정)
       const inj = injuryByPlayer.get(p.id);
@@ -104,6 +113,7 @@ function applySide(club: Club, tactic: Tactic, outcome: Outcome, injuries: Injur
       }
     } else {
       // 벤치/정지/로테이션: 회복 + 출전정지 카운트다운(미출전으로 1경기 소화)
+      p.consecutiveStarts = 0; // 쉬었으니 로테이션 경고 카운트 리셋(고도화 항목30)
       const recovery = TUNING.recoveryBase * (0.5 + p.attributes.naturalFitness / 20) * recoveryBonus;
       p.condition = Math.min(1, p.condition + recovery);
       if (p.suspensionMatches > 0) p.suspensionMatches--;

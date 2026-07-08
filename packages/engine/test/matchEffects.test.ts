@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { applyMatchEffects } from '../src/matchEffects.js';
+import { applyMatchEffects, ROTATION_WARNING_THRESHOLD } from '../src/matchEffects.js';
 import { computeTeamStrength } from '../src/teamStrength.js';
 import { generateClub, defaultTactic } from '../src/generate.js';
 import { Rng } from '../src/rng.js';
@@ -127,5 +127,40 @@ describe('matchEffects: 피로·회복·사기', () => {
       .toEqual(b.home.players.map((p) => p.condition));
     expect(a.home.players.map((p) => p.injuryMatches))
       .toEqual(b.home.players.map((p) => p.injuryMatches));
+  });
+});
+
+describe('matchEffects: 로테이션 필요(과사용) 경고 (고도화 항목30)', () => {
+  it('연속 선발 출전은 누적되고, 벤치로 쉬면 0으로 리셋된다', () => {
+    const { home, away, ht, at } = setup();
+    const starters = new Set(ht.lineup.map((s) => s.playerId));
+    const starter = home.players.find((p) => starters.has(p.id))!;
+    const bench = home.players.find((p) => !starters.has(p.id))!;
+
+    applyMatchEffects(home, ht, away, at, fakeResult(home, away, 1, 0), new Rng(1));
+    expect(starter.consecutiveStarts).toBe(1);
+    expect(bench.consecutiveStarts ?? 0).toBe(0);
+
+    applyMatchEffects(home, ht, away, at, fakeResult(home, away, 1, 0), new Rng(2));
+    expect(starter.consecutiveStarts).toBe(2);
+
+    // 부상으로 결장하면 리셋된다.
+    starter.injuryMatches = 1;
+    applyMatchEffects(home, ht, away, at, fakeResult(home, away, 1, 0), new Rng(3));
+    expect(starter.consecutiveStarts).toBe(0);
+  });
+
+  it('임계값을 넘겨 연속 출전하면 그렇지 않을 때보다 컨디션이 더 많이 떨어진다(과사용 페널티)', () => {
+    const a = setup();
+    const b = setup();
+    const starterId = a.ht.lineup[0]!.playerId;
+    const starterA = a.home.players.find((p) => p.id === starterId)!;
+    const starterB = b.home.players.find((p) => p.id === starterId)!;
+    starterA.condition = 1; starterB.condition = 1;
+    starterA.consecutiveStarts = ROTATION_WARNING_THRESHOLD + 1; // 이미 과사용 구간
+    starterB.consecutiveStarts = 0; // 정상 구간
+    applyMatchEffects(a.home, a.ht, a.away, a.at, fakeResult(a.home, a.away, 0, 0), new Rng(10));
+    applyMatchEffects(b.home, b.ht, b.away, b.at, fakeResult(b.home, b.away, 0, 0), new Rng(10));
+    expect(starterA.condition).toBeLessThan(starterB.condition);
   });
 });

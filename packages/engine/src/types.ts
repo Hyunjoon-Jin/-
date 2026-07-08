@@ -107,6 +107,9 @@ export interface Player {
   reinjuryRiskMatches?: number;
   /** 부상 부위 연관 능력치가 완전히 회복될 때까지 남은 경기 수. 0 = 정상. */
   recoveryAttrMatches?: number;
+  /** 연속 선발 출전 경기 수(고도화 항목30) — 벤치/부상/정지로 쉬면 0으로 리셋된다.
+   *  일정 수를 넘으면 로테이션 경고 대상이자 추가 피로 페널티가 붙는다. */
+  consecutiveStarts?: number;
   /** 시즌 누적 경고. 일정 수마다 출전 정지. */
   yellowCards: number;
   /** 남은 출전 정지 경기 수. 0 = 정상. >0 이면 출전 불가. */
