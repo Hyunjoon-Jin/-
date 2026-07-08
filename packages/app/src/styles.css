@@ -689,6 +689,10 @@ body {
 .slot-injured { background: #2e1c1c; }
 .card-list { list-style: none; padding: 0; margin: 0 0 14px; text-align: left; }
 .card-list li { display: flex; gap: 8px; padding: 4px 0; font-size: 13px; }
+.mstats-highlights { margin-bottom: 8px; }
+.goal-timeline { list-style: none; padding: 0; margin: 0 0 14px; text-align: left; }
+.goal-timeline li { display: flex; gap: 8px; padding: 4px 0; font-size: 13px; }
+.mstats-highlights .feed-min { color: var(--muted); width: 34px; font-weight: 700; display: inline-block; }
 
 /* ── Stats / Awards ── */
 .awards { display: flex; gap: 12px; margin: 12px 0 20px; }

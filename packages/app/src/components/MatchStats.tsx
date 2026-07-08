@@ -2,6 +2,43 @@ import type { MatchResult, PlayerMatchStat } from '@soccer-tycoon/engine';
 import { useModalA11y } from './useModalA11y.js';
 import { ratingClass } from '../rating.js';
 
+/**
+ * 득점 타임라인 + MOTM + 카드(고도화 항목35) — 엔진이 이미 계산해 두는
+ * result.events/motmPlayerId/cards를 지난 경기 다시보기(MatchDetailModal)에서도
+ * 노출한다. 실시간 관전(WatchMatch)의 풀타임 패널은 이미 별도로 이 정보를
+ * 보여주고 있어 중복을 피하고자 여기서만 렌더링한다.
+ */
+function MatchHighlights({ result }: { result: MatchResult }) {
+  const goals = result.events.filter((e) => e.outcome === 'GOAL');
+  const motm = [...result.playerStats.home, ...result.playerStats.away]
+    .find((s) => s.playerId === result.motmPlayerId);
+  return (
+    <div className="mstats-highlights">
+      {motm && <p className="ft-motm">🏅 맨오브더매치 — <b>{motm.name}</b> ({motm.rating.toFixed(1)})</p>}
+      {goals.length > 0 && (
+        <ul className="goal-timeline">
+          {goals.map((g) => (
+            <li key={`${g.minute}-${g.playerId}`}>
+              <span className="feed-min">{g.minute}'</span>
+              <span>⚽ {g.playerName}{g.assistPlayerName ? ` (도움 ${g.assistPlayerName})` : ''}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {result.cards.length > 0 && (
+        <ul className="card-list">
+          {result.cards.map((c) => (
+            <li key={`${c.minute}-${c.playerId}-${c.type}`}>
+              <span className="feed-min">{c.minute}'</span>
+              <span>{c.type === 'red' ? '🟥' : '🟨'} {c.playerName}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 /** 경기 상세 통계 본문 (점유율·슈팅·선수 평점). */
 export function MatchStats({ result, myClubId }: { result: MatchResult; myClubId?: string }) {
   const [hp, ap] = result.possession;
@@ -90,6 +127,7 @@ export function MatchDetailModal({
           </h2>
           <button className="btn-ghost" onClick={onClose}>닫기 ✕</button>
         </div>
+        <MatchHighlights result={result} />
         <MatchStats result={result} myClubId={myClubId} />
       </div>
     </div>
