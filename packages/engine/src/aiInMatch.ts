@@ -37,6 +37,41 @@ function pickReplacement(bench: Club['players'], position: Tactic['lineup'][numb
   });
 }
 
+/** 로테이션 대상으로 삼는 컨디션 임계값(고도화 항목49) — 경기 전 컨디션이 이 미만인
+ *  선발(GK 제외)이 있으면 벤치 최적 자원으로 교체를 고려한다. */
+const ROTATION_CONDITION_THRESHOLD = 0.6;
+/** 경기 중 이 분(minute)에 한 번 컨디션 기반 로테이션을 점검한다(경기 중반 이후 한 시점). */
+export const ROTATION_CHECK_MINUTE = 65;
+
+/**
+ * 경기 전 컨디션이 낮았던 선발(GK 제외) 중 가장 지친 선수 1명을 벤치 최적 자원으로
+ * 교체한다(고도화 항목49) — 결정론적(RNG 미소비), 부상 교체와 동일한 pickReplacement를
+ * 재사용한다. 컨디션은 경기 중 변하지 않는 킥오프 시점 값이라 이 판단도 경기 내내
+ * 동일하게 유지된다. 대상이 없으면 null.
+ */
+export function decideConditionRotation(club: Club, tactic: Tactic): Tactic | null {
+  const byId = new Map(club.players.map((p) => [p.id, p]));
+  let worstSlot: Tactic['lineup'][number] | null = null;
+  let worstCondition = ROTATION_CONDITION_THRESHOLD;
+  for (const slot of tactic.lineup) {
+    if (slot.position === 'GK') continue;
+    const p = byId.get(slot.playerId);
+    if (!p || !isAvailable(p)) continue;
+    if (p.condition < worstCondition) {
+      worstCondition = p.condition;
+      worstSlot = slot;
+    }
+  }
+  if (!worstSlot) return null;
+
+  const lineupIds = new Set(tactic.lineup.map((s) => s.playerId));
+  const bench = club.players.filter((p) => isAvailable(p) && !lineupIds.has(p.id));
+  if (bench.length === 0) return null;
+  const best = pickReplacement(bench, worstSlot.position);
+  const nextLineup = tactic.lineup.map((s) => (s.playerId === worstSlot!.playerId ? { ...s, playerId: best.id } : s));
+  return { ...tactic, lineup: nextLineup };
+}
+
 /** 전반 중 부상당한 선발을 하프타임에 같은 슬롯의 최적 벤치 자원으로 교체(F01). */
 export function injurySubstitution(club: Club, tactic: Tactic, halfInjuries: InjuryEvent[]): Tactic | null {
   if (halfInjuries.length === 0) return null;
@@ -114,6 +149,17 @@ export function simulateMatchWithAiTactics(setup: MatchSetup): MatchResult {
         const subbed = injurySubstitution(setup[side].club, baseTactic, sideInjuries);
         if (subbed) {
           baseLineup[side] = subbed.lineup;
+          applyReactive(side);
+        }
+      }
+    }
+
+    if (m === ROTATION_CHECK_MINUTE) {
+      for (const side of ['home', 'away'] as const) {
+        const baseTactic: Tactic = { ...original[side], lineup: baseLineup[side] };
+        const rotated = decideConditionRotation(setup[side].club, baseTactic);
+        if (rotated) {
+          baseLineup[side] = rotated.lineup;
           applyReactive(side);
         }
       }
