@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { Position } from '@soccer-tycoon/engine';
+import type { KitColors } from '../clubColors.js';
 
 export interface PitchState {
   homeName: string;
@@ -25,6 +26,8 @@ export interface PitchState {
   isDerby?: boolean;
   /** 컵 결승이면 스코어보드를 금색으로 강조 표시(라이벌전보다 우선). */
   isFinal?: boolean;
+  /** 구단별 킷 색상(고도화 항목 C1-C4) — 킷 충돌 시 자동 보정된 값을 그대로 사용. */
+  kit: KitColors;
 }
 
 const W = 760;
@@ -170,12 +173,13 @@ function draw(ctx: CanvasRenderingContext2D, s: PitchState) {
   // ── 선수 점 배치 ──────────────────────────────────────────
   // 공 x에 따라 양 팀이 함께 밀린다(콤팩트 블록). y는 미세하게 흔들려 생동감.
   const shift = (s.ball.x - 0.5) * 0.12;
-  const userColor = '#3ddc84', oppColor = '#e0574b';
-  const homeColor = s.userIsHome ? userColor : oppColor;
-  const awayColor = s.userIsHome ? oppColor : userColor;
 
-  const drawTeam = (formation: Position[], labels: string[], mirror: boolean, color: string, side: 'home' | 'away') => {
+  const drawTeam = (
+    formation: Position[], labels: string[], mirror: boolean,
+    color: string, gkColor: string, side: 'home' | 'away',
+  ) => {
     const coords = formationCoords(formation);
+    const isMine = side === (s.userIsHome ? 'home' : 'away');
     coords.forEach((c, i) => {
       const baseX = mirror ? 1 - c.x : c.x;
       const sway = Math.sin(s.minute * 0.6 + i * 1.7) * 0.015;
@@ -185,10 +189,12 @@ function draw(ctx: CanvasRenderingContext2D, s: PitchState) {
       const py = m + ny * ph;
       ctx.beginPath();
       ctx.arc(px, py, 8, 0, Math.PI * 2);
-      ctx.fillStyle = color;
+      ctx.fillStyle = formation[i] === 'GK' ? gkColor : color;
       ctx.fill();
-      ctx.strokeStyle = 'rgba(0,0,0,0.55)';
-      ctx.lineWidth = 1.5;
+      // 내 팀은 흰색 굵은 테두리로 한눈에 구분되게 한다(킷 색상이 실제 구단색으로
+      // 바뀌면서(항목 C1) 기존 초록/빨강 고정 색으로 하던 아군 식별을 대체).
+      ctx.strokeStyle = isMine ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.55)';
+      ctx.lineWidth = isMine ? 2.2 : 1.5;
       ctx.stroke();
       const label = labels[i];
       if (label) {
@@ -212,8 +218,8 @@ function draw(ctx: CanvasRenderingContext2D, s: PitchState) {
       }
     });
   };
-  drawTeam(s.homeFormation, s.homeLabels, false, homeColor, 'home');
-  drawTeam(s.awayFormation, s.awayLabels, true, awayColor, 'away');
+  drawTeam(s.homeFormation, s.homeLabels, false, s.kit.home, s.kit.homeGk, 'home');
+  drawTeam(s.awayFormation, s.awayLabels, true, s.kit.away, s.kit.awayGk, 'away');
   ctx.textBaseline = 'alphabetic';
 
   // 공
@@ -259,6 +265,9 @@ function draw(ctx: CanvasRenderingContext2D, s: PitchState) {
     ctx.font = `bold ${fontSize}px sans-serif`;
   }
   ctx.fillText(scoreboardText, W / 2, 22);
+  // 킷 색상 스와치(항목 C4) — 스코어보드에서도 양 팀 색상을 바로 확인할 수 있게 한다.
+  ctx.beginPath(); ctx.arc(W / 2 - barW / 2 + 10, 17, 4, 0, Math.PI * 2); ctx.fillStyle = s.kit.home; ctx.fill();
+  ctx.beginPath(); ctx.arc(W / 2 + barW / 2 - 10, 17, 4, 0, Math.PI * 2); ctx.fillStyle = s.kit.away; ctx.fill();
   if (highlight) {
     ctx.font = '16px sans-serif';
     const icon = highlight === 'final' ? '🏆' : '🔥';
