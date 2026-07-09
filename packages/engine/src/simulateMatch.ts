@@ -596,6 +596,10 @@ function finalizeRatings(ctx: MatchContext): void {
  * 심판 엄격도(고도화 항목46)는 카드 확률 전체에 배율로만 반영 — 독립 RNG 스트림의
  * 굴림 횟수·순서는 그대로다.
  */
+/** 첫 옐로우를 받은 선수가 남은 시간 동안 두 번째 북엄 처분을 받아 자동 퇴장(세컨드
+ *  옐로우 → 레드)으로 이어질 확률(고도화 항목56) — 실제로는 드문 일이라 낮게 잡는다. */
+const SECOND_YELLOW_CHANCE = 0.06;
+
 function generateCards(ctx: MatchContext): CardEvent[] {
   const cards: CardEvent[] = [];
   const rng = new Rng(ctx.seed * 3 + 12345);
@@ -614,7 +618,13 @@ function generateCards(ctx: MatchContext): CardEvent[] {
       if (rng.roll(redP)) {
         cards.push({ minute: rng.int(20, 90), side: sideKey, playerId: p.id, playerName: p.name, type: 'red' });
       } else if (rng.roll(yellowP)) {
-        cards.push({ minute: rng.int(5, 90), side: sideKey, playerId: p.id, playerName: p.name, type: 'yellow' });
+        const yellowMinute = rng.int(5, 90);
+        cards.push({ minute: yellowMinute, side: sideKey, playerId: p.id, playerName: p.name, type: 'yellow' });
+        // 세컨드 옐로우(고도화 항목56) — 첫 옐로우 이후 남은 시간이 있어야 성립.
+        if (yellowMinute < 90 && rng.roll(SECOND_YELLOW_CHANCE)) {
+          const secondMinute = rng.int(yellowMinute + 1, 90);
+          cards.push({ minute: secondMinute, side: sideKey, playerId: p.id, playerName: p.name, type: 'red' });
+        }
       }
     }
   };
