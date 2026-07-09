@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { matchRefereeStrictness, REFEREE_STRICTNESS_LABEL, REFEREE_CARD_MULTIPLIER } from '../src/referee.js';
+import {
+  matchRefereeStrictness, REFEREE_STRICTNESS_LABEL, REFEREE_CARD_MULTIPLIER, AWAY_CARD_BIAS_MULTIPLIER,
+} from '../src/referee.js';
 import { simulateMatch, type MatchSetup } from '../src/simulateMatch.js';
 import { generateClub, defaultTactic } from '../src/generate.js';
 import { Rng } from '../src/rng.js';
@@ -88,5 +90,30 @@ describe('고도화 항목46: 심판 엄격도', () => {
     expect(r1.refereeStrictness).toBe(r2.refereeStrictness);
     expect(r1.cards).toEqual(r2.cards);
     expect(r1.score).toEqual(r2.score);
+  });
+});
+
+describe('고도화 항목51: 심판의 홈 편향', () => {
+  it('원정팀 카드 확률 편향 배율은 1보다 크다', () => {
+    expect(AWAY_CARD_BIAS_MULTIPLIER).toBeGreaterThan(1);
+  });
+
+  it('동일한 조건의 두 팀이어도 원정팀이 평균적으로 카드를 더 많이 받는다(다수 시드 누적 비교)', () => {
+    const totalBySide = (side: 'home' | 'away'): number => {
+      let total = 0;
+      const N = 300;
+      for (let seed = 1; seed <= N; seed++) {
+        const home = generateClub(new Rng(10), 'h', 'Home', 12);
+        const away = generateClub(new Rng(10), 'a', 'Away', 12);
+        const result = simulateMatch({
+          home: { club: home, tactic: defaultTactic(home) },
+          away: { club: away, tactic: defaultTactic(away) },
+          seed,
+        });
+        total += result.cards.filter((c) => c.side === side).length;
+      }
+      return total;
+    };
+    expect(totalBySide('away')).toBeGreaterThan(totalBySide('home'));
   });
 });
