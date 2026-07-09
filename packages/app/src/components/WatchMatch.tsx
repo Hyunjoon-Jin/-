@@ -587,6 +587,14 @@ function FullTime({
         </p>
       )}
       <p className="ft-score">{homeName} {score[0]} : {score[1]} {awayName}</p>
+      {result.stoppage && (
+        <p
+          className="ft-stoppage muted small"
+          title="카드·부상·득점 세리머니 등 실제 지연 요인을 반영한 표시용 추가시간(고도화 항목58)"
+        >
+          ⏱️ 추가시간 전반 +{result.stoppage.first}분 · 후반 +{result.stoppage.second}분
+        </p>
+      )}
       {(() => {
         const motm = [...result.playerStats.home, ...result.playerStats.away]
           .find((s) => s.playerId === result.motmPlayerId);
