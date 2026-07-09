@@ -562,6 +562,17 @@ function injuryMedicalFactor(medical: number): number {
 }
 
 /**
+ * 전술 강도(압박·템포) 연동 부상 위험(고도화 항목52) — 공격적인 전술일수록 몸싸움·
+ * 전력 질주가 늘어 부상 위험도 함께 오른다는 통념을 반영. 사후 피로 배율
+ * (matchEffects.ts의 tacticFatigueMul)과 동일한 강도 정의를 쓰되, 부상은 피로보다
+ * 완만하게 반응하도록 계수를 더 작게 둔다. 중립(0.5) 이하에서는 영향 없음.
+ */
+function tacticInjuryFactor(tactic: Tactic): number {
+  const intensity = (tactic.pressing + tactic.tempo) / 2;
+  return 1 + Math.max(0, intensity - 0.5) * 0.4;
+}
+
+/**
  * 부상 판정 (콘텐츠 심화). 경기 rng·카드 rng와 독립된 시드로 결정론적 생성 —
  * 라인업·의료·특성만의 함수라 경기 진행 상태와 무관하게 언제든 계산 가능
  * (관전 중 실시간 노출 목적). 이미 부상·정지 중인 선수는 제외.
@@ -590,7 +601,9 @@ export function generateInjuries(ctx: MatchContext): InjuryEvent[] {
       const chronicMul = chronicInjuryFactor(p.careerInjuryCount ?? 0);
       // 날씨(고도화 항목47) — 혹한은 근육이 경직돼 부상 위험이 소폭 오른다.
       const weatherMul = WEATHER_INJURY_MULTIPLIER[ctx.weather];
-      const injMul = traitMul * trainingMul * reinjuryMul * fatigueMul * chronicMul * weatherMul;
+      // 전술 강도(고도화 항목52) — 압박·템포가 높을수록 부상 위험도 함께 오른다.
+      const tacticMul = tacticInjuryFactor(side.tactic);
+      const injMul = traitMul * trainingMul * reinjuryMul * fatigueMul * chronicMul * weatherMul * tacticMul;
       if (!rng.roll(TUNING.injuryTriggerChance * medFactor * facilityFactor * injMul)) continue;
       const inj = rollInjury(rng, medical);
       injuries.push({
