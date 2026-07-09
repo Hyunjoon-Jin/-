@@ -378,6 +378,19 @@ export function manDownMultiplier(sentOffCount: number): number {
   return sentOffCount > 0 ? Math.pow(RED_CARD_STRENGTH_MULTIPLIER, sentOffCount) : 1;
 }
 
+/** 후반 이 분(minute)부터 뒤지는 팀은 총공세로 전환한다(고도화 항목50). */
+const LATE_GAME_MINUTE = 80;
+/** 총공세 중인 팀의 공격·창조력 배율 — 공격 가담 증가. */
+const DESPERATION_ATTACK_MULTIPLIER = 1.06;
+/** 총공세 중인 팀의 수비 배율 — 수비 라인이 비어 상대 역습에 취약해진다. */
+const DESPERATION_DEFENSE_MULTIPLIER = 0.92;
+
+/** side가 이 시점(minute)에 opp에 뒤지고 있어 총공세 상태인지 — 매 틱 라이브 스코어를
+ *  읽어 판단하는 결정론적 배율이라 RNG를 소비하지 않는다. */
+function isDesperate(side: Side, opp: Side, minute: number): boolean {
+  return minute >= LATE_GAME_MINUTE && side.goals < opp.goals;
+}
+
 /** 한 분(틱) 진행. 생성된 이벤트가 있으면 반환(없으면 null). */
 export function stepMinute(ctx: MatchContext, minute: number): MatchEvent | null {
   const { rng } = ctx;
@@ -390,9 +403,11 @@ export function stepMinute(ctx: MatchContext, minute: number): MatchEvent | null
   const defSentOff = sentOffIds(ctx.cards, homeHasBall ? 'away' : 'home', minute);
   const attMul = manDownMultiplier(attSentOff.size);
   const defMul = manDownMultiplier(defSentOff.size);
-  const attAttack = att.strength.attack * attMul;
-  const attCreation = att.strength.creation * attMul;
-  const defDefense = def.strength.defense * defMul;
+  const attDesperateMul = isDesperate(att, def, minute) ? DESPERATION_ATTACK_MULTIPLIER : 1;
+  const defDesperateMul = isDesperate(def, att, minute) ? DESPERATION_DEFENSE_MULTIPLIER : 1;
+  const attAttack = att.strength.attack * attMul * attDesperateMul;
+  const attCreation = att.strength.creation * attMul * attDesperateMul;
+  const defDefense = def.strength.defense * defMul * defDesperateMul;
 
   const pAdvance = clamp(
     TUNING.advanceBase +
