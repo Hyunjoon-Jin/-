@@ -25,6 +25,7 @@ import {
 import type { Tactic, MatchResult, LoanTerms, AddOnTier, NamedStaffKind } from '@soccer-tycoon/engine';
 import { createSaveStore } from './storage.js';
 import { recordSackedStint } from './career.js';
+import { onKeyActivate } from './a11y.js';
 import { StartScreen } from './components/StartScreen.js';
 import { Dashboard } from './components/Dashboard.js';
 import { Squad } from './components/Squad.js';
@@ -357,12 +358,15 @@ export function App() {
       })()}
 
       {!watching && (
-        <nav className="tabs">
+        <nav className="tabs" role="tablist" aria-label="주 메뉴">
           {TABS.map((t) => (
             <button
               key={t.key}
               className={tab === t.key ? 'tab active' : 'tab'}
+              role="tab"
+              aria-selected={tab === t.key}
               onClick={() => setTab(t.key)}
+              onKeyDown={onKeyActivate(() => setTab(t.key))}
             >
               {t.label}
             </button>
