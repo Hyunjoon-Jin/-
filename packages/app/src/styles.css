@@ -1125,6 +1125,7 @@ h3 { font-size: 14px; margin: 0 0 10px; color: var(--muted); text-transform: upp
 .feed li.goal { background: #243a2a; border-radius: 6px; font-weight: 600; }
 .feed li.goal.mine { background: #1f3a26; color: var(--accent); }
 .feed li.injury-feed { background: #3a2a24; border-radius: 6px; color: var(--color-warning); }
+.feed li.card-feed { background: #3a3420; border-radius: 6px; }
 
 /* 확인 모달(삭제·방출·판매 확정 등 되돌릴 수 없는 동작) */
 .modal.confirm-modal { max-width: 420px; }
