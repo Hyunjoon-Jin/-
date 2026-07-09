@@ -7,6 +7,7 @@ import type { MatchResult, MediaTone } from '@soccer-tycoon/engine';
 import { MatchDetailModal } from './MatchStats.js';
 import { MediaInterview } from './MediaInterview.js';
 import { Banner, type BannerTone } from './Banner.js';
+import { BusyButton } from './BusyButton.js';
 
 interface Props {
   game: GameState;
@@ -18,6 +19,8 @@ interface Props {
   onWatch: () => void;
   onMediaRespond: (event: MediaEvent, tone: MediaTone) => void;
   onMediaDismiss: (event: MediaEvent) => void;
+  /** 시즌/라운드 진행처럼 무거운 액션이 처리 중이면 그 액션 키, 아니면 null(UX 고도화). */
+  busyAction: string | null;
 }
 
 export function Match(props: Props) {
@@ -29,7 +32,7 @@ export function Match(props: Props) {
   return prog.over ? <SeasonOver {...props} /> : <InSeason {...props} />;
 }
 
-function Preseason({ game, onStartSeason, onAdvanceFull }: Props) {
+function Preseason({ game, onStartSeason, onAdvanceFull, busyAction }: Props) {
   const last = lastSummary(game);
   const pos = myLastPosition(game);
   return (
@@ -43,8 +46,14 @@ function Preseason({ game, onStartSeason, onAdvanceFull }: Props) {
         )}
       </div>
       <div className="phase-actions">
-        <button className="btn-advance" onClick={onStartSeason}>시즌 시작 (이적 창 열기)</button>
-        <button className="btn-ghost" onClick={onAdvanceFull}>이번 시즌 한 번에 ▶▶</button>
+        <button className="btn-advance" onClick={onStartSeason} disabled={busyAction !== null}>
+          시즌 시작 (이적 창 열기)
+        </button>
+        <BusyButton
+          className="btn-ghost" actionKey="full" busyAction={busyAction} onClick={onAdvanceFull} busyLabel="진행 중…"
+        >
+          이번 시즌 한 번에 ▶▶
+        </BusyButton>
       </div>
       <p className="hint muted">
         "시즌 시작"을 누르면 AI 구단들이 이적 시장에서 보강하고 일정이 짜입니다.
@@ -64,7 +73,7 @@ const PACE_TONE: Record<'ahead' | 'onTrack' | 'behind', BannerTone> = {
 };
 
 function InSeason(props: Props) {
-  const { game, onPlayRound, onPlayRest, onWatch, onMediaRespond, onMediaDismiss } = props;
+  const { game, onPlayRound, onPlayRest, onWatch, onMediaRespond, onMediaDismiss, busyAction } = props;
   const prog = liveProgress(game);
   const next = myNextFixture(game);
   const table = liveTable(game);
@@ -106,9 +115,21 @@ function InSeason(props: Props) {
         </Banner>
       )}
       <div className="phase-actions">
-        {next && <button className="btn-advance" onClick={onWatch}>내 경기 관전 ▶</button>}
-        <button className="btn-ghost" onClick={onPlayRound}>다음 라운드 진행</button>
-        <button className="btn-ghost" onClick={onPlayRest}>남은 경기 시뮬 ▶▶</button>
+        {next && (
+          <button className="btn-advance" onClick={onWatch} disabled={busyAction !== null}>
+            내 경기 관전 ▶
+          </button>
+        )}
+        <BusyButton
+          className="btn-ghost" actionKey="round" busyAction={busyAction} onClick={onPlayRound} busyLabel="진행 중…"
+        >
+          다음 라운드 진행
+        </BusyButton>
+        <BusyButton
+          className="btn-ghost" actionKey="rest" busyAction={busyAction} onClick={onPlayRest} busyLabel="진행 중…"
+        >
+          남은 경기 시뮬 ▶▶
+        </BusyButton>
       </div>
 
       <div className="match-cols">
