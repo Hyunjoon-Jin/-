@@ -29,6 +29,7 @@ import {
   type Weather,
 } from './weather.js';
 import { matchRefereeStrictness, REFEREE_CARD_MULTIPLIER, type RefereeStrictness } from './referee.js';
+import { matchTravelBurden, type TravelBurden } from './travel.js';
 
 export interface MatchSetup {
   home: { club: Club; tactic: Tactic };
@@ -259,6 +260,8 @@ export interface MatchContext {
   weather: Weather;
   /** 이 경기의 심판 엄격도(고도화 항목46) — 킥오프 시점에 결정, 카드 확률 배율에 반영. */
   refereeStrictness: RefereeStrictness;
+  /** 원정팀의 이동 부담(고도화 항목48) — 킥오프 시점에 결정, 경기 후 원정팀 컨디션에만 반영. */
+  awayTravelBurden: TravelBurden;
 }
 
 function recomputePossession(ctx: MatchContext): void {
@@ -272,6 +275,7 @@ export function createContext(setup: MatchSetup): MatchContext {
   const isBigMatch = setup.isBigMatch ?? false;
   const weather = matchWeather(setup.seed, setup.home.club.id, setup.away.club.id);
   const refereeStrictness = matchRefereeStrictness(setup.seed, setup.home.club.id, setup.away.club.id);
+  const awayTravelBurden = matchTravelBurden(setup.seed, setup.home.club.id, setup.away.club.id);
   const ctx: MatchContext = {
     rng: new Rng(setup.seed),
     home: buildSide(setup.home.club, setup.home.tactic, true, isBigMatch, setup.away.tactic.formation, weather),
@@ -286,6 +290,7 @@ export function createContext(setup: MatchSetup): MatchContext {
     isBigMatch,
     weather,
     refereeStrictness,
+    awayTravelBurden,
   };
   ctx.injuries = generateInjuries(ctx);
   // 카드도 부상과 마찬가지로 킥오프 라인업 기준 고정 — 이 시점의 playedLineups는 아직
@@ -616,6 +621,7 @@ export function finalize(ctx: MatchContext): MatchResult {
     motmPlayerId: motm?.playerId,
     weather: ctx.weather,
     refereeStrictness: ctx.refereeStrictness,
+    awayTravelBurden: ctx.awayTravelBurden,
   };
 }
 

@@ -7,6 +7,7 @@ import type { PlayerInstruction } from './playerInstructions.js';
 import type { SponsorContract } from './finance.js';
 import type { Weather } from './weather.js';
 import type { RefereeStrictness } from './referee.js';
+import type { TravelBurden } from './travel.js';
 
 // ── 능력치 키 ──────────────────────────────────────────────
 
@@ -454,4 +455,7 @@ export interface MatchResult {
   /** 이 경기 심판의 엄격도(고도화 항목46). 손으로 만든 MatchResult(테스트 등)엔 없을 수
    *  있어 optional. */
   refereeStrictness?: RefereeStrictness;
+  /** 원정팀의 이동 부담(고도화 항목48). 손으로 만든 MatchResult(테스트 등)엔 없을 수
+   *  있어 optional. */
+  awayTravelBurden?: TravelBurden;
 }
