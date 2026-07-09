@@ -1,9 +1,15 @@
 import type { MatchPreview as Preview, TeamPreview } from '../game.js';
-import { formationMatchup, WEATHER_LABEL, type TeamStrength, type FormResult, type Weather } from '@soccer-tycoon/engine';
+import {
+  formationMatchup, WEATHER_LABEL, REFEREE_STRICTNESS_LABEL,
+  type TeamStrength, type FormResult, type Weather, type RefereeStrictness,
+} from '@soccer-tycoon/engine';
 import { ATTR_LABELS } from './PlayerDetail.js';
 
 /** 날씨별 표시 아이콘(신규 개선 항목 26). */
 const WEATHER_ICON: Record<Weather, string> = { clear: '☀️', rain: '🌧️', windy: '🌬️' };
+
+/** 심판 엄격도별 표시 아이콘(고도화 항목46). */
+const REFEREE_ICON: Record<RefereeStrictness, string> = { lenient: '🙂', normal: '🧑‍⚖️', strict: '🟨' };
 
 const STRENGTH_LABEL: Record<keyof TeamStrength, string> = {
   attack: '공격', creation: '창출', midfield: '중원', defense: '수비',
@@ -78,6 +84,9 @@ export function MatchPreview({ preview, rivalClubId }: { preview: Preview; rival
         경기 프리뷰
         <span className="pv-weather muted small" title="경기 날씨(신규 개선 항목 26) — 비/강풍은 양 팀 모두의 전개력을 약간 떨어뜨립니다.">
           {WEATHER_ICON[preview.weather]} {WEATHER_LABEL[preview.weather]}
+        </span>
+        <span className="pv-referee muted small" title="이번 경기 심판 엄격도(고도화 항목46) — 엄격할수록 카드가 더 자주 나옵니다.">
+          {REFEREE_ICON[preview.refereeStrictness]} {REFEREE_STRICTNESS_LABEL[preview.refereeStrictness]}
         </span>
       </h3>
       {isDerby && <div className="derby-banner">🔥 라이벌전</div>}

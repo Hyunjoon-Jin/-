@@ -1138,7 +1138,7 @@ h3 { font-size: 14px; margin: 0 0 10px; color: var(--muted); text-transform: upp
 /* 경기 프리뷰 (관전 전 스카우팅) */
 .preview { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; }
 .preview h3 { margin: 0 0 14px; display: flex; align-items: center; gap: 10px; }
-.pv-weather { font-weight: 500; }
+.pv-weather, .pv-referee { font-weight: 500; }
 .pv-teams { display: grid; grid-template-columns: 1fr auto 1fr; align-items: start; gap: 10px; margin-bottom: 16px; }
 .pv-team { display: flex; flex-direction: column; gap: 4px; }
 .pv-team.right { text-align: right; align-items: flex-end; }

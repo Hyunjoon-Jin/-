@@ -6,6 +6,9 @@ export { LiveMatch, HALF_TIME, type LiveStats } from './liveMatch.js';
 export {
   matchWeather, WEATHER_LABEL, WEATHER_ATTACK_MULTIPLIER, WEATHER_CREATION_MULTIPLIER, type Weather,
 } from './weather.js';
+export {
+  matchRefereeStrictness, REFEREE_STRICTNESS_LABEL, REFEREE_CARD_MULTIPLIER, type RefereeStrictness,
+} from './referee.js';
 export { computeTeamStrength, lineOf, formationMatchup, type FormationMatchup } from './teamStrength.js';
 export {
   playerDerived, currentAbility, isInjured, isSuspended, isAvailable, familiarityAt,

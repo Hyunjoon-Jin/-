@@ -6,6 +6,7 @@ import type { InjurySeverity, BodyPart } from './injury.js';
 import type { PlayerInstruction } from './playerInstructions.js';
 import type { SponsorContract } from './finance.js';
 import type { Weather } from './weather.js';
+import type { RefereeStrictness } from './referee.js';
 
 // ── 능력치 키 ──────────────────────────────────────────────
 
@@ -450,4 +451,7 @@ export interface MatchResult {
   motmPlayerId?: string;
   /** 경기 날씨(신규 개선 항목 26). 손으로 만든 MatchResult(테스트 등)엔 없을 수 있어 optional. */
   weather?: Weather;
+  /** 이 경기 심판의 엄격도(고도화 항목46). 손으로 만든 MatchResult(테스트 등)엔 없을 수
+   *  있어 optional. */
+  refereeStrictness?: RefereeStrictness;
 }

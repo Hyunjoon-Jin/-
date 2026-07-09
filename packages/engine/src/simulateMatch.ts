@@ -25,6 +25,7 @@ import {
   CUT_INSIDE_WEIGHT_MUL, CUT_INSIDE_XG_MUL,
 } from './playerInstructions.js';
 import { matchWeather, WEATHER_ATTACK_MULTIPLIER, WEATHER_CREATION_MULTIPLIER, type Weather } from './weather.js';
+import { matchRefereeStrictness, REFEREE_CARD_MULTIPLIER, type RefereeStrictness } from './referee.js';
 
 export interface MatchSetup {
   home: { club: Club; tactic: Tactic };
@@ -253,6 +254,8 @@ export interface MatchContext {
   isBigMatch: boolean;
   /** 경기 날씨(신규 개선 항목 26) — 킥오프 시점에 결정, 하프타임 전술 교체로도 바뀌지 않는다. */
   weather: Weather;
+  /** 이 경기의 심판 엄격도(고도화 항목46) — 킥오프 시점에 결정, 카드 확률 배율에 반영. */
+  refereeStrictness: RefereeStrictness;
 }
 
 function recomputePossession(ctx: MatchContext): void {
@@ -265,6 +268,7 @@ function recomputePossession(ctx: MatchContext): void {
 export function createContext(setup: MatchSetup): MatchContext {
   const isBigMatch = setup.isBigMatch ?? false;
   const weather = matchWeather(setup.seed, setup.home.club.id, setup.away.club.id);
+  const refereeStrictness = matchRefereeStrictness(setup.seed, setup.home.club.id, setup.away.club.id);
   const ctx: MatchContext = {
     rng: new Rng(setup.seed),
     home: buildSide(setup.home.club, setup.home.tactic, true, isBigMatch, setup.away.tactic.formation, weather),
@@ -278,6 +282,7 @@ export function createContext(setup: MatchSetup): MatchContext {
     playedLineups: { home: [...setup.home.tactic.lineup], away: [...setup.away.tactic.lineup] },
     isBigMatch,
     weather,
+    refereeStrictness,
   };
   ctx.injuries = generateInjuries(ctx);
   // 카드도 부상과 마찬가지로 킥오프 라인업 기준 고정 — 이 시점의 playedLineups는 아직
@@ -496,10 +501,13 @@ function finalizeRatings(ctx: MatchContext): void {
  * 카드 판정 — 부상과 동일하게 킥오프 시점(ctx.playedLineups가 아직 선발 XI만
  * 담고 있을 때)에 한 번만 계산해 ctx.cards에 고정한다(고도화 항목41). 레드카드는
  * stepMinute이 해당 분(minute)부터 실시간으로 참조해 인원수 열세를 전력에 반영한다.
+ * 심판 엄격도(고도화 항목46)는 카드 확률 전체에 배율로만 반영 — 독립 RNG 스트림의
+ * 굴림 횟수·순서는 그대로다.
  */
 function generateCards(ctx: MatchContext): CardEvent[] {
   const cards: CardEvent[] = [];
   const rng = new Rng(ctx.seed * 3 + 12345);
+  const refereeMul = REFEREE_CARD_MULTIPLIER[ctx.refereeStrictness];
   const roll = (side: Side, sideKey: 'home' | 'away') => {
     const byId = new Map(side.club.players.map((p) => [p.id, p]));
     for (const slot of ctx.playedLineups[sideKey]) {
@@ -507,8 +515,8 @@ function generateCards(ctx: MatchContext): CardEvent[] {
       if (!p || !isAvailable(p)) continue;
       const aggr = p.attributes.aggression;
       const cardMul = hasTrait(p, 'hothead') ? 1.6 : 1; // 다혈질: 카드 확률↑
-      const yellowP = clamp((0.03 + (aggr - 10) * 0.006) * cardMul, 0.01, 0.16);
-      const redP = clamp((0.002 + (aggr - 10) * 0.0006) * cardMul, 0.0005, 0.02);
+      const yellowP = clamp((0.03 + (aggr - 10) * 0.006) * cardMul * refereeMul, 0.01, 0.16);
+      const redP = clamp((0.002 + (aggr - 10) * 0.0006) * cardMul * refereeMul, 0.0005, 0.02);
       if (rng.roll(redP)) {
         cards.push({ minute: rng.int(20, 90), side: sideKey, playerId: p.id, playerName: p.name, type: 'red' });
       } else if (rng.roll(yellowP)) {
@@ -602,6 +610,7 @@ export function finalize(ctx: MatchContext): MatchResult {
     seed: ctx.seed,
     motmPlayerId: motm?.playerId,
     weather: ctx.weather,
+    refereeStrictness: ctx.refereeStrictness,
   };
 }
 
