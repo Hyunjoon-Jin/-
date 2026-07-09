@@ -26,6 +26,16 @@ export interface PitchState {
 const W = 760;
 const H = 460;
 
+/** 볼 이동 보간(트윈) 지속시간(ms, 고도화 항목 A1) — 이전에는 분(minute)이 바뀔 때마다
+ *  목표 위치로 순간이동했다. 고배속 관전 중 트윈이 끝나기 전에 다음 목표가 도착해도,
+ *  그 시점의 화면상 보간 위치에서 새 목표로 다시 시작해 끊김 없이 이어진다. */
+const BALL_TWEEN_MS = 260;
+
+/** ease-out — 도착 직전에 감속해 더 자연스러운 멈춤을 준다. */
+function easeOutQuad(t: number): number {
+  return 1 - (1 - t) * (1 - t);
+}
+
 // 우측 공격(홈) 기준 포지션별 기본 좌표(0~1). 원정은 x를 반전.
 // PlayerDetail의 포지션 숙련도 맵(신규 개선 항목 15)도 같은 좌표계를 재사용해
 // 포지션 배치 감각을 일관되게 유지한다.
@@ -69,24 +79,46 @@ function formationCoords(positions: Position[]): { x: number; y: number }[] {
 
 export function MatchPitch(props: PitchState) {
   const ref = useRef<HTMLCanvasElement | null>(null);
+  // 매 프레임 최신 props를 읽기 위한 ref — rAF 콜백은 마운트 시 한 번만 생성되므로
+  // 클로저에 갇힌 값이 아니라 이 ref를 통해 항상 최신 스코어·분·포메이션 등을 읽는다.
+  const propsRef = useRef(props);
+  propsRef.current = props;
 
+  // 볼 트윈 상태(고도화 항목 A1): from(트윈 시작 시점의 화면상 위치) → to(새 목표),
+  // start(트윈 시작 시각, performance.now() 기준).
+  const tweenRef = useRef({ from: props.ball, to: props.ball, start: performance.now() });
+  const lastInterpolatedRef = useRef(props.ball);
+
+  // 새 목표 위치(props.ball)가 도착하면, 현재 화면에 보이는 보간 위치에서 새 목표로
+  // 다시 트윈을 시작한다(이전 트윈이 끝났든 진행 중이든 항상 끊김 없이 이어짐).
+  useEffect(() => {
+    tweenRef.current = { from: lastInterpolatedRef.current, to: props.ball, start: performance.now() };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.ball.x, props.ball.y]);
+
+  // requestAnimationFrame으로 매 프레임 트윈 진행률을 계산해 다시 그린다(고도화 항목 A1).
+  // propsRef가 항상 최신 props를 담고 있어, 볼 이외의 변경(스코어·분·포메이션·골 플래시 등)도
+  // 별도 effect 없이 이 루프 안에서 다음 프레임에 자연히 반영된다.
   useEffect(() => {
     const canvas = ref.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas?.getContext('2d');
     if (!ctx) return;
-    draw(ctx, props);
-    // props는 매 렌더마다 새로 생성되는 객체라 참조 자체를 의존성으로 두면 피치와
-    // 무관한 상위 리렌더(중계 피드·통계 갱신 등)에도 캔버스를 다시 그린다.
-    // 실제로 그림에 영향을 주는 원시값/직렬화 가능한 필드만 의존성으로 좁힌다.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    props.homeName, props.awayName, props.score[0], props.score[1], props.minute,
-    props.ball.x, props.ball.y, props.goalFlash, props.userIsHome,
-    props.isDerby, props.isFinal,
-    props.homeFormation.join(','), props.awayFormation.join(','),
-    props.homeLabels.join(','), props.awayLabels.join(','),
-  ]);
+    let raf = 0;
+    const frame = (now: number) => {
+      const tw = tweenRef.current;
+      const t = Math.min(1, (now - tw.start) / BALL_TWEEN_MS);
+      const eased = easeOutQuad(t);
+      const interpolated = {
+        x: tw.from.x + (tw.to.x - tw.from.x) * eased,
+        y: tw.from.y + (tw.to.y - tw.from.y) * eased,
+      };
+      lastInterpolatedRef.current = interpolated;
+      draw(ctx, { ...propsRef.current, ball: interpolated });
+      raf = requestAnimationFrame(frame);
+    };
+    raf = requestAnimationFrame(frame);
+    return () => cancelAnimationFrame(raf);
+  }, []);
 
   return <canvas ref={ref} width={W} height={H} className="pitch-canvas" />;
 }
