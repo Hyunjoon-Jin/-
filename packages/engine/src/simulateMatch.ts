@@ -441,6 +441,20 @@ function isDesperate(side: Side, opp: Side, minute: number): boolean {
   return minute >= LATE_GAME_MINUTE && side.goals < opp.goals;
 }
 
+/** 실점 직후 이 분(minute) 동안 수비 조직력이 흔들린 것으로 본다(고도화 항목55,
+ *  "sucker-punch" 현상 — 실점 직후 곧바로 추가 실점할 위험이 커지는 통념). */
+const MOMENTUM_WINDOW_MINUTES = 5;
+/** 동요 구간의 수비 배율. */
+const MOMENTUM_DEFENSE_MULTIPLIER = 0.93;
+
+/** side가 최근 MOMENTUM_WINDOW_MINUTES분 이내에 실점했는지 — 이벤트 이력만 조회하는
+ *  결정론적 판단이라 RNG를 소비하지 않는다. */
+export function recentlyConceded(ctx: MatchContext, side: 'home' | 'away', minute: number): boolean {
+  const oppSide = side === 'home' ? 'away' : 'home';
+  return ctx.events.some((e) => e.side === oppSide && (e.outcome === 'GOAL' || e.outcome === 'OWN_GOAL')
+    && e.minute < minute && e.minute >= minute - MOMENTUM_WINDOW_MINUTES);
+}
+
 /** 한 분(틱) 진행. 생성된 이벤트가 있으면 반환(없으면 null). */
 export function stepMinute(ctx: MatchContext, minute: number): MatchEvent | null {
   const { rng } = ctx;
@@ -455,9 +469,11 @@ export function stepMinute(ctx: MatchContext, minute: number): MatchEvent | null
   const defMul = manDownMultiplier(defSentOff.size);
   const attDesperateMul = isDesperate(att, def, minute) ? DESPERATION_ATTACK_MULTIPLIER : 1;
   const defDesperateMul = isDesperate(def, att, minute) ? DESPERATION_DEFENSE_MULTIPLIER : 1;
+  const defMomentumMul = recentlyConceded(ctx, homeHasBall ? 'away' : 'home', minute)
+    ? MOMENTUM_DEFENSE_MULTIPLIER : 1;
   const attAttack = att.strength.attack * attMul * attDesperateMul;
   const attCreation = att.strength.creation * attMul * attDesperateMul;
-  const defDefense = def.strength.defense * defMul * defDesperateMul;
+  const defDefense = def.strength.defense * defMul * defDesperateMul * defMomentumMul;
 
   const pAdvance = clamp(
     TUNING.advanceBase +
