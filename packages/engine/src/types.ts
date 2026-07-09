@@ -186,6 +186,14 @@ export interface Player {
    *  paidTierIndexes는 이미 지급된 티어의 tiers 배열 인덱스(중복 지급 방지).
    *  구버전 세이브는 tiers가 없을 수 있어 그 경우 아무 티어도 발동하지 않는다. */
   addOnClause?: { sellerClubId: string; tiers: AddOnTier[]; paidTierIndexes?: number[] };
+  /** 유저가 자유롭게 붙이는 라벨(예: "주전", "육성중") — 스쿼드 목록 필터·정렬에 활용
+   *  가능한 순수 UI 메타데이터(선수관리 개선 항목50). 구버전 세이브는 없을 수 있어
+   *  optional(없으면 빈 배열 취급). */
+  tags?: string[];
+  /** 유저가 남기는 자유 메모(선수관리 개선 항목50) — 엔진 로직에 영향 없음. */
+  note?: string;
+  /** 즐겨찾기/핀 고정(선수관리 개선 항목50) — 대시보드·스쿼드 목록 상단 고정 노출용. */
+  pinned?: boolean;
 }
 
 export type TrainingFocus =
