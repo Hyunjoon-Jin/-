@@ -339,10 +339,43 @@ body {
 
 /* ── Player detail ── */
 .player-detail { max-width: 860px; }
+.player-detail-fullscreen { max-width: 96vw; width: 96vw; height: 92vh; overflow-y: auto; }
 .pd-sub { font-size: 13px; margin-top: 2px; }
 .pd-number { color: var(--muted); font-weight: 400; }
 .pd-meta { display: flex; flex-wrap: wrap; gap: 16px; margin: 8px 0; font-size: 14px; }
 .pd-meta b { font-family: var(--font-display); font-size: 16px; font-weight: 600; }
+
+/* 선수관리 개선 항목17-24 — 헤더 액션(즐겨찾기·이전/다음·전체화면), 관리 패널(등번호·태그·메모·방출) */
+.pd-head-actions { display: flex; align-items: center; gap: 6px; }
+.pd-pin-btn { font-size: 16px; padding: 4px 9px; }
+.pd-pin-btn.active { color: gold; border-color: gold; }
+.pd-manage {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px;
+  padding: 10px 12px; margin: 4px 0 14px;
+}
+.pd-number-edit { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.pd-number-edit input {
+  width: 52px; background: var(--panel); color: var(--text); border: 1px solid var(--line);
+  border-radius: 6px; padding: 4px 6px; font-size: 13px;
+}
+.pd-tags-edit { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.pd-tag-remove {
+  background: none; border: none; color: var(--muted); cursor: pointer; margin-left: 4px;
+  font-size: 11px; padding: 0;
+}
+.pd-tag-remove:hover { color: var(--color-danger); }
+.pd-tag-input {
+  background: var(--panel); color: var(--text); border: 1px solid var(--line);
+  border-radius: 6px; padding: 4px 8px; font-size: 12px; width: 90px;
+}
+.pd-note {
+  width: 100%; min-height: 44px; resize: vertical; background: var(--panel);
+  color: var(--text); border: 1px solid var(--line); border-radius: 6px;
+  padding: 6px 8px; font-size: 13px; font-family: inherit;
+}
+.pd-manage-actions { display: flex; gap: 8px; margin-left: auto; }
+.btn-ghost.danger:hover { border-color: var(--color-danger); color: var(--color-danger); }
 
 .modal-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin: 4px 0 14px; }
 .modal-tab {

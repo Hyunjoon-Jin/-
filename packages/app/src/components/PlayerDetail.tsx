@@ -7,6 +7,7 @@ import {
   POSITION_MASTERY_MILESTONES,
   type AttrKey, type Player, type DerivedRatings, type TrainingFocus, type Position,
   type PlayerFormEntry, type OverallTier, type PotentialTier, type AgeProfile, type ScoutingReport,
+  type PlayerInstruction, type PlayerInstructionKind,
 } from '@soccer-tycoon/engine';
 import { useState } from 'react';
 import {
@@ -19,6 +20,12 @@ import { onKeyActivate } from '../a11y.js';
 import { InfoTip } from './InfoTip.js';
 import { flagFor } from '../flags.js';
 import { LINE_X, SIDE_Y } from './MatchPitch.js';
+import { ConfirmDialog } from './ConfirmDialog.js';
+
+const INSTRUCTION_LABEL: Record<PlayerInstructionKind, string> = {
+  manMark: '전담마크', cutInside: '좁혀 들어오기',
+};
+const MARK_TARGET_POSITIONS: Position[] = POSITIONS.filter((p) => p !== 'GK');
 
 function moraleLabel(m: number): { text: string; cls: string } {
   if (m >= 0.65) return { text: '😀 만족', cls: 'cond-good' };
@@ -145,6 +152,27 @@ interface Props {
   onDispatchScout?: () => { ok: boolean; message: string };
   /** 임대 중인 선수면 원 소속 구단명(loanFromClubId를 이름으로 미리 변환해 전달). */
   loanFromClubName?: string;
+  /** 이전/다음 선수로 이동(선수관리 개선 항목17) — 모달을 닫지 않고 목록을 순회. */
+  onNavigate?: (direction: 'prev' | 'next') => void;
+  canNavigatePrev?: boolean;
+  canNavigateNext?: boolean;
+  /** 내 선수면 방출 가능(선수관리 개선 항목18 — 이전에는 이적 시장 화면에서만 가능했다). */
+  onRelease?: () => { ok: boolean; message: string };
+  /** 판매·임대는 이적 시장 화면에서만 처리 가능해, 그 화면으로 바로 이동하는 진입점만 제공. */
+  onGoToTransfers?: () => void;
+  /** 내 선수이고 현재 라인업 슬롯에 있으면 개인 지시 설정 가능(선수관리 개선 항목19 —
+   *  이전에는 전술 화면에서만 설정할 수 있었다). 슬롯에 없으면 undefined. */
+  onSetInstruction?: (instruction: PlayerInstruction | undefined) => void;
+  currentInstruction?: PlayerInstruction;
+  instructionKinds?: PlayerInstructionKind[];
+  /** 등번호 직접 변경(선수관리 개선 항목20). */
+  onSetSquadNumber?: (num: number | undefined) => { ok: boolean; message: string };
+  /** 자유 메모(선수관리 개선 항목21). */
+  onSetNote?: (note: string) => void;
+  /** 즐겨찾기(핀 고정) 토글(선수관리 개선 항목22). */
+  onTogglePin?: () => void;
+  /** 태그 편집(선수관리 개선 항목23). */
+  onSetTags?: (tags: string[]) => void;
 }
 
 type PdTab = 'overview' | 'development' | 'career';
@@ -195,6 +223,9 @@ function RenewPanel({
 export function PlayerDetail({
   player, onClose, onSetFocus, onSetTrainingPosition, onRenew, recentForm, timeline, ratingHistory, scouting,
   scouted, onDispatchScout, loanFromClubName,
+  onNavigate, canNavigatePrev, canNavigateNext, onRelease, onGoToTransfers,
+  onSetInstruction, currentInstruction, instructionKinds,
+  onSetSquadNumber, onSetNote, onTogglePin, onSetTags,
 }: Props) {
   const toast = useResultToast();
   const ca = currentAbility(player);
@@ -203,11 +234,17 @@ export function PlayerDetail({
   const stability = formStability(ratingHistory ?? []);
   const ref = useModalA11y<HTMLDivElement>(onClose);
   const [tab, setTab] = useState<PdTab>('overview');
+  const [fullscreen, setFullscreen] = useState(false);
+  const [squadNumberDraft, setSquadNumberDraft] = useState(player.squadNumber?.toString() ?? '');
+  const [noteDraft, setNoteDraft] = useState(player.note ?? '');
+  const [tagDraft, setTagDraft] = useState('');
+  const [confirmingRelease, setConfirmingRelease] = useState(false);
 
   return (
+    <>
     <div className="modal-backdrop" onClick={onClose}>
       <div
-        className="modal player-detail"
+        className={fullscreen ? 'modal player-detail player-detail-fullscreen' : 'modal player-detail'}
         role="dialog"
         aria-modal="true"
         aria-label={`${player.name} 선수 상세`}
@@ -223,8 +260,91 @@ export function PlayerDetail({
               {' · '}{player.age}세 · {flagFor(player.nationality)} {player.nationality} · 계약 {player.contractYears}년
             </div>
           </div>
-          <button className="btn-ghost" onClick={onClose}>닫기 ✕</button>
+          <div className="pd-head-actions">
+            {onTogglePin && (
+              <button
+                className={player.pinned ? 'btn-ghost pd-pin-btn active' : 'btn-ghost pd-pin-btn'}
+                title={player.pinned ? '즐겨찾기 해제' : '즐겨찾기 추가'}
+                onClick={onTogglePin}
+              >
+                {player.pinned ? '★' : '☆'}
+              </button>
+            )}
+            {onNavigate && (
+              <>
+                <button className="btn-ghost" disabled={!canNavigatePrev} onClick={() => onNavigate('prev')}>‹ 이전</button>
+                <button className="btn-ghost" disabled={!canNavigateNext} onClick={() => onNavigate('next')}>다음 ›</button>
+              </>
+            )}
+            <button className="btn-ghost" title="전체화면 전환" onClick={() => setFullscreen((f) => !f)}>
+              {fullscreen ? '⛶ 축소' : '⛶ 전체화면'}
+            </button>
+            <button className="btn-ghost" onClick={onClose}>닫기 ✕</button>
+          </div>
         </div>
+
+        {(onSetSquadNumber || onSetNote || onSetTags || onRelease || onGoToTransfers) && (
+          <div className="pd-manage">
+            {onSetSquadNumber && (
+              <label className="pd-number-edit">
+                <span className="muted small">등번호</span>
+                <input
+                  type="number" min={1} max={99} value={squadNumberDraft}
+                  onChange={(e) => setSquadNumberDraft(e.target.value)}
+                  onBlur={() => {
+                    const n = squadNumberDraft.trim() === '' ? undefined : Number(squadNumberDraft);
+                    toast(onSetSquadNumber(n));
+                  }}
+                />
+              </label>
+            )}
+            {onSetTags && (
+              <div className="pd-tags-edit">
+                {(player.tags ?? []).map((t) => (
+                  <span key={t} className="player-tag-chip">
+                    {t}
+                    <button
+                      className="pd-tag-remove"
+                      aria-label={`${t} 태그 삭제`}
+                      onClick={() => onSetTags((player.tags ?? []).filter((x) => x !== t))}
+                    >×</button>
+                  </span>
+                ))}
+                <input
+                  className="pd-tag-input"
+                  placeholder="+ 태그 추가"
+                  value={tagDraft}
+                  onChange={(e) => setTagDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key !== 'Enter' || !tagDraft.trim()) return;
+                    const next = [...(player.tags ?? []), tagDraft.trim()];
+                    onSetTags(next);
+                    setTagDraft('');
+                  }}
+                />
+              </div>
+            )}
+            {onSetNote && (
+              <textarea
+                className="pd-note"
+                placeholder="이 선수에 대한 메모…"
+                value={noteDraft}
+                onChange={(e) => setNoteDraft(e.target.value)}
+                onBlur={() => onSetNote(noteDraft)}
+              />
+            )}
+            {(onRelease || onGoToTransfers) && (
+              <div className="pd-manage-actions">
+                {onGoToTransfers && (
+                  <button className="btn-ghost" onClick={onGoToTransfers}>💰 이적 시장에서 판매·임대</button>
+                )}
+                {onRelease && (
+                  <button className="btn-ghost danger" onClick={() => setConfirmingRelease(true)}>🗑 방출</button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="pd-meta">
           <span>CA <b>{ca.toFixed(0)}</b></span>
@@ -399,6 +519,42 @@ export function PlayerDetail({
               </div>
             )}
 
+            {onSetInstruction && instructionKinds && instructionKinds.length > 0 && (
+              <div className="pd-training">
+                <span className="muted">
+                  개인 지시:
+                  <InfoTip title="개인 지시">
+                    현재 라인업 슬롯에 부착되는 세부 지시입니다. 전담마크는 상대 라인업의 특정
+                    포지션을, 좁혀 들어오기는 측면 자원의 커팅 인을 지시합니다. 전술 화면에서
+                    설정하는 것과 동일하게 적용됩니다.
+                  </InfoTip>
+                </span>
+                <select
+                  value={currentInstruction?.kind ?? ''}
+                  onChange={(e) => {
+                    const kind = e.target.value as PlayerInstructionKind | '';
+                    if (kind === '') { onSetInstruction(undefined); return; }
+                    if (kind === 'manMark') {
+                      onSetInstruction({ kind, targetPosition: MARK_TARGET_POSITIONS[0] });
+                    } else {
+                      onSetInstruction({ kind });
+                    }
+                  }}
+                >
+                  <option value="">지시 없음</option>
+                  {instructionKinds.map((k) => <option key={k} value={k}>{INSTRUCTION_LABEL[k]}</option>)}
+                </select>
+                {currentInstruction?.kind === 'manMark' && (
+                  <select
+                    value={currentInstruction.targetPosition ?? ''}
+                    onChange={(e) => onSetInstruction({ kind: 'manMark', targetPosition: e.target.value as Position })}
+                  >
+                    {MARK_TARGET_POSITIONS.map((pos) => <option key={pos} value={pos}>{pos}</option>)}
+                  </select>
+                )}
+              </div>
+            )}
+
             <GrowthChart history={player.caHistory ?? []} current={Math.round(ca)} />
 
             {player.age >= RETIRE_MIN_AGE && (
@@ -430,6 +586,17 @@ export function PlayerDetail({
         )}
       </div>
     </div>
+    {confirmingRelease && onRelease && (
+      <ConfirmDialog
+        title="선수 방출"
+        message={`${player.name} 선수를 방출하시겠습니까? 보상 없이 영구히 스쿼드에서 빠집니다.`}
+        confirmLabel="방출"
+        danger
+        onConfirm={() => { toast(onRelease()); setConfirmingRelease(false); onClose(); }}
+        onCancel={() => setConfirmingRelease(false)}
+      />
+    )}
+    </>
   );
 }
 

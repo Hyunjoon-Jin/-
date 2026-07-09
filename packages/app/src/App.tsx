@@ -15,6 +15,7 @@ import {
   toggleWatchlistAction,
   loanOut, loanIn, recallLoan, swapDeal, renegotiateLoanWageShareAction,
   setTrainingFocus, setTrainingPosition, renewContract, setAcademyFocus, setPlayerTagsAction,
+  setSquadNumberAction, setPlayerNoteAction, togglePlayerPinAction,
   watchSetup, matchPreview, commitWatchedRound,
   watchCupSetup, cupPreview, commitWatchedCupRound,
   playerForm, playerTimeline, playerRatingHistory, respondMedia, dismissMedia, signContract,
@@ -22,7 +23,8 @@ import {
   declareBoldPredictionAction,
   type GameState, type ActionOutcome, type WatchSetup, type Difficulty, type MediaEvent,
 } from './game.js';
-import type { Tactic, MatchResult, LoanTerms, AddOnTier, NamedStaffKind } from '@soccer-tycoon/engine';
+import { eligibleInstructionKinds, currentAbility, type Tactic, type MatchResult, type LoanTerms, type AddOnTier, type NamedStaffKind } from '@soccer-tycoon/engine';
+import { setPlayerInstruction } from './tactics.js';
 import { createSaveStore } from './storage.js';
 import { recordSackedStint } from './career.js';
 import { onKeyActivate } from './a11y.js';
@@ -61,6 +63,15 @@ function newSlotId(): string {
   return `s_${crypto.randomUUID()}`;
 }
 
+/** 선수 상세 모달용 — id로 전 구단(1군+리저브)에서 최신 Player 객체를 찾는다. */
+function findPlayerAnywhere(state: GameState, id: string): Player | null {
+  for (const c of state.clubs) {
+    const found = c.players.find((p) => p.id === id) ?? (c.reserves ?? []).find((p) => p.id === id);
+    if (found) return found;
+  }
+  return null;
+}
+
 export function App() {
   const store = useMemo(() => createSaveStore(), []);
   const [game, setGame] = useState<GameState | null>(null);
@@ -70,7 +81,10 @@ export function App() {
   const [watching, setWatching] = useState<WatchSetup | null>(null);
   const [watchKind, setWatchKind] = useState<'league' | 'cup'>('league');
   const [showHelp, setShowHelp] = useState(false);
-  const [detailPlayer, setDetailPlayer] = useState<Player | null>(null);
+  // 선택된 선수는 id만 저장하고 매 렌더 game.clubs에서 다시 찾는다(선수관리 개선
+  // 항목17-24) — 예전에는 클릭 시점의 Player 객체 스냅샷을 그대로 들고 있어서, 모달을
+  // 띄운 채로 등번호·태그·즐겨찾기 등을 바꿔도 화면에 갱신된 값이 반영되지 않았다.
+  const [detailPlayerId, setDetailPlayerId] = useState<string | null>(null);
   const [saveError, setSaveError] = useState(false);
   /** 시즌/라운드 진행처럼 화면이 잠깐 멈추는 무거운 액션이 처리 중이면 그 액션 키(UX 고도화). */
   const [busyAction, setBusyAction] = useState<string | null>(null);
@@ -128,7 +142,7 @@ export function App() {
    *  club 데이터와 뒤섞인 채로 눌러붙어 대시보드로 돌아갈 수 없게 된다. */
   function resetOverlays() {
     setWatching(null);
-    setDetailPlayer(null);
+    setDetailPlayerId(null);
     setShowHelp(false);
     setSaveError(false);
   }
@@ -176,6 +190,7 @@ export function App() {
   }
 
   const club = myClub(game);
+  const detailPlayer = detailPlayerId ? findPlayerAnywhere(game, detailPlayerId) : null;
   const savedLabel = savedAt
     ? `저장됨 ${new Date(savedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}`
     : '';
@@ -303,9 +318,42 @@ export function App() {
     update(setTrainingFocus(game, playerIds, focus));
   };
 
-  /** 선수 태그 교체(선수관리 개선 항목11/12 — 방출 후보/임대 검토 일괄 표시). */
+  /** 선수 태그 교체(선수관리 개선 항목11/12/23 — 방출 후보/임대 검토 일괄 표시 + 자유 태그). */
   const handleSetPlayerTags = (playerId: string, tags: string[]) => {
     update(setPlayerTagsAction(game, playerId, tags));
+  };
+
+  /** 등번호 직접 변경(선수관리 개선 항목20). */
+  const handleSetSquadNumber = (playerId: string, num: number | undefined): ActionOutcome => {
+    const outcome = setSquadNumberAction(game, playerId, num);
+    if (outcome.ok) update(outcome.state);
+    return outcome;
+  };
+
+  /** 선수 메모(선수관리 개선 항목21). */
+  const handleSetNote = (playerId: string, note: string) => {
+    update(setPlayerNoteAction(game, playerId, note));
+  };
+
+  /** 즐겨찾기 토글(선수관리 개선 항목22). */
+  const handleTogglePin = (playerId: string) => {
+    update(togglePlayerPinAction(game, playerId));
+  };
+
+  /** 선수 상세 모달에서 개인 지시 설정(선수관리 개선 항목19) — 전술 화면과 동일한 슬롯
+   *  기반 로직을 재사용해, 현재 라인업에 있는 내 선수만 지정 가능하다. */
+  const handleSetInstruction = (playerId: string, instruction: ReturnType<typeof myTactic>['lineup'][number]['instruction']) => {
+    const tactic = myTactic(game);
+    const slotIndex = tactic.lineup.findIndex((s) => s.playerId === playerId);
+    if (slotIndex < 0) return;
+    update(setMyTactic(game, setPlayerInstruction(tactic, slotIndex, instruction)));
+  };
+
+  /** 선수 방출(선수관리 개선 항목18 — 이전에는 이적 시장 화면에서만 가능했다). */
+  const handleReleaseFromDetail = (playerId: string): ActionOutcome => {
+    const outcome = release(game, playerId);
+    if (outcome.ok) update(outcome.state);
+    return outcome;
   };
 
   const handleWatch = () => {
@@ -339,10 +387,17 @@ export function App() {
       {showHelp && <Help onClose={() => setShowHelp(false)} />}
       {detailPlayer && (() => {
         const isMine = club.players.some((p) => p.id === detailPlayer.id);
+        // 이전/다음 선수 네비게이션(선수관리 개선 항목17)은 내 스쿼드에서만 — Squad
+        // 목록의 기본 정렬(CA 내림차순)과 같은 순서로 순회한다.
+        const myOrdered = [...club.players].sort((a, b) => currentAbility(b) - currentAbility(a));
+        const navIndex = isMine ? myOrdered.findIndex((p) => p.id === detailPlayer.id) : -1;
+        const tactic = myTactic(game);
+        const slotIndex = tactic.lineup.findIndex((s) => s.playerId === detailPlayer.id);
+        const slot = slotIndex >= 0 ? tactic.lineup[slotIndex] : undefined;
         return (
           <PlayerDetail
             player={detailPlayer}
-            onClose={() => setDetailPlayer(null)}
+            onClose={() => setDetailPlayerId(null)}
             onSetFocus={isMine ? (focus) => update(setTrainingFocus(game, detailPlayer.id, focus)) : undefined}
             onSetTrainingPosition={isMine ? (pos) => update(setTrainingPosition(game, detailPlayer.id, pos)) : undefined}
             onRenew={
@@ -363,6 +418,21 @@ export function App() {
               isMine ? undefined : () => runAction(dispatchScoutAction, detailPlayer.id)
             }
             loanFromClubName={game.clubs.find((c) => c.id === detailPlayer.loanFromClubId)?.name}
+            onNavigate={isMine ? (dir) => {
+              const next = myOrdered[navIndex + (dir === 'next' ? 1 : -1)];
+              if (next) setDetailPlayerId(next.id);
+            } : undefined}
+            canNavigatePrev={isMine && navIndex > 0}
+            canNavigateNext={isMine && navIndex >= 0 && navIndex < myOrdered.length - 1}
+            onRelease={isMine && !game.live ? () => handleReleaseFromDetail(detailPlayer.id) : undefined}
+            onGoToTransfers={isMine ? () => { setDetailPlayerId(null); setTab('transfers'); } : undefined}
+            onSetInstruction={isMine && slot ? (instruction) => handleSetInstruction(detailPlayer.id, instruction) : undefined}
+            currentInstruction={isMine ? slot?.instruction : undefined}
+            instructionKinds={isMine && slot ? eligibleInstructionKinds(slot.position) : undefined}
+            onSetSquadNumber={isMine ? (num) => handleSetSquadNumber(detailPlayer.id, num) : undefined}
+            onSetNote={isMine ? (note) => handleSetNote(detailPlayer.id, note) : undefined}
+            onTogglePin={isMine ? () => handleTogglePin(detailPlayer.id) : undefined}
+            onSetTags={isMine ? (tags) => handleSetPlayerTags(detailPlayer.id, tags) : undefined}
           />
         );
       })()}
@@ -410,7 +480,7 @@ export function App() {
             )}
             {tab === 'squad' && (
               <Squad
-                key={slotId} club={club} onSelect={setDetailPlayer}
+                key={slotId} club={club} onSelect={(p) => setDetailPlayerId(p.id)}
                 onAssignMentor={handleAssignMentor} onClearMentor={handleClearMentor}
                 onBulkSetTrainingFocus={handleBulkSetTrainingFocus} onSetPlayerTags={handleSetPlayerTags}
               />
@@ -473,7 +543,7 @@ export function App() {
                 onExerciseBuyOption={handleExerciseBuyOption}
                 onRenegotiateLoanWage={handleRenegotiateLoanWage}
                 onSwap={handleSwap}
-                onSelect={setDetailPlayer}
+                onSelect={(p) => setDetailPlayerId(p.id)}
                 onNegotiationBreakdown={(id) => update(recordNegotiationBreakdown(game, id))}
                 onBuyback={handleBuyback}
                 onRenegotiateBuyback={handleRenegotiateBuyback}
