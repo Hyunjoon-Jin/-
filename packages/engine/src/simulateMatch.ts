@@ -24,7 +24,10 @@ import {
   findManMarker, manMarkWeightMultiplier, manMarkXgMultiplier, isValidInstruction,
   CUT_INSIDE_WEIGHT_MUL, CUT_INSIDE_XG_MUL,
 } from './playerInstructions.js';
-import { matchWeather, WEATHER_ATTACK_MULTIPLIER, WEATHER_CREATION_MULTIPLIER, type Weather } from './weather.js';
+import {
+  matchWeather, WEATHER_ATTACK_MULTIPLIER, WEATHER_CREATION_MULTIPLIER, WEATHER_INJURY_MULTIPLIER,
+  type Weather,
+} from './weather.js';
 import { matchRefereeStrictness, REFEREE_CARD_MULTIPLIER, type RefereeStrictness } from './referee.js';
 
 export interface MatchSetup {
@@ -561,7 +564,9 @@ export function generateInjuries(ctx: MatchContext): InjuryEvent[] {
       const fatigueMul = fatigueRiskFactor(p.condition);
       // 통산 부상이 잦았던 선수는 앞으로도 부상 위험이 더 크다(고도화 항목29).
       const chronicMul = chronicInjuryFactor(p.careerInjuryCount ?? 0);
-      const injMul = traitMul * trainingMul * reinjuryMul * fatigueMul * chronicMul;
+      // 날씨(고도화 항목47) — 혹한은 근육이 경직돼 부상 위험이 소폭 오른다.
+      const weatherMul = WEATHER_INJURY_MULTIPLIER[ctx.weather];
+      const injMul = traitMul * trainingMul * reinjuryMul * fatigueMul * chronicMul * weatherMul;
       if (!rng.roll(TUNING.injuryTriggerChance * medFactor * facilityFactor * injMul)) continue;
       const inj = rollInjury(rng, medical);
       injuries.push({
