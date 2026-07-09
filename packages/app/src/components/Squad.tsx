@@ -1,17 +1,61 @@
 import { useMemo, useState } from 'react';
 import {
   formatMoney, currentAbility, marketValue, isInjured, isSuspended, lineOf, MENTOR_PAIRING_MAX, hasTrait,
-  ROTATION_WARNING_THRESHOLD,
-  type Club, type Player, type Line,
+  ROTATION_WARNING_THRESHOLD, TRAINING_FOCUSES, TRAINING_LABELS,
+  type Club, type Player, type Line, type TrainingFocus,
 } from '@soccer-tycoon/engine';
 import { onKeyActivate } from '../a11y.js';
 import { SortableTh } from './SortableTh.js';
 import { flagFor } from '../flags.js';
-import { useResultToast } from '../toast.js';
+import { useResultToast, useToast } from '../toast.js';
+import { PlayerCompareModal } from './PlayerCompareModal.js';
 import type { ActionOutcome } from '../game.js';
 
 /** 멘토링 대상은 아직 성장 중인 유망주(엔진 MENTEE_MAX_AGE와 동일 기준)만. */
 const MENTEE_MAX_AGE = 23;
+
+/** "로"/"으로" 조사 선택 — 받침 없음(index 0) 또는 ㄹ받침(index 8)이면 "로", 그 외는 "으로". */
+function roParticle(word: string): '로' | '으로' {
+  const last = word.charCodeAt(word.length - 1);
+  if (last < 0xac00 || last > 0xd7a3) return '로';
+  const finalIndex = (last - 0xac00) % 28;
+  return finalIndex === 0 || finalIndex === 8 ? '로' : '으로';
+}
+
+/** 방출·임대 검토 대상을 일괄 표시하는 프리셋 태그(선수관리 개선 항목11/12) — 자유 태그
+ *  시스템(Player.tags) 위에 얹은 실용 프리셋 두 가지. */
+const RELEASE_TAG = '방출 후보';
+const LOAN_REVIEW_TAG = '임대 검토';
+
+/** 아직 멘토가 없는 유망주에게 최적의 미배정 멘토를 자동으로 짝지어준다(선수관리 개선
+ *  항목15) — 잠재력이 높은 유망주부터, 같은 라인·높은 CA·성향 충돌(다혈질×차분함) 회피
+ *  순으로 후보를 고르고, 한 멘토는 한 쌍에만 쓴다. 남은 페어링 슬롯만큼만 제안한다. */
+function suggestMentorPairs(club: Club): { mentorId: string; menteeId: string }[] {
+  const pairings = club.mentorPairings ?? [];
+  const slotsLeft = MENTOR_PAIRING_MAX - pairings.length;
+  if (slotsLeft <= 0) return [];
+  const pairedMenteeIds = new Set(pairings.map((m) => m.menteeId));
+  const mentees = club.players
+    .filter((p) => p.age <= MENTEE_MAX_AGE && !pairedMenteeIds.has(p.id))
+    .sort((a, b) => b.potential - a.potential);
+  const usedMentors = new Set<string>();
+  const suggestions: { mentorId: string; menteeId: string }[] = [];
+  for (const mentee of mentees) {
+    if (suggestions.length >= slotsLeft) break;
+    const candidates = club.players
+      .filter((p) => p.id !== mentee.id && p.age > mentee.age && !usedMentors.has(p.id))
+      .filter((p) => !(hasTrait(p, 'hothead') && hasTrait(mentee, 'rock')))
+      .sort((a, b) => {
+        const sameLineA = lineOf(a.position) === lineOf(mentee.position) ? 1 : 0;
+        const sameLineB = lineOf(b.position) === lineOf(mentee.position) ? 1 : 0;
+        if (sameLineA !== sameLineB) return sameLineB - sameLineA;
+        return currentAbility(b) - currentAbility(a);
+      });
+    const best = candidates[0];
+    if (best) { suggestions.push({ mentorId: best.id, menteeId: mentee.id }); usedMentors.add(best.id); }
+  }
+  return suggestions;
+}
 
 function MentorPanel({ club, onAssignMentor, onClearMentor }: {
   club: Club;
@@ -19,6 +63,7 @@ function MentorPanel({ club, onAssignMentor, onClearMentor }: {
   onClearMentor: (menteeId: string) => ActionOutcome;
 }) {
   const toast = useResultToast();
+  const showToast = useToast();
   const pairings = club.mentorPairings ?? [];
   const mentees = club.players.filter((p) => p.age <= MENTEE_MAX_AGE);
   const [menteeId, setMenteeId] = useState('');
@@ -29,10 +74,28 @@ function MentorPanel({ club, onAssignMentor, onClearMentor }: {
   const clashes = mentee !== undefined && selectedMentor !== undefined
     && hasTrait(selectedMentor, 'hothead') && hasTrait(mentee, 'rock');
   const nameOf = (id: string) => club.players.find((p) => p.id === id)?.name ?? '(이적/방출됨)';
+  const suggestions = suggestMentorPairs(club);
+
+  function applySuggestions() {
+    let assigned = 0;
+    for (const s of suggestions) {
+      const r = onAssignMentor(s.mentorId, s.menteeId);
+      if (r.ok) assigned++;
+    }
+    showToast(
+      assigned > 0 ? `${assigned}쌍을 자동으로 배정했습니다.` : '배정할 수 있는 조합이 없습니다.',
+      assigned > 0,
+    );
+  }
 
   return (
     <div className="mentor-panel">
       <h3>🧑‍🏫 멘토 페어링 <span className="muted small">({pairings.length}/{MENTOR_PAIRING_MAX})</span></h3>
+      {suggestions.length > 0 && (
+        <button className="btn-ghost mentor-suggest-btn" onClick={applySuggestions}>
+          ⭐ 자동 추천 배정 ({suggestions.length}쌍)
+        </button>
+      )}
       {pairings.length > 0 && (
         <ul className="mentor-list">
           {pairings.map((m) => (
@@ -145,9 +208,15 @@ interface SquadProps {
   onSelect: (p: Player) => void;
   onAssignMentor: (mentorId: string, menteeId: string) => ActionOutcome;
   onClearMentor: (menteeId: string) => ActionOutcome;
+  /** 선택된 여러 선수의 훈련 포커스를 한 번에 지정(선수관리 개선 항목10). */
+  onBulkSetTrainingFocus: (playerIds: string[], focus: TrainingFocus) => void;
+  /** 선수 태그 전체를 교체(선수관리 개선 항목11/12) — 방출 후보/임대 검토 일괄 표시에 사용. */
+  onSetPlayerTags: (playerId: string, tags: string[]) => void;
 }
 
-export function Squad({ club, onSelect, onAssignMentor, onClearMentor }: SquadProps) {
+export function Squad({
+  club, onSelect, onAssignMentor, onClearMentor, onBulkSetTrainingFocus, onSetPlayerTags,
+}: SquadProps) {
   const [view, setView] = useState<SquadView>('first');
   const [sort, setSort] = useState<SortKey>('ca');
   const [dir, setDir] = useState<SortDir>(-1);
@@ -155,12 +224,37 @@ export function Squad({ club, onSelect, onAssignMentor, onClearMentor }: SquadPr
   const [search, setSearch] = useState('');
   const [troubledOnly, setTroubledOnly] = useState(false);
   const [contractSoonOnly, setContractSoonOnly] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkFocus, setBulkFocus] = useState<TrainingFocus>('balanced');
+  const [compareOpen, setCompareOpen] = useState(false);
   const reserves = club.reserves ?? [];
+  const showToast = useToast();
 
   function toggleSort(k: SortKey) {
     if (k === sort) { setDir((d) => (d === 1 ? -1 : 1) as SortDir); return; }
     setSort(k);
     setDir(DEFAULT_DIR[k]);
+  }
+
+  function toggleSelected(id: string) {
+    setSelected((s) => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  /** 선택된 선수 전원에게 프리셋 태그를 일괄 토글 — 전원이 이미 갖고 있으면 해제,
+   *  아니면 아직 없는 선수에게만 추가(선수관리 개선 항목11/12). */
+  function toggleBulkTag(tag: string, ids: string[]) {
+    const targets = club.players.filter((p) => ids.includes(p.id));
+    const allHave = targets.length > 0 && targets.every((p) => (p.tags ?? []).includes(tag));
+    targets.forEach((p) => {
+      const tags = p.tags ?? [];
+      const next = allHave ? tags.filter((t) => t !== tag) : (tags.includes(tag) ? tags : [...tags, tag]);
+      onSetPlayerTags(p.id, next);
+    });
+    showToast(allHave ? `${tag} 표시를 해제했습니다.` : `${targets.length}명을 ${tag}로 표시했습니다.`, true);
   }
 
   const rows = useMemo(() => {
@@ -261,6 +355,33 @@ export function Squad({ club, onSelect, onAssignMentor, onClearMentor }: SquadPr
         value={search} onChange={(e) => setSearch(e.target.value)}
       />
 
+      {selected.size > 0 && (
+        <div className="bulk-action-bar">
+          <span className="bulk-count">{selected.size}명 선택됨</span>
+          <select value={bulkFocus} onChange={(e) => setBulkFocus(e.target.value as TrainingFocus)}>
+            {TRAINING_FOCUSES.map((f) => <option key={f} value={f}>{TRAINING_LABELS[f]}</option>)}
+          </select>
+          <button
+            className="btn-ghost"
+            onClick={() => {
+              onBulkSetTrainingFocus([...selected], bulkFocus);
+              const label = TRAINING_LABELS[bulkFocus];
+              showToast(`${selected.size}명의 훈련 포커스를 "${label}"${roParticle(label)} 지정했습니다.`, true);
+            }}
+          >
+            🏋 훈련 포커스 일괄 지정
+          </button>
+          <button className="btn-ghost" onClick={() => toggleBulkTag(RELEASE_TAG, [...selected])}>
+            🏷 {RELEASE_TAG}
+          </button>
+          <button className="btn-ghost" onClick={() => toggleBulkTag(LOAN_REVIEW_TAG, [...selected])}>
+            🏷 {LOAN_REVIEW_TAG}
+          </button>
+          <button className="btn-ghost" onClick={() => setCompareOpen(true)}>⚖ 비교 보기</button>
+          <button className="btn-ghost" onClick={() => setSelected(new Set())}>선택 해제</button>
+        </div>
+      )}
+
       {rows.length === 0 ? (
         <p className="muted">조건에 맞는 선수가 없습니다.</p>
       ) : (
@@ -268,6 +389,16 @@ export function Squad({ club, onSelect, onAssignMentor, onClearMentor }: SquadPr
         <table className="data-table">
           <thead>
             <tr>
+              <th className="select-col">
+                <input
+                  type="checkbox"
+                  aria-label="현재 목록 전체 선택"
+                  checked={rows.length > 0 && rows.every((r) => selected.has(r.player.id))}
+                  onChange={(e) => {
+                    setSelected(e.target.checked ? new Set(rows.map((r) => r.player.id)) : new Set());
+                  }}
+                />
+              </th>
               <th>번호</th>
               <th>이름</th>
               <th>포지션</th>
@@ -291,12 +422,23 @@ export function Squad({ club, onSelect, onAssignMentor, onClearMentor }: SquadPr
                 tabIndex={0}
                 onKeyDown={onKeyActivate(() => onSelect(player))}
               >
+                <td className="select-col" onClick={(e) => e.stopPropagation()}>
+                  <input
+                    type="checkbox"
+                    aria-label={`${player.name} 선택`}
+                    checked={selected.has(player.id)}
+                    onChange={() => toggleSelected(player.id)}
+                  />
+                </td>
                 <td className="squad-number muted">{player.squadNumber ?? '-'}</td>
                 <td className="name">
                   {player.name}
                   {player.loanFromClubId !== undefined && (
                     <span className="loan-badge" title="다른 구단에서 임대로 데려온 선수">🔁</span>
                   )}
+                  {(player.tags ?? []).map((t) => (
+                    <span key={t} className="player-tag-chip">{t}</span>
+                  ))}
                 </td>
                 <td><span className={`pos-chip pos-${lineOf(player.position).toLowerCase()}`}>{player.position}</span></td>
                 <td>{player.age}</td>
@@ -314,6 +456,13 @@ export function Squad({ club, onSelect, onAssignMentor, onClearMentor }: SquadPr
         </div>
       )}
       </>
+      )}
+
+      {compareOpen && (
+        <PlayerCompareModal
+          players={club.players.filter((p) => selected.has(p.id))}
+          onClose={() => setCompareOpen(false)}
+        />
       )}
     </div>
   );
