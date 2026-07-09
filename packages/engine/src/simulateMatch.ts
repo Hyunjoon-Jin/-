@@ -312,6 +312,9 @@ export interface MatchContext {
   refereeStrictness: RefereeStrictness;
   /** 원정팀의 이동 부담(고도화 항목48) — 킥오프 시점에 결정, 경기 후 원정팀 컨디션에만 반영. */
   awayTravelBurden: TravelBurden;
+  /** 가장 최근 교체(라인업 변경)가 일어난 분(고도화 항목57) — 교체 투입 프레시니스
+   *  판단용. 일괄 시뮬(simulateMatch)에서는 전술 변경이 없어 항상 undefined로 남는다. */
+  freshSubMinute: { home?: number; away?: number };
 }
 
 function recomputePossession(ctx: MatchContext): void {
@@ -341,6 +344,7 @@ export function createContext(setup: MatchSetup): MatchContext {
     weather,
     refereeStrictness,
     awayTravelBurden,
+    freshSubMinute: {},
   };
   ctx.injuries = generateInjuries(ctx);
   // 카드도 부상과 마찬가지로 킥오프 라인업 기준 고정 — 이 시점의 playedLineups는 아직
@@ -351,9 +355,20 @@ export function createContext(setup: MatchSetup): MatchContext {
 }
 
 /** 라이브 경기에서 한 팀의 전술을 교체(하프타임 개입). 전력·점유 확률 재계산. */
-export function applyTactic(ctx: MatchContext, side: 'home' | 'away', tactic: Tactic): void {
+/**
+ * @param minute 이 전술 교체가 일어난 시점(분). 라이브 경기에서만 전달되며(고도화
+ *   항목57), 라인업(선수 id 집합)이 실제로 달라진 경우에만 교체 투입 프레시니스의
+ *   기준 시점으로 기록한다 — 단순 멘탈리티/템포 등 지시만 바뀐 경우는 제외.
+ */
+export function applyTactic(ctx: MatchContext, side: 'home' | 'away', tactic: Tactic, minute?: number): void {
   const cur = ctx[side];
   const oppSide = side === 'home' ? 'away' : 'home';
+  if (minute !== undefined) {
+    const prevIds = new Set(cur.tactic.lineup.map((s) => s.playerId));
+    const nextIds = tactic.lineup.map((s) => s.playerId);
+    const lineupChanged = nextIds.length !== prevIds.size || nextIds.some((id) => !prevIds.has(id));
+    if (lineupChanged) ctx.freshSubMinute[side] = minute;
+  }
   const next = buildSide(cur.club, tactic, cur.isHome, ctx.isBigMatch, ctx[oppSide].tactic.formation, ctx.weather);
   // 누적 스코어/슈팅/점유 틱은 유지하고 전력·라인업만 교체
   next.goals = cur.goals;
@@ -455,6 +470,19 @@ export function recentlyConceded(ctx: MatchContext, side: 'home' | 'away', minut
     && e.minute < minute && e.minute >= minute - MOMENTUM_WINDOW_MINUTES);
 }
 
+/** 교체 투입 직후 이 분(minute) 동안 프레시니스 효과가 유지된다(고도화 항목57) —
+ *  막 들어온 신선한 선수의 활력이 팀 전체 공격에 소폭 반영된다는 통념. */
+const FRESHNESS_WINDOW_MINUTES = 10;
+/** 프레시니스 구간의 공격·창조력 배율. */
+const FRESHNESS_ATTACK_MULTIPLIER = 1.04;
+
+/** side가 최근 FRESHNESS_WINDOW_MINUTES분 이내에 실제 교체(라인업 변경)를 겪었는지 —
+ *  ctx.freshSubMinute만 조회하는 결정론적 판단이라 RNG를 소비하지 않는다. */
+export function isFreshFromSub(ctx: MatchContext, side: 'home' | 'away', minute: number): boolean {
+  const subMinute = ctx.freshSubMinute[side];
+  return subMinute !== undefined && minute > subMinute && minute <= subMinute + FRESHNESS_WINDOW_MINUTES;
+}
+
 /** 한 분(틱) 진행. 생성된 이벤트가 있으면 반환(없으면 null). */
 export function stepMinute(ctx: MatchContext, minute: number): MatchEvent | null {
   const { rng } = ctx;
@@ -471,8 +499,10 @@ export function stepMinute(ctx: MatchContext, minute: number): MatchEvent | null
   const defDesperateMul = isDesperate(def, att, minute) ? DESPERATION_DEFENSE_MULTIPLIER : 1;
   const defMomentumMul = recentlyConceded(ctx, homeHasBall ? 'away' : 'home', minute)
     ? MOMENTUM_DEFENSE_MULTIPLIER : 1;
-  const attAttack = att.strength.attack * attMul * attDesperateMul;
-  const attCreation = att.strength.creation * attMul * attDesperateMul;
+  const attFreshMul = isFreshFromSub(ctx, homeHasBall ? 'home' : 'away', minute)
+    ? FRESHNESS_ATTACK_MULTIPLIER : 1;
+  const attAttack = att.strength.attack * attMul * attDesperateMul * attFreshMul;
+  const attCreation = att.strength.creation * attMul * attDesperateMul * attFreshMul;
   const defDefense = def.strength.defense * defMul * defDesperateMul * defMomentumMul;
 
   const pAdvance = clamp(
