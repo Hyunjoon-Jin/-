@@ -88,7 +88,7 @@ export class LiveMatch {
 
   /** 하프타임 등에서 한 팀 전술 교체(누적 스코어는 유지). */
   setTactic(side: 'home' | 'away', tactic: Tactic): void {
-    applyTactic(this.ctx, side, tactic);
+    applyTactic(this.ctx, side, tactic, this.current);
   }
 
   /**
