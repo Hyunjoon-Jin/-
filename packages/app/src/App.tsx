@@ -71,6 +71,8 @@ export function App() {
   const [showHelp, setShowHelp] = useState(false);
   const [detailPlayer, setDetailPlayer] = useState<Player | null>(null);
   const [saveError, setSaveError] = useState(false);
+  /** 시즌/라운드 진행처럼 화면이 잠깐 멈추는 무거운 액션이 처리 중이면 그 액션 키(UX 고도화). */
+  const [busyAction, setBusyAction] = useState<string | null>(null);
   /** 첫 시즌 체크리스트 진행 상황 — 탭 방문 여부로 추정(전술 확인 / 이적·스태프 보강). */
   const [visitedTactics, setVisitedTactics] = useState(false);
   const [visitedSquadPrep, setVisitedSquadPrep] = useState(false);
@@ -100,6 +102,24 @@ export function App() {
         setSaveError(true);
       }
     }
+  }
+
+  /**
+   * 시즌 전체 진행·라운드 시뮬처럼 계산이 수백 ms~1초 걸리는 액션 전용 실행기(UX 고도화).
+   * setTimeout(0)으로 한 틱 미뤄 React가 스피너를 먼저 그리게 한 다음 무거운 계산을
+   * 돌린다 — 그러지 않으면 클릭과 동시에 화면이 멈춰 버튼 반응이 있었는지 알 수 없다.
+   * 이미 다른 무거운 액션이 처리 중이면 중복 실행을 막기 위해 무시한다.
+   */
+  function runHeavy(action: string, compute: () => GameState) {
+    if (busyAction) return;
+    setBusyAction(action);
+    setTimeout(() => {
+      try {
+        update(compute());
+      } finally {
+        setBusyAction(null);
+      }
+    }, 0);
   }
 
   /** 다른 세션(새 게임/불러오기/메뉴 복귀)으로 전환 시 이전 세션에 속한 오버레이 상태를
@@ -387,21 +407,23 @@ export function App() {
               <Match
                 game={game}
                 onStartSeason={() => update(startSeason(game))}
-                onPlayRound={() => update(playRound(game))}
-                onPlayRest={() => update(playRestOfSeason(game))}
+                onPlayRound={() => runHeavy('round', () => playRound(game))}
+                onPlayRest={() => runHeavy('rest', () => playRestOfSeason(game))}
                 onFinish={() => update(finishSeason(game))}
-                onAdvanceFull={() => update(advanceFullSeason(game))}
+                onAdvanceFull={() => runHeavy('full', () => advanceFullSeason(game))}
                 onWatch={handleWatch}
                 onMediaRespond={(event, tone) => update(respondMedia(game, event, tone))}
                 onMediaDismiss={(event) => update(dismissMedia(game, event))}
+                busyAction={busyAction}
               />
             )}
             {tab === 'cup' && (
               <Cup
                 game={game}
-                onPlayCupRound={() => update(playCupRound(game))}
+                onPlayCupRound={() => runHeavy('cupRound', () => playCupRound(game))}
                 onWatchCup={handleWatchCup}
-                onPlayContinentalCupRound={() => update(playContinentalCupRound(game))}
+                onPlayContinentalCupRound={() => runHeavy('continentalRound', () => playContinentalCupRound(game))}
+                busyAction={busyAction}
               />
             )}
             {tab === 'staff' && (

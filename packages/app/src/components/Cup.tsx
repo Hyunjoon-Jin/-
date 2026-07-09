@@ -5,12 +5,15 @@ import {
 } from '@soccer-tycoon/engine';
 import { watchCupSetup, type GameState } from '../game.js';
 import { EmptyState } from './EmptyState.js';
+import { BusyButton } from './BusyButton.js';
 
 interface Props {
   game: GameState;
   onPlayCupRound: () => void;
   onWatchCup: () => void;
   onPlayContinentalCupRound: () => void;
+  /** 시즌/라운드 진행처럼 무거운 액션이 처리 중이면 그 액션 키, 아니면 null(UX 고도화). */
+  busyAction: string | null;
 }
 
 /** 대진 카드 한 줄 높이(간격 포함, px) — 라운드별 컬럼 높이를 맞춰 브래킷 모양을 만든다. */
@@ -22,7 +25,7 @@ const UPSET_REPUTATION_GAP = 3;
 /** 프리시즌 컵 우승 후보로 보여줄 상위 인원 수. */
 const CUP_FAVORITES_SHOWN = 5;
 
-export function Cup({ game, onPlayCupRound, onWatchCup, onPlayContinentalCupRound }: Props) {
+export function Cup({ game, onPlayCupRound, onWatchCup, onPlayContinentalCupRound, busyAction }: Props) {
   const cup = game.cup;
   if (!cup) {
     return (
@@ -54,8 +57,17 @@ export function Cup({ game, onPlayCupRound, onWatchCup, onPlayContinentalCupRoun
         headExtra={
           !isCupOver(cup) ? (
             <>
-              {canWatch && <button className="btn-advance" onClick={onWatchCup}>내 컵 경기 관전 ▶</button>}
-              <button className="btn-ghost" onClick={onPlayCupRound}>컵 다음 라운드 ▶▶</button>
+              {canWatch && (
+                <button className="btn-advance" onClick={onWatchCup} disabled={busyAction !== null}>
+                  내 컵 경기 관전 ▶
+                </button>
+              )}
+              <BusyButton
+                className="btn-ghost" actionKey="cupRound" busyAction={busyAction}
+                onClick={onPlayCupRound} busyLabel="진행 중…"
+              >
+                컵 다음 라운드 ▶▶
+              </BusyButton>
             </>
           ) : undefined
         }
@@ -91,7 +103,12 @@ export function Cup({ game, onPlayCupRound, onWatchCup, onPlayContinentalCupRoun
           emptyHint="대륙컵 다음 라운드"
           headExtra={
             !isCupOver(game.continentalCup) ? (
-              <button className="btn-ghost" onClick={onPlayContinentalCupRound}>대륙컵 다음 라운드 ▶▶</button>
+              <BusyButton
+                className="btn-ghost" actionKey="continentalRound" busyAction={busyAction}
+                onClick={onPlayContinentalCupRound} busyLabel="진행 중…"
+              >
+                대륙컵 다음 라운드 ▶▶
+              </BusyButton>
             ) : undefined
           }
         />

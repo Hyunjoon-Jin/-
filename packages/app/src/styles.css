@@ -189,7 +189,20 @@ body {
   background: transparent; color: var(--muted); border: 1px solid var(--line);
   border-radius: 8px; padding: 7px 12px; cursor: pointer; font-size: 13px;
 }
-.btn-ghost:hover { color: var(--text); border-color: var(--accent-2); }
+.btn-ghost:hover:not(:disabled) { color: var(--text); border-color: var(--accent-2); }
+.btn-ghost:disabled { opacity: .5; cursor: not-allowed; }
+
+/* 무거운 액션(시즌/라운드 진행) 처리 중 스피너(UX 고도화) — 클릭과 계산 사이에
+   피드백 공백이 생기지 않도록 버튼 안에서 회전하는 원으로 진행 상태를 알린다. */
+.spinner {
+  display: inline-block; width: 12px; height: 12px; margin-right: 2px; vertical-align: -1px;
+  border-radius: 50%; border: 2px solid currentColor; border-top-color: transparent;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .spinner { animation: none; opacity: .55; }
+}
 .saved-badge { color: var(--accent); font-size: 12px; }
 .saved-badge.save-error { color: var(--color-danger); font-weight: 700; }
 .help-btn { padding: 4px 10px; font-weight: 700; }
