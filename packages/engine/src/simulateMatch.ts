@@ -28,7 +28,9 @@ import {
   matchWeather, WEATHER_ATTACK_MULTIPLIER, WEATHER_CREATION_MULTIPLIER, WEATHER_INJURY_MULTIPLIER,
   type Weather,
 } from './weather.js';
-import { matchRefereeStrictness, REFEREE_CARD_MULTIPLIER, type RefereeStrictness } from './referee.js';
+import {
+  matchRefereeStrictness, REFEREE_CARD_MULTIPLIER, AWAY_CARD_BIAS_MULTIPLIER, type RefereeStrictness,
+} from './referee.js';
 import { matchTravelBurden, type TravelBurden } from './travel.js';
 
 export interface MatchSetup {
@@ -533,13 +535,15 @@ function generateCards(ctx: MatchContext): CardEvent[] {
   const refereeMul = REFEREE_CARD_MULTIPLIER[ctx.refereeStrictness];
   const roll = (side: Side, sideKey: 'home' | 'away') => {
     const byId = new Map(side.club.players.map((p) => [p.id, p]));
+    // 심판의 홈 편향(고도화 항목51) — 원정팀에만 추가로 곱한다.
+    const biasMul = sideKey === 'away' ? AWAY_CARD_BIAS_MULTIPLIER : 1;
     for (const slot of ctx.playedLineups[sideKey]) {
       const p = byId.get(slot.playerId);
       if (!p || !isAvailable(p)) continue;
       const aggr = p.attributes.aggression;
       const cardMul = hasTrait(p, 'hothead') ? 1.6 : 1; // 다혈질: 카드 확률↑
-      const yellowP = clamp((0.03 + (aggr - 10) * 0.006) * cardMul * refereeMul, 0.01, 0.16);
-      const redP = clamp((0.002 + (aggr - 10) * 0.0006) * cardMul * refereeMul, 0.0005, 0.02);
+      const yellowP = clamp((0.03 + (aggr - 10) * 0.006) * cardMul * refereeMul * biasMul, 0.01, 0.16);
+      const redP = clamp((0.002 + (aggr - 10) * 0.0006) * cardMul * refereeMul * biasMul, 0.0005, 0.02);
       if (rng.roll(redP)) {
         cards.push({ minute: rng.int(20, 90), side: sideKey, playerId: p.id, playerName: p.name, type: 'red' });
       } else if (rng.roll(yellowP)) {

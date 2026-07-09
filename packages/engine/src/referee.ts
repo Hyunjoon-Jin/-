@@ -27,3 +27,7 @@ export function matchRefereeStrictness(seed: number, homeClubId: string, awayClu
 export const REFEREE_CARD_MULTIPLIER: Record<RefereeStrictness, number> = {
   lenient: 0.7, normal: 1, strict: 1.35,
 };
+
+/** 심판의 홈 편향(고도화 항목51) — 실제 축구 통계에서 관찰되는, 원정팀이 동일한
+ *  상황에서도 카드를 더 자주 받는 경향을 반영. 엄격도 배율과 별개로 원정팀에만 곱한다. */
+export const AWAY_CARD_BIAS_MULTIPLIER = 1.1;
