@@ -6,6 +6,7 @@ import {
 } from '@soccer-tycoon/engine';
 import type { WatchSetup, MatchPreview as MatchPreviewData } from '../game.js';
 import { swapPlayer } from '../tactics.js';
+import { resolveKitColors } from '../clubColors.js';
 import { Tactics } from './Tactics.js';
 import { MatchPitch, type PitchState } from './MatchPitch.js';
 import { MatchStats } from './MatchStats.js';
@@ -275,6 +276,7 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
   const awayTactic = watch.userIsHome ? (aiTacticOverride ?? watch.setup.away.tactic) : tactic;
   const homeClub = watch.setup.home.club;
   const awayClub = watch.setup.away.club;
+  const kit = resolveKitColors(homeClub.id, awayClub.id);
   const myGoals = watch.userIsHome ? view.score[0] : view.score[1];
   const oppGoals = watch.userIsHome ? view.score[1] : view.score[0];
   const userBehind = myGoals < oppGoals;
@@ -288,6 +290,7 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
     awayLabels: awayTactic.lineup.map((slot) => playerInitials(awayClub, slot.playerId)),
     isDerby,
     isFinal,
+    kit,
   };
 
   return (
