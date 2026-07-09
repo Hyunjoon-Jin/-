@@ -29,6 +29,7 @@ function shooterShareByChance(
 ): Record<string, { taker: number; total: number }> {
   const byChance: Record<string, { taker: number; total: number }> = {
     open: { taker: 0, total: 0 }, cross: { taker: 0, total: 0 }, setpiece: { taker: 0, total: 0 },
+    penalty: { taker: 0, total: 0 },
   };
   for (let s = 0; s < seeds; s++) {
     const result = simulateMatch({

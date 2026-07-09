@@ -374,7 +374,7 @@ export interface TeamStrength {
   gk: number;
 }
 
-export type ChanceType = 'open' | 'cross' | 'setpiece';
+export type ChanceType = 'open' | 'cross' | 'setpiece' | 'penalty';
 export type ShotOutcome = 'GOAL' | 'SAVE' | 'OFF_TARGET' | 'BLOCKED' | 'OWN_GOAL';
 
 export interface MatchEvent {
