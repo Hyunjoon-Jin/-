@@ -3,7 +3,7 @@ import {
   startGame, myClub, myTactic, setMyTactic,
   startSeason, playRound, playRestOfSeason, finishSeason, advanceFullSeason,
   playCupRound, playContinentalCupRound, negotiate, buyAt, buyViaReleaseClause, offersFor, acceptSell, release, upgradeStaffAction,
-  negotiateStaffRaiseAction,
+  negotiateStaffRaiseAction, poachStaffAction,
   buyback, renegotiateBuybackClauseAction,
   attachAddOn,
   exerciseBuyOption,
@@ -11,6 +11,7 @@ import {
   resolveRivalSnipe,
   recordNegotiationBreakdown,
   upgradeStadiumAction, upgradeAcademyAction, upgradeTrainingGroundAction, signSponsorContractAction,
+  setTicketPriceAction,
   toggleWatchlistAction,
   loanOut, loanIn, recallLoan, swapDeal, renegotiateLoanWageShareAction,
   setTrainingFocus, setTrainingPosition, renewContract, setAcademyFocus,
@@ -21,7 +22,7 @@ import {
   declareBoldPredictionAction,
   type GameState, type ActionOutcome, type WatchSetup, type Difficulty, type MediaEvent,
 } from './game.js';
-import type { Tactic, MatchResult, LoanTerms, AddOnTier } from '@soccer-tycoon/engine';
+import type { Tactic, MatchResult, LoanTerms, AddOnTier, NamedStaffKind } from '@soccer-tycoon/engine';
 import { createSaveStore } from './storage.js';
 import { recordSackedStint } from './career.js';
 import { StartScreen } from './components/StartScreen.js';
@@ -200,6 +201,12 @@ export function App() {
 
   const handleRenegotiateBuyback = (id: string, direction: 'increase' | 'decrease'): ActionOutcome => {
     const outcome = renegotiateBuybackClauseAction(game, id, direction);
+    update(outcome.state);
+    return outcome;
+  };
+
+  const handlePoachStaff = (targetClubId: string, kind: NamedStaffKind, attempt: number): ActionOutcome => {
+    const outcome = poachStaffAction(game, targetClubId, kind, attempt);
     update(outcome.state);
     return outcome;
   };
@@ -406,7 +413,9 @@ export function App() {
                 onUpgradeTrainingGround={() => runAction(upgradeTrainingGroundAction, undefined)}
                 onSignSponsorContract={(kind) => runAction(signSponsorContractAction, kind)}
                 onNegotiateRaise={(kind) => runAction(negotiateStaffRaiseAction, kind)}
+                onPoachStaff={handlePoachStaff}
                 onSetAcademyFocus={(focus) => update(setAcademyFocus(game, focus))}
+                onSetTicketPrice={(tier) => runAction(setTicketPriceAction, tier)}
               />
             )}
             {tab === 'history' && <History game={game} />}

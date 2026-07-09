@@ -3,21 +3,21 @@
  * 한 시즌 = 이적 창 → 리그 경기 → 재정 정산 → 선수 성장/노화 → 은퇴·유스 유입.
  * 게임의 시간축을 닫는 핵심 루프.
  */
-import type { Club, Player, Position, AddOnConditionKind } from './types.js';
+import type { Club, Player, Position, AddOnConditionKind, MentorPairing, BoardPersona } from './types.js';
 import type { BoardStatus } from './board.js';
 import { POSITIONS } from './types.js';
 import { simulateSeason, type TableRow } from './league.js';
 import { settleSeason, type SeasonFinanceReport, type SponsorContractKind } from './finance.js';
-import type { BoldPredictionResult } from './board.js';
+import { maybeChangeBoardPersona, type BoldPredictionResult } from './board.js';
 import type { CupUpsetEvent } from './cup.js';
 import { runTransferWindow, type TransferDeal } from './transfer.js';
 import { progressPlayer } from './progression.js';
 import { generateAcademyIntake, generateYouthPlayer, assignSquadNumber } from './generate.js';
 import { applyLoanWageSubsidies, addOnConditionValue, MIN_SQUAD } from './transferActions.js';
-import { enforceFinancialFairPlay } from './financeControl.js';
+import { applyFinancialControl, type FfpStage } from './financeControl.js';
 import {
   runInternationalBreak, runInternationalTournament, TOURNAMENT_INTERVAL_SEASONS, checkInternationalRetirements,
-  type InternationalRetirementEvent,
+  type InternationalRetirementEvent, type ClubTournamentHighlight,
 } from './international.js';
 import { simulateReserveSeason, type ReserveTableRow } from './reserveLeague.js';
 import { currentAbility } from './derived.js';
@@ -30,7 +30,9 @@ import {
 import { recentForm } from './form.js';
 import { clamp } from './math.js';
 import {
-  summarizeStats, type PlayerSeasonStat, type SeasonAwards, type SeasonSquadEntry,
+  summarizeStats, aggregatePlayerStats, type PlayerSeasonStat, type SeasonAwards, type SeasonSquadEntry,
+  type ClubDisciplineRow, type MonthlyManagerAward, type MonthlyPlayerAward, type StreakSummary, type BiggestWin,
+  type WeatherRecordRow,
 } from './stats.js';
 import { Rng } from './rng.js';
 
@@ -54,7 +56,11 @@ export function retireChance(age: number, naturalFitness: number): number {
 const MILESTONE_APPS = [50, 100, 150, 200, 250, 300];
 const MILESTONE_GOALS = [10, 25, 50, 100, 150, 200];
 
-export type MilestoneKind = 'apps' | 'goals';
+export type MilestoneKind = 'apps' | 'goals' | 'positionMastery';
+
+/** 포지션 전환 훈련(고도화 항목13) 숙련도 마일스톤 임계값(%). 느리게 오르는 숙련도 바 외에
+ *  단계별 달성 알림을 줘 전환 훈련의 진행 상황을 체감하게 한다. */
+export const POSITION_MASTERY_MILESTONES = [30, 60, 90, 100];
 
 /** 통산 마일스톤 달성(이번 시즌에 처음 임계값을 넘은 경우). */
 export interface CareerMilestone {
@@ -63,13 +69,23 @@ export interface CareerMilestone {
   clubId: string;
   clubName: string;
   kind: MilestoneKind;
-  /** 달성한 임계값(예: 100). */
+  /** 달성한 임계값(예: 100, positionMastery는 숙련도 %). */
   value: number;
+  /** kind === 'positionMastery'일 때만 설정 — 전환 훈련 중인 포지션. */
+  position?: Position;
 }
 
 /** before < t ≤ after 인 임계값들(이번 시즌에 새로 넘은 것만). */
 function crossedThresholds(before: number, after: number, thresholds: number[]): number[] {
   return thresholds.filter((t) => before < t && after >= t);
+}
+
+/** 회장 교체(고도화 항목17) — 시즌 종료 시 저확률로 이사회 성향이 새로 바뀐 경우 기록. */
+export interface BoardPersonaChangeEvent {
+  clubId: string;
+  clubName: string;
+  oldPersona: BoardPersona;
+  newPersona: BoardPersona;
 }
 
 export type DebutEventKind = 'debut' | 'firstGoal';
@@ -146,6 +162,9 @@ export interface SeasonSummary {
   /** 이번 시즌 비정기 국제대회(월드컵/유로급, C15)가 열렸다면 우승 국가. 참가 자격국 부족 시 null.
    *  값이 undefined면 이번 시즌엔 대회가 열리지 않고 정기 A매치 차출만 있었다는 뜻. */
   internationalTournamentChampion?: string | null;
+  /** 국제대회가 열린 시즌, 내 구단 소속 국가대표의 성적 하이라이트(고도화 항목31, 앱 전용) —
+   *  내 구단에 차출된 선수가 없으면 undefined. */
+  internationalTournamentHighlight?: ClubTournamentHighlight;
   /** 대륙컵 우승 구단(D17, 병행 대회 — 1부 상위 성적 구단만 참가). 앱 전용, 헤드리스엔 미설정. */
   continentalCupChampionId?: string;
   continentalCupChampionName?: string;
@@ -157,6 +176,9 @@ export interface SeasonSummary {
   addOnPayouts?: AddOnEvent[];
   /** 리저브팀 자체 소규모 리그(가상 매치, 신규 개선 항목 14) 순위표(전 구단 — 앱에서 내 구단 순위를 찾아 표시). */
   reserveLeagueTable?: ReserveTableRow[];
+  /** 내 구단 리저브 선수의 이번 시즌 리저브 리그 개인 기록(고도화 항목11, 앱 전용) —
+   *  리그 자체가 없었거나 내 구단이 참가 자격 미달이면 undefined. */
+  reservePlayerStats?: PlayerSeasonStat[];
   /** 과거 내 구단 리저브에서 1군으로 승격했다가 이후 타 구단으로 떠난 "동문"의 이번 시즌
    *  소식(신규 개선 항목 18, 앱 전용 — 헤드리스엔 미설정). 은퇴·방출로 더는 어디서도
    *  뛰지 않는 졸업생은 포함되지 않는다(현재 뛰고 있는 구단을 찾을 수 있는 경우만). */
@@ -173,6 +195,42 @@ export interface SeasonSummary {
   /** 이번 시즌 컵대회에서 내 구단이 이변의 주인공이거나 희생양이었던 경기(신규 개선
    *  항목 29, 앱 전용). */
   cupUpsets?: CupUpsetEvent[];
+  /** 이번 오프시즌 내 구단의 멘토-멘티 페어링이 "졸업"(나이 초과 또는 멘티가 멘토를
+   *  추월)으로 자동 해제된 소식(고도화 항목8, 앱 전용). */
+  mentorGraduations?: MentorGraduationEvent[];
+  /** 이번 시즌 종료 시 내 구단 회장이 교체돼 이사회 성향이 바뀐 경우(고도화 항목17,
+   *  앱 전용). 대부분의 시즌은 undefined. */
+  boardPersonaChange?: BoardPersonaChangeEvent;
+  /** 이번 시즌 종료 시점 내 구단 팬 만족도(0~100, 고도화 항목18, 앱 전용). */
+  fanSatisfaction?: number;
+  /** 팬 만족도가 문턱 미만으로 떨어져 시위가 발생했는지(고도화 항목18, 앱 전용). */
+  fanProtest?: boolean;
+  /** 이사회 목표 연속 달성 스트릭이 이번 시즌 마일스톤을 처음 넘어 장기 프로젝트
+   *  보너스가 지급된 경우(고도화 항목20, 앱 전용). 대부분의 시즌은 undefined. */
+  longTermProjectBonus?: { milestone: number; bonus: number };
+  /** 이번 시즌 파이낸셜 페어플레이 단계(고도화 항목21, 앱 전용) — 'ok'가 아니면
+   *  경고/제재/강제매각 중 하나. */
+  ffpStage?: FfpStage;
+  /** 시즌 페어플레이(징계) 순위표(고도화 항목22, 앱 전용) — 같은 부 전 구단, 카드 수 오름차순. */
+  fairPlayTable?: ClubDisciplineRow[];
+  /** 이달의 감독(고도화 항목24, 앱 전용) — 실제 달력 대신 4라운드씩 묶어 구간별 최고
+   *  성적 구단을 나열. 시즌 진행 라운드 수만큼 블록이 나온다. */
+  monthlyManagerAwards?: MonthlyManagerAward[];
+  /** 이달의 선수(고도화 항목37, 앱 전용) — monthlyManagerAwards와 같은 블록 구간별로
+   *  최소 출전 이상인 선수 중 평균 평점 최고 선수를 나열. */
+  monthlyPlayerAwards?: MonthlyPlayerAward[];
+  /** 이번 시즌 내 구단의 최장 연승·무패 기록(고도화 항목25, 앱 전용). */
+  streaks?: StreakSummary;
+  /** 이번 시즌 라운드별 내 구단 순위 추이(고도화 항목26, 앱 전용) — 라운드 순서대로. */
+  positionHistory?: number[];
+  /** 이번 시즌 내 구단의 최다 득점차 승리(고도화 항목27, 앱 전용). 승리가 없으면 undefined. */
+  biggestWin?: BiggestWin;
+  /** 이번 시즌 종료 시점의 이사회 신뢰도(고도화 항목39, 앱 전용) — 감독 재임 전체의
+   *  신뢰도 추이 스파크라인에 쓰인다. */
+  boardConfidenceAfter?: number;
+  /** 이번 시즌 내 구단의 날씨별 승무패 전적(고도화 항목40, 앱 전용) — 경기 수가
+   *  0인 날씨는 배열에서 생략. */
+  weatherRecord?: WeatherRecordRow[];
 }
 
 /** 유스 졸업생 동문 네트워크(신규 개선 항목 18) — 과거 우리 리저브 출신으로 1군
@@ -344,6 +402,8 @@ export interface OffseasonResult {
   intakePlayersByClub: Map<string, Player[]>;
   /** clubId → 재정 위기 강제 매각 인원. */
   fireSalesByClub: Map<string, number>;
+  /** clubId → 이번 시즌 파이낸셜 페어플레이 단계(고도화 항목21, 'ok'=위기 아님). */
+  ffpStageByClub: Map<string, FfpStage>;
   /** 이번 오프시즌에 은퇴한 선수 스냅샷(전 구단). */
   retiredPlayers: RetiredLegend[];
   /** 이번 오프시즌에 처음 임계값을 넘은 통산 마일스톤(전 구단). */
@@ -367,6 +427,27 @@ export interface OffseasonResult {
   /** 리저브팀 자체 소규모 리그(가상 매치, 신규 개선 항목 14) 순위표. 참가 자격(MIN_RESERVE_SQUAD)
    *  미달 구단은 빠진다. 참가 자격 구단이 2개 미만이면 빈 배열. */
   reserveLeagueTable: ReserveTableRow[];
+  /** 이번 오프시즌 "졸업"으로 자동 해제된 멘토-멘티 페어링(전 구단, 고도화 항목8). */
+  mentorGraduations: MentorGraduationEvent[];
+  /** 리저브 리그(가상 매치) 개인 선수 기록(전 구단, 고도화 항목11) — 참가 자격 미달로
+   *  리그 자체가 열리지 않았으면 빈 배열. */
+  reservePlayerStats: PlayerSeasonStat[];
+  /** 이번 오프시즌 회장이 교체돼 이사회 성향이 바뀐 구단(전 구단, 고도화 항목17). */
+  boardPersonaChanges: BoardPersonaChangeEvent[];
+}
+
+/** 멘토-멘티 페어링 졸업 사유(고도화 항목8). */
+export type MentorGraduationReason = 'age' | 'surpassed';
+
+/** 멘토-멘티 페어링이 "졸업"으로 자동 해제된 이벤트(고도화 항목8). */
+export interface MentorGraduationEvent {
+  mentorId: string;
+  mentorName: string;
+  menteeId: string;
+  menteeName: string;
+  clubId: string;
+  clubName: string;
+  reason: MentorGraduationReason;
 }
 
 /** 멘토링 보너스 배율 — 같은 라인에 리더 특성 보유자나 리더십 높은 베테랑이 있으면 성장 가속. */
@@ -398,6 +479,12 @@ function hasMentor(club: Club, player: Player): boolean {
 export const MENTOR_PAIRING_MAX = 3;
 /** 직접 지정한 멘토링은 자동(같은 라인) 멘토링보다 더 큰 성장 보너스를 준다. */
 const DESIGNATED_MENTOR_GROWTH_MUL = 1.25;
+/** 성향 충돌(고도화 항목8) — 다혈질(hothead) 멘토×차분한(rock) 멘티는 스타일이 맞지
+ *  않아 지정 멘토링 효과가 크게 줄어든다(그래도 자동 멘토링보다는 약간 낫다). */
+const MENTOR_CLASH_GROWTH_MUL = 1.05;
+/** 멘토 보상(고도화 항목8) — 페어링이 유지되는 시즌마다 조언자 역할에 대한 소폭
+ *  사기 보너스를 준다. */
+const MENTOR_REWARD_MORALE = 0.03;
 
 export interface MentorAssignResult { ok: boolean; reason?: string }
 
@@ -428,12 +515,15 @@ export function clearMentorPairing(club: Club, menteeId: string): void {
 }
 
 /** 멘티에게 유저 지정 멘토가 배정돼 있고 그 멘토가 여전히 스쿼드에 있으면 강화된
- *  성장 배율을, 아니면 1을 반환한다(자동 멘토링과 별개 — 더 큰 쪽을 적용). */
+ *  성장 배율을, 아니면 1을 반환한다(자동 멘토링과 별개 — 더 큰 쪽을 적용). 다혈질
+ *  멘토×차분한 멘티 조합이면 성향 충돌로 보너스가 크게 줄어든다(고도화 항목8). */
 function designatedMentorBonus(club: Club, player: Player): number {
   const pairing = club.mentorPairings?.find((m) => m.menteeId === player.id);
   if (!pairing) return 1;
-  const mentorStillHere = club.players.some((p) => p.id === pairing.mentorId);
-  return mentorStillHere ? DESIGNATED_MENTOR_GROWTH_MUL : 1;
+  const mentor = club.players.find((p) => p.id === pairing.mentorId);
+  if (!mentor) return 1;
+  if (hasTrait(mentor, 'hothead') && hasTrait(player, 'rock')) return MENTOR_CLASH_GROWTH_MUL;
+  return DESIGNATED_MENTOR_GROWTH_MUL;
 }
 
 export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
@@ -441,6 +531,7 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
   const intakeByClub = new Map<string, number>();
   const intakePlayersByClub = new Map<string, Player[]>();
   const fireSalesByClub = new Map<string, number>();
+  const ffpStageByClub = new Map<string, FfpStage>();
   const retiredPlayers: RetiredLegend[] = [];
   const milestones: CareerMilestone[] = [];
   const debutEvents: DebutEvent[] = [];
@@ -451,6 +542,8 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
   const staffDepartures: (StaffDepartureEvent & { clubId: string; clubName: string })[] = [];
   const staffRetirements: (StaffRetirementEvent & { clubId: string; clubName: string })[] = [];
   const addOnPayouts: AddOnEvent[] = [];
+  const mentorGraduations: MentorGraduationEvent[] = [];
+  const boardPersonaChanges: BoardPersonaChangeEvent[] = [];
 
   // 임대 복귀: 시즌 카운트다운이 끝난 임대 선수를 원 소속 구단으로 돌려보낸다. 이번
   // 오프시즌의 성장/노화/은퇴 처리를 정상적으로 받도록, 아래 본 루프보다 먼저 처리해
@@ -506,7 +599,9 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
   // 리저브팀 자체 소규모 리그(가상 매치, 신규 개선 항목 14) — 이번 시즌 내내 쌓인 리저브
   // 스쿼드로 전 구단이 한 번에 가상 매치를 치른다. 아래 본 루프에서 성장/승격/유스 인테이크로
   // club.reserves가 바뀌기 전에, "이번 시즌을 실제로 보낸" 스쿼드 기준으로 먼저 계산한다.
-  const { table: reserveLeagueTable } = simulateReserveSeason(clubs, rng.int(1, 1_000_000_000));
+  const { table: reserveLeagueTable, matches: reserveMatches } = simulateReserveSeason(clubs, rng.int(1, 1_000_000_000));
+  // 리저브 리그 개인 선수 기록(고도화 항목11) — 참가 자격 미달로 리그 자체가 없으면 빈 배열.
+  const reservePlayerStats = aggregatePlayerStats(reserveMatches);
 
   const expectedMatches = 2 * (clubs.length - 1); // 리그 기준 기대 출전
   for (const club of clubs) {
@@ -548,7 +643,19 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
         hasMentor(club, player) ? MENTOR_GROWTH_MUL : 1,
         designatedMentorBonus(club, player),
       );
+      // 포지션 전환 마일스톤(고도화 항목13) — progressPlayer가 숙련도를 올리기 전 스냅샷.
+      const trainingPos = player.trainingPosition;
+      const famBefore = trainingPos ? Math.round((player.familiarity[trainingPos] ?? 0.2) * 100) : 0;
       progressPlayer(player, rng, effectiveCoaching(player.position, club.staff), mentorBonus);
+      if (trainingPos) {
+        const famAfter = Math.round((player.familiarity[trainingPos] ?? 0.2) * 100);
+        for (const value of crossedThresholds(famBefore, famAfter, POSITION_MASTERY_MILESTONES)) {
+          milestones.push({
+            playerId: player.id, name: player.name, clubId: club.id, clubName: club.name,
+            kind: 'positionMastery', value, position: trainingPos,
+          });
+        }
+      }
       // 성장 곡선: 이번 시즌 종료 시점 CA 스냅샷(최근 20시즌 유지)
       const hist = player.caHistory ?? (player.caHistory = []);
       hist.push(Math.round(currentAbility(player)));
@@ -626,9 +733,23 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
       return true;
     });
 
-    // 재정 위기 시 강제 매각(파이낸셜 페어플레이)
-    const fire = enforceFinancialFairPlay(club);
-    fireSalesByClub.set(club.id, fire.sold.length);
+    // 회장 교체(고도화 항목17) — 저확률로 이사회 성향이 새로 바뀐다. 구버전 세이브 등
+    // boardPersona가 아예 없는 구단은 대상에서 제외(교체할 "성향"이 없으므로).
+    if (club.boardPersona) {
+      const newPersona = maybeChangeBoardPersona(club.boardPersona, rng);
+      if (newPersona) {
+        boardPersonaChanges.push({
+          clubId: club.id, clubName: club.name, oldPersona: club.boardPersona, newPersona,
+        });
+        club.boardPersona = newPersona;
+      }
+    }
+
+    // 재정 위기 시 단계적 조치(파이낸셜 페어플레이, 고도화 항목21) — 1시즌째 경고,
+    // 2시즌째 제재, 3시즌째부터 강제 매각.
+    const ffp = applyFinancialControl(club);
+    fireSalesByClub.set(club.id, ffp.sold.length);
+    ffpStageByClub.set(club.id, ffp.stage);
 
     // 실명 스태프 계약 잔여연수 감소(0이면 확률적으로 이탈·후임 영입, 그 외엔 조용히 재계약)
     const { departures, retirements: staffRetired } = tickStaffContracts(club, rng);
@@ -678,18 +799,39 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
     // 스쿼드 상한 정리
     trimSquad(club);
 
-    // 멘토·멘티 중 한쪽이라도 스쿼드를 떠났으면(은퇴·매각·이적 등) 페어링을 정리한다
-    // (세이브 파일에 죽은 페어링이 계속 쌓이는 것을 방지 — 성장 계산은 어차피
-    // designatedMentorBonus에서 매번 재검증하므로 정합성에는 영향 없음).
+    // 멘토-멘티 관계 심화(고도화 항목8): 페어링이 유지된 시즌마다 멘토에게 소폭
+    // 사기 보상을 주고, 멘티가 나이 초과 또는 멘토의 CA를 따라잡으면 "졸업"으로
+    // 자동 해제해 이벤트로 보고한다. 어느 한쪽이든 스쿼드를 떠났으면(은퇴·매각·
+    // 이적 등) 조용히 정리한다(세이브에 죽은 페어링이 쌓이는 것을 방지).
     if (club.mentorPairings) {
-      const ids = new Set(club.players.map((p) => p.id));
-      club.mentorPairings = club.mentorPairings.filter((m) => ids.has(m.mentorId) && ids.has(m.menteeId));
+      const byId = new Map(club.players.map((p) => [p.id, p]));
+      const remaining: MentorPairing[] = [];
+      for (const pairing of club.mentorPairings) {
+        const mentor = byId.get(pairing.mentorId);
+        const mentee = byId.get(pairing.menteeId);
+        if (!mentor || !mentee) continue;
+        mentor.morale = clamp(mentor.morale + MENTOR_REWARD_MORALE, 0, 1);
+        const agedOut = mentee.age > MENTEE_MAX_AGE;
+        const surpassed = currentAbility(mentee) >= currentAbility(mentor);
+        if (agedOut || surpassed) {
+          mentorGraduations.push({
+            mentorId: mentor.id, mentorName: mentor.name,
+            menteeId: mentee.id, menteeName: mentee.name,
+            clubId: club.id, clubName: club.name,
+            reason: agedOut ? 'age' : 'surpassed',
+          });
+          continue;
+        }
+        remaining.push(pairing);
+      }
+      club.mentorPairings = remaining;
     }
   }
   return {
-    retirements, intakeByClub, intakePlayersByClub, fireSalesByClub, retiredPlayers, milestones,
+    retirements, intakeByClub, intakePlayersByClub, fireSalesByClub, ffpStageByClub, retiredPlayers, milestones,
     debutEvents, loanReturns, loanObligations, reservePromotions, reserveReleasesByClub, staffDepartures,
-    staffRetirements, addOnPayouts, reserveLeagueTable,
+    staffRetirements, addOnPayouts, reserveLeagueTable, mentorGraduations, reservePlayerStats,
+    boardPersonaChanges,
   };
 }
 

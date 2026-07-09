@@ -4,6 +4,7 @@ import {
   currentAbility, marketValue, playerDerived, isInjured, isSuspended, lineOf, familiarityAt,
   formatMoney, buildScoutingReport, retireChance, RETIRE_MIN_AGE, scoutDispatchCost,
   loyaltyTier, loyaltyDiscount, LOYALTY_TRUSTED_SEASONS, LOYALTY_LEGEND_SEASONS,
+  POSITION_MASTERY_MILESTONES,
   type AttrKey, type Player, type DerivedRatings, type TrainingFocus, type Position,
   type PlayerFormEntry, type OverallTier, type PotentialTier, type AgeProfile, type ScoutingReport,
 } from '@soccer-tycoon/engine';
@@ -386,6 +387,15 @@ export function PlayerDetail({
                   ))}
                 </select>
                 <span className="muted small">시즌이 끝날 때마다 코칭 지원을 받아 숙련도가 상승합니다.</span>
+                {player.trainingPosition && (() => {
+                  const famPct = Math.round(familiarityAt(player, player.trainingPosition) * 100);
+                  const next = POSITION_MASTERY_MILESTONES.find((m) => m > famPct);
+                  return next !== undefined && (
+                    <span className="muted small pd-milestone-target">
+                      🎯 다음 목표: 숙련도 <b>{next}%</b> (현재 {famPct}%)
+                    </span>
+                  );
+                })()}
               </div>
             )}
 
@@ -522,6 +532,11 @@ function CareerTimeline({ entries }: { entries: TimelineEntry[] }) {
             {e.kind === 'milestone' && (
               <span className="timeline-text">
                 🎉 통산 <b>{e.value}{MILESTONE_KIND_LABEL[e.milestoneKind]}</b> 달성
+              </span>
+            )}
+            {e.kind === 'positionMilestone' && (
+              <span className="timeline-text">
+                🎯 <b>{e.position}</b> 포지션 전환 훈련 숙련도 <b>{e.value}%</b> 달성
               </span>
             )}
             {e.kind === 'retired' && (

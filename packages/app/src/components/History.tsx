@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { Landmark } from 'lucide-react';
 import { myClub, rivalClub, DIVISION_LABELS, type GameState } from '../game.js';
-import { careerScorers, type SeasonSquadEntry } from '@soccer-tycoon/engine';
+import {
+  careerScorers, STAFF_TRAIT_LABEL, STAFF_TRAIT_TIER_LABEL, type SeasonSquadEntry, type NamedStaffKind,
+} from '@soccer-tycoon/engine';
 import { computeClubRecords, type ClubRecordEntry } from '../records.js';
 import { useModalA11y } from './useModalA11y.js';
 import { onKeyActivate } from '../a11y.js';
@@ -9,8 +11,13 @@ import { EmptyState } from './EmptyState.js';
 
 const RESULT_LABEL: Record<'win' | 'draw' | 'loss', string> = { win: '승', draw: '무', loss: '패' };
 
+/** 실명 스태프 직책 한글 라벨(고도화 항목36) — Staff.tsx의 표기와 통일. */
+const STAFF_KIND_LABEL: Record<NamedStaffKind, string> = {
+  coaching: '총괄 코치', medical: '의료', scouting: '스카우팅', youth: '유스',
+};
+
 type HistorySeason = GameState['history'][number];
-type HistoryTab = 'seasons' | 'titles' | 'scorers' | 'records' | 'legends' | 'rivals';
+type HistoryTab = 'seasons' | 'titles' | 'scorers' | 'records' | 'legends' | 'staffLegends' | 'rivals';
 
 export function History({ game }: { game: GameState }) {
   const club = myClub(game);
@@ -57,6 +64,10 @@ export function History({ game }: { game: GameState }) {
   const titleTable = [...titleCount.values()].sort((a, b) => b.count - a.count || a.division - b.division);
 
   const leaders = careerScorers(game.clubs, 15);
+  // 이사회 신뢰도 추이(고도화 항목39) — 값이 없는 구버전 세이브 시즌은 건너뛴다.
+  const boardConfidenceHistory = seasons
+    .map((s) => s.boardConfidenceAfter)
+    .filter((v): v is number => v !== undefined);
 
   const [squadSeason, setSquadSeason] = useState<
     { s: HistorySeason; leagueWon: boolean; cupWon: boolean } | null
@@ -71,6 +82,7 @@ export function History({ game }: { game: GameState }) {
     { key: 'scorers', label: '통산 득점 순위', show: leaders.length > 0 },
     { key: 'records', label: '역대 기록집', show: hasRecords },
     { key: 'legends', label: '레전드', show: game.legends.length > 0 },
+    { key: 'staffLegends', label: '스태프 레전드', show: (game.staffLegends?.length ?? 0) > 0 },
     { key: 'rivals', label: '라이벌전', show: game.rivalMeetings.length > 0 },
   ];
   const availableTabs = tabDefs.filter((t) => t.show);
@@ -114,6 +126,12 @@ export function History({ game }: { game: GameState }) {
       {activeTab === 'seasons' && (
         <div>
           <h3>역대 시즌</h3>
+          {boardConfidenceHistory.length > 1 && (
+            <div className="board-confidence-trend">
+              <div className="sparkline-title muted small">이사회 신뢰도 추이(재임 전체)</div>
+              <BoardConfidenceSparkline values={boardConfidenceHistory} />
+            </div>
+          )}
           <table className="data-table compact">
             <thead>
               <tr><th>시즌</th><th>부</th><th>리그 우승</th><th>컵 우승</th><th>득점왕</th><th>내 순위</th><th>이사회 요구</th><th>스폰서 목표</th><th></th></tr>
@@ -216,6 +234,9 @@ export function History({ game }: { game: GameState }) {
             {records.mostAssistsSeason && <RecordCard entry={records.mostAssistsSeason} />}
             {records.bestAvgRatingSeason && <RecordCard entry={records.bestAvgRatingSeason} />}
             {records.bestNetIncomeSeason && <RecordCard entry={records.bestNetIncomeSeason} />}
+            {records.bestWinStreak && <RecordCard entry={records.bestWinStreak} />}
+            {records.bestUnbeatenStreak && <RecordCard entry={records.bestUnbeatenStreak} />}
+            {records.bestWinMargin && <RecordCard entry={records.bestWinMargin} />}
           </div>
         </div>
       )}
@@ -237,6 +258,31 @@ export function History({ game }: { game: GameState }) {
                   <td className="muted">{l.careerApps}</td>
                   <td><b>{l.careerGoals}</b></td>
                   <td className="muted">{l.caps > 0 ? `${l.caps}경` : '-'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {activeTab === 'staffLegends' && (game.staffLegends?.length ?? 0) > 0 && (
+        <div className="legends">
+          <h3>🎖️ 스태프 명예의 전당 <span className="muted small">(은퇴 스태프 · {club.name})</span></h3>
+          <table className="data-table compact">
+            <thead>
+              <tr><th>은퇴 시즌</th><th>이름</th><th>직책</th><th>은퇴 나이</th><th>레벨</th><th>특기</th></tr>
+            </thead>
+            <tbody>
+              {[...game.staffLegends!].reverse().map((l, i) => (
+                <tr key={`${l.season}-${l.kind}-${i}`}>
+                  <td className="muted small">{l.season}</td>
+                  <td className="name">{l.name}</td>
+                  <td>{STAFF_KIND_LABEL[l.kind]}</td>
+                  <td>{l.finalAge}</td>
+                  <td className="muted">{l.level}</td>
+                  <td className="muted small">
+                    {l.trait ? `${STAFF_TRAIT_TIER_LABEL[l.traitTier ?? 'veteran']} ${STAFF_TRAIT_LABEL[l.trait]}` : '-'}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -280,6 +326,42 @@ export function History({ game }: { game: GameState }) {
         />
       )}
     </div>
+  );
+}
+
+/** 이사회 신뢰도 추이 스파크라인(고도화 항목39) — 감독 재임 전체 시즌 순서대로,
+ *  0~100 고정 스케일(값이 높을수록 위로). */
+function BoardConfidenceSparkline({ values }: { values: number[] }) {
+  const w = 320; const h = 64; const padX = 10; const padY = 10;
+  const n = values.length;
+  const x = (i: number) => padX + (i * (w - 2 * padX)) / Math.max(1, n - 1);
+  const y = (v: number) => padY + ((100 - v) * (h - 2 * padY)) / 100;
+  const points = values.map((v, i) => `${x(i)},${y(v)}`).join(' ');
+  const lastIdx = n - 1;
+  return (
+    <svg
+      viewBox={`0 0 ${w} ${h}`} width="100%" height={h} className="position-sparkline" role="img"
+      aria-label={`이사회 신뢰도 추이: ${values.join(' → ')}`}
+    >
+      <polyline
+        points={points} fill="none" stroke="var(--accent)" strokeWidth="2"
+        strokeLinecap="round" strokeLinejoin="round"
+      />
+      {values.map((v, i) => (
+        <circle
+          key={i} cx={x(i)} cy={y(v)} r={i === lastIdx ? 3.5 : 2}
+          fill={i === lastIdx ? 'var(--accent-2)' : 'var(--accent)'}
+        >
+          <title>{`시즌 ${i + 1}: 신뢰도 ${v}`}</title>
+        </circle>
+      ))}
+      <text x={x(0)} y={y(values[0]!) - 6} className="sparkline-label" textAnchor="start">
+        {values[0]}
+      </text>
+      <text x={x(lastIdx)} y={y(values[lastIdx]!) - 6} className="sparkline-label" textAnchor="end">
+        최종 {values[lastIdx]}
+      </text>
+    </svg>
   );
 }
 

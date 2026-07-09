@@ -116,3 +116,67 @@ describe('B14: 멘토 페어링 지정', () => {
     expect(club.mentorPairings ?? []).toHaveLength(0);
   });
 });
+
+describe('고도화 Item8: 멘토-멘티 관계 심화', () => {
+  it('페어링이 유지되는 시즌마다 멘토가 소폭 사기 보상을 받는다', () => {
+    const club = makeClub(20);
+    const mentor: Player = { ...club.players[0]!, id: 'mentor-r1', age: 32, morale: 0.5 };
+    const mentee: Player = { ...club.players[1]!, id: 'mentee-r1', age: 19, morale: 0.5 };
+    club.players = [mentor, mentee, ...club.players.slice(2)];
+    assignMentor(club, mentor.id, mentee.id);
+    runOffseason([club], new Rng(200));
+    const after = club.players.find((p) => p.id === 'mentor-r1')!;
+    expect(after.morale).toBeGreaterThan(0.5);
+  });
+
+  it('멘티가 23세를 초과하면 "졸업"으로 페어링이 자동 해제되고 이벤트가 기록된다', () => {
+    const club = makeClub(21);
+    const mentor: Player = { ...club.players[0]!, id: 'mentor-r2', age: 35 };
+    const mentee: Player = { ...club.players[1]!, id: 'mentee-r2', age: 23 };
+    club.players = [mentor, mentee, ...club.players.slice(2)];
+    assignMentor(club, mentor.id, mentee.id);
+    const result = runOffseason([club], new Rng(201));
+    expect(club.mentorPairings ?? []).toHaveLength(0);
+    expect(result.mentorGraduations).toHaveLength(1);
+    expect(result.mentorGraduations[0]).toMatchObject({
+      mentorId: mentor.id, menteeId: mentee.id, reason: 'age',
+    });
+  });
+
+  it('멘티의 CA가 멘토를 따라잡거나 추월하면 "졸업"으로 페어링이 자동 해제된다', () => {
+    const club = makeClub(22);
+    const mentor: Player = { ...club.players[0]!, id: 'mentor-r3', age: 26 }; // 은퇴 위험 없는 나이
+    for (const k in mentor.attributes) (mentor.attributes as Record<string, number>)[k] = 8;
+    const mentee: Player = { ...club.players[1]!, id: 'mentee-r3', age: 19, potential: 200 };
+    for (const k in mentee.attributes) (mentee.attributes as Record<string, number>)[k] = 19;
+    club.players = [mentor, mentee, ...club.players.slice(2)];
+    assignMentor(club, mentor.id, mentee.id);
+    const result = runOffseason([club], new Rng(202));
+    expect(club.mentorPairings ?? []).toHaveLength(0);
+    expect(result.mentorGraduations).toHaveLength(1);
+    expect(result.mentorGraduations[0]!.reason).toBe('surpassed');
+  });
+
+  it('다혈질 멘토×차분한 멘티 조합은 성향 충돌로 지정 멘토링 효과가 자동 멘토링보다 크지 않다', () => {
+    function trial(mentorTrait: 'hothead' | undefined) {
+      const club = makeClub(23);
+      const mentor: Player = {
+        ...club.players[0]!, id: 'mentor-r4', age: 30, position: 'GK',
+        traits: mentorTrait ? [mentorTrait] : [],
+        attributes: { ...club.players[0]!.attributes, leadership: 5 },
+      };
+      const mentee: Player = {
+        ...club.players[1]!, id: 'mentee-r4', age: 18, position: 'ST', potential: 190, traits: ['rock'],
+      };
+      for (const k in mentee.attributes) (mentee.attributes as Record<string, number>)[k] = 8;
+      club.players = [mentor, mentee, ...club.players.slice(2)];
+      assignMentor(club, mentor.id, mentee.id);
+      runOffseason([club], new Rng(99));
+      const after = club.players.find((p) => p.id === 'mentee-r4')!;
+      return currentAbility(after);
+    }
+    const caWithClash = trial('hothead');
+    const caWithoutClash = trial(undefined);
+    expect(caWithClash).toBeLessThan(caWithoutClash);
+  });
+});

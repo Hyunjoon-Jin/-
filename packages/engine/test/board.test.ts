@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   confidenceDelta, applyConfidence, boardStatus, isSacked,
   START_CONFIDENCE, SACK_THRESHOLD, boardTierUpgradeBonus,
+  LONG_TERM_PROJECT_MILESTONES, crossedLongTermProjectMilestone, longTermProjectBonus,
 } from '../src/board.js';
 
 describe('board: 이사회 신뢰도', () => {
@@ -82,5 +83,35 @@ describe('board: 이사회 신뢰도', () => {
 
   it('C-new1: 이미 최고 등급(secure)을 유지만 하면 보너스가 없다(반복 소득 방지)', () => {
     expect(boardTierUpgradeBonus('secure', 'secure', 15)).toBe(0);
+  });
+});
+
+describe('고도화 Item20: 장기 프로젝트 보너스', () => {
+  it('스트릭이 마일스톤을 이번 시즌에 처음 넘으면 그 마일스톤 값을 반환한다', () => {
+    expect(crossedLongTermProjectMilestone(2, 3)).toBe(LONG_TERM_PROJECT_MILESTONES[0]);
+    expect(crossedLongTermProjectMilestone(4, 5)).toBe(LONG_TERM_PROJECT_MILESTONES[1]);
+  });
+
+  it('이미 넘은 마일스톤은 다시 반환하지 않는다', () => {
+    expect(crossedLongTermProjectMilestone(3, 4)).toBeUndefined();
+    expect(crossedLongTermProjectMilestone(5, 6)).toBeUndefined();
+  });
+
+  it('마일스톤에 도달하지 못하면 undefined다', () => {
+    expect(crossedLongTermProjectMilestone(0, 1)).toBeUndefined();
+    expect(crossedLongTermProjectMilestone(1, 2)).toBeUndefined();
+  });
+
+  it('한 시즌에 목표 실패로 스트릭이 리셋되면(0) 마일스톤을 다시 넘지 않는 한 보상이 없다', () => {
+    expect(crossedLongTermProjectMilestone(5, 0)).toBeUndefined();
+  });
+
+  it('더 큰 마일스톤일수록, 평판이 높을수록 보너스가 크다', () => {
+    const small = longTermProjectBonus(3, 10);
+    const large = longTermProjectBonus(10, 10);
+    expect(large).toBeGreaterThan(small);
+    const lowRep = longTermProjectBonus(5, 5);
+    const highRep = longTermProjectBonus(5, 20);
+    expect(highRep).toBeGreaterThan(lowRep);
   });
 });

@@ -62,6 +62,24 @@ export function ensureCaptain(club: Club, lineup: Tactic['lineup'], currentId?: 
   return pickCaptain(club, lineup);
 }
 
+/** 라인업 중 주장을 제외하고 주장 추천 점수가 가장 높은 선수를 부주장(고도화 항목14)으로 자동 지정. */
+export function pickViceCaptain(club: Club, lineup: Tactic['lineup'], captainId?: string): string | undefined {
+  const byId = new Map(club.players.map((p) => [p.id, p]));
+  const inLineup = lineup
+    .map((s) => byId.get(s.playerId))
+    .filter((p): p is Player => p !== undefined && p.id !== captainId);
+  if (inLineup.length === 0) return undefined;
+  return rankCaptainCandidates(inLineup)[0]!.playerId;
+}
+
+/** 현재 부주장이 새 라인업에 없거나 주장과 겹치면(포메이션·스쿼드 변동) 다시 자동 지정. */
+export function ensureViceCaptain(
+  club: Club, lineup: Tactic['lineup'], currentId: string | undefined, captainId?: string,
+): string | undefined {
+  if (currentId && currentId !== captainId && lineup.some((s) => s.playerId === currentId)) return currentId;
+  return pickViceCaptain(club, lineup, captainId);
+}
+
 /**
  * 포메이션에 맞춰 자동으로 베스트 XI를 뽑는다.
  * @param customPositions 커스텀 포메이션(F14)의 슬롯 배열 — 넘기면 이름 대신 이걸 그대로 쓴다
@@ -86,6 +104,7 @@ export function autoPickLineup(club: Club, formation: string, customPositions?: 
 /** 기본 전술(4-3-3, 베스트 XI, 중립 슬라이더). */
 export function makeDefaultTactic(club: Club): Tactic {
   const lineup = autoPickLineup(club, '4-3-3');
+  const captainId = pickCaptain(club, lineup);
   return {
     formation: '4-3-3',
     lineup,
@@ -95,7 +114,8 @@ export function makeDefaultTactic(club: Club): Tactic {
     width: 0.5,
     defensiveLine: 0.5,
     setPieceTakerId: pickSetPieceTaker(club, lineup),
-    captainId: pickCaptain(club, lineup),
+    captainId,
+    viceCaptainId: pickViceCaptain(club, lineup, captainId),
   };
 }
 
@@ -133,11 +153,13 @@ export function repairTactic(club: Club, tactic: Tactic): Tactic {
       lineup.push({ position: pos, playerId: pick.id });
     }
   });
+  const captainId = ensureCaptain(club, lineup, tactic.captainId);
   return {
     ...tactic,
     lineup,
     setPieceTakerId: ensureSetPieceTaker(club, lineup, tactic.setPieceTakerId),
-    captainId: ensureCaptain(club, lineup, tactic.captainId),
+    captainId,
+    viceCaptainId: ensureViceCaptain(club, lineup, tactic.viceCaptainId, captainId),
   };
 }
 

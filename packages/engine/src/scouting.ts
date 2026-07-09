@@ -14,21 +14,40 @@ export type PotentialTier = 'generational' | 'high' | 'moderate' | 'limited' | '
 export type AgeProfile = 'wonderkid' | 'prime' | 'veteran' | 'declining';
 
 /**
- * 스카우팅 레벨에 따라 아카데미 유스 선수의 국적 후보 풀이 단계적으로 넓어진다.
+ * 스카우팅 레벨에 따라 아카데미 유스 선수의 국적 후보 풀이 넓어진다.
  * 레벨이 낮은 구단은 소수 핵심 국가 위주로만 유망주를 배출하고, 스카우팅에
  * 투자할수록 해외 네트워크가 넓어져 더 다양한 국적의 유망주가 나온다.
+ * 예전에는 3단계(0/8/15)로 뭉텅뭉텅 늘던 것을, 국가별 개별 임계값으로 세분화해
+ * 레벨을 한 단계씩 올릴 때마다 새 국가가 하나씩 열리는 체감을 준다.
  */
-const ACADEMY_NATION_TIERS: { minScouting: number; nations: string[] }[] = [
-  { minScouting: 0, nations: ['KOR', 'JPN', 'ENG', 'ESP'] },
-  { minScouting: 8, nations: ['GER', 'ITA', 'FRA'] },
-  { minScouting: 15, nations: ['BRA', 'NED', 'ARG'] },
+const ACADEMY_NATIONS: { minScouting: number; nation: string }[] = [
+  { minScouting: 0, nation: 'KOR' },
+  { minScouting: 0, nation: 'JPN' },
+  { minScouting: 0, nation: 'ENG' },
+  { minScouting: 0, nation: 'ESP' },
+  { minScouting: 2, nation: 'GER' },
+  { minScouting: 4, nation: 'ITA' },
+  { minScouting: 6, nation: 'FRA' },
+  { minScouting: 8, nation: 'NED' },
+  { minScouting: 9, nation: 'POR' },
+  { minScouting: 10, nation: 'BRA' },
+  { minScouting: 11, nation: 'ARG' },
+  { minScouting: 12, nation: 'URU' },
+  { minScouting: 13, nation: 'COL' },
+  { minScouting: 14, nation: 'BEL' },
+  { minScouting: 15, nation: 'DEN' },
+  { minScouting: 16, nation: 'CRO' },
+  { minScouting: 17, nation: 'USA' },
+  { minScouting: 18, nation: 'MEX' },
+  { minScouting: 19, nation: 'NGA' },
+  { minScouting: 20, nation: 'SEN' },
 ];
 
 /** 주어진 스카우팅 레벨에서 아카데미 유입이 가능한 국적 목록(레벨이 오를수록 누적 확장). */
 export function academyNationPool(scoutingLevel: number): string[] {
-  return ACADEMY_NATION_TIERS
+  return ACADEMY_NATIONS
     .filter((t) => scoutingLevel >= t.minScouting)
-    .flatMap((t) => t.nations);
+    .map((t) => t.nation);
 }
 
 export interface ScoutingReport {

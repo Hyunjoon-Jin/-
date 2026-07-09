@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import {
-  myClub, rivalClub, lastSummary, myLastPosition, managerPersona, contractOptions,
+  myClub, rivalClub, lastSummary, myLastPosition, managerPersona, managerSnsReputation, contractOptions,
   thinSquadLines, LINE_DEPTH_RECOMMENDED,
   DIFFICULTIES, DIVISION_LABELS, type GameState, type ActionOutcome,
 } from '../game.js';
@@ -8,6 +8,7 @@ import {
   formatMoney, currentAbility, wageBudget, annualWageBill, inFinancialCrisis,
   boardStatus, DEMAND_LABEL, SPONSOR_GOAL_LABEL, sponsorStreakMultiplier, SPONSOR_CONTRACT_LABEL,
   boldPredictionTarget, ADD_ON_CONDITION_LABEL,
+  FAN_SATISFACTION_DEFAULT, FAN_PROTEST_THRESHOLD,
   type BoardStatus, type ManagerPersona, type BoardPersona, type Line, type NamedStaffKind,
 } from '@soccer-tycoon/engine';
 import { Landmark } from 'lucide-react';
@@ -65,6 +66,7 @@ export function Dashboard({
   const squadAvgCA =
     club.players.reduce((s, p) => s + currentAbility(p), 0) / club.players.length;
   const wageBill = club.players.reduce((s, p) => s + p.wage, 0);
+  const fanSatisfaction = club.finance.fanSatisfaction ?? FAN_SATISFACTION_DEFAULT;
 
   const myReport = last?.finance.get(club.id);
   const firstRun = game.history.length === 0 && !game.live;
@@ -74,6 +76,7 @@ export function Dashboard({
   const thinLines = thinSquadLines(game);
   const retiredThisSeason = last ? game.legends.filter((l) => l.season === last.season) : [];
   const persona = managerPersona(game);
+  const sns = managerSnsReputation(game);
   const contract = contractOptions(game);
 
   // 시즌 종료 배너를 중요도순으로 담아, 여러 개가 한꺼번에 세로로 쌓이지 않도록
@@ -111,14 +114,31 @@ export function Dashboard({
       ),
     });
   }
-  if (last?.milestones !== undefined && last.milestones.length > 0) {
+  const careerMilestones = last?.milestones?.filter((m) => m.kind !== 'positionMastery') ?? [];
+  if (careerMilestones.length > 0) {
     seasonBanners.push({
       key: 'milestones', priority: 2,
       node: (
         <Banner tone="success">
-          {last.milestones.map((m) => (
+          {careerMilestones.map((m) => (
             <p key={`${m.playerId}-${m.kind}-${m.value}`}>
               🎉 <b>{m.name}</b>, 통산 <b>{m.value}{m.kind === 'apps' ? '경기 출전' : '골'}</b> 달성!
+            </p>
+          ))}
+        </Banner>
+      ),
+    });
+  }
+  const positionMilestones = last?.milestones?.filter((m) => m.kind === 'positionMastery') ?? [];
+  if (positionMilestones.length > 0) {
+    seasonBanners.push({
+      key: 'positionMilestones', priority: 2,
+      node: (
+        <Banner tone="info">
+          {positionMilestones.map((m) => (
+            <p key={`${m.playerId}-${m.position}-${m.value}`}>
+              🎯 <b>{m.name}</b>, <b>{m.position}</b> 포지션 전환 훈련 숙련도 <b>{m.value}%</b> 달성!
+              {m.value >= 100 && ' 완전히 전환을 마쳤습니다.'}
             </p>
           ))}
         </Banner>
@@ -201,6 +221,15 @@ export function Dashboard({
               ({myRow.won}승 {myRow.drawn}무 {myRow.lost}패, 득실 {myRow.gf - myRow.ga > 0 ? '+' : ''}{myRow.gf - myRow.ga}).
               {isChampion && ' 우승 보너스로 리저브 전원의 사기가 올랐습니다!'}
             </p>
+            {last.reservePlayerStats !== undefined && last.reservePlayerStats.length > 0 && (() => {
+              const topScorer = [...last.reservePlayerStats].sort((a, b) => b.goals - a.goals)[0]!;
+              return topScorer.goals > 0 && (
+                <p className="muted small">
+                  개인 기록: <b>{topScorer.name}</b> {topScorer.goals}골 {topScorer.assists}도움({topScorer.apps}경기)
+                  · 스태프 탭에서 리저브 개인 기록 전체를 볼 수 있습니다.
+                </p>
+              );
+            })()}
           </Banner>
         ),
       });
@@ -377,6 +406,64 @@ export function Dashboard({
       ),
     });
   }
+  if (last?.mentorGraduations !== undefined && last.mentorGraduations.length > 0) {
+    seasonBanners.push({
+      key: 'mentorGraduations', priority: 6.8,
+      node: (
+        <Banner tone="success" title="🎓 멘토링 졸업">
+          {last.mentorGraduations.map((g) => (
+            <p key={g.menteeId}>
+              <b>{g.menteeName}</b> 선수가 {g.reason === 'age' ? '유망주 나이를 넘어서며' : '멘토의 기량을 넘어서며'} <b>{g.mentorName}</b>와(과)의 멘토링을 졸업했습니다.
+            </p>
+          ))}
+        </Banner>
+      ),
+    });
+  }
+  if (last?.boardPersonaChange !== undefined) {
+    const change = last.boardPersonaChange;
+    seasonBanners.push({
+      key: 'boardPersonaChange', priority: 1.8,
+      node: (
+        <Banner tone="info" title="🪑 회장 교체">
+          <p>
+            새 회장이 취임하며 이사회 성향이 바뀌었습니다 —{' '}
+            <b>{PATIENCE_LABEL[change.oldPersona.patience]} · {STYLE_LABEL[change.oldPersona.style]}</b>
+            {' '}에서{' '}
+            <b>{PATIENCE_LABEL[change.newPersona.patience]} · {STYLE_LABEL[change.newPersona.style]}</b>
+            {' '}(으)로 바뀌었습니다.
+          </p>
+        </Banner>
+      ),
+    });
+  }
+  if (last?.longTermProjectBonus !== undefined) {
+    const { milestone, bonus } = last.longTermProjectBonus;
+    seasonBanners.push({
+      key: 'longTermProjectBonus', priority: 1.7,
+      node: (
+        <Banner tone="success" title="🏗️ 장기 프로젝트 보너스">
+          <p>
+            이사회 목표를 <b>{milestone}시즌</b> 연속 달성해 이사회가 장기 프로젝트에
+            신뢰를 보냈습니다 — 예산 <b>+{formatMoney(bonus)}</b>이 지급되었습니다.
+          </p>
+        </Banner>
+      ),
+    });
+  }
+  if (last?.fanProtest) {
+    seasonBanners.push({
+      key: 'fanProtest', priority: 1.9,
+      node: (
+        <Banner tone="danger" title="📢 팬 시위">
+          <p>
+            팬 만족도가 바닥나며 서포터즈가 시위에 나섰습니다 — 현재 만족도{' '}
+            <b>{last.fanSatisfaction}</b>. 다음 시즌 매치데이 수익이 한동안 줄어듭니다.
+          </p>
+        </Banner>
+      ),
+    });
+  }
   seasonBanners.sort((a, b) => a.priority - b.priority);
 
   const [showAllBanners, setShowAllBanners] = useState(false);
@@ -464,6 +551,13 @@ export function Dashboard({
           <span className="muted"> — {PERSONA_LABEL[persona].desc}</span>
         </Banner>
       )}
+      <Banner tone="info">
+        📱 감독 SNS — 팔로워 <b>{sns.followers.toLocaleString()}</b>명 · 여론 지지율{' '}
+        <b>{sns.approval}</b>%
+        <span className="muted">
+          {' '}(자신감 있는 답변은 화제성을 키우고, 겸손한 답변은 지지율을 쌓습니다)
+        </span>
+      </Banner>
 
       {contract && (
         <Banner tone="gold" title="📝 감독 계약 만료 — 갱신 제안">
@@ -540,6 +634,10 @@ export function Dashboard({
         <Card title="주급 총액" value={`${formatMoney(wageBill)} / 주`} />
         <Card title="스쿼드 평균 CA" value={squadAvgCA.toFixed(0)} />
         <Card title="스쿼드 인원" value={`${club.players.length}명`} />
+        <Card
+          title="팬 만족도"
+          value={`${fanSatisfaction}${fanSatisfaction < FAN_PROTEST_THRESHOLD ? ' 😠' : fanSatisfaction >= 80 ? ' 😀' : ''} / 100`}
+        />
       </div>
 
       <section className="panel">
@@ -576,8 +674,29 @@ export function Dashboard({
               {last.fireSales !== undefined && last.fireSales > 0 && (
                 <> &nbsp;·&nbsp; <span className="neg">💸 재정 강제 매각: {last.fireSales}명</span></>
               )}
+              {last.ffpStage === 'warning' && (
+                <> &nbsp;·&nbsp; <span className="neg">
+                  ⚠️ 재정 위기 경고 — 이적 예산 동결(다음 시즌도 적자면 제재가 뒤따릅니다)
+                </span></>
+              )}
+              {last.ffpStage === 'sanction' && (
+                <> &nbsp;·&nbsp; <span className="neg">
+                  🚨 재정 위기 제재 — 이적 예산 동결 · 임금 삭감(다음 시즌도 적자면 강제 매각)
+                </span></>
+              )}
               {last.internationalTournamentChampion !== undefined && (
-                <> &nbsp;·&nbsp; 🌍 국제대회 우승: <b>{last.internationalTournamentChampion ?? '무산(참가국 부족)'}</b></>
+                <> &nbsp;·&nbsp; 🌍 국제대회 우승: <b>{last.internationalTournamentChampion ?? '무산(참가국 부족)'}</b>
+                  {last.internationalTournamentHighlight && (
+                    <span className="muted small">
+                      {' '}(우리 구단 국가대표 소속국: {last.internationalTournamentHighlight.myNations.join(', ')}
+                      {last.internationalTournamentHighlight.won
+                        ? ' · 🏆 우승에 기여!'
+                        : last.internationalTournamentHighlight.furthestRoundName
+                          ? ` · ${last.internationalTournamentHighlight.furthestRoundName}에서 탈락`
+                          : ''})
+                    </span>
+                  )}
+                </>
               )}
               {last.nationalCallUps !== undefined && last.nationalCallUps > 0 && (
                 <> &nbsp;·&nbsp; 🎽 국가대표 차출: <b>{last.nationalCallUps}명</b>
@@ -617,7 +736,12 @@ export function Dashboard({
                   </span>
                 </p>
                 <p className="muted small finance-breakdown">
-                  중계 {formatMoney(myReport.income.tv)} · 매치데이 {formatMoney(myReport.income.matchday)}
+                  중계 {formatMoney(myReport.income.tv)}
+                  <InfoTip title="중계권료">
+                    균등 분배분 + 평판 비례분에, 이번 시즌 최종 순위가 높을수록(1위에 가까울수록)
+                    추가되는 순위 배당이 더해집니다. 시청 수요가 상위권 경기에 몰린다는 가정입니다.
+                  </InfoTip>
+                  {' · '}매치데이 {formatMoney(myReport.income.matchday)}
                   {myReport.rivalBonus !== undefined && (
                     <span> (라이벌전 홈경기 프리미엄 +{formatMoney(myReport.rivalBonus)} 포함)</span>
                   )}

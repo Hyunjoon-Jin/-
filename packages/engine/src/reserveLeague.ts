@@ -6,7 +6,7 @@
  * (international.ts의 비정기 국제대회와 같은 관례), 우승 스쿼드에게만 경량 사기 보너스를
  * 직접 부여한다.
  */
-import type { Club } from './types.js';
+import type { Club, MatchResult } from './types.js';
 import { doubleRoundRobin } from './schedule.js';
 import { defaultTactic } from './generate.js';
 import { simulateMatchWithAiTactics } from './aiInMatch.js';
@@ -33,6 +33,10 @@ export interface ReserveTableRow {
 export interface ReserveLeagueResult {
   /** 참가 자격(MIN_RESERVE_SQUAD 이상)을 갖춘 구단들의 순위표(승점순). 미달 구단은 아예 빠진다. */
   table: ReserveTableRow[];
+  /** 이번 시즌 리저브 리그 전 경기 결과(고도화 항목11 — 개인 선수 기록 집계용).
+   *  homeClubId/awayClubId는 실제 구단id 그대로(내부 시뮬레이션용 reserve: 접두사 제거됨),
+   *  aggregatePlayerStats에 그대로 넘겨 개인 기록을 집계할 수 있다. */
+  matches: MatchResult[];
 }
 
 /** 리저브 스쿼드를 simulateMatch가 받아들이는 Club 형태로 감싼다(선수단만 교체, 재정/스태프는 원 구단 그대로). */
@@ -53,11 +57,12 @@ function emptyRow(club: Club): ReserveTableRow {
  */
 export function simulateReserveSeason(clubs: Club[], baseSeed: number): ReserveLeagueResult {
   const eligible = clubs.filter((c) => (c.reserves?.length ?? 0) >= MIN_RESERVE_SQUAD);
-  if (eligible.length < 2) return { table: [] };
+  if (eligible.length < 2) return { table: [], matches: [] };
 
   const fixtures = doubleRoundRobin(eligible.map((c) => c.id));
   const byId = new Map(eligible.map((c) => [c.id, c]));
   const rows = new Map(eligible.map((c) => [c.id, emptyRow(c)]));
+  const matches: MatchResult[] = [];
 
   fixtures.forEach((fx, i) => {
     const homeClub = byId.get(fx.homeId)!;
@@ -68,6 +73,13 @@ export function simulateReserveSeason(clubs: Club[], baseSeed: number): ReserveL
       home: { club: home, tactic: defaultTactic(home, { opponent: away, isHome: true }) },
       away: { club: away, tactic: defaultTactic(away, { opponent: home, isHome: false }) },
       seed: baseSeed + i,
+    });
+    // 개인 기록 집계(고도화 항목11)를 위해 내부 시뮬레이션용 reserve: 접두사 id를
+    // 실제 구단id·이름으로 되돌려 저장한다.
+    matches.push({
+      ...result,
+      homeClubId: homeClub.id, homeClubName: homeClub.name,
+      awayClubId: awayClub.id, awayClubName: awayClub.name,
     });
     const [hg, ag] = result.score;
     const hr = rows.get(fx.homeId)!;
@@ -97,5 +109,5 @@ export function simulateReserveSeason(clubs: Club[], baseSeed: number): ReserveL
     }
   }
 
-  return { table };
+  return { table, matches };
 }

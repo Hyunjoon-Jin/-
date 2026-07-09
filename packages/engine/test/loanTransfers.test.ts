@@ -212,7 +212,7 @@ describe('A1: 임대 의무완전이적 조항', () => {
     expect(from.finance.balance).toBe(fromBalance + 8000);
   });
 
-  it('자금이 부족해도 계약상 의무이므로 강제 집행된다(자금 부족→재정 위기 강제매각까지 이어짐)', () => {
+  it('자금이 부족해도 계약상 의무이므로 강제 집행된다(자금 부족→재정 위기 경고 단계로 이어짐)', () => {
     const clubs = makeLeague(23);
     const from = clubs[0]!; const to = clubs[1]!;
     const player = from.players[from.players.length - 1]!;
@@ -227,9 +227,13 @@ describe('A1: 임대 의무완전이적 조항', () => {
     expect(r.loanObligations).toHaveLength(1);
     // 판매자(원 소속)는 정상적으로 이적료를 받는다.
     expect(from.finance.balance).toBe(fromBalance + hugeFee);
-    // 구매자(임대 갔던 구단)는 감당 못 할 금액이라도 강제 집행되어 잔고가 크게 깎이고,
-    // 같은 오프시즌 내 재정 위기 로직(enforceFinancialFairPlay)이 즉시 강제매각으로 수습한다.
-    expect(r.fireSalesByClub.get(to.id) ?? 0).toBeGreaterThan(0);
+    // 구매자(임대 갔던 구단)는 감당 못 할 금액이라도 강제 집행되어 잔고가 마이너스로
+    // 크게 깎인다. 재정 위기 대응은 고도화 항목21의 단계적 절차라 첫 적자 시즌에는
+    // 즉시 강제매각하지 않고 경고(이적 예산 동결)만 적용한다 — 3시즌 연속 적자여야
+    // 강제매각으로 이어진다(financeControl.test.ts의 applyFinancialControl 참고).
+    expect(to.finance.balance).toBeLessThan(0);
+    expect(r.fireSalesByClub.get(to.id) ?? 0).toBe(0);
+    expect(r.ffpStageByClub.get(to.id)).toBe('warning');
   });
 
   it('시즌 중 회수(콜백)하면 의무완전이적 조항도 함께 해제된다', () => {

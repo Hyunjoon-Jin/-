@@ -3,9 +3,11 @@ import {
   Activity, Handshake,
   type LucideIcon,
 } from 'lucide-react';
-import { myClub, type GameState, type ActionOutcome } from '../game.js';
+import { useState } from 'react';
+import { myClub, lastSummary, STAFF_LABEL, type GameState, type ActionOutcome } from '../game.js';
 import {
   upgradeCost, STAFF_MAX, formatMoney, specialistCoachLevel, STAFF_TRAIT_LABEL, STAFF_TRAIT_DESC,
+  STAFF_TRAIT_TIER_LABEL, STAFF_TRAIT_TIER_BONUS, staffMarketValue,
   STADIUM_MAX, stadiumUpgradeCost, stadiumMatchdayMultiplier,
   ACADEMY_MAX, academyUpgradeCost, academyPotentialBonus, staffTraitSynergyBonus,
   staffRaiseCost, STAFF_RAISE_ELIGIBLE_YEARS, ACADEMY_FOCUS_POTENTIAL_BONUS_PER_LEVEL,
@@ -13,8 +15,9 @@ import {
   TRAINING_GROUND_MAX, trainingGroundUpgradeCost, trainingGroundInjuryFactor,
   SPONSOR_CONTRACT_LABEL, SPONSOR_CONTRACT_LENGTH_SEASONS, SPONSOR_CONTRACT_SIGN_FEE_MULTIPLIER,
   SPONSOR_CONTRACT_STADIUM_MIN_LEVEL, sponsorContractPayout,
+  TICKET_PRICE_MATCHDAY_MULTIPLIER, FAN_SATISFACTION_DEFAULT,
   type StaffKind, type SpecialistCoachKind, type NamedStaffKind, type Club, type Line, type InjuryRiskTier,
-  type SponsorContractKind,
+  type SponsorContractKind, type TicketPriceTier,
 } from '@soccer-tycoon/engine';
 import { useResultToast } from '../toast.js';
 import { InfoTip } from './InfoTip.js';
@@ -28,9 +31,14 @@ interface Props {
   onNegotiateRaise: (kind: NamedStaffKind) => ActionOutcome;
   onSetAcademyFocus: (focus: Line | undefined) => void;
   onSignSponsorContract: (kind: SponsorContractKind) => ActionOutcome;
+  onPoachStaff: (targetClubId: string, kind: NamedStaffKind, attempt: number) => ActionOutcome;
+  onSetTicketPrice: (tier: TicketPriceTier) => ActionOutcome;
 }
 
-const SPONSOR_CONTRACT_KINDS: SponsorContractKind[] = ['kit', 'stadiumNaming'];
+const TICKET_PRICE_TIERS: TicketPriceTier[] = ['low', 'normal', 'high'];
+const TICKET_PRICE_LABEL: Record<TicketPriceTier, string> = { low: '저가', normal: '보통', high: '고가' };
+
+const SPONSOR_CONTRACT_KINDS: SponsorContractKind[] = ['kit', 'stadiumNaming', 'sleeve'];
 
 const ACADEMY_FOCUS_OPTIONS: { key: Line; label: string }[] = [
   { key: 'GK', label: 'GK' },
@@ -72,9 +80,83 @@ const INJURY_RISK_LABEL: Record<InjuryRiskTier, { text: string; cls: string }> =
 /** 리포트에 표시할 최대 인원 — 스쿼드 전체가 아니라 위험도 상위만 보여준다. */
 const INJURY_RISK_REPORT_SIZE = 8;
 
+/** 스태프 이적시장(고도화 항목10) — 라이벌 구단이 보유한 실명 스태프를 영입 제안한다. */
+function StaffMarketPanel({ game, onPoachStaff }: {
+  game: GameState;
+  onPoachStaff: (targetClubId: string, kind: NamedStaffKind, attempt: number) => ActionOutcome;
+}) {
+  const toast = useResultToast();
+  const club = myClub(game);
+  const [kind, setKind] = useState<NamedStaffKind>('coaching');
+  const [attempts, setAttempts] = useState<Record<string, number>>({});
+
+  const candidates = game.clubs
+    .filter((c) => c.id !== game.myClubId)
+    .map((c) => ({ club: c, member: c.staff.members?.[kind], level: c.staff[kind] }))
+    .filter((c): c is { club: typeof c.club; member: NonNullable<typeof c.member>; level: number } => c.member !== undefined)
+    .sort((a, b) => b.level - a.level)
+    .slice(0, 10);
+
+  return (
+    <div className="mentor-panel">
+      <h3>🔁 스태프 이적시장</h3>
+      <div className="mentor-form">
+        <select value={kind} onChange={(e) => setKind(e.target.value as NamedStaffKind)}>
+          {NAMED_KINDS.map((k) => <option key={k} value={k}>{STAFF_LABEL[k]}</option>)}
+        </select>
+      </div>
+      {candidates.length === 0 ? (
+        <p className="muted small">다른 구단에 영입할 만한 인물이 없습니다.</p>
+      ) : (
+        <table className="data-table compact">
+          <thead>
+            <tr><th>구단</th><th>인물</th><th>레벨</th><th>특기</th><th>이적료</th><th></th></tr>
+          </thead>
+          <tbody>
+            {candidates.map(({ club: c, member, level }) => {
+              const fee = staffMarketValue(level, member);
+              const key = `${c.id}:${kind}`;
+              const attempt = attempts[key] ?? 0;
+              return (
+                <tr key={c.id}>
+                  <td className="name">{c.name}</td>
+                  <td>{member.name}</td>
+                  <td>{level}</td>
+                  <td className="muted small">
+                    {member.trait
+                      ? `${STAFF_TRAIT_TIER_LABEL[member.traitTier ?? 'veteran']} ${STAFF_TRAIT_LABEL[member.trait]}`
+                      : '—'}
+                  </td>
+                  <td>{formatMoney(fee)}</td>
+                  <td>
+                    <button
+                      className="btn-small"
+                      disabled={club.finance.balance < fee}
+                      onClick={() => {
+                        const r = onPoachStaff(c.id, kind, attempt);
+                        toast(r);
+                        setAttempts((prev) => ({ ...prev, [key]: attempt + 1 }));
+                      }}
+                    >
+                      영입 제안
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+      <p className="muted small">
+        특기 있는 인재는 원 소속 구단이 더 자주 거절합니다. 거절돼도 다시 시도할 수 있습니다.
+      </p>
+    </div>
+  );
+}
+
 export function Staff({
   game, onUpgrade, onUpgradeStadium, onUpgradeAcademy, onUpgradeTrainingGround, onNegotiateRaise, onSetAcademyFocus,
-  onSignSponsorContract,
+  onSignSponsorContract, onPoachStaff, onSetTicketPrice,
 }: Props) {
   const club = myClub(game);
   const toast = useResultToast();
@@ -137,8 +219,11 @@ export function Staff({
                 <div className="staff-member muted small">
                   {member.name} · {member.age}세 · 계약 {member.contractYears}년
                   {member.trait && (
-                    <span className="staff-trait" title={STAFF_TRAIT_DESC[member.trait]}>
-                      ✨ {STAFF_TRAIT_LABEL[member.trait]}
+                    <span
+                      className={`staff-trait staff-trait-${member.traitTier ?? 'veteran'}`}
+                      title={`${STAFF_TRAIT_DESC[member.trait]} (${STAFF_TRAIT_TIER_LABEL[member.traitTier ?? 'veteran']} 등급, +${STAFF_TRAIT_TIER_BONUS[member.traitTier ?? 'veteran']})`}
+                    >
+                      ✨ {STAFF_TRAIT_TIER_LABEL[member.traitTier ?? 'veteran']} {STAFF_TRAIT_LABEL[member.trait]}
                     </span>
                   )}
                 </div>
@@ -262,13 +347,16 @@ export function Staff({
         </div>
       </div>
 
+      <StaffMarketPanel game={game} onPoachStaff={onPoachStaff} />
+
       <div className="injury-risk-report">
         <h3>
           🩺 의료진 부상 예측 리포트
           <InfoTip title="부상 예측 리포트">
-            의료 스태프 레벨·선수 특성(부상 잦음/강철 체력)·훈련 포커스·최근 복귀 후 재부상
-            위험 구간을 종합해 다음 경기 부상 발생 확률을 예측합니다. 실제 판정과 같은
-            공식을 그대로 사용하지만, 결과 자체를 바꾸지는 않는 참고용 수치입니다.
+            의료 스태프 레벨·선수 특성(부상 잦음/강철 체력)·훈련 포커스·컨디션(피로)·통산
+            부상 이력·최근 복귀 후 재부상 위험 구간을 종합해 다음 경기 부상 발생 확률을
+            예측합니다. 실제 판정과 같은 공식을 그대로 사용하지만, 결과 자체를 바꾸지는
+            않는 참고용 수치입니다.
           </InfoTip>
         </h3>
         {injuryRiskReport.length === 0 ? (
@@ -281,6 +369,9 @@ export function Staff({
                 {r.isInjuryProne && ' 🤕'}
                 {r.isIronMan && ' 💪'}
                 {r.reinjuryWindowRemaining > 0 && ' 🔁'}
+                {r.isChronicallyInjured && (
+                  <span className="chronic-injury-badge" title="통산 부상이 잦은 편입니다"> 📋</span>
+                )}
               </span>
               <div className="bar-track">
                 <div className="bar-fill" style={{ width: `${Math.min(100, r.riskPerMatch * 400)}%` }} />
@@ -317,6 +408,43 @@ export function Staff({
             </div>
           ))
         )}
+      </div>
+
+      <div className="injury-recovery-report">
+        <h3>
+          🌱 리저브 리그 개인 기록
+          <InfoTip title="리저브 리그 개인 기록">
+            리저브(2군) 스쿼드끼리 매 시즌 한 번 치르는 가상 리그(신규 개선 항목 14)의
+            개인 출전·득점·도움·평점 기록입니다(고도화 항목11). 지난 시즌 결과이며,
+            참가 자격(MIN_RESERVE_SQUAD) 미달이었던 시즌에는 표시되지 않습니다.
+          </InfoTip>
+        </h3>
+        {(() => {
+          const stats = lastSummary(game)?.reservePlayerStats;
+          if (!stats || stats.length === 0) {
+            return <p className="muted small">지난 시즌 리저브 리그 개인 기록이 없습니다.</p>;
+          }
+          const sorted = [...stats].sort((a, b) => b.goals - a.goals || b.avgRating - a.avgRating);
+          return (
+            <table className="data-table compact">
+              <thead>
+                <tr><th>선수</th><th>포지션</th><th>출전</th><th>득점</th><th>도움</th><th>평점</th></tr>
+              </thead>
+              <tbody>
+                {sorted.map((s) => (
+                  <tr key={s.playerId}>
+                    <td className="name">{s.name}</td>
+                    <td>{s.position}</td>
+                    <td>{s.apps}</td>
+                    <td>{s.goals}</td>
+                    <td>{s.assists}</td>
+                    <td>{s.avgRating.toFixed(1)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          );
+        })()}
       </div>
 
       <div className="sponsor-contracts">
@@ -360,6 +488,37 @@ export function Staff({
                   onClick={() => toast(onSignSponsorContract(kind))}
                 >
                   {active ? '계약 중' : `체결 (${formatMoney(previewCost)})`}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="ticket-price">
+        <h3>
+          <Handshake size={18} strokeWidth={1.75} /> 티켓 가격
+          <InfoTip title="티켓 가격">
+            비쌀수록 매치데이 수익은 늘지만 팬 만족도(현재 {club.finance.fanSatisfaction ?? FAN_SATISFACTION_DEFAULT})가
+            깎입니다. 만족도가 너무 낮아지면 시위가 발생해 다음 시즌 매치데이 수익이 한동안 줄어듭니다.
+          </InfoTip>
+        </h3>
+        <div className="staff-cards">
+          {TICKET_PRICE_TIERS.map((tier) => {
+            const active = (club.finance.ticketPriceTier ?? 'normal') === tier;
+            return (
+              <div className="staff-card" key={tier}>
+                <div className="staff-icon"><Handshake size={32} strokeWidth={1.75} /></div>
+                <div className="staff-name">{TICKET_PRICE_LABEL[tier]}</div>
+                <div className="staff-effect muted">
+                  매치데이 수익 ×{TICKET_PRICE_MATCHDAY_MULTIPLIER[tier].toFixed(2)}
+                </div>
+                <button
+                  className="btn-advance staff-btn"
+                  disabled={active}
+                  onClick={() => toast(onSetTicketPrice(tier))}
+                >
+                  {active ? '적용 중' : '적용'}
                 </button>
               </div>
             );

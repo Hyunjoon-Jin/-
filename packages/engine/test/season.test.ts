@@ -2,13 +2,15 @@ import { describe, it, expect } from 'vitest';
 import { doubleRoundRobin } from '../src/schedule.js';
 import {
   createSeasonState, playRound, playNext, playToEnd, computeTable,
-  isSeasonOver, totalRounds, currentRound,
+  isSeasonOver, totalRounds, currentRound, tacticFor, positionHistory,
   type SeasonState,
 } from '../src/season.js';
 import { simulateSeason } from '../src/league.js';
-import { generateClub } from '../src/generate.js';
+import { generateClub, defaultTactic } from '../src/generate.js';
+import { recentForm } from '../src/form.js';
 import { Rng } from '../src/rng.js';
 import type { Club, MatchResult } from '../src/types.js';
+import type { Fixture } from '../src/schedule.js';
 
 /** computeTable에 필요한 필드만 채운 최소 가짜 결과(경기 시뮬레이션 없이 순위표 로직만 검증). */
 function fakeResult(homeId: string, awayId: string, score: [number, number]): MatchResult {
@@ -138,5 +140,78 @@ describe('season: 상태 기반 진행', () => {
     expect(a.gf).toBe(b.gf);
     expect(c.points).toBeLessThan(a.points); // C는 동률 그룹 밖(비교 대상 아님)
     expect(table.indexOf(a)).toBeLessThan(table.indexOf(b));
+  });
+});
+
+describe('tacticFor: AI 전술이 홈/원정 폼을 구분해 반영한다(고도화 항목23)', () => {
+  it('tactics 맵에 없으면 이번 경기와 같은 구장 조건(홈이면 홈, 원정이면 원정)의 최근 폼만 반영한다', () => {
+    const [clubA, clubB] = makeClubs(2, 77);
+    // A의 홈 3연패 + 원정 3연승을 섞어 쌓는다 — 블렌드 폼이면 상쇄되지만,
+    // 구장 조건을 가리면 홈 전술엔 3연패만, 원정 전술엔 3연승만 반영돼야 한다.
+    const results: MatchResult[] = [
+      fakeResult(clubA.id, clubB.id, [0, 2]),
+      fakeResult(clubB.id, clubA.id, [0, 2]),
+      fakeResult(clubA.id, clubB.id, [0, 3]),
+      fakeResult(clubB.id, clubA.id, [0, 3]),
+      fakeResult(clubA.id, clubB.id, [1, 4]),
+      fakeResult(clubB.id, clubA.id, [0, 4]),
+    ];
+
+    const homeTactic = tacticFor(clubA, clubB, true, undefined, results);
+    const awayTactic = tacticFor(clubA, clubB, false, undefined, results);
+
+    const expectedHomeForm = recentForm(results, clubA.id, 5, 'home');
+    const expectedAwayForm = recentForm(results, clubA.id, 5, 'away');
+    const expectedHome = defaultTactic(clubA, {
+      opponent: clubB, isHome: true,
+      recentFormPoints: (expectedHomeForm.points / expectedHomeForm.results.length) * 5,
+    });
+    const expectedAway = defaultTactic(clubA, {
+      opponent: clubB, isHome: false,
+      recentFormPoints: (expectedAwayForm.points / expectedAwayForm.results.length) * 5,
+    });
+
+    expect(homeTactic.mentality).toBeCloseTo(expectedHome.mentality, 10);
+    expect(awayTactic.mentality).toBeCloseTo(expectedAway.mentality, 10);
+    // 홈에서는 3연패(과감해짐), 원정에서는 3연승(신중해짐) 중이므로 방향이 뚜렷이 갈린다.
+    expect(homeTactic.mentality).toBeGreaterThan(awayTactic.mentality);
+  });
+
+  it('tactics 맵에 club이 있으면 그 전술을 그대로 쓴다(기존 동작 유지)', () => {
+    const [clubA, clubB] = makeClubs(2, 78);
+    const fixed = defaultTactic(clubA);
+    const tactics = new Map([[clubA.id, fixed]]);
+    expect(tacticFor(clubA, clubB, true, tactics, [])).toBe(fixed);
+  });
+});
+
+describe('positionHistory: 시즌 순위 추이 (고도화 항목26)', () => {
+  function fx(round: number, homeId: string, awayId: string): Fixture {
+    return { round, homeId, awayId };
+  }
+
+  it('라운드가 끝날 때마다 순위가 갱신되고, 최종 순위는 computeTable과 일치한다', () => {
+    const [a, b, c] = makeClubs(3, 200);
+    const fixtures: Fixture[] = [
+      fx(1, a.id, b.id), fx(1, c.id, a.id),
+      fx(2, b.id, c.id), fx(2, a.id, b.id),
+    ];
+    // A가 라운드1엔 이겨서 선두, 라운드2엔 져서 순위가 내려가는 시나리오.
+    const results: MatchResult[] = [
+      fakeResult(a.id, b.id, [2, 0]), // A 승
+      fakeResult(c.id, a.id, [0, 0]), // 무관 매치(다른 조합)
+      fakeResult(b.id, c.id, [1, 1]),
+      fakeResult(a.id, b.id, [0, 3]), // A 패
+    ];
+    const history = positionHistory([a, b, c], fixtures, results, a.id);
+    expect(history).toHaveLength(2);
+    const finalTable = computeTable({ clubs: [a, b, c], fixtures, results, cursor: 0, baseSeed: 0 });
+    const finalPos = finalTable.findIndex((r) => r.clubId === a.id) + 1;
+    expect(history[history.length - 1]).toBe(finalPos);
+  });
+
+  it('경기가 없으면 빈 배열', () => {
+    const [a, b] = makeClubs(2, 201);
+    expect(positionHistory([a, b], [], [], a.id)).toEqual([]);
   });
 });

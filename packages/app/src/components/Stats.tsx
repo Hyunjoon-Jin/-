@@ -2,7 +2,11 @@ import { BarChart3 } from 'lucide-react';
 import {
   liveTopScorers, liveSquadStats, lastSummary, myClub, type GameState,
 } from '../game.js';
-import type { PlayerSeasonStat, BestXIEntry } from '@soccer-tycoon/engine';
+import type {
+  PlayerSeasonStat, BestXIEntry, ClubDisciplineRow, MonthlyManagerAward, MonthlyPlayerAward,
+  WeatherRecordRow,
+} from '@soccer-tycoon/engine';
+import { WEATHER_LABEL } from '@soccer-tycoon/engine';
 import { ratingClass } from '../rating.js';
 import { EmptyState } from './EmptyState.js';
 
@@ -12,6 +16,12 @@ export function Stats({ game }: { game: GameState }) {
   const scorers = live ? liveTopScorers(game, 10) : (lastSummary(game)?.topScorers ?? []);
   const squad = live ? liveSquadStats(game) : lastSeasonSquad(game);
   const awards = live ? null : lastSummary(game)?.awards;
+  const fairPlayTable = live ? null : lastSummary(game)?.fairPlayTable;
+  const monthlyAwards = live ? null : lastSummary(game)?.monthlyManagerAwards;
+  const monthlyPlayerAwards = live ? null : lastSummary(game)?.monthlyPlayerAwards;
+  const positionHistory = live ? null : lastSummary(game)?.positionHistory;
+  const weatherRecord = live ? null : lastSummary(game)?.weatherRecord;
+  const divisionSize = live ? 0 : (lastSummary(game)?.table.length ?? 0);
   const heading = live ? `시즌 ${game.season} (진행 중)` : lastSummary(game) ? `시즌 ${lastSummary(game)!.season} 최종` : null;
 
   if (!heading) {
@@ -28,7 +38,7 @@ export function Stats({ game }: { game: GameState }) {
     <div className="stats">
       <h2>{heading}</h2>
 
-      {awards && (awards.topScorer || awards.topAssist || awards.playerOfSeason || awards.goldenGlove) && (
+      {awards && (awards.topScorer || awards.topAssist || awards.playerOfSeason || awards.goldenGlove || awards.mostMotm) && (
         <div className="awards">
           {awards.topScorer && (
             <div className="award">
@@ -58,6 +68,13 @@ export function Stats({ game }: { game: GameState }) {
               <div className="muted">{awards.goldenGlove.clubName} · 클린시트 {awards.goldenGlove.cleanSheets}회</div>
             </div>
           )}
+          {awards.mostMotm && (
+            <div className="award">
+              <div className="award-title">🏅 최다 MOTM</div>
+              <div className="award-name">{awards.mostMotm.name}</div>
+              <div className="muted">{awards.mostMotm.clubName} · {awards.mostMotm.count}회</div>
+            </div>
+          )}
         </div>
       )}
 
@@ -73,7 +90,169 @@ export function Stats({ game }: { game: GameState }) {
           <ScorerTable rows={squad.slice(0, 14)} myClubId={game.myClubId} showClub={false} />
         </div>
       </div>
+
+      {positionHistory && positionHistory.length > 1 && divisionSize > 1 && (
+        <div>
+          <h3>📈 시즌 순위 추이</h3>
+          <PositionSparkline history={positionHistory} divisionSize={divisionSize} />
+        </div>
+      )}
+
+      {fairPlayTable && fairPlayTable.length > 0 && (
+        <div>
+          <h3>🟨 페어플레이 순위</h3>
+          <FairPlayTable rows={fairPlayTable} myClubId={game.myClubId} />
+        </div>
+      )}
+
+      {monthlyAwards && monthlyAwards.length > 0 && (
+        <div>
+          <h3>🏆 이달의 감독</h3>
+          <MonthlyManagerSection awards={monthlyAwards} myClubId={game.myClubId} />
+        </div>
+      )}
+
+      {monthlyPlayerAwards && monthlyPlayerAwards.length > 0 && (
+        <div>
+          <h3>⭐ 이달의 선수</h3>
+          <MonthlyPlayerSection awards={monthlyPlayerAwards} myClubId={game.myClubId} />
+        </div>
+      )}
+
+      {weatherRecord && weatherRecord.length > 0 && (
+        <div>
+          <h3>🌦️ 날씨별 전적</h3>
+          <WeatherRecordTable rows={weatherRecord} />
+        </div>
+      )}
     </div>
+  );
+}
+
+/** 날씨별 전적(고도화 항목40) — 맑음/비/강풍 각각의 승무패. */
+function WeatherRecordTable({ rows }: { rows: WeatherRecordRow[] }) {
+  return (
+    <table className="data-table compact">
+      <thead>
+        <tr><th>날씨</th><th>승</th><th>무</th><th>패</th></tr>
+      </thead>
+      <tbody>
+        {rows.map((r) => (
+          <tr key={r.weather}>
+            <td>{WEATHER_LABEL[r.weather]}</td>
+            <td>{r.wins}</td>
+            <td>{r.draws}</td>
+            <td>{r.losses}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+/** 시즌 라운드별 내 구단 순위 추이(고도화 항목26) — 1위가 위로 오도록 y축을 뒤집는다. */
+function PositionSparkline({ history, divisionSize }: { history: number[]; divisionSize: number }) {
+  const w = 320; const h = 64; const padX = 10; const padY = 10;
+  const n = history.length;
+  const x = (i: number) => padX + (i * (w - 2 * padX)) / (n - 1);
+  const y = (pos: number) => padY + ((pos - 1) * (h - 2 * padY)) / Math.max(1, divisionSize - 1);
+  const points = history.map((p, i) => `${x(i)},${y(p)}`).join(' ');
+  const bestPos = Math.min(...history);
+  const bestIdx = history.indexOf(bestPos);
+  const lastIdx = n - 1;
+  return (
+    <svg
+      viewBox={`0 0 ${w} ${h}`} width="100%" height={h} className="position-sparkline" role="img"
+      aria-label={`시즌 순위 추이(${divisionSize}개 구단 중): ${history.join(' → ')}위`}
+    >
+      <polyline
+        points={points} fill="none" stroke="var(--accent)" strokeWidth="2"
+        strokeLinecap="round" strokeLinejoin="round"
+      />
+      {history.map((p, i) => (
+        <circle
+          key={i} cx={x(i)} cy={y(p)} r={i === bestIdx || i === lastIdx ? 3.5 : 2}
+          fill={i === lastIdx ? 'var(--accent-2)' : 'var(--accent)'}
+        >
+          <title>{`${i + 1}R: ${p}위`}</title>
+        </circle>
+      ))}
+      <text x={x(0)} y={y(history[0]!) - 6} className="sparkline-label" textAnchor="start">
+        {history[0]}위
+      </text>
+      <text x={x(lastIdx)} y={y(history[lastIdx]!) - 6} className="sparkline-label" textAnchor="end">
+        최종 {history[lastIdx]}위
+      </text>
+    </svg>
+  );
+}
+
+function MonthlyManagerSection({ awards, myClubId }: { awards: MonthlyManagerAward[]; myClubId: string }) {
+  return (
+    <table className="data-table compact">
+      <thead>
+        <tr>
+          <th>구간</th><th>구단</th><th>승점</th><th>득실차</th>
+        </tr>
+      </thead>
+      <tbody>
+        {awards.map((a) => (
+          <tr key={a.blockIndex} className={a.clubId === myClubId ? 'mine' : ''}>
+            <td className="muted small">{a.fromRound}~{a.toRound}R</td>
+            <td className="name">{a.clubName}</td>
+            <td><b>{a.points}</b></td>
+            <td>{a.gd > 0 ? `+${a.gd}` : a.gd}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+/** 이달의 선수(고도화 항목37) — 이달의 감독과 같은 블록 구간별로 평균 평점 최고 선수. */
+function MonthlyPlayerSection({ awards, myClubId }: { awards: MonthlyPlayerAward[]; myClubId: string }) {
+  return (
+    <table className="data-table compact">
+      <thead>
+        <tr>
+          <th>구간</th><th>선수</th><th>소속</th><th>평점</th><th>출전</th>
+        </tr>
+      </thead>
+      <tbody>
+        {awards.map((a) => (
+          <tr key={a.blockIndex} className={a.clubId === myClubId ? 'mine' : ''}>
+            <td className="muted small">{a.fromRound}~{a.toRound}R</td>
+            <td className="name">{a.name}</td>
+            <td className="muted">{a.clubName}</td>
+            <td className={ratingClass(a.avgRating)}><b>{a.avgRating.toFixed(1)}</b></td>
+            <td className="muted small">{a.apps}경기</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function FairPlayTable({ rows, myClubId }: { rows: ClubDisciplineRow[]; myClubId: string }) {
+  return (
+    <table className="data-table compact">
+      <thead>
+        <tr>
+          <th>순위</th><th>구단</th><th>옐로</th><th>레드</th><th>합계</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((r, i) => (
+          <tr key={r.clubId} className={r.clubId === myClubId ? 'mine' : ''}>
+            <td>{i === 0 ? <span className="rank-gold">1</span> : i + 1}</td>
+            <td className="name">{r.clubName}</td>
+            <td>{r.yellowCards}</td>
+            <td>{r.redCards}</td>
+            <td><b>{r.totalCards}</b></td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
 
@@ -120,7 +299,9 @@ function ScorerTable({
         <tr>
           <th>순위</th><th>선수</th>
           {showClub && <th>구단</th>}
-          <th>출전</th><th>득점</th><th>도움</th><th>슛</th><th>평점</th>
+          <th>출전</th><th>득점</th><th>도움</th><th>슛</th>
+          <th title="빅찬스 생성/실축(고도화 항목45)">빅찬스</th>
+          <th>평점</th>
         </tr>
       </thead>
       <tbody>
@@ -133,6 +314,9 @@ function ScorerTable({
             <td><b>{s.goals}</b></td>
             <td>{s.assists}</td>
             <td className="muted">{s.shots}</td>
+            <td className="muted small">
+              {s.bigChancesCreated > 0 ? `${s.bigChancesCreated - s.bigChancesMissed}/${s.bigChancesCreated}` : '-'}
+            </td>
             <td className={ratingClass(s.avgRating)}>{s.avgRating.toFixed(2)}</td>
           </tr>
         ))}

@@ -30,8 +30,9 @@ describe('밸런스 회귀: 12팀 × 15시즌 헤드리스 시뮬레이션', () 
     expect(new Set(r.champions).size).toBeGreaterThanOrEqual(2);
   });
 
-  it('구단 재정이 파산하지 않는다(최하위 구단도 시즌 말 자금이 음수로 떨어지지 않는다)', () => {
-    expect(r.negativeSeasons).toBe(0);
+  it('구단 재정이 영구 파산하지 않는다(고도화 항목21: FFP 경고→제재→강제매각 단계 때문에 ' +
+    '최하위 구단이 최대 2시즌은 적자를 버틸 수 있지만, 그 이상 방치되지는 않는다)', () => {
+    expect(r.negativeSeasons).toBeLessThanOrEqual(5);
   });
 
   it('스쿼드 크기가 규정 범위(14~26명) 안에서 유지된다', () => {

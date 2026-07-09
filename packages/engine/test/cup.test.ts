@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   createCup, playCupRound, playCupToEnd, cupSurvivors, isCupOver, nextCupPairings,
-  CUP_FINAL_ROUND_NAME,
+  CUP_FINAL_ROUND_NAME, CUP_SEMIFINAL_ROUND_NAME, cupTieAggregate, resolveTwoLegWinner,
 } from '../src/cup.js';
 import { simulateMatch } from '../src/simulateMatch.js';
 import { defaultTactic } from '../src/generate.js';
@@ -181,5 +181,124 @@ describe('cup: 녹아웃 토너먼트', () => {
     expect(tie.homeScore).toBe(0);
     expect(tie.awayScore).toBe(5);
     expect(tie.winnerId).toBe(pr.awayId);
+  });
+});
+
+describe('cup: 시드 추첨식 — 포트 분리 후 무작위 추첨 (고도화 항목32)', () => {
+  it('평판 상위 절반(시드 포트)과 하위 절반(비시드 포트)끼리만 맞붙는다', () => {
+    const clubs = makeClubs(12, 21);
+    const cup = createCup(clubs, 200);
+    const byId = new Map(clubs.map((c) => [c.id, c]));
+    const sorted = [...cup.participantIds].sort(
+      (a, b) => byId.get(b)!.finance.reputation - byId.get(a)!.finance.reputation,
+    );
+    const seededHalf = new Set(sorted.slice(0, sorted.length / 2));
+    const unseededHalf = new Set(sorted.slice(sorted.length / 2));
+
+    const next = nextCupPairings(cup, clubs)!;
+    for (const pr of next.pairings) {
+      const homeIsSeeded = seededHalf.has(pr.homeId);
+      const awayIsSeeded = seededHalf.has(pr.awayId);
+      // 한쪽은 시드 포트, 다른 한쪽은 비시드 포트여야 한다(같은 포트끼리는 안 붙음).
+      expect(homeIsSeeded).not.toBe(awayIsSeeded);
+      expect(homeIsSeeded || unseededHalf.has(pr.homeId)).toBe(true);
+      expect(pr.homeSeeded).toBe(homeIsSeeded);
+    }
+  });
+
+  it('같은 시드면 대진(홈/원정 배정 포함)이 동일하다 (재현성)', () => {
+    const a = nextCupPairings(createCup(makeClubs(12, 30), 500), makeClubs(12, 30))!;
+    const b = nextCupPairings(createCup(makeClubs(12, 30), 500), makeClubs(12, 30))!;
+    expect(a.pairings.map((p) => [p.homeId, p.awayId, p.homeSeeded])).toEqual(
+      b.pairings.map((p) => [p.homeId, p.awayId, p.homeSeeded]),
+    );
+  });
+
+  it('시드가 다르면 포트 내 짝짓기 순서가 달라질 수 있다(고정 순번 매칭이 아님)', () => {
+    const clubs = makeClubs(12, 40);
+    const seeds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    const shapes = new Set(
+      seeds.map((s) => {
+        const next = nextCupPairings(createCup(clubs, s), clubs)!;
+        return next.pairings.map((p) => `${p.homeId}-${p.awayId}`).join('|');
+      }),
+    );
+    // 시드마다 셔플 결과가 달라, 최소 2가지 이상의 서로 다른 대진 모양이 나와야 한다.
+    expect(shapes.size).toBeGreaterThan(1);
+  });
+});
+
+describe('cup: resolveTwoLegWinner 순수 함수 (고도화 항목33)', () => {
+  it('합계 득점이 많은 쪽이 승리한다(원정 다득점 룰 필요 없음)', () => {
+    const r = resolveTwoLegWinner(2, 1, 0, 0, 'home', 'away', new Rng(1));
+    expect(r.winnerId).toBe('home');
+    expect(r.penalties).toBe(false);
+  });
+
+  it('합계가 동률이면 원정 다득점(홈팀의 2차전 골, 원정팀의 1차전 골)으로 가른다', () => {
+    // 1차전 0:1(away 원정 1골), 2차전 2:1(home이 2차전 원정에서 2골) → 합계 2:2,
+    // 원정 다득점: 홈팀 2(2차전 원정) vs 원정팀 1(1차전 원정) → 홈팀 승.
+    const r = resolveTwoLegWinner(0, 1, 2, 1, 'home', 'away', new Rng(1));
+    expect(r.winnerId).toBe('home');
+    expect(r.penalties).toBe(false);
+  });
+
+  it('원정 다득점까지 동률이면 승부차기로 결정한다', () => {
+    const r = resolveTwoLegWinner(1, 1, 1, 1, 'home', 'away', new Rng(2));
+    expect(r.penalties).toBe(true);
+    expect(['home', 'away']).toContain(r.winnerId);
+  });
+});
+
+describe('cup: 대륙컵 준결승·결승 2레그 홈&어웨이 (고도화 항목33)', () => {
+  it('twoLegKnockout 컵은 결승에 2차전(secondLeg)이 기록되고 합계가 계산된다', () => {
+    const clubs = makeClubs(2, 50);
+    const cup = createCup(clubs, 300, true);
+    const played = playCupRound(cup, clubs);
+    expect(played.rounds[0]!.name).toBe(CUP_FINAL_ROUND_NAME);
+    const tie = played.rounds[0]!.ties[0]!;
+    expect(tie.secondLeg).toBeDefined();
+    const agg = cupTieAggregate(tie);
+    expect(agg).not.toBeNull();
+    expect(agg![0]).toBe(tie.homeScore! + tie.secondLeg!.homeGoals);
+    expect(agg![1]).toBe(tie.awayScore! + tie.secondLeg!.awayGoals);
+    expect([tie.homeId, tie.awayId]).toContain(tie.winnerId);
+  });
+
+  it('twoLegKnockout이 아닌 일반 컵은 secondLeg가 없다(단판 유지)', () => {
+    const clubs = makeClubs(2, 51);
+    const cup = createCup(clubs, 300); // twoLegKnockout 미지정
+    const played = playCupRound(cup, clubs);
+    const tie = played.rounds[0]!.ties[0]!;
+    expect(tie.secondLeg).toBeUndefined();
+    expect(cupTieAggregate(tie)).toBeNull();
+  });
+
+  it('준결승도 2레그로 진행되고, 그 다음 결승도 2레그로 진행된다', () => {
+    const clubs = makeClubs(4, 52);
+    let cup = createCup(clubs, 300, true);
+    expect(nextCupPairings(cup, clubs)!.roundName).toBe(CUP_SEMIFINAL_ROUND_NAME);
+    cup = playCupRound(cup, clubs);
+    expect(cup.rounds[0]!.ties.every((t) => t.awayId === null || t.secondLeg !== undefined)).toBe(true);
+    expect(isCupOver(cup)).toBe(false);
+    cup = playCupRound(cup, clubs);
+    expect(cup.rounds[1]!.name).toBe(CUP_FINAL_ROUND_NAME);
+    expect(cup.rounds[1]!.ties[0]!.secondLeg).toBeDefined();
+    expect(isCupOver(cup)).toBe(true);
+  });
+
+  it('8강 이전 라운드는 twoLegKnockout이어도 단판이다(준결승·결승만 2레그)', () => {
+    const clubs = makeClubs(8, 53);
+    const cup = createCup(clubs, 300, true);
+    const next = nextCupPairings(cup, clubs)!;
+    expect(next.roundName).toBe('8강');
+    const played = playCupRound(cup, clubs);
+    expect(played.rounds[0]!.ties.every((t) => t.secondLeg === undefined)).toBe(true);
+  });
+
+  it('동일 시드면 2레그 스코어까지 포함해 동일한 결과 (재현성)', () => {
+    const a = playCupRound(createCup(makeClubs(2, 60), 400, true), makeClubs(2, 60));
+    const b = playCupRound(createCup(makeClubs(2, 60), 400, true), makeClubs(2, 60));
+    expect(a.rounds[0]!.ties).toEqual(b.rounds[0]!.ties);
   });
 });

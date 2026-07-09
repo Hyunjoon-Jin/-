@@ -6,6 +6,7 @@
 import {
   generateClub, runTransferWindow, runOffseason, settleSeason, Rng,
   createSeasonState, playRound as enginePlayRound, playToEnd, computeTable, totalRounds, currentRound,
+  positionHistory as enginePositionHistory,
   commitResult, simulateMatch, simulateSeason, defaultTactic, applyMatchEffects,
   buyPlayer, buyPlayerAt, buyPlayerViaReleaseClause, evaluateOffer, sellPlayer, releasePlayer,
   transferTargets,
@@ -19,28 +20,35 @@ import {
   renegotiateBuybackClause as engineRenegotiateBuybackClause, type BuybackRenegotiationDirection,
   type OfferEvaluation, type SellOffer, type LoanTerms, type LoanReturnEvent, type LoanObligationEvent,
   summarizeStats, aggregatePlayerStats, topScorers as engineTopScorers, recentPlayerForm,
-  seasonSquadSnapshot,
+  seasonSquadSnapshot, clubDisciplineTable, monthlyManagerAwards, monthlyPlayerAwards,
+  longestStreaks, biggestWinMargin, weatherRecordByClub,
   createCup, playCupRound as enginePlayCupRound, playCupToEnd, isCupOver, nextCupPairings,
   CUP_FINAL_ROUND_NAME, findCupUpsets,
   applyPromotionRelegation, clubsInDivision, runInternationalBreak,
   runInternationalTournament, TOURNAMENT_INTERVAL_SEASONS, checkInternationalRetirements,
+  clubTournamentHighlight, type ClubTournamentHighlight,
   confidenceDelta, applyConfidence, isSacked, START_CONFIDENCE, boardStatus, boardTierUpgradeBonus,
   boldPredictionTarget, evaluateBoldPrediction, type BoldPredictionResult,
+  crossedLongTermProjectMilestone, longTermProjectBonus,
   type BoardStatus,
   generateDemand, evaluateDemand, demandConfidence, DEMAND_LABEL,
   renegotiateDemand as engineRenegotiateDemand,
   generateSponsorGoal, evaluateSponsorGoal, SPONSOR_GOAL_LABEL, sponsorStreakMultiplier, type SponsorGoal,
   signSponsorContract as engineSignSponsorContract, tickSponsorContracts, SPONSOR_CONTRACT_LABEL,
   type SponsorContractKind,
+  updateFanSatisfaction, setTicketPriceTier as engineSetTicketPriceTier,
+  FAN_SATISFACTION_DEFAULT, FAN_PROTEST_THRESHOLD, type TicketPriceTier,
   matchWeather, type Weather,
+  matchRefereeStrictness, type RefereeStrictness,
   annualWageBill, wageBudget,
   matchOutcomeKind, mediaToneOptions, shouldTriggerMediaEvent, applyMediaTone,
-  MEDIA_TONE_STYLE, classifyPersona,
+  MEDIA_TONE_STYLE, classifyPersona, snsReputation, type SnsReputation,
   type BoardDemand, type RetiredLegend,
   type MediaEventKind, type MediaTone, type MediaToneOption, type ManagerPersona,
   upgradeStaff as engineUpgradeStaff, upgradeStadium as engineUpgradeStadium,
   upgradeTrainingGround as engineUpgradeTrainingGround,
   negotiateStaffRaise as engineNegotiateStaffRaise,
+  poachStaff as enginePoachStaff,
   upgradeAcademy as engineUpgradeAcademy, formatMoney,
   loyaltyDiscount,
   computeTeamStrength, currentAbility, recentForm, buildScoutingReport, lineOf,
@@ -51,7 +59,8 @@ import {
   type PlayerFormEntry, type Player, type YouthProspect, type YouthProspectUpdate,
   type TeamStrength, type FormSummary, type ScoutingReport, type Line, type Position,
   type StaffDepartureEvent, type StaffRetirementEvent, type AcademyAlumnusUpdate,
-  type AddOnEvent,
+  type StaffTrait, type StaffTraitTier,
+  type AddOnEvent, type MentorGraduationEvent,
 } from '@soccer-tycoon/engine';
 import { makeDefaultTactic, repairTactic } from './tactics.js';
 
@@ -168,8 +177,15 @@ export interface GameState {
    *  실패하면 0으로 리셋. 목표가 없는 시즌은 그대로 유지(불이익 없음). 구버전
    *  세이브는 없을 수 있어 optional(없으면 0 취급). */
   sponsorStreak?: number;
+  /** 이사회 목표(objective) 연속 달성 시즌 수(고도화 항목20) — 달성하면 +1, 미달이면
+   *  0으로 리셋. 마일스톤(3/5/7/10)에 처음 도달하면 장기 프로젝트 보너스가 지급된다.
+   *  구버전 세이브는 없을 수 있어 optional(없으면 0 취급). */
+  objectiveStreak?: number;
   /** 내 구단에서 뛰다 은퇴한 선수 아카이브(레전드). */
   legends: ClubLegend[];
+  /** 내 구단에서 은퇴한 실명 스태프 아카이브(고도화 항목36, 스태프 명예의 전당).
+   *  구버전 세이브는 없을 수 있어 optional(없으면 빈 배열 취급). */
+  staffLegends?: StaffLegend[];
   /** 라이벌 구단 id. 게임 시작 시 1회 고정(같은 부 내 평판이 가장 가까운 구단). */
   rivalClubId: string;
   /** 라이벌 구단전 통산 전적(내 구단 기준). */
@@ -190,6 +206,27 @@ export interface GameState {
   /** 이적 관심 목록(신규 개선 항목 27)에 올린 타 구단 선수 id — 시즌을 넘어 유지되며,
    *  계약 만료가 임박하면 시즌 종료 시 알림이 뜬다. */
   transferWatchlist?: string[];
+  /**
+   * 상대 구단별 통산 전적(고도화 항목34) — clubId → 그 구단과의 리그·국내컵 누적
+   * 전적. 라이벌(rivalRecord)은 지정된 한 구단만 추적하는 데 비해, 이건 실제로
+   * 맞붙어 본 모든 상대를 포괄한다. 구버전 세이브엔 없을 수 있어 optional.
+   */
+  headToHead?: Record<string, HeadToHeadRecord>;
+}
+
+/** 상대 구단 1곳과의 통산 전적(고도화 항목34). */
+export interface HeadToHeadRecord {
+  wins: number;
+  draws: number;
+  losses: number;
+  /** 가장 최근 맞대결(마지막에 갱신된 것). */
+  lastMeeting: {
+    season: number;
+    home: boolean;
+    myGoals: number;
+    oppGoals: number;
+    competition: 'league' | 'cup';
+  };
 }
 
 /** 선수의 한 시즌 평균 평점 스냅샷. */
@@ -222,6 +259,17 @@ export interface RivalMeeting {
 
 /** 은퇴 스냅샷(RetiredLegend) + 은퇴한 시즌(내 구단 재임 기준). */
 export interface ClubLegend extends RetiredLegend {
+  season: number;
+}
+
+/** 실명 스태프 은퇴 스냅샷 + 은퇴 시즌(고도화 항목36, 스태프 명예의 전당). */
+export interface StaffLegend {
+  kind: NamedStaffKind;
+  name: string;
+  finalAge: number;
+  level: number;
+  trait?: StaffTrait;
+  traitTier?: StaffTraitTier;
   season: number;
 }
 
@@ -370,6 +418,14 @@ const transferSeed = (s: GameState) => s.seed + s.season * 1000 + 1;
 const seasonSeed = (s: GameState) => s.seed + s.season * 1000 + 2;
 const offseasonSeed = (s: GameState) => s.seed + s.season * 1000 + 3;
 
+/** 문자열을 정수 시드로 뭉개는 경량 해시(암호학적 용도 아님) — 스태프 영입 제안(고도화
+ *  항목10)처럼 상대 구단id를 시드에 섞어 넣어야 하는 곳에 쓴다. */
+function simpleStrSeed(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return h;
+}
+
 /** live 스냅샷 → 엔진 SeasonState 복원 (내 부 구단만 부착). */
 function toSeasonState(state: GameState) {
   const live = state.live!;
@@ -404,6 +460,7 @@ export function startSeason(state: GameState): GameState {
     ? createCup(
         continentalQualifierIds.map((id) => state.clubs.find((c) => c.id === id)!),
         state.seed + state.season * 1000 + 8,
+        true, // 고도화 항목33: 대륙컵은 준결승·결승만 2레그(홈&어웨이 합산)
       )
     : null;
   // 이적 창 마감 직후 스쿼드 기준 언론 예상 순위(시즌 내내 고정).
@@ -473,6 +530,13 @@ export function finishSeason(state: GameState): GameState {
   playToEnd(ss, tacticMap(state));
   const myTable = computeTable(ss);
   const { topScorers, awards } = summarizeStats(ss.results, totalRounds(ss));
+  const fairPlayTable = clubDisciplineTable(ss.results);
+  const monthAwards = monthlyManagerAwards(ss.fixtures, ss.results);
+  const monthPlayerAwards = monthlyPlayerAwards(ss.fixtures, ss.results);
+  const streaks = longestStreaks(ss.results, state.myClubId);
+  const myPositionHistory = enginePositionHistory(ss.clubs, ss.fixtures, ss.results, state.myClubId);
+  const myBiggestWin = biggestWinMargin(ss.results, state.myClubId);
+  const myWeatherRecord = weatherRecordByClub(ss.results, state.myClubId);
   // 스쿼드 스냅샷: 오프시즌(나이 증가·은퇴) 전에 나이를 캡처해야 "그 시즌 당시" 기록이 된다 —
   // seasonSquadSnapshot이 club.players에서 나이를 직접 읽지 않고 이 맵을 요구하도록
   // 시그니처에서 강제한다.
@@ -499,14 +563,31 @@ export function finishSeason(state: GameState): GameState {
   // 라이벌전 전적 갱신(같은 부에서 맞붙은 경우만 — 다른 부일 땐 이번 시즌 대결 없음).
   const rivalRecord = { ...state.rivalRecord };
   const newRivalMeetings: RivalMeeting[] = [];
+  // 상대 구단별 통산 전적(고도화 항목34) — 라이벌 한정이 아닌 실제로 맞붙은 모든
+  // 상대가 대상. 리그전은 여기서, 국내컵은 아래 4) 블록에서 갱신한다.
+  const headToHead: Record<string, HeadToHeadRecord> = { ...(state.headToHead ?? {}) };
+  const recordHeadToHead = (
+    oppId: string, home: boolean, myGoals: number, oppGoals: number, competition: 'league' | 'cup',
+  ) => {
+    const prev = headToHead[oppId];
+    headToHead[oppId] = {
+      wins: (prev?.wins ?? 0) + (myGoals > oppGoals ? 1 : 0),
+      draws: (prev?.draws ?? 0) + (myGoals === oppGoals ? 1 : 0),
+      losses: (prev?.losses ?? 0) + (myGoals < oppGoals ? 1 : 0),
+      lastMeeting: { season: state.season, home, myGoals, oppGoals, competition },
+    };
+  };
   for (const r of ss.results) {
-    const isDerby =
-      (r.homeClubId === state.myClubId && r.awayClubId === state.rivalClubId) ||
-      (r.awayClubId === state.myClubId && r.homeClubId === state.rivalClubId);
-    if (!isDerby) continue;
     const home = r.homeClubId === state.myClubId;
+    const away = r.awayClubId === state.myClubId;
+    if (!home && !away) continue;
+    const oppId = home ? r.awayClubId : r.homeClubId;
     const myGoals = home ? r.score[0] : r.score[1];
     const oppGoals = home ? r.score[1] : r.score[0];
+    recordHeadToHead(oppId, home, myGoals, oppGoals, 'league');
+
+    const isDerby = oppId === state.rivalClubId;
+    if (!isDerby) continue;
     let result: RivalMeeting['result'];
     if (myGoals > oppGoals) { rivalRecord.wins++; result = 'win'; }
     else if (myGoals < oppGoals) { rivalRecord.losses++; result = 'loss'; }
@@ -571,17 +652,19 @@ export function finishSeason(state: GameState): GameState {
         champClub.finance.transferBudget += CUP_PRIZE;
       }
     }
-    // 컵에서도 라이벌과 맞붙었다면 전적에 포함(승부차기는 항상 승/패 — 무승부 없음).
+    // 컵 맞대결 전적 갱신(승부차기는 항상 승/패 — 무승부 없음). 라이벌은 rivalRecord에도 겹쳐 기록.
     for (const round of finishedCup.rounds) {
       for (const tie of round.ties) {
         if (tie.awayId === null) continue;
-        const isDerby =
-          (tie.homeId === state.myClubId && tie.awayId === state.rivalClubId) ||
-          (tie.awayId === state.myClubId && tie.homeId === state.rivalClubId);
-        if (!isDerby) continue;
+        const isMine = tie.homeId === state.myClubId || tie.awayId === state.myClubId;
+        if (!isMine) continue;
         const home = tie.homeId === state.myClubId;
         const myGoals = home ? tie.homeScore! : tie.awayScore!;
         const oppGoals = home ? tie.awayScore! : tie.homeScore!;
+        const oppId = home ? tie.awayId : tie.homeId;
+        recordHeadToHead(oppId, home, myGoals, oppGoals, 'cup');
+
+        if (oppId !== state.rivalClubId) continue;
         const result: RivalMeeting['result'] = tie.winnerId === state.myClubId ? 'win' : 'loss';
         if (result === 'win') rivalRecord.wins++; else rivalRecord.losses++;
         newRivalMeetings.push({
@@ -609,11 +692,17 @@ export function finishSeason(state: GameState): GameState {
   }
 
   // 5) 오프시즌 (전 구단)
+  // 리저브 리그(가상 매치)는 runOffseason 내부에서 승격/방출/유스 인테이크로 reserves가
+  // 바뀌기 전의 "이번 시즌을 실제로 보낸" 명단으로 뛴다(reserveLeague.ts 주석 참고) —
+  // 개인 기록을 그 명단 기준으로 걸러내려면 오프시즌 처리 전에 미리 스냅샷해야 한다.
+  const myReserveIdsThisSeason = new Set((myClub(state).reserves ?? []).map((p) => p.id));
   const {
-    retirements, intakeByClub, intakePlayersByClub, fireSalesByClub, retiredPlayers, milestones, debutEvents,
+    retirements, intakeByClub, intakePlayersByClub, fireSalesByClub, ffpStageByClub, retiredPlayers, milestones, debutEvents,
     loanReturns, loanObligations, reservePromotions, staffDepartures, staffRetirements, addOnPayouts,
-    reserveLeagueTable,
+    reserveLeagueTable, mentorGraduations, reservePlayerStats, boardPersonaChanges,
   } = runOffseason(state.clubs, new Rng(offseasonSeed(state)));
+  // 내 구단 리저브 선수의 이번 시즌 리저브 리그 개인 기록(고도화 항목11)
+  const myReservePlayerStats = reservePlayerStats.filter((s) => myReserveIdsThisSeason.has(s.playerId));
   // 내 구단 선수의 이번 시즌 리저브 승격(시즌 요약에 첨부)
   const myReservePromotions = reservePromotions.filter((r) => r.clubId === state.myClubId);
   // 내 구단이 관련된 임대 복귀(보낸 임대가 돌아오거나, 데려온 임대가 복귀)
@@ -632,10 +721,21 @@ export function finishSeason(state: GameState): GameState {
   const myAddOnPayouts: AddOnEvent[] = addOnPayouts.filter(
     (a) => a.fromClubId === state.myClubId || a.toClubId === state.myClubId,
   );
+  // 내 구단의 멘토-멘티 페어링이 "졸업"으로 자동 해제된 소식(고도화 항목8)
+  const myMentorGraduations: MentorGraduationEvent[] = mentorGraduations.filter(
+    (g) => g.clubId === state.myClubId,
+  );
+  // 내 구단 회장이 교체돼 이사회 성향이 바뀐 소식(고도화 항목17)
+  const myBoardPersonaChange = boardPersonaChanges.find((e) => e.clubId === state.myClubId);
   // 내 구단에서 은퇴한 선수는 레전드 아카이브에 영구 보존
   const newLegends: ClubLegend[] = retiredPlayers
     .filter((r) => r.clubId === state.myClubId)
     .map((r) => ({ ...r, season: state.season }));
+  // 내 구단에서 은퇴한 실명 스태프는 명예의 전당에 영구 보존(고도화 항목36)
+  const newStaffLegends: StaffLegend[] = myStaffRetirements.map((r) => ({
+    kind: r.kind, name: r.name, finalAge: r.finalAge, level: r.level,
+    trait: r.trait, traitTier: r.traitTier, season: state.season,
+  }));
   // 내 구단 선수의 이번 시즌 통산 마일스톤(시즌 요약에 첨부)
   const myMilestones = milestones.filter((m) => m.clubId === state.myClubId);
   // 내 구단 유스 배출 소개(잠재력 높은 순, 시즌 요약에 첨부)
@@ -680,10 +780,12 @@ export function finishSeason(state: GameState): GameState {
   const isTournamentSeason = state.season % TOURNAMENT_INTERVAL_SEASONS === 0;
   let intl: { byClub: Map<string, number> };
   let internationalTournamentChampion: string | null | undefined;
+  let internationalTournamentHighlight: ClubTournamentHighlight | undefined;
   if (isTournamentSeason) {
     const tournament = runInternationalTournament(state.clubs, new Rng(offseasonSeed(state) + 777));
     intl = tournament;
     internationalTournamentChampion = tournament.championNation;
+    internationalTournamentHighlight = clubTournamentHighlight(tournament, state.myClubId);
   } else {
     intl = runInternationalBreak(state.clubs, new Rng(offseasonSeed(state) + 777));
   }
@@ -731,6 +833,30 @@ export function finishSeason(state: GameState): GameState {
   const delta = confidenceDelta({
     position: myPosition, objective: state.objective, promoted, relegated, netFinance: myNet,
   }, boardPersona);
+
+  // 장기 프로젝트 보너스(고도화 항목20) — 이사회 목표를 연속으로 달성할수록 스트릭이
+  // 쌓이고, 마일스톤(3/5/7/10시즌)에 처음 도달하면 예산 증액이 일회성으로 지급된다.
+  const objectiveMet = myPosition <= state.objective;
+  const objectiveStreakBefore = state.objectiveStreak ?? 0;
+  const nextObjectiveStreak = objectiveMet ? objectiveStreakBefore + 1 : 0;
+  const longTermMilestone = crossedLongTermProjectMilestone(objectiveStreakBefore, nextObjectiveStreak);
+  let longTermProjectResult: { milestone: number; bonus: number } | undefined;
+  if (longTermMilestone !== undefined) {
+    const me = myClub(state);
+    const bonus = longTermProjectBonus(longTermMilestone, me.finance.reputation);
+    me.finance.balance += bonus;
+    me.finance.transferBudget += bonus;
+    longTermProjectResult = { milestone: longTermMilestone, bonus };
+  }
+
+  // 팬 만족도(고도화 항목18) — 목표 대비 성적·티켓가·신규 영입에 반응한다. 문턱 미만으로
+  // 떨어지면 시위가 발생해 다음 시즌 매치데이 수익에 한 번 페널티가 붙는다(엔진에서 처리).
+  const mySignings = state.live.transfers.filter((t) => t.toClubId === state.myClubId).length;
+  const fanSatisfactionResult = updateFanSatisfaction(myClub(state), {
+    performanceDelta: state.objective - myPosition,
+    ticketPriceTier: myClub(state).finance.ticketPriceTier ?? 'normal',
+    newSignings: mySignings,
+  });
 
   // 대담한 목표 공개 선언 평가(신규 개선 항목 25) — 선언했었다면 신뢰도 가감치가
   // 이사회 신뢰도 갱신에 그대로 더해진다.
@@ -844,8 +970,15 @@ export function finishSeason(state: GameState): GameState {
     retirements,
     youthPromotions: intakeByClub.get(state.myClubId),
     fireSales: fireSalesByClub.get(state.myClubId),
+    ffpStage: ffpStageByClub.get(state.myClubId),
     topScorers,
     awards,
+    fairPlayTable,
+    monthlyManagerAwards: monthAwards.length > 0 ? monthAwards : undefined,
+    monthlyPlayerAwards: monthPlayerAwards.length > 0 ? monthPlayerAwards : undefined,
+    streaks,
+    positionHistory: myPositionHistory,
+    biggestWin: myBiggestWin,
     cupChampionId,
     cupChampionName,
     division: myDiv,
@@ -854,6 +987,7 @@ export function finishSeason(state: GameState): GameState {
     nationalCallUps: myCallUps,
     nationalInjuries: myIntlInjuries,
     internationalTournamentChampion,
+    internationalTournamentHighlight,
     demand: demandResult,
     squad: mySquad,
     milestones: myMilestones,
@@ -875,11 +1009,19 @@ export function finishSeason(state: GameState): GameState {
     qualifiedForContinental: continentalQualifierIds.includes(state.myClubId),
     boardTierBonus: boardBonusResult,
     addOnPayouts: myAddOnPayouts,
+    mentorGraduations: myMentorGraduations.length > 0 ? myMentorGraduations : undefined,
+    boardPersonaChange: myBoardPersonaChange,
+    fanSatisfaction: fanSatisfactionResult.fanSatisfaction,
+    fanProtest: fanSatisfactionResult.protest,
+    longTermProjectBonus: longTermProjectResult,
     reserveLeagueTable: reserveLeagueTable.length > 0 ? reserveLeagueTable : undefined,
+    reservePlayerStats: myReservePlayerStats.length > 0 ? myReservePlayerStats : undefined,
     sponsorContractExpired,
     boldPrediction: boldPredictionResult,
     watchlistContractAlerts: watchlistContractAlerts.length > 0 ? watchlistContractAlerts : undefined,
     cupUpsets: myCupUpsets.length > 0 ? myCupUpsets : undefined,
+    boardConfidenceAfter: boardConfidence,
+    weatherRecord: myWeatherRecord.length > 0 ? myWeatherRecord : undefined,
   };
 
   const repaired = repairTactic(myClub(state), myTactic(state));
@@ -897,9 +1039,12 @@ export function finishSeason(state: GameState): GameState {
     boldPrediction: undefined,
     sponsorGoal: nextSponsorGoal,
     sponsorStreak: nextSponsorStreak,
+    objectiveStreak: nextObjectiveStreak,
     legends: [...state.legends, ...newLegends],
+    staffLegends: [...(state.staffLegends ?? []), ...newStaffLegends],
     rivalRecord,
     rivalMeetings: [...state.rivalMeetings, ...newRivalMeetings],
+    headToHead,
     contractSeasonsLeft: state.contractSeasonsLeft - 1,
     ratingHistory,
     live: null,
@@ -1262,7 +1407,7 @@ export function myLoanedOutPlayers(state: GameState): { player: Player; loanClub
   return out;
 }
 
-const STAFF_LABEL: Record<string, string> = {
+export const STAFF_LABEL: Record<string, string> = {
   coaching: '총괄 코치', medical: '의료', scouting: '스카우팅', youth: '유스',
   coachGk: 'GK 코치', coachAttack: '공격 코치', coachDefense: '수비 코치', coachPhysical: '피지컬 코치',
   reserveCoach: '리저브 전담 코치',
@@ -1294,6 +1439,23 @@ export function negotiateStaffRaiseAction(state: GameState, kind: NamedStaffKind
   return {
     state: { ...state }, ok: true,
     message: `${STAFF_LABEL[kind]} ${r.staffName} 연봉 인상 협상 타결 (−${formatMoney(r.cost!)}, 계약 연장)`,
+  };
+}
+
+/** 다른 구단의 실명 스태프를 영입 제안한다(고도화 항목10) — 이적료를 지불하면 그
+ *  인물이 우리 구단으로 옮겨오고, 상대 구단엔 같은 레벨의 새 인물이 채워진다.
+ *  특기 있는 인재는 더 자주 거절하므로, attempt를 늘려 재시도할 수 있다(성사
+ *  여부는 매번 다시 판정 — 같은 attempt로는 항상 같은 결과). */
+export function poachStaffAction(
+  state: GameState, targetClubId: string, kind: NamedStaffKind, attempt = 0,
+): ActionOutcome {
+  if (state.live) return { state, ok: false, message: '이적은 프리시즌에만 가능합니다.' };
+  const seed = offseasonSeed(state) + simpleStrSeed(`${targetClubId}:${kind}`) + attempt * 97;
+  const r = enginePoachStaff(state.clubs, state.myClubId, targetClubId, kind, new Rng(seed));
+  if (!r.ok) return { state: { ...state }, ok: false, message: r.reason! };
+  return {
+    state: { ...state }, ok: true,
+    message: `${STAFF_LABEL[kind]} ${r.poachedName} 영입 완료 (−${formatMoney(r.fee!)})`,
   };
 }
 
@@ -1343,6 +1505,16 @@ export function signSponsorContractAction(state: GameState, kind: SponsorContrac
     state: { ...state }, ok: true,
     message: `${SPONSOR_CONTRACT_LABEL[kind]} 계약 체결 완료 (−${formatMoney(r.cost!)}, 시즌당 +${formatMoney(r.contract!.payoutPerSeason)})`,
   };
+}
+
+const TICKET_PRICE_TIER_LABEL: Record<TicketPriceTier, string> = {
+  low: '저가', normal: '보통', high: '고가',
+};
+
+/** 티켓 가격 등급 변경(고도화 항목18) — 비쌀수록 매치데이 수익은 늘지만 팬 만족도는 깎인다. */
+export function setTicketPriceAction(state: GameState, tier: TicketPriceTier): ActionOutcome {
+  engineSetTicketPriceTier(myClub(state), tier);
+  return { state: { ...state }, ok: true, message: `티켓 가격을 ${TICKET_PRICE_TIER_LABEL[tier]}(으)로 설정했습니다.` };
 }
 
 // ── 조회 헬퍼 ──
@@ -1481,15 +1653,27 @@ export function respondMedia(state: GameState, event: MediaEvent, tone: MediaTon
   };
 }
 
-/** 누적 인터뷰 답변 성향으로 형성된 감독 이미지("아직 형성 안 됨" = neutral). */
-export function managerPersona(state: GameState): ManagerPersona {
+/** 누적 인터뷰 답변을 성향별로 집계(managerPersona/managerSnsReputation 공용). */
+function toneTally(state: GameState): { bold: number; humble: number } {
   let bold = 0;
   let humble = 0;
   for (const [tone, count] of Object.entries(state.mediaToneCounts) as [MediaTone, number][]) {
     if (MEDIA_TONE_STYLE[tone] === 'bold') bold += count;
     else humble += count;
   }
+  return { bold, humble };
+}
+
+/** 누적 인터뷰 답변 성향으로 형성된 감독 이미지("아직 형성 안 됨" = neutral). */
+export function managerPersona(state: GameState): ManagerPersona {
+  const { bold, humble } = toneTally(state);
   return classifyPersona(bold, humble);
+}
+
+/** 감독 SNS 평판(고도화 항목19) — 누적 인터뷰 톤을 팔로워 수·여론 지지율로 시각화. */
+export function managerSnsReputation(state: GameState): SnsReputation {
+  const { bold, humble } = toneTally(state);
+  return snsReputation(bold, humble);
 }
 
 /** 인터뷰를 답변 없이 넘김(효과 없음, 재노출만 방지). */
@@ -1555,6 +1739,7 @@ export type SeasonAwardKind = 'playerOfSeason' | 'topScorer' | 'goldenGlove';
 export type TimelineEntry =
   | { season: number; kind: 'transfer'; fromClubName: string; toClubName: string; fee: number }
   | { season: number; kind: 'milestone'; milestoneKind: 'apps' | 'goals'; value: number }
+  | { season: number; kind: 'positionMilestone'; position: Position; value: number }
   | { season: number; kind: 'retired'; finalAge: number; careerApps: number; careerGoals: number; caps: number }
   | { season: number; kind: 'award'; awardKind: SeasonAwardKind };
 
@@ -1573,7 +1758,10 @@ export function playerTimeline(state: GameState, playerId: string): TimelineEntr
       }
     }
     for (const m of s.milestones ?? []) {
-      if (m.playerId === playerId) {
+      if (m.playerId !== playerId) continue;
+      if (m.kind === 'positionMastery') {
+        entries.push({ season: s.season, kind: 'positionMilestone', position: m.position!, value: m.value });
+      } else {
         entries.push({ season: s.season, kind: 'milestone', milestoneKind: m.kind, value: m.value });
       }
     }
@@ -1815,6 +2003,9 @@ export interface TeamPreview {
   /** 예상 포메이션 — 포메이션 상성 안내에 사용. */
   formation: string;
   form: FormSummary;
+  /** 이번 경기와 같은 구장 조건(홈이면 홈, 원정이면 원정)의 최근 폼(고도화 항목23) —
+   *  AI 전술 결정에 실제로 쓰이는 값과 동일한 기준. */
+  venueForm: FormSummary;
   /** 예상 선발 중 CA 최고 선수. */
   keyPlayer: { name: string; ca: number } | null;
   /** 키플레이어의 스카우팅 리포트(강점/약점) — 상대는 내 스카우팅 등급에 따라 표기. */
@@ -1826,6 +2017,10 @@ export interface MatchPreview {
   away: TeamPreview;
   /** 경기 날씨(신규 개선 항목 26) — 킥오프 전에도 미리 확인 가능. */
   weather: Weather;
+  /** 이번 경기 심판의 엄격도(고도화 항목46) — 킥오프 전에도 미리 확인 가능. */
+  refereeStrictness: RefereeStrictness;
+  /** 상대 구단과의 통산 전적(고도화 항목34) — 맞대결 기록이 없으면 undefined. */
+  opponentHeadToHead?: HeadToHeadRecord;
 }
 
 /** 선발(전술 라인업) 중 현재 능력 최고 선수. */
@@ -1853,7 +2048,7 @@ function buildPreviewFrom(state: GameState, setup: MatchSetup): MatchPreview | n
     const i = table.findIndex((r) => r.clubId === clubId);
     return i < 0 ? null : i + 1; // 타 부 상대는 순위 정보 없음(null)
   };
-  const build = (club: Club, tactic: Tactic, opponentFormation: string): TeamPreview => {
+  const build = (club: Club, tactic: Tactic, opponentFormation: string, isHomeSide: boolean): TeamPreview => {
     const isMine = club.id === state.myClubId;
     const kp = keyPlayerOf(club, tactic);
     return {
@@ -1864,14 +2059,18 @@ function buildPreviewFrom(state: GameState, setup: MatchSetup): MatchPreview | n
       strength: computeTeamStrength(club, tactic, false, opponentFormation),
       formation: tactic.formation,
       form: recentForm(results, club.id, 5),
+      venueForm: recentForm(results, club.id, 5, isHomeSide ? 'home' : 'away'),
       keyPlayer: kp ? { name: kp.name, ca: Math.round(currentAbility(kp)) } : null,
       keyPlayerReport: kp ? buildScoutingReport(kp, isMine ? 20 : myScouting) : null,
     };
   };
+  const opponentClubId = setup.home.club.id === state.myClubId ? setup.away.club.id : setup.home.club.id;
   return {
-    home: build(setup.home.club, setup.home.tactic, setup.away.tactic.formation),
-    away: build(setup.away.club, setup.away.tactic, setup.home.tactic.formation),
+    home: build(setup.home.club, setup.home.tactic, setup.away.tactic.formation, true),
+    away: build(setup.away.club, setup.away.tactic, setup.home.tactic.formation, false),
     weather: matchWeather(setup.seed, setup.home.club.id, setup.away.club.id),
+    refereeStrictness: matchRefereeStrictness(setup.seed, setup.home.club.id, setup.away.club.id),
+    opponentHeadToHead: state.headToHead?.[opponentClubId],
   };
 }
 

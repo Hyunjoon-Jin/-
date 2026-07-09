@@ -32,6 +32,30 @@ function contractFactor(years: number): number {
   return 1.0;
 }
 
+/** 부상 이력 할인 하한(최대 20%까지 깎인다). */
+const INJURY_HISTORY_MIN_FACTOR = 0.8;
+/** 통산 부상 1건당 할인 폭 — 1건까지는 정상 리스크로 보고 페널티가 없다. */
+const INJURY_HISTORY_STEP = 0.03;
+
+/**
+ * 통산 부상 이력에 따른 시장 가치 보정(고도화 항목7) — 구단들은 잦은 부상 이력이
+ * 있는 선수를 향후 결장 리스크로 보고 가치를 낮게 매긴다. 첫 1건은 누구나 겪을 수
+ * 있는 정상 범위로 보아 페널티가 없고, 이후 건마다 조금씩 할인 폭이 커진다.
+ */
+function injuryHistoryFactor(careerInjuryCount: number): number {
+  const penalized = Math.max(0, careerInjuryCount - 1);
+  return clamp(1 - penalized * INJURY_HISTORY_STEP, INJURY_HISTORY_MIN_FACTOR, 1);
+}
+
+/**
+ * 사기(최근 폼의 대리 지표)에 따른 시장 가치 보정(고도화 항목7) — 최근 성적·출전이
+ * 좋아 사기가 높은 선수는 프리미엄이, 저조해 사기가 낮은 선수는 할인이 붙는다.
+ * 중립(0.5) 기준 ±10% 범위.
+ */
+function formFactor(morale: number): number {
+  return 0.9 + clamp(morale, 0, 1) * 0.2;
+}
+
 /** 시장 가치 (만원). economy.md 2장. */
 export function marketValue(player: Player): number {
   const ca = currentAbility(player);
@@ -40,7 +64,9 @@ export function marketValue(player: Player): number {
     base *
     ageFactor(player.age) *
     potentialFactor(ca, player.potential, player.age) *
-    contractFactor(player.contractYears);
+    contractFactor(player.contractYears) *
+    injuryHistoryFactor(player.careerInjuryCount ?? 0) *
+    formFactor(player.morale);
   return Math.max(0, Math.round(v));
 }
 

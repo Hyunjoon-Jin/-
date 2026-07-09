@@ -2,7 +2,7 @@
  * 구단 재정: 시즌 수입/지출 정산 (economy.md 4장).
  * 단위: 만원.
  */
-import type { Club } from './types.js';
+import type { Club, TicketPriceTier } from './types.js';
 import type { Rng } from './rng.js';
 import { clamp } from './math.js';
 
@@ -123,6 +123,28 @@ export function upgradeTrainingGround(club: Club): TrainingGroundUpgradeResult {
  *  뜨거워 관중이 몰려, 그 경기만큼은 입장 수입이 이 배율만큼 더 오른다. */
 export const RIVAL_MATCHDAY_PREMIUM = 1.4;
 
+/** 중계권료 순위 배당 계수(고도화 항목16) — 상위권 경기에 시청 수요가 몰린다는 가정으로,
+ *  평판 비례분과 별개로 최종 순위(0-index, 낮을수록 상위)에 비례해 추가 배당한다.
+ *  꼴찌는 가산 없음, 1위는 최대 가산(평판 비례분의 배율로 적용). */
+const TV_RANK_BONUS_PER_REP = 12_000;
+
+/** 중계권료 순위 배당(고도화 항목16) — 균등 분배분·평판 비례분(tv 기본식)과 별개로,
+ *  이번 시즌 최종 순위가 높을수록(1위에 가까울수록) 시청률 배당이 추가로 붙는다. */
+function broadcastRankBonus(finalPosition: number, nClubs: number, rep: number): number {
+  const rankRatio = nClubs > 1 ? 1 - finalPosition / (nClubs - 1) : 1;
+  return Math.round(clamp(rankRatio, 0, 1) * rep * TV_RANK_BONUS_PER_REP);
+}
+
+/** 티켓 가격 등급별 매치데이 수익 배율(고도화 항목18) — 비쌀수록 수익은 늘지만 팬
+ *  만족도는 깎인다(fanSatisfactionDelta 참고). 'normal'은 기존과 완전히 동일(1.0배). */
+export const TICKET_PRICE_MATCHDAY_MULTIPLIER: Record<TicketPriceTier, number> = {
+  low: 0.85, normal: 1.0, high: 1.2,
+};
+
+/** 팬 만족도가 문턱 미만으로 떨어져 시위가 발생한 다음 시즌, 매치데이 수익에 붙는
+ *  일회성 페널티 배율(고도화 항목18) — 정산 후 자동으로 꺼진다. */
+export const FAN_PROTEST_MATCHDAY_PENALTY = 0.85;
+
 /**
  * 시즌 재정 정산.
  * @param finalPosition 리그 최종 순위 (0-index).
@@ -142,10 +164,16 @@ export function settleSeason(
 ): SeasonFinanceReport {
   const rep = club.finance.reputation;
 
-  // 수입 (중계는 균등 분배분 + 평판 비례분 → 약팀도 최소 보장)
-  const tv = 45_000 + rep * 48_000;
+  // 수입 (중계는 균등 분배분 + 평판 비례분 → 약팀도 최소 보장. 순위 배당(고도화 항목16)은
+  // 시청률이 상위권 경기에 몰린다는 가정으로 그 위에 추가로 붙는다.)
+  const tv = 45_000 + rep * 48_000 + broadcastRankBonus(finalPosition, nClubs, rep);
+  const ticketMul = TICKET_PRICE_MATCHDAY_MULTIPLIER[club.finance.ticketPriceTier ?? 'normal'];
+  // 지난 시즌 팬 만족도가 바닥나 시위가 있었다면(고도화 항목18) 이번 정산에서 한 번만 페널티.
+  const protestMul = club.finance.fanProtestActive ? FAN_PROTEST_MATCHDAY_PENALTY : 1;
+  club.finance.fanProtestActive = false;
   const perGameMatchday =
-    rep * 5_000 * attendanceFormFactor(recentFormRatio) * stadiumMatchdayMultiplier(club.finance.stadiumLevel);
+    rep * 5_000 * attendanceFormFactor(recentFormRatio) * stadiumMatchdayMultiplier(club.finance.stadiumLevel)
+    * ticketMul * protestMul;
   const rivalBonus = Math.round(perGameMatchday * clamp(rivalHomeMatches, 0, homeGames) * (RIVAL_MATCHDAY_PREMIUM - 1));
   const matchday = Math.round(perGameMatchday * homeGames) + rivalBonus; // 입장 수입(라이벌전 프리미엄 포함)
   const sponsor = Math.round(Math.pow(rep, 1.5) * 5_500);
@@ -178,17 +206,18 @@ export function settleSeason(
 }
 
 /**
- * 스폰서 계약(유니폼/스타디움 명명권) — 아래의 성과 기반 시즌 목표 보너스와는 별개로,
+ * 스폰서 계약(유니폼/스타디움 명명권/소매) — 아래의 성과 기반 시즌 목표 보너스와는 별개로,
  * 한 번 체결하면 성과와 무관하게 정해진 시즌 동안 고정 수익을 매 시즌 보장하는
- * 장기 계약(신규 개선 항목 24). 체결 시점의 평판(과 스타디움 명명권의 경우 스타디움
- * 규모)에 수익이 고정되므로, 평판이 오르기 전에 미리 체결하면 손해, 오른 뒤 체결하면
- * 이득이라는 타이밍 판단이 생긴다.
+ * 장기 계약(신규 개선 항목 24, 고도화 항목15로 소매 스폰서 추가 다변화). 체결 시점의
+ * 평판(과 스타디움 명명권의 경우 스타디움 규모)에 수익이 고정되므로, 평판이 오르기 전에
+ * 미리 체결하면 손해, 오른 뒤 체결하면 이득이라는 타이밍 판단이 생긴다.
  */
-export type SponsorContractKind = 'kit' | 'stadiumNaming';
+export type SponsorContractKind = 'kit' | 'stadiumNaming' | 'sleeve';
 
 export const SPONSOR_CONTRACT_LABEL: Record<SponsorContractKind, string> = {
   kit: '유니폼 스폰서',
   stadiumNaming: '스타디움 명명권',
+  sleeve: '소매 스폰서',
 };
 
 /** 계약 기간(시즌) — 만료되면 재계약(재체결)이 필요하다. */
@@ -203,10 +232,12 @@ export const SPONSOR_CONTRACT_STADIUM_MIN_LEVEL = 1;
 const SPONSOR_CONTRACT_BASE: Record<SponsorContractKind, number> = {
   kit: 6_000,
   stadiumNaming: 5_000,
+  sleeve: 3_000,
 };
 const SPONSOR_CONTRACT_PER_REP: Record<SponsorContractKind, number> = {
   kit: 900,
   stadiumNaming: 700,
+  sleeve: 500,
 };
 
 /** 계약 체결 시 시즌당 고정 수익(만원) — 스타디움 명명권은 스타디움 규모만큼 추가로 붙는다. */
@@ -259,6 +290,63 @@ export function tickSponsorContracts(club: Club): SponsorContractTickResult {
   }
   club.finance.sponsorContracts = remaining;
   return { income, expired };
+}
+
+/**
+ * 팬 만족도 미터(고도화 항목18) — 티켓가·성적·영입 소식에 반응하는 팬심 지표.
+ * 성적·영입 신호는 리그 순위/목표(1-index)를 다루는 앱 레이어만 알 수 있어, 이 함수는
+ * 순수하게 "성과 편차"(양수=초과 달성)를 입력으로 받아 index 기준 혼동을 피한다.
+ */
+export const FAN_SATISFACTION_DEFAULT = 60;
+/** 팬 만족도가 이 미만으로 떨어지면 시위가 발생한다. */
+export const FAN_PROTEST_THRESHOLD = 20;
+
+/** 티켓가가 비쌀수록 팬은 부담을 느낀다(매치데이 수익 배율과는 반대 방향 압력). */
+const TICKET_PRICE_FAN_DELTA: Record<TicketPriceTier, number> = {
+  low: 3, normal: 0, high: -5,
+};
+/** 신규 영입 1명당 팬 만족도 가산(상한 있음) — 큰 이적 소식에 팬이 들뜬다는 가정. */
+const SIGNING_FAN_BONUS_PER_PLAYER = 2;
+const SIGNING_FAN_BONUS_MAX = 6;
+
+export interface FanSatisfactionInput {
+  /** 목표 대비 성적 편차(양수=초과 달성, 음수=미달) — 1-index 순위 계산은 호출부 책임. */
+  performanceDelta: number;
+  ticketPriceTier: TicketPriceTier;
+  /** 이번 시즌 새로 영입한 선수 수(0 이상). */
+  newSignings: number;
+}
+
+/** 팬 만족도 변화량(순수 계산, Club을 변경하지 않는다). */
+export function fanSatisfactionDelta(input: FanSatisfactionInput): number {
+  const perf = clamp(input.performanceDelta * 1.5, -15, 15);
+  const price = TICKET_PRICE_FAN_DELTA[input.ticketPriceTier];
+  const signings = Math.min(Math.max(input.newSignings, 0) * SIGNING_FAN_BONUS_PER_PLAYER, SIGNING_FAN_BONUS_MAX);
+  return Math.round(perf + price + signings);
+}
+
+export interface FanSatisfactionResult {
+  fanSatisfaction: number;
+  delta: number;
+  /** 문턱 미만으로 떨어져 시위가 발생했는지 — true면 club.finance.fanProtestActive가
+   *  켜져 다음 settleSeason에서 매치데이 페널티가 한 번 적용된다. */
+  protest: boolean;
+}
+
+/** 팬 만족도 갱신(Club을 직접 변경한다). 시즌 종료 시 한 번 호출한다. */
+export function updateFanSatisfaction(club: Club, input: FanSatisfactionInput): FanSatisfactionResult {
+  const current = club.finance.fanSatisfaction ?? FAN_SATISFACTION_DEFAULT;
+  const delta = fanSatisfactionDelta(input);
+  const next = clamp(current + delta, 0, 100);
+  club.finance.fanSatisfaction = next;
+  const protest = next < FAN_PROTEST_THRESHOLD;
+  if (protest) club.finance.fanProtestActive = true;
+  return { fanSatisfaction: next, delta, protest };
+}
+
+/** 티켓 가격 등급 변경(자유 변경, 비용 없음). */
+export function setTicketPriceTier(club: Club, tier: TicketPriceTier): void {
+  club.finance.ticketPriceTier = tier;
 }
 
 /**

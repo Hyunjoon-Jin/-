@@ -6,6 +6,7 @@ import type { InjurySeverity, BodyPart } from './injury.js';
 import type { PlayerInstruction } from './playerInstructions.js';
 import type { SponsorContract } from './finance.js';
 import type { Weather } from './weather.js';
+import type { RefereeStrictness } from './referee.js';
 
 // ── 능력치 키 ──────────────────────────────────────────────
 
@@ -99,10 +100,17 @@ export interface Player {
   /** 이번 부상의 최초 총 결장 경기 수(부상 시점에 고정, 신규 개선 항목 28) — injuryMatches(잔여)와
    *  비교해 회복 진행률을 계산하는 데 쓰인다. 회복 시 해제. 구버전 세이브는 없을 수 있어 optional. */
   injuryTotalMatches?: number;
+  /** 통산 부상 발생 횟수(선수·국가대표 경기 통틀어, 고도화 항목7) — 은퇴 없이는
+   *  줄어들지 않는다. 잦은 부상 이력이 시장 가치 산정에서 리스크 할인으로 반영된다.
+   *  구버전 세이브는 없을 수 있어 optional(없으면 0 취급). */
+  careerInjuryCount?: number;
   /** 복귀 직후 재부상 위험이 남은 경기 수. 0 = 위험 없음. */
   reinjuryRiskMatches?: number;
   /** 부상 부위 연관 능력치가 완전히 회복될 때까지 남은 경기 수. 0 = 정상. */
   recoveryAttrMatches?: number;
+  /** 연속 선발 출전 경기 수(고도화 항목30) — 벤치/부상/정지로 쉬면 0으로 리셋된다.
+   *  일정 수를 넘으면 로테이션 경고 대상이자 추가 피로 페널티가 붙는다. */
+  consecutiveStarts?: number;
   /** 시즌 누적 경고. 일정 수마다 출전 정지. */
   yellowCards: number;
   /** 남은 출전 정지 경기 수. 0 = 정상. >0 이면 출전 불가. */
@@ -209,12 +217,19 @@ export interface Tactic {
   setPieceTakerId?: string;
   /** 주장. 라인업에 없는 날(결장)에는 팀 전체 사기에 소폭 페널티가 붙는다. */
   captainId?: string;
+  /** 부주장(고도화 항목14). 주장이 결장한 날 라인업에 있으면 완장을 대신 차
+   *  팀 전체 사기 페널티가 발생하지 않는다(자동 승계). */
+  viceCaptainId?: string;
 }
 
 // ── 구단 ──────────────────────────────────────────────────
 
 /** 실명 스태프의 특기 특성 — 직책별 하나씩, 보유 시 해당 직책의 유효 레벨에 가산 보너스를 준다. */
 export type StaffTrait = 'developmentGuru' | 'rehabSpecialist' | 'eyeForTalent' | 'academyMaestro';
+
+/** 특기 특성의 등급(고도화 항목9) — 같은 특성이라도 등급에 따라 가산 보너스 크기가
+ *  다르다. 초급 < 중급 < 전설급 순으로 희소하고 강력해진다. */
+export type StaffTraitTier = 'novice' | 'veteran' | 'legend';
 
 /** 스태프 능력 (1~20). 경영으로 업그레이드. */
 /** 스태프 직책에 배정된 실명 인물(이름·나이·계약기간·특기 특성). 구버전 세이브·미도입
@@ -227,6 +242,10 @@ export interface StaffMember {
   /** 특기 특성(있을 수도, 없을 수도). 스태프 업그레이드로 새 인물을 영입할 때만 새로 판정되고,
    *  같은 인물의 단순 재계약(계약 만료 시 잔류)으로는 바뀌지 않는다. */
   trait?: StaffTrait;
+  /** 특기 특성의 등급(고도화 항목9) — trait가 있을 때만 의미가 있다. 구버전 세이브는
+   *  없을 수 있어 optional(없으면 veteran 취급 — 기존 STAFF_TRAIT_BONUS와 동일한
+   *  중간 등급으로 하위 호환). */
+  traitTier?: StaffTraitTier;
 }
 
 export interface Staff {
@@ -279,7 +298,22 @@ export interface ClubFinance {
   /** 체결한 스폰서 계약(유니폼/스타디움 명명권, 신규 개선 항목 24) — 성과와 무관하게
    *  매 시즌 고정 수익을 지급하는 장기 계약. 구버전 세이브는 없을 수 있어 optional. */
   sponsorContracts?: SponsorContract[];
+  /** 티켓 가격 등급(고도화 항목18) — 비쌀수록 매치데이 수익은 늘지만 팬 만족도는 깎인다.
+   *  구버전 세이브는 없을 수 있어 optional(없으면 'normal' = 기존과 동일한 수익). */
+  ticketPriceTier?: TicketPriceTier;
+  /** 팬 만족도(0~100, 고도화 항목18) — 성적·티켓가·영입 소식에 반응한다. 구버전 세이브는
+   *  없을 수 있어 optional(없으면 FAN_SATISFACTION_DEFAULT로 취급). */
+  fanSatisfaction?: number;
+  /** 팬 만족도가 문턱 미만으로 떨어져 시위가 발생한 상태(고도화 항목18) — 다음 시즌
+   *  정산에서 매치데이 수익 페널티가 한 번 적용된 뒤 자동으로 꺼진다. */
+  fanProtestActive?: boolean;
+  /** 연속 재정 위기(자금 음수) 시즌 수(고도화 항목21) — 파이낸셜 페어플레이 단계적
+   *  절차(경고→제재→강제매각)에 쓰인다. 흑자로 돌아서면 0으로 리셋된다. */
+  financialCrisisStreak?: number;
 }
+
+/** 티켓 가격 등급(고도화 항목18) — finance.ts의 매치데이 수익 배율·팬 만족도 계산에 쓰인다. */
+export type TicketPriceTier = 'low' | 'normal' | 'high';
 
 /** 이사회의 인내심 성향 — 목표 미달 시 얼마나 가혹하게 반응하는가(board.ts). */
 export type BoardPatience = 'patient' | 'impatient';
@@ -340,7 +374,7 @@ export interface TeamStrength {
 }
 
 export type ChanceType = 'open' | 'cross' | 'setpiece';
-export type ShotOutcome = 'GOAL' | 'SAVE' | 'OFF_TARGET' | 'BLOCKED';
+export type ShotOutcome = 'GOAL' | 'SAVE' | 'OFF_TARGET' | 'BLOCKED' | 'OWN_GOAL';
 
 export interface MatchEvent {
   minute: number;
@@ -352,6 +386,9 @@ export interface MatchEvent {
   /** 득점(outcome==='GOAL')에 어시스트가 붙었을 때만 설정. */
   assistPlayerId?: string;
   assistPlayerName?: string;
+  /** 자책골(고도화 항목42) — true면 playerId/playerName은 수비 측(실점 귀책) 선수를
+   *  가리키고, side는 여전히 득점이 반영되는(득점을 얻는) 공격 측이다. */
+  isOwnGoal?: boolean;
 }
 
 export type CardType = 'yellow' | 'red';
@@ -375,6 +412,12 @@ export interface PlayerMatchStat {
   assists: number;
   /** GK 슬롯으로 뛴 선수가 무실점으로 경기를 마쳤는지(골든글러브 집계용). GK가 아니면 미설정. */
   cleanSheet?: boolean;
+  /** 이 경기에서 범한 자책골 수(고도화 항목42). 없으면 0으로 취급. */
+  ownGoals?: number;
+  /** 빅찬스(득점확률이 임계값 이상인 슈팅) 생성 수(고도화 항목45). 없으면 0으로 취급. */
+  bigChancesCreated?: number;
+  /** 빅찬스 중 득점으로 이어지지 않은 수(고도화 항목45). 없으면 0으로 취급. */
+  bigChancesMissed?: number;
 }
 
 export interface InjuryEvent {
@@ -408,4 +451,7 @@ export interface MatchResult {
   motmPlayerId?: string;
   /** 경기 날씨(신규 개선 항목 26). 손으로 만든 MatchResult(테스트 등)엔 없을 수 있어 optional. */
   weather?: Weather;
+  /** 이 경기 심판의 엄격도(고도화 항목46). 손으로 만든 MatchResult(테스트 등)엔 없을 수
+   *  있어 optional. */
+  refereeStrictness?: RefereeStrictness;
 }

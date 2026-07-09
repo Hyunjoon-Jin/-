@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { selectCallUps, runInternationalBreak, runInternationalTournament } from '../src/international.js';
+import {
+  selectCallUps, runInternationalBreak, runInternationalTournament, clubTournamentHighlight,
+} from '../src/international.js';
 import { generateClub } from '../src/generate.js';
 import { currentAbility } from '../src/derived.js';
 import { Rng } from '../src/rng.js';
@@ -133,5 +135,45 @@ describe('international: 비정기 국제대회 (C15)', () => {
     expect(ra.rounds.map((r) => r.ties.map((t) => [t.homeScore, t.awayScore]))).toEqual(
       rb.rounds.map((r) => r.ties.map((t) => [t.homeScore, t.awayScore])),
     );
+  });
+});
+
+describe('international: 내 구단 국가대표 성적 하이라이트 (고도화 항목31)', () => {
+  it('내 구단에 차출된 선수가 없으면 undefined', () => {
+    const clubs = league(20, [18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18]);
+    const res = runInternationalTournament(clubs, new Rng(7));
+    expect(res.championNation).not.toBeNull();
+    const highlight = clubTournamentHighlight(res, '__no_such_club__');
+    expect(highlight).toBeUndefined();
+  });
+
+  it('내 구단 선수가 차출됐으면 국적·최종 라운드·우승 여부를 뽑는다', () => {
+    const clubs = league(21, [18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18]);
+    const res = runInternationalTournament(clubs, new Rng(8));
+    expect(res.championNation).not.toBeNull();
+    // 첫 콜업의 소속 구단을 내 구단으로 삼아 검증(항상 최소 1건 이상 콜업이 있다고 보장됨).
+    const myClubId = res.callUps[0]!.clubId;
+    const highlight = clubTournamentHighlight(res, myClubId)!;
+    expect(highlight).toBeDefined();
+    expect(highlight.myNations.length).toBeGreaterThan(0);
+    expect(highlight.furthestRoundName).toBeDefined();
+    expect(typeof highlight.won).toBe('boolean');
+  });
+
+  it('우승국 선수가 있으면 won이 true, 결승 라운드까지 도달했다고 나온다', () => {
+    const clubs = league(22, [18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18, 18]);
+    const res = runInternationalTournament(clubs, new Rng(9));
+    expect(res.championNation).not.toBeNull();
+    const championCallUp = res.callUps.find((c) => c.nationality === res.championNation)!;
+    const highlight = clubTournamentHighlight(res, championCallUp.clubId)!;
+    expect(highlight.won).toBe(true);
+    expect(highlight.furthestRoundName).toBe('결승');
+  });
+
+  it('대회 자체가 열리지 않았으면(참가국 부족) undefined', () => {
+    const clubs = league(23, [2, 2]);
+    const res = runInternationalTournament(clubs, new Rng(10));
+    expect(res.championNation).toBeNull();
+    expect(clubTournamentHighlight(res, 'c0')).toBeUndefined();
   });
 });

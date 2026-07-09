@@ -1,9 +1,15 @@
 import type { MatchPreview as Preview, TeamPreview } from '../game.js';
-import { formationMatchup, WEATHER_LABEL, type TeamStrength, type FormResult, type Weather } from '@soccer-tycoon/engine';
+import {
+  formationMatchup, WEATHER_LABEL, REFEREE_STRICTNESS_LABEL,
+  type TeamStrength, type FormResult, type Weather, type RefereeStrictness,
+} from '@soccer-tycoon/engine';
 import { ATTR_LABELS } from './PlayerDetail.js';
 
 /** 날씨별 표시 아이콘(신규 개선 항목 26). */
 const WEATHER_ICON: Record<Weather, string> = { clear: '☀️', rain: '🌧️', windy: '🌬️' };
+
+/** 심판 엄격도별 표시 아이콘(고도화 항목46). */
+const REFEREE_ICON: Record<RefereeStrictness, string> = { lenient: '🙂', normal: '🧑‍⚖️', strict: '🟨' };
 
 const STRENGTH_LABEL: Record<keyof TeamStrength, string> = {
   attack: '공격', creation: '창출', midfield: '중원', defense: '수비',
@@ -57,6 +63,15 @@ function scoutingInsight(mine: TeamStrength, opp: TeamStrength): string {
   return parts.length === 0 ? '두 팀의 전력이 전반적으로 비슷합니다.' : `${parts.join(' · ')}.`;
 }
 
+/** 상대 전적 한 줄 요약(고도화 항목34) — "통산 3승 1무 2패 (최근: 2:1 승, 24시즌 리그)". */
+function headToHeadSummary(h2h: NonNullable<Preview['opponentHeadToHead']>): string {
+  const { wins, draws, losses, lastMeeting } = h2h;
+  const resultLabel = lastMeeting.myGoals > lastMeeting.oppGoals ? '승'
+    : lastMeeting.myGoals < lastMeeting.oppGoals ? '패' : '무';
+  const compLabel = lastMeeting.competition === 'league' ? '리그' : '컵';
+  return `통산 ${wins}승 ${draws}무 ${losses}패 (최근: ${lastMeeting.myGoals}:${lastMeeting.oppGoals} ${resultLabel}, ${lastMeeting.season}시즌 ${compLabel})`;
+}
+
 export function MatchPreview({ preview, rivalClubId }: { preview: Preview; rivalClubId?: string }) {
   const { home, away } = preview;
   const isDerby = rivalClubId !== undefined && (home.clubId === rivalClubId || away.clubId === rivalClubId);
@@ -70,8 +85,16 @@ export function MatchPreview({ preview, rivalClubId }: { preview: Preview; rival
         <span className="pv-weather muted small" title="경기 날씨(신규 개선 항목 26) — 비/강풍은 양 팀 모두의 전개력을 약간 떨어뜨립니다.">
           {WEATHER_ICON[preview.weather]} {WEATHER_LABEL[preview.weather]}
         </span>
+        <span className="pv-referee muted small" title="이번 경기 심판 엄격도(고도화 항목46) — 엄격할수록 카드가 더 자주 나옵니다.">
+          {REFEREE_ICON[preview.refereeStrictness]} {REFEREE_STRICTNESS_LABEL[preview.refereeStrictness]}
+        </span>
       </h3>
       {isDerby && <div className="derby-banner">🔥 라이벌전</div>}
+      {preview.opponentHeadToHead && (
+        <div className="pv-h2h muted small" title="상대 구단과의 리그·국내컵 통산 전적(고도화 항목34)">
+          🆚 {opp.name} 상대 전적 · {headToHeadSummary(preview.opponentHeadToHead)}
+        </div>
+      )}
       <div className="pv-teams">
         <TeamHead team={home} align="left" />
         <span className="pv-vs">VS</span>
@@ -106,6 +129,7 @@ export function MatchPreview({ preview, rivalClubId }: { preview: Preview; rival
 }
 
 function TeamHead({ team, align }: { team: TeamPreview; align: 'left' | 'right' }) {
+  const venueLabel = align === 'left' ? '홈 최근' : '원정 최근';
   return (
     <div className={`pv-team ${align}`}>
       <div className="pv-name">
@@ -122,6 +146,14 @@ function TeamHead({ team, align }: { team: TeamPreview; align: 'left' | 'right' 
           ))
         )}
       </div>
+      {team.venueForm.results.length > 0 && (
+        <div className="pv-form pv-venue-form" title="AI 전술 결정에 실제로 반영되는 홈/원정 구분 폼(고도화 항목23)">
+          <span className="muted small">{venueLabel}</span>
+          {team.venueForm.results.map((r, i) => (
+            <span key={i} className={`form-dot ${r}`} title={FORM_MARK[r]}>{FORM_MARK[r]}</span>
+          ))}
+        </div>
+      )}
       {team.keyPlayer && (
         <div className="pv-key muted small">
           핵심 {team.keyPlayer.name} · CA {team.keyPlayer.ca}

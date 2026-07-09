@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   matchOutcomeKind, mediaToneOptions, shouldTriggerMediaEvent, applyMediaTone,
-  MEDIA_TONE_STYLE, classifyPersona, type MediaTone,
+  MEDIA_TONE_STYLE, classifyPersona, snsReputation, SNS_BASE_FOLLOWERS, type MediaTone,
 } from '../src/media.js';
 import { generateClub } from '../src/generate.js';
 import { Rng } from '../src/rng.js';
@@ -71,5 +71,39 @@ describe('media: 감독 인터뷰', () => {
     expect(classifyPersona(2, 2)).toBe('neutral'); // 팽팽
     expect(classifyPersona(4, 1)).toBe('bold');
     expect(classifyPersona(1, 4)).toBe('humble');
+  });
+});
+
+describe('고도화 Item19: 감독 SNS 평판', () => {
+  it('인터뷰가 하나도 없으면 팔로워는 기본값, 여론은 중립(50)이다', () => {
+    const r = snsReputation(0, 0);
+    expect(r.followers).toBe(SNS_BASE_FOLLOWERS);
+    expect(r.approval).toBe(50);
+  });
+
+  it('인터뷰가 쌓일수록(bold든 humble이든) 팔로워 수는 늘어난다', () => {
+    const none = snsReputation(0, 0);
+    const some = snsReputation(3, 2);
+    const more = snsReputation(6, 4);
+    expect(some.followers).toBeGreaterThan(none.followers);
+    expect(more.followers).toBeGreaterThan(some.followers);
+  });
+
+  it('bold 답변이 많을수록 humble보다 팔로워 증가폭이 크다(화제성)', () => {
+    const boldHeavy = snsReputation(5, 0);
+    const humbleHeavy = snsReputation(0, 5);
+    expect(boldHeavy.followers).toBeGreaterThan(humbleHeavy.followers);
+  });
+
+  it('humble 답변이 많을수록 여론 지지율이 오르고, bold 답변이 많을수록 내려간다', () => {
+    const humbleHeavy = snsReputation(0, 5);
+    const boldHeavy = snsReputation(5, 0);
+    expect(humbleHeavy.approval).toBeGreaterThan(50);
+    expect(boldHeavy.approval).toBeLessThan(50);
+  });
+
+  it('여론 지지율은 0~100 범위를 벗어나지 않는다', () => {
+    expect(snsReputation(0, 1000).approval).toBeLessThanOrEqual(100);
+    expect(snsReputation(1000, 0).approval).toBeGreaterThanOrEqual(0);
   });
 });

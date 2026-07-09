@@ -73,6 +73,7 @@ export function runInternationalBreak(clubs: Club[], rng: Rng): InternationalRes
       p.injuryMatches = rng.int(1, 3);
       p.injuryTotalMatches = p.injuryMatches; // 회복 진행률(신규 개선 항목 28) 계산 기준
       p.injuryName = '대표팀 차출 중 부상';
+      p.careerInjuryCount = (p.careerInjuryCount ?? 0) + 1; // 시장 가치 리스크 할인(고도화 항목7) 기준
       p.condition = 0.6;
       injuries++;
     }
@@ -161,6 +162,40 @@ export interface InternationalTournamentResult {
   injuries: number;
   /** clubId → 이번 대회 차출 인원. */
   byClub: Map<string, number>;
+}
+
+/**
+ * 내 구단 소속 국가대표의 이번 대회 성적 하이라이트(고도화 항목31) — rounds(전체
+ * 대진표)는 지금까지 championNation만 남기고 버려졌는데, 여기서 다시 훑어 내 구단
+ * 선수의 국적이 어디까지 갔는지·우승했는지를 뽑는다. rounds는 이른 라운드→결승
+ * 순서로 쌓이므로, 마지막으로 등장한 라운드가 곧 가장 멀리 간 라운드다.
+ */
+export interface ClubTournamentHighlight {
+  /** 내 구단 선수들의 국적(중복 제거) — 이 대회에 차출된 적이 있는 국가만. */
+  myNations: string[];
+  /** myNations 중 어느 국가든 관여한 마지막 라운드 이름. 대회 자체가 안 열렸거나
+   *  내 구단에 차출된 선수가 없으면 undefined. */
+  furthestRoundName?: string;
+  /** myNations 중 하나가 우승했는지. */
+  won: boolean;
+}
+
+export function clubTournamentHighlight(
+  result: InternationalTournamentResult, clubId: string,
+): ClubTournamentHighlight | undefined {
+  const myNations = [...new Set(
+    result.callUps.filter((c) => c.clubId === clubId).map((c) => c.nationality),
+  )];
+  if (myNations.length === 0) return undefined;
+  let furthestRoundName: string | undefined;
+  for (const round of result.rounds) {
+    const involved = round.ties.some(
+      (t) => myNations.includes(t.homeNation) || myNations.includes(t.awayNation),
+    );
+    if (involved) furthestRoundName = round.name;
+  }
+  const won = result.championNation !== null && myNations.includes(result.championNation);
+  return { myNations, furthestRoundName, won };
 }
 
 /** 결승까지 남은 라운드 수 기준 이름 — cup.ts의 규칙과 동일한 관례를 국가대표 대회에도 적용. */
@@ -288,6 +323,7 @@ export function runInternationalTournament(clubs: Club[], rng: Rng): Internation
           p.injuryMatches = Math.max(p.injuryMatches, rng.int(1, 4));
           p.injuryTotalMatches = p.injuryMatches; // 회복 진행률(신규 개선 항목 28) 계산 기준
           p.injuryName = '국제대회 중 부상';
+          p.careerInjuryCount = (p.careerInjuryCount ?? 0) + 1; // 시장 가치 리스크 할인(고도화 항목7) 기준
           p.condition = Math.min(p.condition, 0.55);
           injuries++;
           break;

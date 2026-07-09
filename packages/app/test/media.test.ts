@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
   startGame, startSeason, playRound, checkMediaEvent, respondMedia, dismissMedia, myClub,
-  managerPersona,
+  managerPersona, managerSnsReputation,
 } from '../src/game.js';
+import { SNS_BASE_FOLLOWERS } from '@soccer-tycoon/engine';
 
 /** 내 경기가 있었던 라운드까지 진행한다(최대 round 12까지 탐색). */
 function advanceUntilMyMatchPlayed(g: ReturnType<typeof startGame>) {
@@ -96,5 +97,18 @@ describe('media: 감독 인터뷰(앱 레이어)', () => {
 
     const tied = { ...base, mediaToneCounts: { ...base.mediaToneCounts, confident: 3, humble: 3 } };
     expect(managerPersona(tied)).toBe('neutral');
+  });
+
+  it('고도화 Item19: 인터뷰 응답이 없으면 기본 팔로워·여론이고, 누적되면 함께 반응한다', () => {
+    const base = startGame(2030, 'c6');
+    expect(managerSnsReputation(base).followers).toBe(SNS_BASE_FOLLOWERS);
+    expect(managerSnsReputation(base).approval).toBe(50);
+
+    const boldHeavy = { ...base, mediaToneCounts: { ...base.mediaToneCounts, confident: 5 } };
+    const humbleHeavy = { ...base, mediaToneCounts: { ...base.mediaToneCounts, humble: 5 } };
+    expect(managerSnsReputation(boldHeavy).followers).toBeGreaterThan(SNS_BASE_FOLLOWERS);
+    expect(managerSnsReputation(boldHeavy).followers).toBeGreaterThan(managerSnsReputation(humbleHeavy).followers);
+    expect(managerSnsReputation(humbleHeavy).approval).toBeGreaterThan(50);
+    expect(managerSnsReputation(boldHeavy).approval).toBeLessThan(50);
   });
 });

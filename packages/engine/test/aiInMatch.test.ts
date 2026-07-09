@@ -3,6 +3,7 @@ import { generateClub, defaultTactic } from '../src/generate.js';
 import { Rng } from '../src/rng.js';
 import { decideAiHalftimeTactic, simulateMatchWithAiTactics } from '../src/aiInMatch.js';
 import { simulateMatch } from '../src/simulateMatch.js';
+import { LiveMatch, HALF_TIME } from '../src/liveMatch.js';
 import type { Club, InjuryEvent, MatchSetup, Tactic } from '../src/types.js';
 
 function makeClub(seed: number, tier = 13) {
@@ -111,5 +112,83 @@ describe('simulateMatchWithAiTactics', () => {
       }
     }
     expect(anyDifferent).toBe(true);
+  });
+});
+
+describe('F09 고도화(고도화 항목44): 하프타임 한정이 아니라 득실차 변화 시점마다 반응형 전술 재평가', () => {
+  function setup(seed: number): MatchSetup {
+    const rng = new Rng(seed);
+    const home = generateClub(rng, 'h', 'Home', 14);
+    const away = generateClub(rng, 'a', 'Away', 8); // 전력차 큼 → 전반 골 가능성↑
+    return {
+      home: { club: home, tactic: defaultTactic(home) },
+      away: { club: away, tactic: defaultTactic(away) },
+      seed,
+    };
+  }
+
+  /** 항목44 이전의 "하프타임 한정" 개입 방식을 그대로 재현한 참조 구현. */
+  function halftimeOnlySimulate(s: MatchSetup) {
+    const live = new LiveMatch(s);
+    live.runFirstHalf();
+    const [hg, ag] = live.score();
+    const halfInjuries = live.injuries().filter((e) => e.minute <= HALF_TIME);
+    for (const side of ['home', 'away'] as const) {
+      const { club, tactic } = s[side];
+      const myGoals = side === 'home' ? hg : ag;
+      const oppGoals = side === 'home' ? ag : hg;
+      const sideInjuries = halfInjuries.filter((e) => e.side === side);
+      const next = decideAiHalftimeTactic(club, tactic, myGoals, oppGoals, sideInjuries);
+      if (next) live.setTactic(side, next);
+    }
+    live.runToEnd();
+    return live.result();
+  }
+
+  it('전반에 스코어가 바뀌는 시드가 존재하고, 그런 시드에서는 하프타임까지 기다리는 옛 방식과 결과가 달라진다', () => {
+    let sawFirstHalfGoal = false;
+    let anyDifferentGivenFirstHalfGoal = false;
+    for (let seed = 1; seed <= 100; seed++) {
+      const s = setup(seed);
+      const newResult = simulateMatchWithAiTactics(s);
+      const hasFirstHalfGoal = newResult.events.some(
+        (e) => e.minute <= HALF_TIME && (e.outcome === 'GOAL' || e.outcome === 'OWN_GOAL'),
+      );
+      if (!hasFirstHalfGoal) continue;
+      sawFirstHalfGoal = true;
+      const oldResult = halftimeOnlySimulate(s);
+      if (
+        newResult.score[0] !== oldResult.score[0] || newResult.score[1] !== oldResult.score[1]
+        || newResult.events.length !== oldResult.events.length
+      ) {
+        anyDifferentGivenFirstHalfGoal = true;
+        break;
+      }
+    }
+    expect(sawFirstHalfGoal).toBe(true);
+    expect(anyDifferentGivenFirstHalfGoal).toBe(true);
+  });
+
+  it('경기 전체에 골이 전혀 없는 시드는 하프타임까지 기다리는 옛 방식과 결과가 동일하다', () => {
+    // 옛 방식은 하프타임 이후로는 전술을 다시 평가하지 않으므로, 후반 득점만으로도
+    // (전반은 무득점이었더라도) 새 방식과 갈릴 수 있다 — "완전 무득점"만 동일성을 보장한다.
+    let sawGoallessMatch = false;
+    for (let seed = 1; seed <= 200; seed++) {
+      const s = setup(seed);
+      const newResult = simulateMatchWithAiTactics(s);
+      const hasAnyGoal = newResult.events.some((e) => e.outcome === 'GOAL' || e.outcome === 'OWN_GOAL');
+      if (hasAnyGoal) continue;
+      sawGoallessMatch = true;
+      const oldResult = halftimeOnlySimulate(s);
+      expect(newResult.score).toEqual(oldResult.score);
+      expect(newResult.events.length).toEqual(oldResult.events.length);
+    }
+    expect(sawGoallessMatch).toBe(true);
+  });
+
+  it('동일 시드면 여전히 재현 가능하다', () => {
+    const a = simulateMatchWithAiTactics(setup(42));
+    const b = simulateMatchWithAiTactics(setup(42));
+    expect(a).toEqual(b);
   });
 });

@@ -177,3 +177,52 @@ describe('A6: 실명 스태프 특기 특성', () => {
     expect(after?.name).not.toBe(before?.name);
   });
 });
+
+describe('고도화 Item9: 스태프 특성 등급제', () => {
+  it('초급 등급은 STAFF_TRAIT_BONUS보다 작고, 전설급은 더 큰 보너스를 준다', () => {
+    const base: Staff = { coaching: 10, medical: 10, scouting: 10, youth: 10 };
+    const novice: Staff = {
+      ...base, members: { coaching: { name: 'A', age: 40, contractYears: 2, trait: 'developmentGuru', traitTier: 'novice' } },
+    };
+    const legend: Staff = {
+      ...base, members: { coaching: { name: 'B', age: 40, contractYears: 2, trait: 'developmentGuru', traitTier: 'legend' } },
+    };
+    expect(effectiveCoaching('MC', novice)).toBeLessThan(effectiveCoaching('MC', base) + STAFF_TRAIT_BONUS);
+    expect(effectiveCoaching('MC', legend)).toBeGreaterThan(effectiveCoaching('MC', base) + STAFF_TRAIT_BONUS);
+  });
+
+  it('traitTier가 없으면(구버전 세이브) veteran 등급과 동일하게 STAFF_TRAIT_BONUS를 적용한다', () => {
+    const base: Staff = { coaching: 10, medical: 10, scouting: 10, youth: 10 };
+    const legacy: Staff = {
+      ...base, members: { medical: { name: 'C', age: 40, contractYears: 2, trait: 'rehabSpecialist' } },
+    };
+    const veteran: Staff = {
+      ...base, members: { medical: { name: 'D', age: 40, contractYears: 2, trait: 'rehabSpecialist', traitTier: 'veteran' } },
+    };
+    expect(effectiveMedical(legacy)).toBe(effectiveMedical(veteran));
+    expect(effectiveMedical(legacy)).toBe(effectiveMedical(base) + STAFF_TRAIT_BONUS);
+  });
+
+  it('같은 구단id·직책·레벨 조합이면 등급 판정도 항상 같다(결정론적)', () => {
+    const a = hireInitialStaffMembers('club-tier', { coaching: 14, medical: 14, scouting: 14, youth: 14 } as Staff);
+    const b = hireInitialStaffMembers('club-tier', { coaching: 14, medical: 14, scouting: 14, youth: 14 } as Staff);
+    expect(a.coaching?.traitTier).toBe(b.coaching?.traitTier);
+    expect(a.medical?.traitTier).toBe(b.medical?.traitTier);
+  });
+
+  it('충분히 많은 조합을 뽑으면 초급·중급·전설급 세 등급이 모두 나온다', () => {
+    const tiers = new Set<string>();
+    for (let i = 0; i < 300; i++) {
+      const members = hireInitialStaffMembers(`club-tier-${i}`, {
+        coaching: 5 + (i % 15), medical: 5 + (i % 15), scouting: 5 + (i % 15), youth: 5 + (i % 15),
+      } as Staff);
+      for (const kind of ['coaching', 'medical', 'scouting', 'youth'] as const) {
+        const tier = members[kind]?.traitTier;
+        if (tier) tiers.add(tier);
+      }
+    }
+    expect(tiers.has('novice')).toBe(true);
+    expect(tiers.has('veteran')).toBe(true);
+    expect(tiers.has('legend')).toBe(true);
+  });
+});

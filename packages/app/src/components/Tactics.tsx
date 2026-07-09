@@ -6,7 +6,7 @@ import {
 } from '@soccer-tycoon/engine';
 import {
   FORMATION_NAMES, autoPickLineup, swapPlayer, pickSetPieceTaker, ensureSetPieceTaker,
-  pickCaptain, ensureCaptain, setPlayerInstruction,
+  pickCaptain, ensureCaptain, pickViceCaptain, ensureViceCaptain, setPlayerInstruction,
 } from '../tactics.js';
 import { loadCustomPresets, saveCustomPreset, deleteCustomPreset, type CustomPreset } from '../customPresets.js';
 import {
@@ -68,10 +68,12 @@ export function Tactics({ club, tactic, onChange, disabled }: Props) {
   function setFormation(f: string, customPositions?: Position[]) {
     const positions = customPositions ?? customFormations.find((cf) => cf.label === f)?.positions;
     const lineup = autoPickLineup(club, f, positions);
+    const captainId = pickCaptain(club, lineup);
     onChange({
       ...tactic, formation: f, lineup,
       setPieceTakerId: pickSetPieceTaker(club, lineup),
-      captainId: pickCaptain(club, lineup),
+      captainId,
+      viceCaptainId: pickViceCaptain(club, lineup, captainId),
     });
   }
   function handleSaveFormation(label: string, positions: Position[]) {
@@ -95,7 +97,14 @@ export function Tactics({ club, tactic, onChange, disabled }: Props) {
     onChange({ ...tactic, setPieceTakerId: playerId });
   }
   function setCaptain(playerId: string) {
-    onChange({ ...tactic, captainId: playerId });
+    // 주장을 부주장으로 바꾸는 경우 겹치지 않도록 부주장을 다시 자동 지정한다.
+    const viceCaptainId = tactic.viceCaptainId === playerId
+      ? pickViceCaptain(club, tactic.lineup, playerId)
+      : tactic.viceCaptainId;
+    onChange({ ...tactic, captainId: playerId, viceCaptainId });
+  }
+  function setViceCaptain(playerId: string) {
+    onChange({ ...tactic, viceCaptainId: playerId });
   }
 
   const setPieceCandidates = tactic.lineup
@@ -112,6 +121,11 @@ export function Tactics({ club, tactic, onChange, disabled }: Props) {
       .filter((p): p is NonNullable<typeof p> => p !== undefined),
   );
   const captainCandidates = captainRanking
+    .map((r) => ({ player: byId.get(r.playerId)!, rank: r }));
+
+  // 부주장 후보(고도화 항목14) — 주장은 제외하고 같은 점수 공식으로 랭킹.
+  const viceCaptainCandidates = captainRanking
+    .filter((r) => r.playerId !== tactic.captainId)
     .map((r) => ({ player: byId.get(r.playerId)!, rank: r }));
 
   const [customPresets, setCustomPresets] = useState<CustomPreset[]>(() => loadCustomPresets());
@@ -208,16 +222,20 @@ export function Tactics({ club, tactic, onChange, disabled }: Props) {
                       disabled={disabled}
                       onChange={(e) => {
                         const next = swapPlayer(tactic, i, e.target.value);
+                        const captainId = ensureCaptain(club, next.lineup, next.captainId);
                         onChange({
                           ...next,
                           setPieceTakerId: ensureSetPieceTaker(club, next.lineup, next.setPieceTakerId),
-                          captainId: ensureCaptain(club, next.lineup, next.captainId),
+                          captainId,
+                          viceCaptainId: ensureViceCaptain(club, next.lineup, next.viceCaptainId, captainId),
                         });
                       }}
                     >
                       {club.players.map((pl) => (
                         <option key={pl.id} value={pl.id}>
-                          {mark(pl)}{pl.id === tactic.captainId ? '(C) ' : ''}{pl.name} ({pl.position} · {currentAbility(pl).toFixed(0)})
+                          {mark(pl)}
+                          {pl.id === tactic.captainId ? '(C) ' : pl.id === tactic.viceCaptainId ? '(VC) ' : ''}
+                          {pl.name} ({pl.position} · {currentAbility(pl).toFixed(0)})
                         </option>
                       ))}
                     </select>
@@ -394,6 +412,32 @@ export function Tactics({ club, tactic, onChange, disabled }: Props) {
               <p className="muted small">
                 ⭐ 표시가 추천 1순위입니다(리더십·리더 특성·소속 기간·국가대표 경험 종합).
                 주장이 결장하면 팀 전체 사기에 소폭 페널티가 붙습니다.
+              </p>
+            </>
+          )}
+        </div>
+
+        <div className="panel">
+          <h3>부주장</h3>
+          {viceCaptainCandidates.length === 0 ? (
+            <p className="muted small">지정할 수 있는 선수가 없습니다.</p>
+          ) : (
+            <>
+              <select
+                className="setpiece-select"
+                value={tactic.viceCaptainId ?? ''}
+                disabled={disabled}
+                onChange={(e) => setViceCaptain(e.target.value)}
+              >
+                {viceCaptainCandidates.map(({ player: p, rank }) => (
+                  <option key={p.id} value={p.id}>
+                    {p.id === viceCaptainCandidates[0]!.player.id ? '⭐ ' : ''}
+                    {p.name}{rank.isLeaderTrait ? ' ★리더' : ''}{rank.isHothead ? ' ⚠️다혈질' : ''} (리더십 {p.attributes.leadership})
+                  </option>
+                ))}
+              </select>
+              <p className="muted small">
+                주장이 결장한 날 라인업에 있으면 완장을 대신 차 사기 페널티가 발생하지 않습니다(자동 승계).
               </p>
             </>
           )}

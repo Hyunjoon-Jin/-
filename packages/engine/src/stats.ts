@@ -5,6 +5,8 @@
  */
 import type { Club, MatchResult, Position, Tactic } from './types.js';
 import { lineOf } from './teamStrength.js';
+import type { Fixture } from './schedule.js';
+import type { Weather } from './weather.js';
 
 export interface PlayerSeasonStat {
   playerId: string;
@@ -20,6 +22,10 @@ export interface PlayerSeasonStat {
   avgRating: number;
   /** GK로 출전해 무실점으로 마친 경기 수(골든글러브 집계용). GK가 아니면 0. */
   cleanSheets: number;
+  /** 시즌 빅찬스 생성 수(고도화 항목45). */
+  bigChancesCreated: number;
+  /** 시즌 빅찬스 중 득점으로 이어지지 않은 수(고도화 항목45). */
+  bigChancesMissed: number;
 }
 
 export interface BestXIEntry {
@@ -41,11 +47,40 @@ export interface SeasonAwards {
   goldenGlove?: { playerId: string; name: string; clubName: string; cleanSheets: number };
   /** 시즌 베스트 XI(GK 1 · DEF 4 · MID 3 · ATT 3, 최소 출전 이상 중 라인별 평균 평점 최고). */
   bestXI?: BestXIEntry[];
+  /** 시즌 최다 맨오브더매치(고도화 항목38). */
+  mostMotm?: { playerId: string; name: string; clubName: string; count: number };
+}
+
+export interface MotmTallyEntry {
+  playerId: string;
+  name: string;
+  clubName: string;
+  count: number;
+}
+
+/**
+ * 시즌 맨오브더매치 집계(고도화 항목38) — 경기마다 이미 계산되는
+ * MatchResult.motmPlayerId를 선수별로 세어 내림차순 정렬한다(동률이면 이름순으로
+ * 결정론적으로 정렬).
+ */
+export function motmTally(results: MatchResult[]): MotmTallyEntry[] {
+  const map = new Map<string, MotmTallyEntry>();
+  for (const r of results) {
+    if (!r.motmPlayerId) continue;
+    const stat = [...r.playerStats.home, ...r.playerStats.away].find((s) => s.playerId === r.motmPlayerId);
+    if (!stat) continue;
+    const clubName = r.playerStats.home.includes(stat) ? r.homeClubName : r.awayClubName;
+    let e = map.get(r.motmPlayerId);
+    if (!e) { e = { playerId: r.motmPlayerId, name: stat.name, clubName, count: 0 }; map.set(r.motmPlayerId, e); }
+    e.count++;
+  }
+  return [...map.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
 }
 
 interface Acc {
   playerId: string; name: string; clubId: string; clubName: string; position: Position;
   apps: number; goals: number; assists: number; shots: number; totalRating: number; cleanSheets: number;
+  bigChancesCreated: number; bigChancesMissed: number;
 }
 
 /** 시즌 전 경기 결과에서 선수별 통계 집계. */
@@ -59,6 +94,7 @@ export function aggregatePlayerStats(results: MatchResult[]): PlayerSeasonStat[]
       a = {
         playerId: st.playerId, name: st.name, clubId, clubName, position: st.position,
         apps: 0, goals: 0, assists: 0, shots: 0, totalRating: 0, cleanSheets: 0,
+        bigChancesCreated: 0, bigChancesMissed: 0,
       };
       map.set(st.playerId, a);
     }
@@ -70,6 +106,8 @@ export function aggregatePlayerStats(results: MatchResult[]): PlayerSeasonStat[]
     a.shots += st.shots;
     a.totalRating += st.rating;
     if (st.cleanSheet) a.cleanSheets++;
+    a.bigChancesCreated += st.bigChancesCreated ?? 0;
+    a.bigChancesMissed += st.bigChancesMissed ?? 0;
   };
   for (const r of results) {
     for (const st of r.playerStats.home) add(st, r.homeClubId, r.homeClubName);
@@ -80,6 +118,8 @@ export function aggregatePlayerStats(results: MatchResult[]): PlayerSeasonStat[]
     apps: a.apps, goals: a.goals, assists: a.assists, shots: a.shots,
     avgRating: a.apps > 0 ? a.totalRating / a.apps : 0,
     cleanSheets: a.cleanSheets,
+    bigChancesCreated: a.bigChancesCreated,
+    bigChancesMissed: a.bigChancesMissed,
   }));
 }
 
@@ -160,6 +200,241 @@ export function seasonAwards(stats: PlayerSeasonStat[], minApps: number): Season
   };
 }
 
+export interface ClubDisciplineRow {
+  clubId: string;
+  clubName: string;
+  yellowCards: number;
+  redCards: number;
+  totalCards: number;
+}
+
+/**
+ * 시즌 페어플레이(징계) 순위(고도화 항목22) — 구단별 옐로/레드카드 집계.
+ * 카드 수가 적을수록(동률이면 레드가 적을수록) 페어플레이 순위가 높다.
+ */
+export function clubDisciplineTable(results: MatchResult[]): ClubDisciplineRow[] {
+  const map = new Map<string, ClubDisciplineRow>();
+  const ensure = (clubId: string, clubName: string): ClubDisciplineRow => {
+    let row = map.get(clubId);
+    if (!row) {
+      row = { clubId, clubName, yellowCards: 0, redCards: 0, totalCards: 0 };
+      map.set(clubId, row);
+    }
+    return row;
+  };
+  for (const r of results) {
+    ensure(r.homeClubId, r.homeClubName);
+    ensure(r.awayClubId, r.awayClubName);
+    for (const c of r.cards) {
+      const row = c.side === 'home' ? ensure(r.homeClubId, r.homeClubName) : ensure(r.awayClubId, r.awayClubName);
+      if (c.type === 'yellow') row.yellowCards++;
+      else row.redCards++;
+      row.totalCards++;
+    }
+  }
+  return [...map.values()].sort((a, b) => a.totalCards - b.totalCards || a.redCards - b.redCards);
+}
+
+export interface MonthlyManagerAward {
+  /** 블록 순번(1부터) — 실제 달력이 없어 라운드를 blockSize개씩 묶은 것. */
+  blockIndex: number;
+  fromRound: number;
+  toRound: number;
+  clubId: string;
+  clubName: string;
+  points: number;
+  gd: number;
+  gf: number;
+}
+
+/**
+ * 이달의 감독(고도화 항목24) — 실제 달력 대신 라운드를 blockSize개씩 묶어(기본 4라운드)
+ * 그 구간 승점(동률이면 득실차·득점) 최고 구단을 뽑는다. fixtures[i]와 results[i]가
+ * 1:1 대응한다는 SeasonState 규약을 그대로 활용(round 조회용).
+ */
+export function monthlyManagerAwards(
+  fixtures: Fixture[], results: MatchResult[], blockSize = 4,
+): MonthlyManagerAward[] {
+  const totalRounds = fixtures.reduce((m, f) => Math.max(m, f.round), 0);
+  const awards: MonthlyManagerAward[] = [];
+  for (let from = 1; from <= totalRounds; from += blockSize) {
+    const to = Math.min(from + blockSize - 1, totalRounds);
+    const acc = new Map<string, { clubName: string; points: number; gf: number; ga: number }>();
+    const bump = (clubId: string, clubName: string, gf: number, ga: number): void => {
+      let a = acc.get(clubId);
+      if (!a) { a = { clubName, points: 0, gf: 0, ga: 0 }; acc.set(clubId, a); }
+      a.points += gf > ga ? 3 : gf === ga ? 1 : 0;
+      a.gf += gf; a.ga += ga;
+    };
+    for (let i = 0; i < results.length && i < fixtures.length; i++) {
+      const fx = fixtures[i]!;
+      if (fx.round < from || fx.round > to) continue;
+      const r = results[i]!;
+      bump(r.homeClubId, r.homeClubName, r.score[0], r.score[1]);
+      bump(r.awayClubId, r.awayClubName, r.score[1], r.score[0]);
+    }
+    if (acc.size === 0) continue;
+    const [bestId, best] = [...acc.entries()]
+      .sort((a, b) => b[1].points - a[1].points
+        || (b[1].gf - b[1].ga) - (a[1].gf - a[1].ga)
+        || b[1].gf - a[1].gf)[0]!;
+    awards.push({
+      blockIndex: awards.length + 1, fromRound: from, toRound: to,
+      clubId: bestId, clubName: best.clubName, points: best.points,
+      gd: best.gf - best.ga, gf: best.gf,
+    });
+  }
+  return awards;
+}
+
+export interface MonthlyPlayerAward {
+  /** 블록 순번(1부터) — monthlyManagerAwards와 동일한 라운드 구간. */
+  blockIndex: number;
+  fromRound: number;
+  toRound: number;
+  playerId: string;
+  name: string;
+  clubId: string;
+  clubName: string;
+  avgRating: number;
+  apps: number;
+}
+
+/**
+ * 이달의 선수(고도화 항목37) — monthlyManagerAwards와 동일하게 라운드를
+ * blockSize개씩 묶어, 그 구간에 minApps경기 이상 출전한 선수 중 평균 평점
+ * 최고인 선수를 뽑는다(동률이면 출전 수, 그다음 이름순으로 결정론적으로 결정).
+ */
+export function monthlyPlayerAwards(
+  fixtures: Fixture[], results: MatchResult[], blockSize = 4, minApps = 2,
+): MonthlyPlayerAward[] {
+  const totalRounds = fixtures.reduce((m, f) => Math.max(m, f.round), 0);
+  const awards: MonthlyPlayerAward[] = [];
+  for (let from = 1; from <= totalRounds; from += blockSize) {
+    const to = Math.min(from + blockSize - 1, totalRounds);
+    const acc = new Map<string, { name: string; clubId: string; clubName: string; totalRating: number; apps: number }>();
+    const bump = (clubId: string, clubName: string, stats: { playerId: string; name: string; rating: number }[]) => {
+      for (const s of stats) {
+        let a = acc.get(s.playerId);
+        if (!a) { a = { name: s.name, clubId, clubName, totalRating: 0, apps: 0 }; acc.set(s.playerId, a); }
+        a.totalRating += s.rating; a.apps += 1;
+      }
+    };
+    for (let i = 0; i < results.length && i < fixtures.length; i++) {
+      const fx = fixtures[i]!;
+      if (fx.round < from || fx.round > to) continue;
+      const r = results[i]!;
+      bump(r.homeClubId, r.homeClubName, r.playerStats.home);
+      bump(r.awayClubId, r.awayClubName, r.playerStats.away);
+    }
+    const eligible = [...acc.entries()].filter(([, a]) => a.apps >= minApps);
+    if (eligible.length === 0) continue;
+    const [bestId, best] = eligible.sort((a, b) =>
+      (b[1].totalRating / b[1].apps) - (a[1].totalRating / a[1].apps)
+      || b[1].apps - a[1].apps
+      || a[1].name.localeCompare(b[1].name))[0]!;
+    awards.push({
+      blockIndex: awards.length + 1, fromRound: from, toRound: to,
+      playerId: bestId, name: best.name, clubId: best.clubId, clubName: best.clubName,
+      avgRating: best.totalRating / best.apps, apps: best.apps,
+    });
+  }
+  return awards;
+}
+
+export interface StreakSummary {
+  /** 시즌 내 최장 연승. */
+  winStreak: number;
+  /** 시즌 내 최장 무패(승+무) 연속 기록. */
+  unbeatenStreak: number;
+}
+
+/**
+ * 특정 구단의 시즌 내 최장 연승·무패 기록(고도화 항목25).
+ * results는 진행 순서(과거→최신)라고 가정 — venue 무관, 실제 경기 순서 그대로 훑는다.
+ */
+export function longestStreaks(results: MatchResult[], clubId: string): StreakSummary {
+  let winStreak = 0; let unbeatenStreak = 0;
+  let curWin = 0; let curUnbeaten = 0;
+  for (const r of results) {
+    const isHome = r.homeClubId === clubId;
+    const isAway = r.awayClubId === clubId;
+    if (!isHome && !isAway) continue;
+    const gf = isHome ? r.score[0] : r.score[1];
+    const ga = isHome ? r.score[1] : r.score[0];
+    if (gf > ga) {
+      curWin++; curUnbeaten++;
+    } else if (gf === ga) {
+      curWin = 0; curUnbeaten++;
+    } else {
+      curWin = 0; curUnbeaten = 0;
+    }
+    winStreak = Math.max(winStreak, curWin);
+    unbeatenStreak = Math.max(unbeatenStreak, curUnbeaten);
+  }
+  return { winStreak, unbeatenStreak };
+}
+
+export interface BiggestWin {
+  margin: number;
+  opponentName: string;
+  myGoals: number;
+  oppGoals: number;
+}
+
+/**
+ * 시즌 내 특정 구단의 최다 득점차 승리(고도화 항목27). 승리한 경기가 없으면 undefined.
+ * 득점차가 같으면 총 득점이 더 많은 경기를 우선한다.
+ */
+export function biggestWinMargin(results: MatchResult[], clubId: string): BiggestWin | undefined {
+  let best: BiggestWin | undefined;
+  for (const r of results) {
+    const isHome = r.homeClubId === clubId;
+    const isAway = r.awayClubId === clubId;
+    if (!isHome && !isAway) continue;
+    const myGoals = isHome ? r.score[0] : r.score[1];
+    const oppGoals = isHome ? r.score[1] : r.score[0];
+    if (myGoals <= oppGoals) continue;
+    const margin = myGoals - oppGoals;
+    if (!best || margin > best.margin || (margin === best.margin && myGoals > best.myGoals)) {
+      best = { margin, opponentName: isHome ? r.awayClubName : r.homeClubName, myGoals, oppGoals };
+    }
+  }
+  return best;
+}
+
+export interface WeatherRecordRow {
+  weather: Weather;
+  wins: number;
+  draws: number;
+  losses: number;
+}
+
+/**
+ * 특정 구단의 시즌 내 날씨별 전적(고도화 항목40) — 맑음/비/강풍 각각의 승무패.
+ * weather가 없는(구버전) 경기는 집계에서 제외한다. 경기 수가 0인 날씨는 결과에서 생략.
+ */
+export function weatherRecordByClub(results: MatchResult[], clubId: string): WeatherRecordRow[] {
+  const tally = new Map<Weather, { wins: number; draws: number; losses: number }>();
+  for (const r of results) {
+    if (!r.weather) continue;
+    const isHome = r.homeClubId === clubId;
+    const isAway = r.awayClubId === clubId;
+    if (!isHome && !isAway) continue;
+    const gf = isHome ? r.score[0] : r.score[1];
+    const ga = isHome ? r.score[1] : r.score[0];
+    let row = tally.get(r.weather);
+    if (!row) { row = { wins: 0, draws: 0, losses: 0 }; tally.set(r.weather, row); }
+    if (gf > ga) row.wins++;
+    else if (gf === ga) row.draws++;
+    else row.losses++;
+  }
+  const order: Weather[] = ['clear', 'rain', 'windy'];
+  return order
+    .filter((w) => tally.has(w))
+    .map((w) => ({ weather: w, ...tally.get(w)! }));
+}
+
 /** clubs 인자는 향후 확장용(현재는 결과만으로 충분). */
 export function summarizeStats(results: MatchResult[], totalRounds: number): {
   topScorers: PlayerSeasonStat[];
@@ -167,7 +442,9 @@ export function summarizeStats(results: MatchResult[], totalRounds: number): {
 } {
   const stats = aggregatePlayerStats(results);
   const minApps = Math.max(1, Math.floor(totalRounds / 2));
-  return { topScorers: topScorers(stats, 10), awards: seasonAwards(stats, minApps) };
+  const awards = seasonAwards(stats, minApps);
+  const mostMotm = motmTally(results)[0];
+  return { topScorers: topScorers(stats, 10), awards: mostMotm ? { ...awards, mostMotm } : awards };
 }
 
 export interface CareerStat {

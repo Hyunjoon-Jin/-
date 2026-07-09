@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
-  formatMoney, currentAbility, marketValue, isInjured, isSuspended, lineOf, MENTOR_PAIRING_MAX,
+  formatMoney, currentAbility, marketValue, isInjured, isSuspended, lineOf, MENTOR_PAIRING_MAX, hasTrait,
+  ROTATION_WARNING_THRESHOLD,
   type Club, type Player, type Line,
 } from '@soccer-tycoon/engine';
 import { onKeyActivate } from '../a11y.js';
@@ -24,6 +25,9 @@ function MentorPanel({ club, onAssignMentor, onClearMentor }: {
   const [mentorId, setMentorId] = useState('');
   const mentee = mentees.find((p) => p.id === menteeId);
   const mentorOptions = mentee ? club.players.filter((p) => p.id !== mentee.id && p.age > mentee.age) : [];
+  const selectedMentor = mentorOptions.find((p) => p.id === mentorId);
+  const clashes = mentee !== undefined && selectedMentor !== undefined
+    && hasTrait(selectedMentor, 'hothead') && hasTrait(mentee, 'rock');
   const nameOf = (id: string) => club.players.find((p) => p.id === id)?.name ?? '(이적/방출됨)';
 
   return (
@@ -60,9 +64,16 @@ function MentorPanel({ club, onAssignMentor, onClearMentor }: {
           지정
         </button>
       </div>
+      {clashes && (
+        <p className="mentor-clash-warning">
+          ⚠️ 다혈질 멘토×차분한 멘티 조합은 성향이 맞지 않아 지정 멘토링 효과가 크게 줄어듭니다.
+        </p>
+      )}
       <p className="muted small">
-        지정한 멘토는 같은 라인 자동 멘토링보다 성장 보너스가 더 큽니다. 멘토가 멘티보다 나이가
-        많아야 하며, 동시에 최대 {MENTOR_PAIRING_MAX}쌍까지 지정할 수 있습니다.
+        지정한 멘토는 같은 라인 자동 멘토링보다 성장 보너스가 더 큽니다(성향 충돌 시 예외). 멘토가
+        멘티보다 나이가 많아야 하며, 동시에 최대 {MENTOR_PAIRING_MAX}쌍까지 지정할 수 있습니다.
+        페어링이 유지되는 동안 멘토도 소폭 사기 보너스를 받으며, 멘티가 나이를 넘기거나 멘토를
+        추월하면 자동으로 "졸업"합니다.
       </p>
     </div>
   );
@@ -113,9 +124,15 @@ function ConditionCell({ player }: { player: Player }) {
   }
   const pct = Math.round(player.condition * 100);
   const cls = pct >= 80 ? 'cond-good' : pct >= 55 ? 'cond-mid' : 'cond-low';
+  const needsRotation = (player.consecutiveStarts ?? 0) > ROTATION_WARNING_THRESHOLD;
   return (
     <span className={`cond ${cls}`}>
       {pct}%
+      {needsRotation && (
+        <span className="rotation-warning" title={`${player.consecutiveStarts}경기 연속 선발 — 로테이션이 필요합니다`}>
+          {' '}🔄
+        </span>
+      )}
       <RecoveryHint player={player} />
     </span>
   );

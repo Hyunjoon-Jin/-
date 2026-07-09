@@ -1,7 +1,7 @@
 import { type ReactNode } from 'react';
 import { Trophy } from 'lucide-react';
 import {
-  isCupOver, cupSurvivors, nextCupPairings, type CupTie, type CupState, type Club,
+  isCupOver, cupSurvivors, nextCupPairings, cupTieAggregate, type CupTie, type CupState, type Club,
 } from '@soccer-tycoon/engine';
 import { watchCupSetup, type GameState } from '../game.js';
 import { EmptyState } from './EmptyState.js';
@@ -191,9 +191,15 @@ function CupBracket({
                     const involvesMe = pr.homeId === mine || pr.awayId === mine;
                     return (
                       <div key={pi} className={`tie-card pending ${involvesMe ? 'mine' : ''}`}>
-                        <span className="tie-side">{nameOf(pr.homeId)}</span>
+                        <span className="tie-side">
+                          {nameOf(pr.homeId)}
+                          {pr.homeSeeded && <span className="seed-tag" title="추첨 시드">S</span>}
+                        </span>
                         <span className="tie-score muted small">vs</span>
-                        <span className="tie-side away">{nameOf(pr.awayId)}</span>
+                        <span className="tie-side away">
+                          {nameOf(pr.awayId)}
+                          {!pr.homeSeeded && <span className="seed-tag" title="추첨 시드">S</span>}
+                        </span>
                       </div>
                     );
                   })}
@@ -236,12 +242,20 @@ function TieCard({
       </div>
     );
   }
+  const aggregate = cupTieAggregate(tie);
   return (
     <div className={cls} title={upset ? '🌟 이변! 평판이 낮은 쪽이 승리했습니다.' : undefined}>
       {upset && <span className="upset-badge">🌟 이변</span>}
       <span className={`tie-side ${tie.winnerId === tie.homeId ? 'won' : ''}`}>{nameOf(tie.homeId)}</span>
       <span className="tie-score">
-        {tie.homeScore} : {tie.awayScore}{tie.penalties ? ' (PK)' : ''}
+        {aggregate ? (
+          <>
+            합계 {aggregate[0]} : {aggregate[1]}{tie.penalties ? ' (PK)' : ''}
+            <span className="tie-legs muted"> (1차 {tie.homeScore}:{tie.awayScore} · 2차 {tie.secondLeg!.homeGoals}:{tie.secondLeg!.awayGoals})</span>
+          </>
+        ) : (
+          <>{tie.homeScore} : {tie.awayScore}{tie.penalties ? ' (PK)' : ''}</>
+        )}
       </span>
       <span className={`tie-side away ${tie.winnerId === tie.awayId ? 'won' : ''}`}>{nameOf(tie.awayId)}</span>
     </div>

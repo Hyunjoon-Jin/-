@@ -21,9 +21,16 @@ export interface FormSummary {
 /**
  * 특정 구단의 최근 n경기 폼.
  * @param results 시즌 진행 순서의 경기 결과(과거→현재).
+ * @param venue 지정하면 홈/원정 중 해당 구장에서 치른 경기만 집계(고도화 항목23).
  */
-export function recentForm(results: MatchResult[], clubId: string, n = 5): FormSummary {
-  const played = results.filter((m) => m.homeClubId === clubId || m.awayClubId === clubId);
+export function recentForm(
+  results: MatchResult[], clubId: string, n = 5, venue?: 'home' | 'away',
+): FormSummary {
+  const played = results.filter((m) => {
+    if (venue === 'home') return m.homeClubId === clubId;
+    if (venue === 'away') return m.awayClubId === clubId;
+    return m.homeClubId === clubId || m.awayClubId === clubId;
+  });
   const window = played.slice(-n);
   const out: FormSummary = { results: [], points: 0, gf: 0, ga: 0 };
   for (const m of window) {

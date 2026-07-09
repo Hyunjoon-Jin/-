@@ -1,12 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import {
   aggregatePlayerStats, topScorers, seasonAwards, summarizeStats, careerScorers, recentPlayerForm,
-  seasonSquadSnapshot,
+  seasonSquadSnapshot, clubDisciplineTable, monthlyManagerAwards, monthlyPlayerAwards, motmTally,
+  longestStreaks, biggestWinMargin, weatherRecordByClub,
 } from '../src/stats.js';
 import { simulateSeason } from '../src/league.js';
 import { generateClub, defaultTactic } from '../src/generate.js';
 import { Rng } from '../src/rng.js';
 import type { Club, MatchResult } from '../src/types.js';
+import type { Fixture } from '../src/schedule.js';
 
 function season(seed = 1) {
   const rng = new Rng(seed);
@@ -16,12 +18,16 @@ function season(seed = 1) {
 }
 
 describe('stats: 시즌 통계 집계', () => {
-  it('집계 득점 합이 실제 경기 득점 합과 일치한다', () => {
+  it('집계 득점 합(자책골 제외) + 자책골 수가 실제 경기 득점 합과 일치한다', () => {
+    // 자책골(고도화 항목42)은 스코어보드에는 반영되지만 어느 선수의 "득점"으로도
+    // 집계되지 않는다(실제 축구 통계 관례와 동일) — 따라서 개인 득점 합만으로는
+    // 팀 득점 합과 일치하지 않을 수 있고, 자책골 수만큼의 차이가 정확히 나야 한다.
     const { matches } = season(11);
     const stats = aggregatePlayerStats(matches);
     const aggGoals = stats.reduce((s, p) => s + p.goals, 0);
+    const ownGoals = matches.reduce((s, m) => s + m.events.filter((e) => e.outcome === 'OWN_GOAL').length, 0);
     const matchGoals = matches.reduce((s, m) => s + m.score[0] + m.score[1], 0);
-    expect(aggGoals).toBe(matchGoals);
+    expect(aggGoals + ownGoals).toBe(matchGoals);
   });
 
   it('출전 수·평점 범위가 타당하다', () => {
@@ -58,6 +64,60 @@ describe('stats: 시즌 통계 집계', () => {
     const { topScorers: ts, awards } = summarizeStats(matches, 14);
     expect(ts.length).toBeLessThanOrEqual(10);
     expect(awards).toBeDefined();
+  });
+
+  it('summarizeStats의 어워드에 시즌 최다 MOTM(mostMotm)이 포함된다(고도화 항목38)', () => {
+    const { matches } = season(77);
+    const { awards } = summarizeStats(matches, 14);
+    expect(awards.mostMotm).toBeDefined();
+    expect(awards.mostMotm!.count).toBeGreaterThan(0);
+  });
+});
+
+function mkResult(overrides: Partial<MatchResult>): MatchResult {
+  return {
+    homeClubId: 'a', awayClubId: 'b', homeClubName: 'A', awayClubName: 'B',
+    score: [0, 0], possession: [50, 50], shots: [0, 0], events: [], cards: [], injuries: [],
+    playerStats: { home: [], away: [] }, seed: 1,
+    ...overrides,
+  };
+}
+
+describe('stats: 시즌 페어플레이(징계) 순위 (고도화 항목22)', () => {
+  it('카드가 적은 구단이 상위, 카드 없는 구단은 0으로 집계된다', () => {
+    const results: MatchResult[] = [
+      mkResult({
+        homeClubId: 'a', awayClubId: 'b', homeClubName: 'A', awayClubName: 'B',
+        cards: [
+          { minute: 10, side: 'home', playerId: 'p1', playerName: '선수1', type: 'yellow' },
+          { minute: 20, side: 'home', playerId: 'p2', playerName: '선수2', type: 'yellow' },
+          { minute: 30, side: 'away', playerId: 'p3', playerName: '선수3', type: 'yellow' },
+        ],
+      }),
+      mkResult({ homeClubId: 'c', awayClubId: 'a', homeClubName: 'C', awayClubName: 'A' }),
+    ];
+    const table = clubDisciplineTable(results);
+    expect(table.map((r) => r.clubId)).toEqual(['c', 'b', 'a']);
+    expect(table.find((r) => r.clubId === 'a')).toEqual({
+      clubId: 'a', clubName: 'A', yellowCards: 2, redCards: 0, totalCards: 2,
+    });
+    expect(table.find((r) => r.clubId === 'c')).toEqual({
+      clubId: 'c', clubName: 'C', yellowCards: 0, redCards: 0, totalCards: 0,
+    });
+  });
+
+  it('카드 수가 같으면 레드카드가 적은 쪽이 상위', () => {
+    const results: MatchResult[] = [
+      mkResult({
+        homeClubId: 'a', awayClubId: 'b', homeClubName: 'A', awayClubName: 'B',
+        cards: [
+          { minute: 10, side: 'home', playerId: 'p1', playerName: '선수1', type: 'red' },
+          { minute: 20, side: 'away', playerId: 'p2', playerName: '선수2', type: 'yellow' },
+        ],
+      }),
+    ];
+    const table = clubDisciplineTable(results);
+    expect(table.map((r) => r.clubId)).toEqual(['b', 'a']);
   });
 });
 
@@ -169,5 +229,253 @@ describe('stats: 시즌 스쿼드 스냅샷', () => {
       expect(entry.age).toBe(ages.get(entry.playerId));
       expect(entry.age).not.toBe(club.players.find((p) => p.id === entry.playerId)!.age);
     }
+  });
+});
+
+describe('stats: 이달의 감독 (고도화 항목24)', () => {
+  function fx(round: number, homeId: string, awayId: string): Fixture {
+    return { round, homeId, awayId };
+  }
+
+  it('블록(기본 4라운드)별로 승점(동률이면 득실차) 최고 구단을 뽑는다', () => {
+    const fixtures: Fixture[] = [
+      fx(1, 'a', 'b'), fx(2, 'b', 'a'), fx(3, 'a', 'b'), fx(4, 'b', 'a'),
+      fx(5, 'a', 'b'), fx(6, 'b', 'a'), fx(7, 'a', 'b'), fx(8, 'b', 'a'),
+    ];
+    const results: MatchResult[] = [
+      // 1~4라운드: A가 전승
+      mkResult({ homeClubId: 'a', awayClubId: 'b', homeClubName: 'A', awayClubName: 'B', score: [2, 0] }),
+      mkResult({ homeClubId: 'b', awayClubId: 'a', homeClubName: 'B', awayClubName: 'A', score: [0, 3] }),
+      mkResult({ homeClubId: 'a', awayClubId: 'b', homeClubName: 'A', awayClubName: 'B', score: [1, 0] }),
+      mkResult({ homeClubId: 'b', awayClubId: 'a', homeClubName: 'B', awayClubName: 'A', score: [0, 1] }),
+      // 5~8라운드: B가 전승
+      mkResult({ homeClubId: 'a', awayClubId: 'b', homeClubName: 'A', awayClubName: 'B', score: [0, 2] }),
+      mkResult({ homeClubId: 'b', awayClubId: 'a', homeClubName: 'B', awayClubName: 'A', score: [3, 0] }),
+      mkResult({ homeClubId: 'a', awayClubId: 'b', homeClubName: 'A', awayClubName: 'B', score: [0, 1] }),
+      mkResult({ homeClubId: 'b', awayClubId: 'a', homeClubName: 'B', awayClubName: 'A', score: [1, 0] }),
+    ];
+
+    const awards = monthlyManagerAwards(fixtures, results, 4);
+    expect(awards).toHaveLength(2);
+    expect(awards[0]).toMatchObject({ blockIndex: 1, fromRound: 1, toRound: 4, clubId: 'a', points: 12 });
+    expect(awards[1]).toMatchObject({ blockIndex: 2, fromRound: 5, toRound: 8, clubId: 'b', points: 12 });
+  });
+
+  it('총 라운드 수가 블록 크기로 안 나뉘면 마지막 블록은 남은 라운드만으로 집계한다', () => {
+    const fixtures: Fixture[] = [fx(1, 'a', 'b'), fx(2, 'b', 'a'), fx(3, 'a', 'b')];
+    const results: MatchResult[] = [
+      mkResult({ homeClubId: 'a', awayClubId: 'b', score: [1, 0] }),
+      mkResult({ homeClubId: 'b', awayClubId: 'a', score: [0, 1] }),
+      mkResult({ homeClubId: 'a', awayClubId: 'b', score: [2, 2] }),
+    ];
+    const awards = monthlyManagerAwards(fixtures, results, 4);
+    expect(awards).toHaveLength(1);
+    expect(awards[0]!.fromRound).toBe(1);
+    expect(awards[0]!.toRound).toBe(3);
+  });
+
+  it('경기 결과가 없으면 빈 배열', () => {
+    expect(monthlyManagerAwards([], [], 4)).toEqual([]);
+  });
+});
+
+function mkPlayerStat(playerId: string, name: string, rating: number) {
+  return { playerId, name, position: 'MF' as const, rating, shots: 0, goals: 0, assists: 0 };
+}
+
+describe('stats: 이달의 선수 (고도화 항목37)', () => {
+  function fx(round: number, homeId: string, awayId: string): Fixture {
+    return { round, homeId, awayId };
+  }
+
+  it('블록별로 최소 출전(minApps) 이상인 선수 중 평균 평점 최고 선수를 뽑는다', () => {
+    const fixtures: Fixture[] = [
+      fx(1, 'a', 'b'), fx(2, 'b', 'a'), fx(3, 'a', 'b'), fx(4, 'b', 'a'),
+    ];
+    const results: MatchResult[] = [
+      mkResult({
+        homeClubId: 'a', awayClubId: 'b', homeClubName: 'A', awayClubName: 'B',
+        playerStats: { home: [mkPlayerStat('p1', 'P1', 9)], away: [mkPlayerStat('p2', 'P2', 5)] },
+      }),
+      mkResult({
+        homeClubId: 'b', awayClubId: 'a', homeClubName: 'B', awayClubName: 'A',
+        playerStats: { home: [mkPlayerStat('p2', 'P2', 5)], away: [mkPlayerStat('p1', 'P1', 8)] },
+      }),
+      mkResult({
+        homeClubId: 'a', awayClubId: 'b', homeClubName: 'A', awayClubName: 'B',
+        playerStats: { home: [mkPlayerStat('p1', 'P1', 7)], away: [mkPlayerStat('p2', 'P2', 5)] },
+      }),
+      mkResult({
+        homeClubId: 'b', awayClubId: 'a', homeClubName: 'B', awayClubName: 'A',
+        playerStats: { home: [mkPlayerStat('p2', 'P2', 5)], away: [mkPlayerStat('p1', 'P1', 9)] },
+      }),
+    ];
+    const awards = monthlyPlayerAwards(fixtures, results, 4, 2);
+    expect(awards).toHaveLength(1);
+    expect(awards[0]).toMatchObject({ blockIndex: 1, fromRound: 1, toRound: 4, playerId: 'p1', apps: 4 });
+    expect(awards[0]!.avgRating).toBeCloseTo((9 + 8 + 7 + 9) / 4, 5);
+  });
+
+  it('minApps 미만인 선수는 평점이 더 높아도 제외된다', () => {
+    const fixtures: Fixture[] = [fx(1, 'a', 'b'), fx(2, 'a', 'b')];
+    const results: MatchResult[] = [
+      mkResult({
+        homeClubId: 'a', awayClubId: 'b',
+        playerStats: { home: [mkPlayerStat('p1', 'P1', 10)], away: [mkPlayerStat('p2', 'P2', 6)] },
+      }),
+      mkResult({
+        homeClubId: 'a', awayClubId: 'b',
+        playerStats: { home: [], away: [mkPlayerStat('p2', 'P2', 6)] },
+      }),
+    ];
+    // p1은 1경기(평점10)뿐이라 minApps=2 기준 제외 → p2(2경기, 평점6)가 선정.
+    const awards = monthlyPlayerAwards(fixtures, results, 4, 2);
+    expect(awards).toHaveLength(1);
+    expect(awards[0]!.playerId).toBe('p2');
+  });
+
+  it('경기 결과가 없으면 빈 배열', () => {
+    expect(monthlyPlayerAwards([], [], 4, 2)).toEqual([]);
+  });
+});
+
+describe('stats: 시즌 MOTM 집계 (고도화 항목38)', () => {
+  it('경기별 motmPlayerId 횟수를 세어 내림차순으로 정렬한다', () => {
+    const results: MatchResult[] = [
+      mkResult({
+        homeClubId: 'a', awayClubId: 'b', homeClubName: 'A', awayClubName: 'B',
+        playerStats: { home: [mkPlayerStat('p1', 'P1', 9)], away: [mkPlayerStat('p2', 'P2', 5)] },
+        motmPlayerId: 'p1',
+      }),
+      mkResult({
+        homeClubId: 'a', awayClubId: 'b', homeClubName: 'A', awayClubName: 'B',
+        playerStats: { home: [mkPlayerStat('p1', 'P1', 9)], away: [mkPlayerStat('p2', 'P2', 5)] },
+        motmPlayerId: 'p1',
+      }),
+      mkResult({
+        homeClubId: 'a', awayClubId: 'b', homeClubName: 'A', awayClubName: 'B',
+        playerStats: { home: [mkPlayerStat('p1', 'P1', 5)], away: [mkPlayerStat('p2', 'P2', 9)] },
+        motmPlayerId: 'p2',
+      }),
+    ];
+    const tally = motmTally(results);
+    expect(tally).toEqual([
+      { playerId: 'p1', name: 'P1', clubName: 'A', count: 2 },
+      { playerId: 'p2', name: 'P2', clubName: 'B', count: 1 },
+    ]);
+  });
+
+  it('motmPlayerId가 없는 경기는 집계에서 제외된다', () => {
+    const results: MatchResult[] = [
+      mkResult({ playerStats: { home: [mkPlayerStat('p1', 'P1', 5)], away: [] } }),
+    ];
+    expect(motmTally(results)).toEqual([]);
+  });
+
+  it('경기 결과가 없으면 빈 배열', () => {
+    expect(motmTally([])).toEqual([]);
+  });
+});
+
+describe('stats: 연승/무패 기록 (고도화 항목25)', () => {
+  it('중간에 패배가 끼면 연승은 끊기지만 무패는 무승부까지 이어간다', () => {
+    const results: MatchResult[] = [
+      mkResult({ homeClubId: 'a', awayClubId: 'x', score: [2, 0] }), // W
+      mkResult({ homeClubId: 'a', awayClubId: 'x', score: [3, 0] }), // W
+      mkResult({ homeClubId: 'a', awayClubId: 'x', score: [1, 1] }), // D → 연승 끊김, 무패는 유지
+      mkResult({ homeClubId: 'a', awayClubId: 'x', score: [0, 2] }), // L → 둘 다 끊김
+      mkResult({ homeClubId: 'a', awayClubId: 'x', score: [1, 0] }), // W
+    ];
+    const s = longestStreaks(results, 'a');
+    expect(s.winStreak).toBe(2);
+    expect(s.unbeatenStreak).toBe(3);
+  });
+
+  it('전승이면 승·무패 기록이 전체 경기 수와 같다', () => {
+    const results: MatchResult[] = [
+      mkResult({ homeClubId: 'a', awayClubId: 'x', score: [1, 0] }),
+      mkResult({ homeClubId: 'x', awayClubId: 'a', score: [0, 1] }),
+      mkResult({ homeClubId: 'a', awayClubId: 'x', score: [2, 0] }),
+    ];
+    const s = longestStreaks(results, 'a');
+    expect(s.winStreak).toBe(3);
+    expect(s.unbeatenStreak).toBe(3);
+  });
+
+  it('출전하지 않은 경기는 건너뛰고, 경기가 전혀 없으면 0', () => {
+    const results: MatchResult[] = [
+      mkResult({ homeClubId: 'x', awayClubId: 'y', score: [1, 0] }),
+    ];
+    expect(longestStreaks(results, 'a')).toEqual({ winStreak: 0, unbeatenStreak: 0 });
+    expect(longestStreaks([], 'a')).toEqual({ winStreak: 0, unbeatenStreak: 0 });
+  });
+});
+
+describe('stats: 최다 득점차 승리 기록 (고도화 항목27)', () => {
+  it('득점차가 가장 큰 승리 경기를 뽑는다(홈/원정 모두 반영)', () => {
+    const results: MatchResult[] = [
+      mkResult({ homeClubId: 'a', awayClubId: 'x', homeClubName: 'A', awayClubName: 'X', score: [2, 1] }), // +1
+      mkResult({ homeClubId: 'y', awayClubId: 'a', homeClubName: 'Y', awayClubName: 'A', score: [0, 4] }), // +4(원정)
+      mkResult({ homeClubId: 'a', awayClubId: 'z', homeClubName: 'A', awayClubName: 'Z', score: [1, 1] }), // 무
+      mkResult({ homeClubId: 'a', awayClubId: 'w', homeClubName: 'A', awayClubName: 'W', score: [0, 2] }), // 패
+    ];
+    const best = biggestWinMargin(results, 'a');
+    expect(best).toEqual({ margin: 4, opponentName: 'Y', myGoals: 4, oppGoals: 0 });
+  });
+
+  it('득점차가 같으면 총 득점이 더 많은 경기를 우선한다', () => {
+    const results: MatchResult[] = [
+      mkResult({ homeClubId: 'a', awayClubId: 'x', homeClubName: 'A', awayClubName: 'X', score: [2, 0] }), // +2, 합2
+      mkResult({ homeClubId: 'a', awayClubId: 'y', homeClubName: 'A', awayClubName: 'Y', score: [4, 2] }), // +2, 합6
+    ];
+    const best = biggestWinMargin(results, 'a');
+    expect(best).toEqual({ margin: 2, opponentName: 'Y', myGoals: 4, oppGoals: 2 });
+  });
+
+  it('승리한 경기가 없으면 undefined', () => {
+    const results: MatchResult[] = [
+      mkResult({ homeClubId: 'a', awayClubId: 'x', score: [0, 0] }),
+      mkResult({ homeClubId: 'a', awayClubId: 'x', score: [0, 1] }),
+    ];
+    expect(biggestWinMargin(results, 'a')).toBeUndefined();
+    expect(biggestWinMargin([], 'a')).toBeUndefined();
+  });
+});
+
+describe('stats: 날씨별 전적 (고도화 항목40)', () => {
+  it('구단의 경기를 날씨별로 승무패 집계한다', () => {
+    const results: MatchResult[] = [
+      mkResult({ homeClubId: 'a', awayClubId: 'x', score: [2, 0], weather: 'clear' }), // W(맑음)
+      mkResult({ homeClubId: 'x', awayClubId: 'a', score: [1, 1], weather: 'clear' }), // D(맑음, 원정)
+      mkResult({ homeClubId: 'a', awayClubId: 'x', score: [0, 1], weather: 'rain' }), // L(비)
+      mkResult({ homeClubId: 'a', awayClubId: 'x', score: [3, 0], weather: 'rain' }), // W(비)
+      mkResult({ homeClubId: 'a', awayClubId: 'x', score: [1, 0], weather: 'windy' }), // W(강풍)
+    ];
+    expect(weatherRecordByClub(results, 'a')).toEqual([
+      { weather: 'clear', wins: 1, draws: 1, losses: 0 },
+      { weather: 'rain', wins: 1, draws: 0, losses: 1 },
+      { weather: 'windy', wins: 1, draws: 0, losses: 0 },
+    ]);
+  });
+
+  it('weather가 없는 경기(구버전 세이브)는 집계에서 제외한다', () => {
+    const results: MatchResult[] = [
+      mkResult({ homeClubId: 'a', awayClubId: 'x', score: [2, 0] }), // weather 미설정
+    ];
+    expect(weatherRecordByClub(results, 'a')).toEqual([]);
+  });
+
+  it('경기가 없는 날씨는 결과 배열에서 생략한다', () => {
+    const results: MatchResult[] = [
+      mkResult({ homeClubId: 'a', awayClubId: 'x', score: [1, 0], weather: 'clear' }),
+    ];
+    expect(weatherRecordByClub(results, 'a')).toEqual([{ weather: 'clear', wins: 1, draws: 0, losses: 0 }]);
+  });
+
+  it('해당 구단이 참여하지 않은 경기는 제외한다', () => {
+    const results: MatchResult[] = [
+      mkResult({ homeClubId: 'x', awayClubId: 'y', score: [1, 0], weather: 'rain' }),
+    ];
+    expect(weatherRecordByClub(results, 'a')).toEqual([]);
   });
 });
