@@ -10,6 +10,7 @@ import { clamp } from './math.js';
 import { hasTrait } from './traits.js';
 import { REINJURY_RISK_WINDOW, RECOVERY_ATTR_WINDOW } from './injury.js';
 import { effectiveMedical } from './staffActions.js';
+import { WEATHER_FATIGUE_MULTIPLIER, type Weather } from './weather.js';
 
 const TUNING = {
   /** 선발 출전 시 기본 컨디션 하락(스태미너로 경감). */
@@ -45,7 +46,9 @@ function tacticFatigueMul(tactic: Tactic): number {
   return 1 + Math.max(0, intensity - 0.5) * 0.7;
 }
 
-function applySide(club: Club, tactic: Tactic, outcome: Outcome, injuries: InjuryEvent[]): void {
+function applySide(
+  club: Club, tactic: Tactic, outcome: Outcome, injuries: InjuryEvent[], weather: Weather,
+): void {
   const starters = new Set(tactic.lineup.map((s) => s.playerId));
   const slotByPlayer = new Map(tactic.lineup.map((s) => [s.playerId, s.position]));
   const dMorale = outcome === 'W' ? TUNING.moraleWin : outcome === 'L' ? -TUNING.moraleLoss : 0;
@@ -92,9 +95,12 @@ function applySide(club: Club, tactic: Tactic, outcome: Outcome, injuries: Injur
       const fatMul = hasTrait(p, 'ironMan') ? 0.6 : 1;
       // 로테이션 없이 계속 뛰면(과사용) 그만큼 더 지친다(고도화 항목30).
       const overuseMul = p.consecutiveStarts > ROTATION_WARNING_THRESHOLD ? OVERUSE_FATIGUE_MUL : 1;
+      // 날씨(고도화 항목47) — 폭염은 체력 소모를 가속시킨다.
+      const weatherFatigueMul = WEATHER_FATIGUE_MULTIPLIER[weather];
       // 선발: 피로 누적 (스태미너 높을수록 덜 지침, 회복 공식과 동일한 분모).
       // 압박·템포를 중립 이상으로 올리면(고강도 전술) 그만큼 더 지친다.
-      const fatigue = TUNING.fatigueBase * (1 - p.attributes.stamina / 20) * fatMul * fatigueMul * overuseMul;
+      const fatigue = TUNING.fatigueBase * (1 - p.attributes.stamina / 20)
+        * fatMul * fatigueMul * overuseMul * weatherFatigueMul;
       p.condition = Math.max(TUNING.minCondition, p.condition - fatigue);
       // 부상 반영 (판정은 simulateMatch.generateInjuries가 이미 확정)
       const inj = injuryByPlayer.get(p.id);
@@ -173,8 +179,10 @@ export function applyMatchEffects(
   const awayOutcome: Outcome = ag > hg ? 'W' : ag < hg ? 'L' : 'D';
   const homeInjuries = result.injuries.filter((e) => e.side === 'home');
   const awayInjuries = result.injuries.filter((e) => e.side === 'away');
-  applySide(home, homeTactic, homeOutcome, homeInjuries);
-  applySide(away, awayTactic, awayOutcome, awayInjuries);
+  // 손으로 만든 MatchResult(테스트 등)엔 weather가 없을 수 있어 'clear'로 대체(기존 동작과 동일).
+  const weather = result.weather ?? 'clear';
+  applySide(home, homeTactic, homeOutcome, homeInjuries, weather);
+  applySide(away, awayTactic, awayOutcome, awayInjuries, weather);
   accumulateSeasonStats(home, result.playerStats.home);
   accumulateSeasonStats(away, result.playerStats.away);
   processDiscipline(home, away, result.cards);

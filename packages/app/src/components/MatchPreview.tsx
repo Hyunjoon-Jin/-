@@ -6,7 +6,9 @@ import {
 import { ATTR_LABELS } from './PlayerDetail.js';
 
 /** 날씨별 표시 아이콘(신규 개선 항목 26). */
-const WEATHER_ICON: Record<Weather, string> = { clear: '☀️', rain: '🌧️', windy: '🌬️' };
+const WEATHER_ICON: Record<Weather, string> = {
+  clear: '☀️', rain: '🌧️', windy: '🌬️', heat: '🥵', cold: '🥶',
+};
 
 /** 심판 엄격도별 표시 아이콘(고도화 항목46). */
 const REFEREE_ICON: Record<RefereeStrictness, string> = { lenient: '🙂', normal: '🧑‍⚖️', strict: '🟨' };
