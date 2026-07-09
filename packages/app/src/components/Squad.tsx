@@ -207,6 +207,7 @@ export function Squad({ club, onSelect, onAssignMentor, onClearMentor }: SquadPr
         reserves.length === 0 ? (
           <p className="muted">리저브 선수가 없습니다. 유스 아카데미에서 배출되면 여기에 합류합니다.</p>
         ) : (
+          <div className="table-scroll">
           <table className="data-table">
             <thead>
               <tr>
@@ -233,6 +234,7 @@ export function Squad({ club, onSelect, onAssignMentor, onClearMentor }: SquadPr
               ))}
             </tbody>
           </table>
+          </div>
         )
       ) : (
       <>
@@ -262,6 +264,7 @@ export function Squad({ club, onSelect, onAssignMentor, onClearMentor }: SquadPr
       {rows.length === 0 ? (
         <p className="muted">조건에 맞는 선수가 없습니다.</p>
       ) : (
+        <div className="table-scroll">
         <table className="data-table">
           <thead>
             <tr>
@@ -308,6 +311,7 @@ export function Squad({ club, onSelect, onAssignMentor, onClearMentor }: SquadPr
             ))}
           </tbody>
         </table>
+        </div>
       )}
       </>
       )}

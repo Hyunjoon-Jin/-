@@ -228,6 +228,7 @@ function TransferMarket({
           </div>
           <input className="search" placeholder="선수 이름 검색…" aria-label="선수 이름 검색"
             value={search} onChange={(e) => setSearch(e.target.value)} />
+          <div className="table-scroll">
           <table className="data-table compact">
             <thead>
               <tr>
@@ -354,11 +355,13 @@ function TransferMarket({
               )}
             </tbody>
           </table>
+          </div>
         </div>
 
         {/* 내 스쿼드 */}
         <div className="market-panel">
           <h3>내 스쿼드 ({club.players.length})</h3>
+          <div className="table-scroll">
           <table className="data-table compact">
             <thead>
               <tr>
@@ -461,12 +464,14 @@ function TransferMarket({
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       </div>
 
       {loanedOut.length > 0 && (
         <div className="market-panel loaned-out-panel">
           <h3>임대 보낸 선수 ({loanedOut.length})</h3>
+          <div className="table-scroll">
           <table className="data-table compact">
             <thead>
               <tr>
@@ -504,6 +509,7 @@ function TransferMarket({
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
@@ -1042,6 +1048,7 @@ function SellModal({
               </div>
             )}
             <p className="muted small">{offers.length}개 구단이 입찰했습니다. 원하는 제안을 수락하세요.</p>
+            <div className="table-scroll">
             <table className="data-table compact">
               <thead><tr><th>구단</th><th>입찰액</th><th></th></tr></thead>
               <tbody>
@@ -1058,6 +1065,7 @@ function SellModal({
                 ))}
               </tbody>
             </table>
+            </div>
           </>
         )}
       </div>
@@ -1236,6 +1244,7 @@ function TransferHistory({ game }: { game: GameState }) {
       ) : (
         <>
           <h3>시즌 {last.season} 이적 시장 ({last.transfers.length}건)</h3>
+          <div className="table-scroll">
           <table className="data-table">
             <thead><tr><th>선수</th><th>포지션</th><th>이적</th><th>이적료</th></tr></thead>
             <tbody>
@@ -1252,6 +1261,7 @@ function TransferHistory({ game }: { game: GameState }) {
               })}
             </tbody>
           </table>
+          </div>
         </>
       )}
     </div>

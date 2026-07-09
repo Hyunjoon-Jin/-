@@ -108,6 +108,7 @@ function StaffMarketPanel({ game, onPoachStaff }: {
       {candidates.length === 0 ? (
         <p className="muted small">다른 구단에 영입할 만한 인물이 없습니다.</p>
       ) : (
+        <div className="table-scroll">
         <table className="data-table compact">
           <thead>
             <tr><th>구단</th><th>인물</th><th>레벨</th><th>특기</th><th>이적료</th><th></th></tr>
@@ -146,6 +147,7 @@ function StaffMarketPanel({ game, onPoachStaff }: {
             })}
           </tbody>
         </table>
+        </div>
       )}
       <p className="muted small">
         특기 있는 인재는 원 소속 구단이 더 자주 거절합니다. 거절돼도 다시 시도할 수 있습니다.
@@ -426,6 +428,7 @@ export function Staff({
           }
           const sorted = [...stats].sort((a, b) => b.goals - a.goals || b.avgRating - a.avgRating);
           return (
+            <div className="table-scroll">
             <table className="data-table compact">
               <thead>
                 <tr><th>선수</th><th>포지션</th><th>출전</th><th>득점</th><th>도움</th><th>평점</th></tr>
@@ -443,6 +446,7 @@ export function Staff({
                 ))}
               </tbody>
             </table>
+            </div>
           );
         })()}
       </div>
