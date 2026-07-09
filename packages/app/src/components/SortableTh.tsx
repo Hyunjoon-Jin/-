@@ -20,6 +20,7 @@ export function SortableTh<K extends string>({ label, k, sort, dir, onClick, tit
       role="button"
       tabIndex={0}
       onKeyDown={onKeyActivate(() => onClick(k))}
+      aria-sort={sort === k ? (dir === 1 ? 'ascending' : 'descending') : 'none'}
     >
       {label} {sort === k ? (dir === 1 ? '▴' : '▾') : ''}
     </th>
