@@ -32,6 +32,7 @@ import {
   matchRefereeStrictness, REFEREE_CARD_MULTIPLIER, AWAY_CARD_BIAS_MULTIPLIER, type RefereeStrictness,
 } from './referee.js';
 import { matchTravelBurden, type TravelBurden } from './travel.js';
+import { computeStoppage } from './stoppage.js';
 
 export interface MatchSetup {
   home: { club: Club; tactic: Tactic };
@@ -761,6 +762,7 @@ export function finalize(ctx: MatchContext): MatchResult {
     weather: ctx.weather,
     refereeStrictness: ctx.refereeStrictness,
     awayTravelBurden: ctx.awayTravelBurden,
+    stoppage: computeStoppage(cards, injuries, ctx.events),
   };
 }
 

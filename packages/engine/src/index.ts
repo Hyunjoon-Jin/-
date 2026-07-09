@@ -12,6 +12,7 @@ export {
 export {
   matchTravelBurden, TRAVEL_BURDEN_LABEL, TRAVEL_CONDITION_PENALTY, type TravelBurden,
 } from './travel.js';
+export { computeStoppage, type Stoppage } from './stoppage.js';
 export { computeTeamStrength, lineOf, formationMatchup, type FormationMatchup } from './teamStrength.js';
 export {
   playerDerived, currentAbility, isInjured, isSuspended, isAvailable, familiarityAt,

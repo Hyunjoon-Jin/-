@@ -8,6 +8,7 @@ import type { SponsorContract } from './finance.js';
 import type { Weather } from './weather.js';
 import type { RefereeStrictness } from './referee.js';
 import type { TravelBurden } from './travel.js';
+import type { Stoppage } from './stoppage.js';
 
 // ── 능력치 키 ──────────────────────────────────────────────
 
@@ -458,4 +459,8 @@ export interface MatchResult {
   /** 원정팀의 이동 부담(고도화 항목48). 손으로 만든 MatchResult(테스트 등)엔 없을 수
    *  있어 optional. */
   awayTravelBurden?: TravelBurden;
+  /** 전후반 추가시간(고도화 항목58) — 카드·부상·후반 득점 세리머니 등 실제 지연
+   *  요인 기반 표시 전용 값. 시뮬레이션 틱 수에는 영향 없음. 손으로 만든
+   *  MatchResult(테스트 등)엔 없을 수 있어 optional. */
+  stoppage?: Stoppage;
 }
