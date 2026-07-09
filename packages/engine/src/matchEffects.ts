@@ -11,6 +11,7 @@ import { hasTrait } from './traits.js';
 import { REINJURY_RISK_WINDOW, RECOVERY_ATTR_WINDOW } from './injury.js';
 import { effectiveMedical } from './staffActions.js';
 import { WEATHER_FATIGUE_MULTIPLIER, type Weather } from './weather.js';
+import { TRAVEL_CONDITION_PENALTY, type TravelBurden } from './travel.js';
 
 const TUNING = {
   /** 선발 출전 시 기본 컨디션 하락(스태미너로 경감). */
@@ -165,6 +166,22 @@ function processDiscipline(home: Club, away: Club, cards: MatchResult['cards']):
 }
 
 /**
+ * 원정팀 선발 출전자에게만 이동 부담만큼 경기 후 컨디션을 추가로 깎는다(고도화
+ * 항목48). 부상으로 결장 중인 선수는 제외(applySide에서 이미 회복 로직을 따로
+ * 처리하므로 여기서 건드리지 않는다).
+ */
+function applyTravelFatigue(club: Club, tactic: Tactic, burden: TravelBurden): void {
+  const penalty = TRAVEL_CONDITION_PENALTY[burden];
+  if (penalty <= 0) return;
+  const starters = new Set(tactic.lineup.map((s) => s.playerId));
+  for (const p of club.players) {
+    if (starters.has(p.id) && p.injuryMatches === 0) {
+      p.condition = Math.max(TUNING.minCondition, p.condition - penalty);
+    }
+  }
+}
+
+/**
  * 경기 결과를 양 구단 선수 상태에 반영.
  * @param _rng 과거 부상 판정용 시드(현재는 result.injuries로 대체돼 미사용).
  *   호출부 시그니처 안정성을 위해 유지.
@@ -183,6 +200,9 @@ export function applyMatchEffects(
   const weather = result.weather ?? 'clear';
   applySide(home, homeTactic, homeOutcome, homeInjuries, weather);
   applySide(away, awayTactic, awayOutcome, awayInjuries, weather);
+  // 원정 이동 부담(고도화 항목48) — 원정팀에만 적용, 손으로 만든 MatchResult엔 없을 수
+  // 있어 'short'(페널티 0)로 대체(기존 동작과 동일).
+  applyTravelFatigue(away, awayTactic, result.awayTravelBurden ?? 'short');
   accumulateSeasonStats(home, result.playerStats.home);
   accumulateSeasonStats(away, result.playerStats.away);
   processDiscipline(home, away, result.cards);

@@ -9,6 +9,9 @@ export {
 export {
   matchRefereeStrictness, REFEREE_STRICTNESS_LABEL, REFEREE_CARD_MULTIPLIER, type RefereeStrictness,
 } from './referee.js';
+export {
+  matchTravelBurden, TRAVEL_BURDEN_LABEL, TRAVEL_CONDITION_PENALTY, type TravelBurden,
+} from './travel.js';
 export { computeTeamStrength, lineOf, formationMatchup, type FormationMatchup } from './teamStrength.js';
 export {
   playerDerived, currentAbility, isInjured, isSuspended, isAvailable, familiarityAt,

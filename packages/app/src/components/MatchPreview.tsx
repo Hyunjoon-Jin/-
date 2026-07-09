@@ -1,6 +1,6 @@
 import type { MatchPreview as Preview, TeamPreview } from '../game.js';
 import {
-  formationMatchup, WEATHER_LABEL, REFEREE_STRICTNESS_LABEL,
+  formationMatchup, WEATHER_LABEL, REFEREE_STRICTNESS_LABEL, TRAVEL_BURDEN_LABEL,
   type TeamStrength, type FormResult, type Weather, type RefereeStrictness,
 } from '@soccer-tycoon/engine';
 import { ATTR_LABELS } from './PlayerDetail.js';
@@ -89,6 +89,12 @@ export function MatchPreview({ preview, rivalClubId }: { preview: Preview; rival
         </span>
         <span className="pv-referee muted small" title="이번 경기 심판 엄격도(고도화 항목46) — 엄격할수록 카드가 더 자주 나옵니다.">
           {REFEREE_ICON[preview.refereeStrictness]} {REFEREE_STRICTNESS_LABEL[preview.refereeStrictness]}
+        </span>
+        <span
+          className="pv-travel muted small"
+          title={`원정팀(${away.name})의 이동 부담(고도화 항목48) — 부담이 클수록 원정팀 선수의 경기 후 컨디션이 더 떨어집니다.`}
+        >
+          🧳 {TRAVEL_BURDEN_LABEL[preview.awayTravelBurden]}
         </span>
       </h3>
       {isDerby && <div className="derby-banner">🔥 라이벌전</div>}

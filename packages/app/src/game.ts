@@ -40,6 +40,7 @@ import {
   FAN_SATISFACTION_DEFAULT, FAN_PROTEST_THRESHOLD, type TicketPriceTier,
   matchWeather, type Weather,
   matchRefereeStrictness, type RefereeStrictness,
+  matchTravelBurden, type TravelBurden,
   annualWageBill, wageBudget,
   matchOutcomeKind, mediaToneOptions, shouldTriggerMediaEvent, applyMediaTone,
   MEDIA_TONE_STYLE, classifyPersona, snsReputation, type SnsReputation,
@@ -2019,6 +2020,8 @@ export interface MatchPreview {
   weather: Weather;
   /** 이번 경기 심판의 엄격도(고도화 항목46) — 킥오프 전에도 미리 확인 가능. */
   refereeStrictness: RefereeStrictness;
+  /** 원정팀의 이동 부담(고도화 항목48) — 킥오프 전에도 미리 확인 가능. */
+  awayTravelBurden: TravelBurden;
   /** 상대 구단과의 통산 전적(고도화 항목34) — 맞대결 기록이 없으면 undefined. */
   opponentHeadToHead?: HeadToHeadRecord;
 }
@@ -2070,6 +2073,7 @@ function buildPreviewFrom(state: GameState, setup: MatchSetup): MatchPreview | n
     away: build(setup.away.club, setup.away.tactic, setup.home.tactic.formation, false),
     weather: matchWeather(setup.seed, setup.home.club.id, setup.away.club.id),
     refereeStrictness: matchRefereeStrictness(setup.seed, setup.home.club.id, setup.away.club.id),
+    awayTravelBurden: matchTravelBurden(setup.seed, setup.home.club.id, setup.away.club.id),
     opponentHeadToHead: state.headToHead?.[opponentClubId],
   };
 }
