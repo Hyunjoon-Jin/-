@@ -1096,12 +1096,13 @@ export function renewContract(
   };
 }
 
-/** 내 선수의 훈련 포커스 설정. */
+/** 내 선수의 훈련 포커스 설정. playerId를 배열로 넘기면 여러 선수를 한 번에 지정한다
+ *  (선수관리 개선 항목49 — 이전에는 한 명씩만 지정 가능해 다수 선수 일괄 지정이 불편했다). */
 export function setTrainingFocus(
-  state: GameState, playerId: string, focus: import('@soccer-tycoon/engine').TrainingFocus,
+  state: GameState, playerId: string | string[], focus: import('@soccer-tycoon/engine').TrainingFocus,
 ): GameState {
-  const p = myClub(state).players.find((pl) => pl.id === playerId);
-  if (p) p.trainingFocus = focus;
+  const ids = new Set(Array.isArray(playerId) ? playerId : [playerId]);
+  myClub(state).players.forEach((p) => { if (ids.has(p.id)) p.trainingFocus = focus; });
   return { ...state };
 }
 
@@ -1111,12 +1112,56 @@ export function setAcademyFocus(state: GameState, focus: import('@soccer-tycoon/
   return { ...state };
 }
 
-/** 포지션 전환 훈련 대상 지정(해제하려면 undefined). 시즌 경계마다 코칭 지원을 받아 숙련도가 오른다. */
+/** 포지션 전환 훈련 대상 지정(해제하려면 undefined). 시즌 경계마다 코칭 지원을 받아 숙련도가 오른다.
+ *  playerId를 배열로 넘기면 여러 선수를 한 번에 지정한다(선수관리 개선 항목49). */
 export function setTrainingPosition(
-  state: GameState, playerId: string, position: import('@soccer-tycoon/engine').Position | undefined,
+  state: GameState, playerId: string | string[], position: import('@soccer-tycoon/engine').Position | undefined,
 ): GameState {
+  const ids = new Set(Array.isArray(playerId) ? playerId : [playerId]);
+  myClub(state).players.forEach((p) => { if (ids.has(p.id)) p.trainingPosition = position; });
+  return { ...state };
+}
+
+/** 등번호 직접 변경(선수관리 개선 항목50) — 1~99 범위, 같은 구단 내 유일해야 한다.
+ *  undefined를 넘기면 등번호를 해제한다. */
+export function setSquadNumberAction(
+  state: GameState, playerId: string, num: number | undefined,
+): ActionOutcome {
+  const club = myClub(state);
+  const p = club.players.find((pl) => pl.id === playerId);
+  if (!p) return { state, ok: false, message: '선수를 찾을 수 없습니다.' };
+  if (num !== undefined) {
+    if (!Number.isInteger(num) || num < 1 || num > 99) {
+      return { state, ok: false, message: '등번호는 1~99 사이의 정수여야 합니다.' };
+    }
+    const taken = club.players.some((pl) => pl.id !== playerId && pl.squadNumber === num);
+    if (taken) return { state, ok: false, message: `이미 사용 중인 등번호입니다(${num}번).` };
+  }
+  p.squadNumber = num;
+  return {
+    state: { ...state }, ok: true,
+    message: num !== undefined ? `등번호를 ${num}번으로 변경했습니다.` : '등번호를 해제했습니다.',
+  };
+}
+
+/** 선수 태그 설정(선수관리 개선 항목50) — 엔진 로직에 영향 없는 순수 분류용 라벨. */
+export function setPlayerTagsAction(state: GameState, playerId: string, tags: string[]): GameState {
   const p = myClub(state).players.find((pl) => pl.id === playerId);
-  if (p) p.trainingPosition = position;
+  if (p) p.tags = tags;
+  return { ...state };
+}
+
+/** 선수 메모 설정(선수관리 개선 항목50). */
+export function setPlayerNoteAction(state: GameState, playerId: string, note: string): GameState {
+  const p = myClub(state).players.find((pl) => pl.id === playerId);
+  if (p) p.note = note || undefined;
+  return { ...state };
+}
+
+/** 선수 즐겨찾기(핀 고정) 토글(선수관리 개선 항목50). */
+export function togglePlayerPinAction(state: GameState, playerId: string): GameState {
+  const p = myClub(state).players.find((pl) => pl.id === playerId);
+  if (p) p.pinned = !p.pinned;
   return { ...state };
 }
 
