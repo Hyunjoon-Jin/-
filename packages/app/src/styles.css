@@ -657,6 +657,12 @@ body {
 .neg { color: var(--color-danger); }
 
 /* ── Tables ── */
+/* 넓은 표(11컬럼까지)가 좁은 화면에서 페이지 전체를 가로로 밀지 않도록, 표 자체만
+   개별 스크롤되게 감싼다(UX 고도화) — 브래킷(.bracket-scroll)과 동일한 패턴.
+   표에 width:auto를 줘야 min-content 이하로 컬럼이 눌리지 않고 실제로 넘쳐서
+   스크롤이 생긴다(100%로 두면 컨테이너 폭에 맞춰 그냥 찌그러진다). */
+.table-scroll { overflow-x: auto; }
+.table-scroll .data-table { width: auto; min-width: 100%; }
 .data-table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .data-table th, .data-table td { padding: 8px 10px; text-align: center; border-bottom: 1px solid var(--line); }
 .data-table th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; }

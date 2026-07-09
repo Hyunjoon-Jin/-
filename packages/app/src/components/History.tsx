@@ -132,6 +132,7 @@ export function History({ game }: { game: GameState }) {
               <BoardConfidenceSparkline values={boardConfidenceHistory} />
             </div>
           )}
+          <div className="table-scroll">
           <table className="data-table compact">
             <thead>
               <tr><th>시즌</th><th>부</th><th>리그 우승</th><th>컵 우승</th><th>득점왕</th><th>내 순위</th><th>이사회 요구</th><th>스폰서 목표</th><th></th></tr>
@@ -178,12 +179,14 @@ export function History({ game }: { game: GameState }) {
               })}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
       {activeTab === 'titles' && (
         <div>
           <h3>리그 우승 순위</h3>
+          <div className="table-scroll">
           <table className="data-table compact">
             <thead><tr><th>#</th><th>구단</th><th>부</th><th>우승</th></tr></thead>
             <tbody>
@@ -197,12 +200,14 @@ export function History({ game }: { game: GameState }) {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
       {activeTab === 'scorers' && leaders.length > 0 && (
         <div className="career-leaders">
           <h3>🥇 현역 통산 득점 순위 <span className="muted small">(전 구단 · 리그+컵)</span></h3>
+          <div className="table-scroll">
           <table className="data-table compact">
             <thead>
               <tr><th>#</th><th>선수</th><th>구단</th><th>P</th><th>나이</th><th>출전</th><th>득점</th></tr>
@@ -221,6 +226,7 @@ export function History({ game }: { game: GameState }) {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
@@ -244,6 +250,7 @@ export function History({ game }: { game: GameState }) {
       {activeTab === 'legends' && game.legends.length > 0 && (
         <div className="legends">
           <h3>🕯️ 레전드 명예의 전당 <span className="muted small">(은퇴 선수 · {club.name})</span></h3>
+          <div className="table-scroll">
           <table className="data-table compact">
             <thead>
               <tr><th>은퇴 시즌</th><th>선수</th><th>P</th><th>은퇴 나이</th><th>통산 출전</th><th>통산 득점</th><th>A매치</th></tr>
@@ -262,12 +269,14 @@ export function History({ game }: { game: GameState }) {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
       {activeTab === 'staffLegends' && (game.staffLegends?.length ?? 0) > 0 && (
         <div className="legends">
           <h3>🎖️ 스태프 명예의 전당 <span className="muted small">(은퇴 스태프 · {club.name})</span></h3>
+          <div className="table-scroll">
           <table className="data-table compact">
             <thead>
               <tr><th>은퇴 시즌</th><th>이름</th><th>직책</th><th>은퇴 나이</th><th>레벨</th><th>특기</th></tr>
@@ -287,6 +296,7 @@ export function History({ game }: { game: GameState }) {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
@@ -297,6 +307,7 @@ export function History({ game }: { game: GameState }) {
               ({rivalClub(game).name} · 통산 {game.rivalRecord.wins}승 {game.rivalRecord.draws}무 {game.rivalRecord.losses}패)
             </span>
           </h3>
+          <div className="table-scroll">
           <table className="data-table compact">
             <thead><tr><th>시즌</th><th>대회</th><th>홈/원정</th><th>스코어</th><th>결과</th></tr></thead>
             <tbody>
@@ -313,6 +324,7 @@ export function History({ game }: { game: GameState }) {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
@@ -408,6 +420,7 @@ function TitleSquadModal({
           <button className="btn-ghost" onClick={onClose}>닫기 ✕</button>
         </div>
         <p className="muted small">{trophies} 우승 당시 선발 라인업(전술 기준).</p>
+        <div className="table-scroll">
         <table className="data-table compact">
           <thead><tr><th>포지션</th><th>선수</th><th>나이</th><th>평균 평점</th><th>득점</th></tr></thead>
           <tbody>
@@ -422,6 +435,7 @@ function TitleSquadModal({
             ))}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );
