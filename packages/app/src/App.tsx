@@ -14,7 +14,7 @@ import {
   setTicketPriceAction,
   toggleWatchlistAction,
   loanOut, loanIn, recallLoan, swapDeal, renegotiateLoanWageShareAction,
-  setTrainingFocus, setTrainingPosition, renewContract, setAcademyFocus,
+  setTrainingFocus, setTrainingPosition, renewContract, setAcademyFocus, setPlayerTagsAction,
   watchSetup, matchPreview, commitWatchedRound,
   watchCupSetup, cupPreview, commitWatchedCupRound,
   playerForm, playerTimeline, playerRatingHistory, respondMedia, dismissMedia, signContract,
@@ -298,6 +298,16 @@ export function App() {
     return outcome;
   };
 
+  /** 스쿼드 목록 다중 선택 → 훈련 포커스 일괄 지정(선수관리 개선 항목10). */
+  const handleBulkSetTrainingFocus = (playerIds: string[], focus: Parameters<typeof setTrainingFocus>[2]) => {
+    update(setTrainingFocus(game, playerIds, focus));
+  };
+
+  /** 선수 태그 교체(선수관리 개선 항목11/12 — 방출 후보/임대 검토 일괄 표시). */
+  const handleSetPlayerTags = (playerId: string, tags: string[]) => {
+    update(setPlayerTagsAction(game, playerId, tags));
+  };
+
   const handleWatch = () => {
     const ws = watchSetup(game);
     if (ws) { setWatchKind('league'); setWatching(ws); }
@@ -402,6 +412,7 @@ export function App() {
               <Squad
                 key={slotId} club={club} onSelect={setDetailPlayer}
                 onAssignMentor={handleAssignMentor} onClearMentor={handleClearMentor}
+                onBulkSetTrainingFocus={handleBulkSetTrainingFocus} onSetPlayerTags={handleSetPlayerTags}
               />
             )}
             {tab === 'tactics' && (
