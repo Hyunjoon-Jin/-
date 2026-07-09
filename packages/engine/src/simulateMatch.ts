@@ -102,6 +102,11 @@ const SET_PIECE_TAKER_SHARE = 0.55;
 /** 세트피스 스페셜리스트가 전담자면 몫을 더 많이 가져간다(그 외엔 기본 비율). */
 const SET_PIECE_SPECIALIST_SHARE = 0.72;
 
+/** 페널티킥 전담 키커가 실제로 직접 차는 비율(고도화 항목54) — 세트피스보다 훨씬
+ *  높다(부상 등 예외 상황이 아니면 거의 항상 지정된 키커가 찬다). 세트피스 전담자
+ *  (setPieceTakerId)를 그대로 페널티 전담자로 재사용한다(별도 필드를 추가하지 않음). */
+const PENALTY_TAKER_SHARE = 0.92;
+
 /**
  * 개인 지시(F10)에 따른 슛 관여도(선택 가중치) 배수 — 좁혀 들어오기는 관여도를 높이고,
  * 전담마크에 걸리면 관여도가 줄어든다(마크맨의 marking 대 공격수의 dribbling 격차로 조정).
@@ -122,10 +127,12 @@ function pickShooter(att: Side, def: Side, rng: Rng, chance: ChanceType, sentOff
   const attackersOnField = att.attackers.filter((p) => !sentOff.has(p.id));
   const pool = attackersOnField.length > 0 ? attackersOnField : available;
   if (pool.length === 0) return null;
-  if (chance === 'setpiece' && att.tactic.setPieceTakerId) {
+  if ((chance === 'setpiece' || chance === 'penalty') && att.tactic.setPieceTakerId) {
     const taker = pool.find((p) => p.id === att.tactic.setPieceTakerId);
     if (taker) {
-      const share = hasTrait(taker, 'setPieceSpecialist') ? SET_PIECE_SPECIALIST_SHARE : SET_PIECE_TAKER_SHARE;
+      const share = chance === 'penalty'
+        ? PENALTY_TAKER_SHARE
+        : hasTrait(taker, 'setPieceSpecialist') ? SET_PIECE_SPECIALIST_SHARE : SET_PIECE_TAKER_SHARE;
       if (rng.roll(share)) return taker;
     }
   }
@@ -150,7 +157,7 @@ const FINISHING_XG_COEFF = 0.02;
  *  상승, 전담마크는 억제, 결정력(고도화 항목53)은 능력치만큼 가감. */
 function individualXgMultiplier(shooter: Player, att: Side, def: Side, chance: ChanceType): number {
   let mul = 1;
-  if (chance !== 'setpiece') {
+  if (chance !== 'setpiece' && chance !== 'penalty') {
     mul *= 1 + (shooter.attributes.finishing - 10) * FINISHING_XG_COEFF;
   }
   const slot = att.tactic.lineup.find((s) => s.playerId === shooter.id);
@@ -162,10 +169,18 @@ function individualXgMultiplier(shooter: Player, att: Side, def: Side, chance: C
   return mul;
 }
 
+/** 오픈플레이 찬스 중 페널티킥으로 재분류되는 몫(고도화 항목54) — 박스 안 파울로
+ *  얻는 PK를 모델링. 같은 r 굴림의 open 구간 앞부분을 떼어내 쓰므로(자책골과 동일
+ *  패턴) RNG 소비량은 늘지 않는다. 실제 통계상 팀당 경기당 약 0.1~0.15개 수준이
+ *  나오도록 이후 pShot 관문(약 55%)까지 감안해 소폭으로 잡았다. */
+const PENALTY_CHANCE_SHARE = 0.012;
+
 function pickChanceType(tactic: Tactic, rng: Rng): ChanceType {
   const r = rng.next();
   if (r < 0.12) return 'setpiece';
-  if (r < 0.12 + 0.33 * (1 - tactic.tempo) + 0.10) return 'cross';
+  const crossUpper = 0.12 + 0.33 * (1 - tactic.tempo) + 0.10;
+  if (r < crossUpper) return 'cross';
+  if (r < crossUpper + PENALTY_CHANCE_SHARE) return 'penalty';
   return 'open';
 }
 
@@ -186,15 +201,39 @@ interface ResolvedShot {
   goalP: number;
 }
 
+/** 페널티킥 기본 전환율(고도화 항목54) — 실제 통계상 팀 전력차와 거의 무관하게
+ *  약 76~80%에 몰려 있다. */
+const PENALTY_BASE_CONVERSION = 0.78;
+/** 키커의 침착성(composure)이 전환율에 미치는 소폭 가감(평균치 10 기준). */
+const PENALTY_COMPOSURE_COEFF = 0.006;
+/** GK 능력치가 페널티 방어율에 미치는 가감 — 일반 슈팅(gkK)보다 훨씬 완만하다. */
+const PENALTY_GK_COEFF = 0.001;
+/** 페널티가 골이 아닐 때: 대부분 GK 선방, 나머지는 빗나감(가로막힘은 없음). */
+const PENALTY_MISS_SAVE_SHARE = 0.55;
+
 /**
  * @param ownGoalShare 자책골로 재분류할 확률 몫(고도화 항목42) — BLOCKED 몫에서
  *   떼어낸다. 같은 r 굴림을 그대로 재사용하므로 RNG 소비량은 늘지 않는다
  *   (자책골이 실제로 나온 경우에만 이후 별도 처리에서 추가 로직이 붙는다).
+ * @param composure 키커의 침착성(1~20). chance가 'penalty'일 때만 반영(고도화 항목54).
  */
 function resolveShot(
   attack: number, gk: number, chance: ChanceType, rng: Rng, setPieceSkill?: number, individualMul = 1,
-  ownGoalShare = 0,
+  ownGoalShare = 0, composure?: number,
 ): ResolvedShot {
+  if (chance === 'penalty') {
+    // 페널티킥은 팀 전력차와 거의 무관한 고정 확률에 가깝다 — attack/individualMul을
+    // 쓰지 않고 침착성·GK만 소폭 반영한다.
+    const goalP = clamp(
+      PENALTY_BASE_CONVERSION
+        + (composure !== undefined ? (composure - 10) * PENALTY_COMPOSURE_COEFF : 0)
+        - (gk - 50) * PENALTY_GK_COEFF,
+      0.55, 0.92,
+    );
+    if (rng.roll(goalP)) return { outcome: 'GOAL', goalP };
+    const r = rng.next();
+    return { outcome: r < PENALTY_MISS_SAVE_SHARE ? 'SAVE' : 'OFF_TARGET', goalP };
+  }
   const base = TUNING.baseXg[chance];
   let finishMul = (1 + (attack - 50) * TUNING.finishK) * individualMul;
   if (chance === 'setpiece' && setPieceSkill !== undefined) {
@@ -344,7 +383,7 @@ function ensureStat(ctx: MatchContext, p: Player): PlayerMatchStat {
 
 /** 득점 상황(chanceType)별 어시스트가 붙을 확률 — 크로스는 거의 항상, 오픈플레이는
  *  절반 이상, 세트피스(주로 직접 프리킥)는 낮게. */
-const ASSIST_CHANCE: Record<ChanceType, number> = { open: 0.65, cross: 0.88, setpiece: 0.35 };
+const ASSIST_CHANCE: Record<ChanceType, number> = { open: 0.65, cross: 0.88, setpiece: 0.35, penalty: 0 };
 
 /** 가중치 기반 무작위 선택 — 합이 0 이하면 null. */
 function pickWeighted<T>(items: T[], weight: (t: T) => number, rng: Rng): T | null {
@@ -448,7 +487,10 @@ export function stepMinute(ctx: MatchContext, minute: number): MatchEvent | null
   // 자책골(고도화 항목42) 몫 — 수비 라인 중 가장 실점 유발 위험이 큰 선수의 특성으로 확대.
   const defErrorProne = weakestDefender(def);
   const ownGoalShare = defErrorProne ? OWN_GOAL_BASE_SHARE * ownGoalRiskMultiplier(defErrorProne) : 0;
-  const { outcome, goalP } = resolveShot(attAttack, def.strength.gk, chance, rng, setPieceSkill, individualMul, ownGoalShare);
+  const { outcome, goalP } = resolveShot(
+    attAttack, def.strength.gk, chance, rng, setPieceSkill, individualMul, ownGoalShare,
+    shooter.attributes.composure,
+  );
 
   // 빅찬스 생성/실축 집계(고도화 항목45) — 이미 계산된 goalP를 읽기만 하므로 추가 RNG
   // 소비 없음. 자책골은 슈터 본인의 마무리 실력과 무관해 집계에서 제외한다.
