@@ -141,9 +141,18 @@ function pickShooter(att: Side, def: Side, rng: Rng, chance: ChanceType, sentOff
   return pool[pool.length - 1]!;
 }
 
-/** 개인 지시(F10)에 따른 득점 확률 배수 — 좁혀 들어오기는 각도 개선으로 소폭 상승, 전담마크는 억제. */
-function individualXgMultiplier(shooter: Player, att: Side, def: Side): number {
+/** 슈터 개인 결정력(finishing) 능력치가 골 확률에 직접 반영되는 배율(고도화 항목53) —
+ *  평균치(10) 대비 가감. 오픈플레이·크로스에만 적용하고 세트피스는 제외한다(세트피스는
+ *  setPieceSkill로 이미 별도 반영돼 있어 이중 반영을 피한다). */
+const FINISHING_XG_COEFF = 0.02;
+
+/** 개인 지시(F10)·결정력에 따른 득점 확률 배수 — 좁혀 들어오기는 각도 개선으로 소폭
+ *  상승, 전담마크는 억제, 결정력(고도화 항목53)은 능력치만큼 가감. */
+function individualXgMultiplier(shooter: Player, att: Side, def: Side, chance: ChanceType): number {
   let mul = 1;
+  if (chance !== 'setpiece') {
+    mul *= 1 + (shooter.attributes.finishing - 10) * FINISHING_XG_COEFF;
+  }
   const slot = att.tactic.lineup.find((s) => s.playerId === shooter.id);
   if (slot?.instruction?.kind === 'cutInside' && isValidInstruction(slot.position, slot.instruction)) {
     mul *= CUT_INSIDE_XG_MUL;
@@ -435,7 +444,7 @@ export function stepMinute(ctx: MatchContext, minute: number): MatchEvent | null
   const setPieceSkill = chance === 'setpiece'
     ? shooter.attributes.setPiece + (hasTrait(shooter, 'setPieceSpecialist') ? 3 : 0)
     : undefined;
-  const individualMul = individualXgMultiplier(shooter, att, def);
+  const individualMul = individualXgMultiplier(shooter, att, def, chance);
   // 자책골(고도화 항목42) 몫 — 수비 라인 중 가장 실점 유발 위험이 큰 선수의 특성으로 확대.
   const defErrorProne = weakestDefender(def);
   const ownGoalShare = defErrorProne ? OWN_GOAL_BASE_SHARE * ownGoalRiskMultiplier(defErrorProne) : 0;
