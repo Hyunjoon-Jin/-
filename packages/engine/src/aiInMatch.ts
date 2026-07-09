@@ -5,6 +5,7 @@
  */
 import type { Club, InjuryEvent, MatchResult, Tactic } from './types.js';
 import { LiveMatch, HALF_TIME } from './liveMatch.js';
+import { MATCH_LENGTH } from './simulateMatch.js';
 import type { MatchSetup } from './simulateMatch.js';
 import { isAvailable, currentAbility, familiarityAt } from './derived.js';
 
@@ -17,8 +18,9 @@ const PROTECT_TACTIC: QuickTacticValues = { mentality: 0.3, tempo: 0.35, pressin
 /** 이 골차 이상 앞서야 리드 지키기로 전환(1점 차는 아직 불안하므로 유지). */
 const PROTECT_LEAD_MARGIN = 2;
 
-/** 하프타임 스코어라인에 따른 반응형 전술. 지고 있으면 추격, 2골 이상 앞서면 안정화. */
-function reactiveTactic(tactic: Tactic, myGoals: number, oppGoals: number): Tactic | null {
+/** 스코어라인에 따른 반응형 전술. 지고 있으면 추격, 2골 이상 앞서면 안정화(F09,
+ *  고도화 항목44부터는 하프타임뿐 아니라 득실차가 바뀔 때마다 재호출된다). */
+export function reactiveTactic(tactic: Tactic, myGoals: number, oppGoals: number): Tactic | null {
   const diff = myGoals - oppGoals;
   if (diff < 0) return { ...tactic, ...CHASE_TACTIC };
   if (diff >= PROTECT_LEAD_MARGIN) return { ...tactic, ...PROTECT_TACTIC };
@@ -36,7 +38,7 @@ function pickReplacement(bench: Club['players'], position: Tactic['lineup'][numb
 }
 
 /** 전반 중 부상당한 선발을 하프타임에 같은 슬롯의 최적 벤치 자원으로 교체(F01). */
-function injurySubstitution(club: Club, tactic: Tactic, halfInjuries: InjuryEvent[]): Tactic | null {
+export function injurySubstitution(club: Club, tactic: Tactic, halfInjuries: InjuryEvent[]): Tactic | null {
   if (halfInjuries.length === 0) return null;
   const injuredIds = new Set(halfInjuries.map((e) => e.playerId));
   const outSlots = tactic.lineup.filter((s) => injuredIds.has(s.playerId));
@@ -78,25 +80,55 @@ export function decideAiHalftimeTactic(
 }
 
 /**
- * simulateMatch와 동일한 로직을 공유하되, 하프타임에 양 팀 모두 부상 교체(F01)·
- * 반응형 전술(F09)을 자동 적용한다. 개입이 전혀 없으면 simulateMatch와 완전히
- * 동일한 결과를 낸다(LiveMatch가 같은 컨텍스트를 재사용하기 때문 — 재현성 유지).
+ * simulateMatch와 동일한 로직을 공유하되, 하프타임에 양 팀 모두 부상 교체(F01)를
+ * 자동 적용하고, 득실차가 바뀌는 시점마다(하프타임 한정이 아니라 경기 중 실시간으로)
+ * 반응형 전술(F09, 고도화 항목44)을 재평가한다. RNG를 전혀 소비하지 않는 결정론적
+ * 판단이라 재현성에는 영향이 없다 — 개입이 전혀 없으면 simulateMatch와 완전히
+ * 동일한 결과를 낸다(LiveMatch가 같은 컨텍스트를 재사용하기 때문).
  */
 export function simulateMatchWithAiTactics(setup: MatchSetup): MatchResult {
   const live = new LiveMatch(setup);
-  live.runFirstHalf();
-  const [homeGoals, awayGoals] = live.score();
-  const halfInjuries = live.injuries().filter((e) => e.minute <= HALF_TIME);
+  const original = { home: setup.home.tactic, away: setup.away.tactic };
+  // 반응형 전술 판단의 기준(중립) 라인업 — 득실차 판단용 mentality/tempo 등은 항상
+  // 원래(original) 값을 쓰고, 부상 교체로 바뀐 라인업만 여기에 누적 반영한다.
+  const baseLineup = { home: setup.home.tactic.lineup, away: setup.away.tactic.lineup };
+  const lastDiff = { home: 0, away: 0 };
 
-  for (const side of ['home', 'away'] as const) {
-    const { club, tactic } = setup[side];
-    const myGoals = side === 'home' ? homeGoals : awayGoals;
-    const oppGoals = side === 'home' ? awayGoals : homeGoals;
-    const sideInjuries = halfInjuries.filter((e) => e.side === side);
-    const next = decideAiHalftimeTactic(club, tactic, myGoals, oppGoals, sideInjuries);
-    if (next) live.setTactic(side, next);
+  const applyReactive = (side: 'home' | 'away'): void => {
+    const [hg, ag] = live.score();
+    const myGoals = side === 'home' ? hg : ag;
+    const oppGoals = side === 'home' ? ag : hg;
+    const baseTactic: Tactic = { ...original[side], lineup: baseLineup[side] };
+    const next = reactiveTactic(baseTactic, myGoals, oppGoals) ?? baseTactic;
+    live.setTactic(side, next);
+  };
+
+  for (let m = 1; m <= MATCH_LENGTH; m++) {
+    live.runUntil(m);
+
+    if (m === HALF_TIME) {
+      const halfInjuries = live.injuries().filter((e) => e.minute <= HALF_TIME);
+      for (const side of ['home', 'away'] as const) {
+        const sideInjuries = halfInjuries.filter((e) => e.side === side);
+        const baseTactic: Tactic = { ...original[side], lineup: baseLineup[side] };
+        const subbed = injurySubstitution(setup[side].club, baseTactic, sideInjuries);
+        if (subbed) {
+          baseLineup[side] = subbed.lineup;
+          applyReactive(side);
+        }
+      }
+    }
+
+    const [hg, ag] = live.score();
+    for (const side of ['home', 'away'] as const) {
+      const myGoals = side === 'home' ? hg : ag;
+      const oppGoals = side === 'home' ? ag : hg;
+      const diff = myGoals - oppGoals;
+      if (diff === lastDiff[side]) continue;
+      lastDiff[side] = diff;
+      applyReactive(side);
+    }
   }
 
-  live.runToEnd();
   return live.result();
 }
