@@ -158,6 +158,18 @@ function pickChanceType(tactic: Tactic, rng: Rng): ChanceType {
  *   평균치(10) 대비 마무리 배율을 소폭 보정해, 세트피스 전문가를 모으면 실제로
  *   코너·프리킥 득점력이 오르도록 한다(이전엔 이 능력치가 시뮬에 전혀 반영되지 않았음).
  */
+/** 이 득점확률(goalP) 이상인 슈팅은 "빅찬스"로 분류한다(고도화 항목45). 일반적인
+ *  매치업에서 goalP 분포가 대략 0.08~0.17 사이에 몰려 있어(평균 클럽 기준 실측),
+ *  상위 구간(대략 p70 이상)에 해당하는 값으로 보정 — 전력차가 있거나 개인 특성이
+ *  붙어 평균보다 뚜렷이 좋은 기회만 포함되도록 한다. */
+const BIG_CHANCE_GOAL_P_THRESHOLD = 0.14;
+
+interface ResolvedShot {
+  outcome: ShotOutcome;
+  /** 이 슈팅의 최종 득점확률(고도화 항목45, 빅찬스 판정용). */
+  goalP: number;
+}
+
 /**
  * @param ownGoalShare 자책골로 재분류할 확률 몫(고도화 항목42) — BLOCKED 몫에서
  *   떼어낸다. 같은 r 굴림을 그대로 재사용하므로 RNG 소비량은 늘지 않는다
@@ -166,7 +178,7 @@ function pickChanceType(tactic: Tactic, rng: Rng): ChanceType {
 function resolveShot(
   attack: number, gk: number, chance: ChanceType, rng: Rng, setPieceSkill?: number, individualMul = 1,
   ownGoalShare = 0,
-): ShotOutcome {
+): ResolvedShot {
   const base = TUNING.baseXg[chance];
   let finishMul = (1 + (attack - 50) * TUNING.finishK) * individualMul;
   if (chance === 'setpiece' && setPieceSkill !== undefined) {
@@ -174,13 +186,13 @@ function resolveShot(
   }
   const gkMul = 1 + (gk - 50) * TUNING.gkK;
   const goalP = clamp((base * finishMul) / gkMul, 0.02, 0.75);
-  if (rng.roll(goalP)) return 'GOAL';
+  if (rng.roll(goalP)) return { outcome: 'GOAL', goalP };
   const s = TUNING.nonGoalSplit;
   const r = rng.next();
-  if (r < s.save) return 'SAVE';
-  if (r < s.save + s.offTarget) return 'OFF_TARGET';
-  if (r < s.save + s.offTarget + ownGoalShare) return 'OWN_GOAL';
-  return 'BLOCKED';
+  if (r < s.save) return { outcome: 'SAVE', goalP };
+  if (r < s.save + s.offTarget) return { outcome: 'OFF_TARGET', goalP };
+  if (r < s.save + s.offTarget + ownGoalShare) return { outcome: 'OWN_GOAL', goalP };
+  return { outcome: 'BLOCKED', goalP };
 }
 
 /** 자책골 기본 확률 몫(BLOCKED 몫 중 일부, 고도화 항목42) — 수비 책임자의
@@ -397,7 +409,15 @@ export function stepMinute(ctx: MatchContext, minute: number): MatchEvent | null
   // 자책골(고도화 항목42) 몫 — 수비 라인 중 가장 실점 유발 위험이 큰 선수의 특성으로 확대.
   const defErrorProne = weakestDefender(def);
   const ownGoalShare = defErrorProne ? OWN_GOAL_BASE_SHARE * ownGoalRiskMultiplier(defErrorProne) : 0;
-  const outcome = resolveShot(attAttack, def.strength.gk, chance, rng, setPieceSkill, individualMul, ownGoalShare);
+  const { outcome, goalP } = resolveShot(attAttack, def.strength.gk, chance, rng, setPieceSkill, individualMul, ownGoalShare);
+
+  // 빅찬스 생성/실축 집계(고도화 항목45) — 이미 계산된 goalP를 읽기만 하므로 추가 RNG
+  // 소비 없음. 자책골은 슈터 본인의 마무리 실력과 무관해 집계에서 제외한다.
+  const isBigChance = goalP >= BIG_CHANCE_GOAL_P_THRESHOLD;
+  if (isBigChance && outcome !== 'OWN_GOAL') {
+    st.bigChancesCreated = (st.bigChancesCreated ?? 0) + 1;
+    if (outcome !== 'GOAL') st.bigChancesMissed = (st.bigChancesMissed ?? 0) + 1;
+  }
 
   let assister: Player | null = null;
   let eventPlayerId = shooter.id;

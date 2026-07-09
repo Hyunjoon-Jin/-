@@ -22,6 +22,10 @@ export interface PlayerSeasonStat {
   avgRating: number;
   /** GK로 출전해 무실점으로 마친 경기 수(골든글러브 집계용). GK가 아니면 0. */
   cleanSheets: number;
+  /** 시즌 빅찬스 생성 수(고도화 항목45). */
+  bigChancesCreated: number;
+  /** 시즌 빅찬스 중 득점으로 이어지지 않은 수(고도화 항목45). */
+  bigChancesMissed: number;
 }
 
 export interface BestXIEntry {
@@ -76,6 +80,7 @@ export function motmTally(results: MatchResult[]): MotmTallyEntry[] {
 interface Acc {
   playerId: string; name: string; clubId: string; clubName: string; position: Position;
   apps: number; goals: number; assists: number; shots: number; totalRating: number; cleanSheets: number;
+  bigChancesCreated: number; bigChancesMissed: number;
 }
 
 /** 시즌 전 경기 결과에서 선수별 통계 집계. */
@@ -89,6 +94,7 @@ export function aggregatePlayerStats(results: MatchResult[]): PlayerSeasonStat[]
       a = {
         playerId: st.playerId, name: st.name, clubId, clubName, position: st.position,
         apps: 0, goals: 0, assists: 0, shots: 0, totalRating: 0, cleanSheets: 0,
+        bigChancesCreated: 0, bigChancesMissed: 0,
       };
       map.set(st.playerId, a);
     }
@@ -100,6 +106,8 @@ export function aggregatePlayerStats(results: MatchResult[]): PlayerSeasonStat[]
     a.shots += st.shots;
     a.totalRating += st.rating;
     if (st.cleanSheet) a.cleanSheets++;
+    a.bigChancesCreated += st.bigChancesCreated ?? 0;
+    a.bigChancesMissed += st.bigChancesMissed ?? 0;
   };
   for (const r of results) {
     for (const st of r.playerStats.home) add(st, r.homeClubId, r.homeClubName);
@@ -110,6 +118,8 @@ export function aggregatePlayerStats(results: MatchResult[]): PlayerSeasonStat[]
     apps: a.apps, goals: a.goals, assists: a.assists, shots: a.shots,
     avgRating: a.apps > 0 ? a.totalRating / a.apps : 0,
     cleanSheets: a.cleanSheets,
+    bigChancesCreated: a.bigChancesCreated,
+    bigChancesMissed: a.bigChancesMissed,
   }));
 }
 

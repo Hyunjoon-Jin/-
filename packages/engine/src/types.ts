@@ -413,6 +413,10 @@ export interface PlayerMatchStat {
   cleanSheet?: boolean;
   /** 이 경기에서 범한 자책골 수(고도화 항목42). 없으면 0으로 취급. */
   ownGoals?: number;
+  /** 빅찬스(득점확률이 임계값 이상인 슈팅) 생성 수(고도화 항목45). 없으면 0으로 취급. */
+  bigChancesCreated?: number;
+  /** 빅찬스 중 득점으로 이어지지 않은 수(고도화 항목45). 없으면 0으로 취급. */
+  bigChancesMissed?: number;
 }
 
 export interface InjuryEvent {

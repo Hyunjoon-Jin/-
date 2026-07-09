@@ -299,7 +299,9 @@ function ScorerTable({
         <tr>
           <th>순위</th><th>선수</th>
           {showClub && <th>구단</th>}
-          <th>출전</th><th>득점</th><th>도움</th><th>슛</th><th>평점</th>
+          <th>출전</th><th>득점</th><th>도움</th><th>슛</th>
+          <th title="빅찬스 생성/실축(고도화 항목45)">빅찬스</th>
+          <th>평점</th>
         </tr>
       </thead>
       <tbody>
@@ -312,6 +314,9 @@ function ScorerTable({
             <td><b>{s.goals}</b></td>
             <td>{s.assists}</td>
             <td className="muted">{s.shots}</td>
+            <td className="muted small">
+              {s.bigChancesCreated > 0 ? `${s.bigChancesCreated - s.bigChancesMissed}/${s.bigChancesCreated}` : '-'}
+            </td>
             <td className={ratingClass(s.avgRating)}>{s.avgRating.toFixed(2)}</td>
           </tr>
         ))}
