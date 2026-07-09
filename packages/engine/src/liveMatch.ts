@@ -7,7 +7,7 @@ import {
   createContext, stepMinute, finalize, applyTactic, MATCH_LENGTH,
   type MatchContext, type MatchSetup,
 } from './simulateMatch.js';
-import type { InjuryEvent, MatchEvent, MatchResult, Tactic } from './types.js';
+import type { CardEvent, InjuryEvent, MatchEvent, MatchResult, Tactic } from './types.js';
 import type { Weather } from './weather.js';
 
 export const HALF_TIME = Math.floor(MATCH_LENGTH / 2); // 45분
@@ -97,6 +97,14 @@ export class LiveMatch {
    */
   injuries(): InjuryEvent[] {
     return this.ctx.injuries;
+  }
+
+  /**
+   * 이번 경기 카드(옐로/레드) 판정 스케줄(킥오프 시점 확정, 언제 호출해도 동일).
+   * 부상과 마찬가지로 라이브 관전 중 분이 지날 때마다 노출한다(고도화 항목 B1).
+   */
+  cards(): CardEvent[] {
+    return this.ctx.cards;
   }
 
   result(): MatchResult {

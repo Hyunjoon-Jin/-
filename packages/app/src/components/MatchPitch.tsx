@@ -10,6 +10,10 @@ export interface PitchState {
   ball: { x: number; y: number };
   /** 방금 골 이벤트 하이라이트. */
   goalFlash: 'home' | 'away' | null;
+  /** 방금 카드(옐로/레드) 이벤트 하이라이트 — 해당 슬롯 선수 위에 아이콘 표시(고도화 항목 B1). */
+  cardFlash?: { side: 'home' | 'away'; slotIndex: number; type: 'yellow' | 'red' } | null;
+  /** 방금 부상 이벤트 하이라이트 — 해당 슬롯 선수 위에 🚑 표시(고도화 항목 B2). */
+  injuryFlash?: { side: 'home' | 'away'; slotIndex: number } | null;
   userIsHome: boolean;
   /** 홈/원정 선발 포메이션(슬롯 포지션 순서). 선수 점 배치에 사용. */
   homeFormation: Position[];
@@ -170,7 +174,7 @@ function draw(ctx: CanvasRenderingContext2D, s: PitchState) {
   const homeColor = s.userIsHome ? userColor : oppColor;
   const awayColor = s.userIsHome ? oppColor : userColor;
 
-  const drawTeam = (formation: Position[], labels: string[], mirror: boolean, color: string) => {
+  const drawTeam = (formation: Position[], labels: string[], mirror: boolean, color: string, side: 'home' | 'away') => {
     const coords = formationCoords(formation);
     coords.forEach((c, i) => {
       const baseX = mirror ? 1 - c.x : c.x;
@@ -194,10 +198,22 @@ function draw(ctx: CanvasRenderingContext2D, s: PitchState) {
         ctx.textBaseline = 'middle';
         ctx.fillText(label, px, py + 0.5);
       }
+      if (s.cardFlash && s.cardFlash.side === side && s.cardFlash.slotIndex === i) {
+        ctx.font = '14px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'alphabetic';
+        ctx.fillText(s.cardFlash.type === 'red' ? '🟥' : '🟨', px, py - 12);
+      }
+      if (s.injuryFlash && s.injuryFlash.side === side && s.injuryFlash.slotIndex === i) {
+        ctx.font = '14px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'alphabetic';
+        ctx.fillText('🚑', px, py - 12);
+      }
     });
   };
-  drawTeam(s.homeFormation, s.homeLabels, false, homeColor);
-  drawTeam(s.awayFormation, s.awayLabels, true, awayColor);
+  drawTeam(s.homeFormation, s.homeLabels, false, homeColor, 'home');
+  drawTeam(s.awayFormation, s.awayLabels, true, awayColor, 'away');
   ctx.textBaseline = 'alphabetic';
 
   // 공

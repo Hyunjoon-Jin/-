@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   LiveMatch, HALF_TIME, MATCH_LENGTH, currentAbility, isAvailable, SEVERITY_LABEL,
   CUP_FINAL_ROUND_NAME, decideAiHalftimeTactic,
-  type Club, type Tactic, type MatchEvent, type MatchResult, type LiveStats, type InjuryEvent,
+  type Club, type Tactic, type MatchEvent, type MatchResult, type LiveStats, type InjuryEvent, type CardEvent,
 } from '@soccer-tycoon/engine';
 import type { WatchSetup, MatchPreview as MatchPreviewData } from '../game.js';
 import { swapPlayer } from '../tactics.js';
@@ -45,6 +45,9 @@ interface View {
 
 /** "GOAL!" 배너 표시 지속시간(ms) — 틱 주기(TICK_MS)와 무관하게 고정. */
 const GOAL_FLASH_MS = 1500;
+/** 피치 위 카드/부상 아이콘 하이라이트 표시 지속시간(ms, 고도화 항목 B1/B2). */
+const CARD_FLASH_MS = 2000;
+const INJURY_FLASH_MS = 2000;
 
 export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId, onDone, onCancel }: Props) {
   const liveRef = useRef<LiveMatch | null>(null);
@@ -64,13 +67,20 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
   const [view, setView] = useState<View>({ minute: 0, score: [0, 0], ball: { x: 0.5, y: 0.5 } });
   const [goalFlash, setGoalFlash] = useState<'home' | 'away' | null>(null);
   const goalFlashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [cardFlash, setCardFlash] = useState<{ side: 'home' | 'away'; slotIndex: number; type: 'yellow' | 'red' } | null>(null);
+  const cardFlashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [injuryFlash, setInjuryFlash] = useState<{ side: 'home' | 'away'; slotIndex: number } | null>(null);
+  const injuryFlashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => {
     if (goalFlashTimerRef.current) clearTimeout(goalFlashTimerRef.current);
+    if (cardFlashTimerRef.current) clearTimeout(cardFlashTimerRef.current);
+    if (injuryFlashTimerRef.current) clearTimeout(injuryFlashTimerRef.current);
   }, []);
   const [feed, setFeed] = useState<MatchEvent[]>([]);
   const [tactic, setTactic] = useState<Tactic>(initialTactic);
   const [stats, setStats] = useState<LiveStats>({ possession: [50, 50], shots: [0, 0], shotsOnTarget: [0, 0] });
   const [injuryFeed, setInjuryFeed] = useState<InjuryEvent[]>([]);
+  const [cardFeed, setCardFeed] = useState<CardEvent[]>([]);
   const [activeInjury, setActiveInjury] = useState<InjuryEvent | null>(null);
   const [subsUsed, setSubsUsed] = useState(0);
   const [subModalOpen, setSubModalOpen] = useState(false);
@@ -84,10 +94,16 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
   const revealedIdxRef = useRef(0);
   const pendingMineRef = useRef<InjuryEvent[]>([]);
 
+  // 카드 스케줄도 부상과 동일하게 킥오프 시점에 확정 — 관전 중 분이 지날 때마다 노출(고도화 항목 B1).
+  const cardScheduleRef = useRef<CardEvent[] | null>(null);
+  if (cardScheduleRef.current === null) cardScheduleRef.current = live.cards();
+  const revealedCardIdxRef = useRef(0);
+
   /**
    * target분까지 지난 부상 이벤트를 피드에 공개.
    * interactive=true(기본)면 내 선수(현재 라인업 소속) 부상은 교체 대기열에 추가해
    * 경기를 잠시 멈추고 묻는다 — "빠르게" 스킵 중에는 방해하지 않도록 false로 끈다.
+   * 공개된 마지막 이벤트는 소속 팀 슬롯 위치를 찾아 피치 위 🚑 하이라이트도 함께 띄운다(항목 B2).
    */
   function revealInjuriesUpTo(target: number, currentTactic: Tactic, interactive = true) {
     const schedule = injuryScheduleRef.current!;
@@ -100,8 +116,44 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
       const stillOnPitch = currentTactic.lineup.some((s) => s.playerId === e.playerId);
       if (interactive && e.side === userSide && stillOnPitch) newlyMine.push(e);
     }
-    if (newlyShown.length) setInjuryFeed((f) => [...newlyShown.reverse(), ...f]);
+    if (newlyShown.length) {
+      const last = newlyShown[newlyShown.length - 1]!;
+      setInjuryFeed((f) => [...newlyShown.slice().reverse(), ...f]);
+      const sideTactic = last.side === 'home' ? homeTactic : awayTactic;
+      const slotIndex = sideTactic.lineup.findIndex((s) => s.playerId === last.playerId);
+      if (slotIndex >= 0) {
+        if (injuryFlashTimerRef.current) clearTimeout(injuryFlashTimerRef.current);
+        setInjuryFlash({ side: last.side, slotIndex });
+        injuryFlashTimerRef.current = setTimeout(() => setInjuryFlash(null), INJURY_FLASH_MS);
+      }
+    }
     if (newlyMine.length) pendingMineRef.current.push(...newlyMine);
+  }
+
+  /**
+   * target분까지 지난 카드 이벤트를 중계 피드에 공개하고, 피치 위 해당 슬롯 선수 위에
+   * 🟨/🟥 하이라이트를 띄운다(고도화 항목 B1) — 이전에는 카드가 경기 종료 후 결과 패널에만
+   * 노출돼 관전 중에는 전혀 알 수 없었다.
+   */
+  function revealCardsUpTo(target: number) {
+    const schedule = cardScheduleRef.current!;
+    const newlyShown: CardEvent[] = [];
+    while (revealedCardIdxRef.current < schedule.length && schedule[revealedCardIdxRef.current]!.minute <= target) {
+      const e = schedule[revealedCardIdxRef.current]!;
+      revealedCardIdxRef.current++;
+      newlyShown.push(e);
+    }
+    if (newlyShown.length) {
+      const last = newlyShown[newlyShown.length - 1]!;
+      setCardFeed((f) => [...newlyShown.slice().reverse(), ...f]);
+      const sideTactic = last.side === 'home' ? homeTactic : awayTactic;
+      const slotIndex = sideTactic.lineup.findIndex((s) => s.playerId === last.playerId);
+      if (slotIndex >= 0) {
+        if (cardFlashTimerRef.current) clearTimeout(cardFlashTimerRef.current);
+        setCardFlash({ side: last.side, slotIndex, type: last.type });
+        cardFlashTimerRef.current = setTimeout(() => setCardFlash(null), CARD_FLASH_MS);
+      }
+    }
   }
 
   // 대기 중인 내 부상 이벤트가 있고, 아직 프롬프트가 없으면 하나 꺼내 표시(경기 일시 정지).
@@ -144,6 +196,7 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
       minuteRef.current = target;
       applyMinute(target, evs);
       revealInjuriesUpTo(target, tactic);
+      revealCardsUpTo(target);
     }, TICK_MS / speed);
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -161,6 +214,7 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
     minuteRef.current = boundary;
     applyMinute(boundary, evs);
     revealInjuriesUpTo(boundary, tactic, false);
+    revealCardsUpTo(boundary);
   }
 
   /** 라인업 슬롯 교체를 즉시 엔진에 반영(부상 교체·자유 교체 공통 경로). 교체 카드 1장 소모. */
@@ -227,7 +281,7 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
   const userAhead = myGoals > oppGoals;
   const pitch: PitchState = {
     homeName, awayName, score: view.score, minute: view.minute,
-    ball: view.ball, goalFlash, userIsHome: watch.userIsHome,
+    ball: view.ball, goalFlash, cardFlash, injuryFlash, userIsHome: watch.userIsHome,
     homeFormation: homeTactic.lineup.map((s) => s.position),
     awayFormation: awayTactic.lineup.map((s) => s.position),
     homeLabels: homeTactic.lineup.map((slot) => playerInitials(homeClub, slot.playerId)),
@@ -329,7 +383,7 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
               <LiveStatsPanel stats={stats} homeName={homeName} awayName={awayName} userSide={userSide} />
               {aiHalftimeNote && <p className="muted small ai-halftime-note">🔄 {aiHalftimeNote}</p>}
               <h3>중계</h3>
-              <Feed events={feed} injuries={injuryFeed} userSide={userSide} />
+              <Feed events={feed} injuries={injuryFeed} cards={cardFeed} userSide={userSide} />
             </div>
           )}
         </div>
@@ -395,14 +449,16 @@ function LiveStatsPanel({
 
 type FeedItem =
   | { kind: 'match'; minute: number; ev: MatchEvent }
-  | { kind: 'injury'; minute: number; ev: InjuryEvent };
+  | { kind: 'injury'; minute: number; ev: InjuryEvent }
+  | { kind: 'card'; minute: number; ev: CardEvent };
 
 function Feed({
-  events, injuries, userSide,
-}: { events: MatchEvent[]; injuries: InjuryEvent[]; userSide: 'home' | 'away' }) {
+  events, injuries, cards, userSide,
+}: { events: MatchEvent[]; injuries: InjuryEvent[]; cards: CardEvent[]; userSide: 'home' | 'away' }) {
   const items: FeedItem[] = [
     ...events.map((ev): FeedItem => ({ kind: 'match', minute: ev.minute, ev })),
     ...injuries.map((ev): FeedItem => ({ kind: 'injury', minute: ev.minute, ev })),
+    ...cards.map((ev): FeedItem => ({ kind: 'card', minute: ev.minute, ev })),
   ];
   // 각 목록은 이미 최신순으로 쌓이므로, 삽입 순서를 보존하며 안정적으로 합친다.
   items.sort((a, b) => b.minute - a.minute);
@@ -418,12 +474,20 @@ function Feed({
           <span className="feed-min">{it.ev.minute}'</span>
           <span className="feed-text">{it.ev.playerName} — {OUTCOME[it.ev.outcome]}</span>
         </li>
-      ) : (
+      ) : it.kind === 'injury' ? (
         <li key={`injury-${it.ev.minute}-${it.ev.playerId}`} className="injury-feed">
           <span className="feed-min">{it.ev.minute}'</span>
           <span className="feed-text">
             🚑 {it.ev.playerName} {SEVERITY_LABEL[it.ev.severity]} 부상 ({it.ev.name})
             {it.ev.side === userSide && <span className="muted small"> — 예상 결장 {it.ev.matches}경기</span>}
+          </span>
+        </li>
+      ) : (
+        <li key={`card-${it.ev.minute}-${it.ev.playerId}-${it.ev.type}`} className="card-feed">
+          <span className="feed-min">{it.ev.minute}'</span>
+          <span className="feed-text">
+            {it.ev.type === 'red' ? '🟥' : '🟨'} {it.ev.playerName}
+            {it.ev.type === 'red' && <span className="muted small"> — 퇴장</span>}
           </span>
         </li>
       ))}
