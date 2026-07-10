@@ -938,7 +938,7 @@ h3 { font-size: 14px; margin: 0 0 10px; color: var(--muted); text-transform: upp
 /* 선수관리 개선 항목25-33 — 슬롯 선수 선택 팝업, 베스트 XI 성향, 라인업 프리셋, 전력 diff */
 .field-controls .label.small { font-size: 11px; }
 .chip.small { padding: 3px 9px; font-size: 11px; border-radius: 12px; }
-.xi-bias-row, .lineup-preset-row { margin-bottom: 10px; }
+.xi-bias-row, .lineup-preset-row, .formation-tag-filter-row { margin-bottom: 10px; }
 .slot-player-btn {
   width: 100%; text-align: left; background: var(--panel-2); color: var(--text);
   border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; font-size: 13px; cursor: pointer;
@@ -1183,12 +1183,16 @@ h3 { font-size: 14px; margin: 0 0 10px; color: var(--muted); text-transform: upp
 }
 .add-on-tier-row input[type="number"] { width: 70px; }
 
-/* ── 커스텀 포메이션 에디터(F14) ── */
-.modal.formation-editor-modal { max-width: 560px; }
+/* ── 커스텀 포메이션 에디터(F14, 선수관리 개선 항목34-38) ── */
+.modal.formation-editor-modal { max-width: 820px; }
 .formation-editor-warning { color: var(--color-warning); margin: -4px 0 10px; }
+.formation-editor-body { display: grid; grid-template-columns: 380px 1fr; gap: 18px; align-items: start; }
+.formation-editor-side { display: flex; flex-direction: column; gap: 12px; }
+.formation-editor-hint { margin: 6px 0; }
 .formation-editor-grid {
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 16px;
 }
+.formation-editor-grid-compact { grid-template-columns: repeat(2, 1fr); margin-bottom: 0; }
 .formation-slot { display: flex; flex-direction: column; gap: 4px; }
 .formation-slot-label { font-size: 11px; color: var(--muted); }
 .formation-slot-fixed {
@@ -1199,6 +1203,42 @@ h3 { font-size: 14px; margin: 0 0 10px; color: var(--muted); text-transform: upp
   background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
   border-radius: 6px; padding: 6px 8px; font-size: 13px; width: 100%;
 }
+
+/* 드래그 배치 미니 피치(항목34) */
+.formation-pitch-editor {
+  position: relative; width: 100%; aspect-ratio: 760 / 460;
+  background: linear-gradient(180deg, #1c4a2e, #163d26); border: 1px solid var(--line);
+  border-radius: 10px; overflow: hidden; touch-action: none;
+}
+.fpe-halfway {
+  position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: rgba(255,255,255,0.25);
+}
+.fpe-center-circle {
+  position: absolute; left: 50%; top: 50%; width: 15%; aspect-ratio: 1;
+  border: 1px solid rgba(255,255,255,0.25); border-radius: 50%; transform: translate(-50%, -50%);
+}
+.fpe-slot {
+  position: absolute; transform: translate(-50%, -50%); width: 34px; height: 34px; border-radius: 50%;
+  background: var(--accent-2); color: #06203f; border: 2px solid #fff; font-size: 11px; font-weight: 700;
+  cursor: grab; touch-action: none; padding: 0; line-height: 1;
+}
+.fpe-slot-gk { background: var(--color-warning); cursor: default; }
+.fpe-slot.dragging { cursor: grabbing; box-shadow: 0 0 0 4px rgba(255,255,255,0.25); z-index: 5; }
+
+/* 라인 구성 실시간 미리보기(항목36) */
+.formation-balance-row { display: flex; flex-direction: column; gap: 4px; }
+.formation-balance-bar {
+  display: flex; height: 22px; border-radius: 6px; overflow: hidden; border: 1px solid var(--line);
+}
+.fb-segment {
+  display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700;
+  color: #06203f; white-space: nowrap; overflow: hidden;
+}
+.fb-segment.def { background: var(--accent-2); }
+.fb-segment.mid { background: #c9c26a; }
+.fb-segment.att { background: var(--accent); }
+
+.formation-tag-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 
 /* ── Watch match (2D) ── */
 .watch-topbar { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }

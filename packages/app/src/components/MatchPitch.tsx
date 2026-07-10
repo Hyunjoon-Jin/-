@@ -65,8 +65,9 @@ export const SIDE_Y: Record<Position, number> = {
   ST: 0.5,
 };
 
-/** 포메이션 → 정규화 좌표. 같은 x열에 몰린 선수는 y로 고르게 벌린다. */
-function formationCoords(positions: Position[]): { x: number; y: number }[] {
+/** 포메이션 → 정규화 좌표. 같은 x열에 몰린 선수는 y로 고르게 벌린다.
+ *  커스텀 포메이션 드래그 에디터(선수관리 개선 항목34)도 동일 좌표계를 재사용한다. */
+export function formationCoords(positions: Position[]): { x: number; y: number }[] {
   const raw = positions.map((p) => ({ x: LINE_X[p], y: SIDE_Y[p] }));
   const groups = new Map<number, number[]>();
   raw.forEach((r, i) => {

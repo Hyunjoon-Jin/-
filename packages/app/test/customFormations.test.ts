@@ -35,7 +35,7 @@ describe('customFormations: 유효성 판정', () => {
 describe('customFormations: 저장·조회·삭제', () => {
   it('저장한 포메이션을 다시 불러올 수 있다', () => {
     const storage = mockStorage();
-    const saved = saveCustomFormation('박스형 스리백', VALID_11, storage);
+    const saved = saveCustomFormation('박스형 스리백', VALID_11, [], storage);
     expect(saved.length).toBe(1);
     expect(saved[0]!.label).toBe('박스형 스리백');
     expect(loadCustomFormations(storage)).toEqual(saved);
@@ -43,24 +43,37 @@ describe('customFormations: 저장·조회·삭제', () => {
 
   it('유효하지 않은 포지션 배열은 저장되지 않는다', () => {
     const storage = mockStorage();
-    const saved = saveCustomFormation('잘못된 포메이션', VALID_11.slice(0, 9), storage);
+    const saved = saveCustomFormation('잘못된 포메이션', VALID_11.slice(0, 9), [], storage);
     expect(saved.length).toBe(0);
     expect(loadCustomFormations(storage)).toEqual([]);
   });
 
   it('삭제하면 목록에서 사라진다', () => {
     const storage = mockStorage();
-    const saved = saveCustomFormation('테스트', VALID_11, storage);
+    const saved = saveCustomFormation('테스트', VALID_11, [], storage);
     const remaining = deleteCustomFormation(saved[0]!.id, storage);
     expect(remaining).toEqual([]);
     expect(loadCustomFormations(storage)).toEqual([]);
+  });
+
+  it('태그(선수관리 개선 항목38)를 붙여 저장하면 그대로 불러와진다', () => {
+    const storage = mockStorage();
+    const saved = saveCustomFormation('역습 전용', VALID_11, ['역습형', '수비형'], storage);
+    expect(saved[0]!.tags).toEqual(['역습형', '수비형']);
+    expect(loadCustomFormations(storage)[0]!.tags).toEqual(['역습형', '수비형']);
+  });
+
+  it('태그 없이 저장하면 tags가 undefined다', () => {
+    const storage = mockStorage();
+    const saved = saveCustomFormation('무태그', VALID_11, [], storage);
+    expect(saved[0]!.tags).toBeUndefined();
   });
 
   it('상한(8개)을 넘으면 가장 오래된 것부터 제거된다', () => {
     const storage = mockStorage();
     let latest = loadCustomFormations(storage);
     for (let i = 0; i < 9; i++) {
-      latest = saveCustomFormation(`포메이션${i}`, VALID_11, storage);
+      latest = saveCustomFormation(`포메이션${i}`, VALID_11, [], storage);
     }
     expect(latest.length).toBe(8);
     expect(latest[0]!.label).toBe('포메이션1'); // 포메이션0은 밀려남
