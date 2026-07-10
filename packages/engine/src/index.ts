@@ -2,7 +2,7 @@
 export * from './types.js';
 export { Rng } from './rng.js';
 export { simulateMatch, MATCH_LENGTH, type MatchSetup } from './simulateMatch.js';
-export { LiveMatch, HALF_TIME, type LiveStats } from './liveMatch.js';
+export { LiveMatch, HALF_TIME, type LiveStats, type TeamTalkTone } from './liveMatch.js';
 export {
   matchWeather, WEATHER_LABEL, WEATHER_ATTACK_MULTIPLIER, WEATHER_CREATION_MULTIPLIER, type Weather,
 } from './weather.js';

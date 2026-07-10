@@ -21,9 +21,15 @@ export interface LiveStats {
   bigChances: [number, number];
 }
 
+/** 하프타임 팀토크 어조(경기 개입 개선 B13/F4). */
+export type TeamTalkTone = 'encourage' | 'critic' | 'calm';
+
 export class LiveMatch {
   private ctx: MatchContext;
   private current = 0; // 진행된 분
+  /** 팀토크 보정 배율(F4) — 전술 재적용(applyTactic)이 전력을 재계산해도 유지되도록
+   *  별도 보관하고 setTactic마다 다시 곱한다. */
+  private talkMul: { home: number; away: number } = { home: 1, away: 1 };
   // finalize()는 statMap 평점에 승/패·실점 보정을 "더해서" 반영하므로 비멱등적이다.
   // result()가 여러 번 호출돼도(예: React 렌더마다) 보정이 중복 적용되지 않도록 최초 1회만
   // 계산해 캐시한다 — 경기가 끝난 뒤의 결과는 이후 다시 계산해도 달라질 이유가 없다.
@@ -106,9 +112,39 @@ export class LiveMatch {
     return this.runUntil(MATCH_LENGTH);
   }
 
+  /** 팀토크 배율을 전력의 모든 항목에 곱한다(TeamStrength는 항목별 수치 객체). */
+  private scaleStrength(side: 'home' | 'away', mul: number): void {
+    const st = this.ctx[side].strength;
+    for (const key of Object.keys(st) as (keyof typeof st)[]) st[key] *= mul;
+  }
+
   /** 하프타임 등에서 한 팀 전술 교체(누적 스코어는 유지). */
   setTactic(side: 'home' | 'away', tactic: Tactic): void {
     applyTactic(this.ctx, side, tactic, this.current);
+    // 전술 재적용은 전력을 처음부터 재계산하므로, 팀토크 보정을 다시 얹는다(F4).
+    if (this.talkMul[side] !== 1) this.scaleStrength(side, this.talkMul[side]);
+  }
+
+  /** 현재 팀 전력 총합(팀토크 보정 포함) — 테스트·UI 확인용 읽기 전용. */
+  strengthOf(side: 'home' | 'away'): number {
+    const st = this.ctx[side].strength;
+    return Object.values(st).reduce((s, v) => s + v, 0);
+  }
+
+  /**
+   * 하프타임 팀토크(경기 개입 개선 B13/F4) — 후반 팀 전력에 단기 보정을 준다.
+   * 격려 +2% · 침착 +1% · 질책은 지고 있으면 +4%(반등), 아니면 -2%(역효과).
+   * 적용된 배율을 반환한다(UI 피드백용). 경기당 1회 사용은 호출자(UI)가 보장한다.
+   */
+  applyTeamTalk(side: 'home' | 'away', tone: TeamTalkTone): number {
+    const team = this.ctx[side];
+    const opp = this.ctx[side === 'home' ? 'away' : 'home'];
+    const mul = tone === 'encourage' ? 1.02
+      : tone === 'calm' ? 1.01
+        : team.goals < opp.goals ? 1.04 : 0.98;
+    this.talkMul[side] *= mul;
+    this.scaleStrength(side, mul);
+    return mul;
   }
 
   /**

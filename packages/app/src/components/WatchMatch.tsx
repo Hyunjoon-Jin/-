@@ -5,7 +5,7 @@ import {
   LiveMatch, HALF_TIME, MATCH_LENGTH, currentAbility, isAvailable, SEVERITY_LABEL,
   CUP_FINAL_ROUND_NAME, decideAiHalftimeTactic, lineOf,
   type Club, type Player, type Tactic, type MatchEvent, type MatchResult, type LiveStats,
-  type InjuryEvent, type CardEvent,
+  type InjuryEvent, type CardEvent, type TeamTalkTone,
 } from '@soccer-tycoon/engine';
 import type { WatchSetup, MatchPreview as MatchPreviewData } from '../game.js';
 import { swapPlayer } from '../tactics.js';
@@ -75,6 +75,13 @@ const QUICK_PRESETS: { key: string; label: string; title: string; values: QuickT
   { key: 'lowblock', label: '🧱 로우 블록', title: '낮은 압박 + 낮은 수비라인으로 골문 앞을 걸어 잠금', values: { pressing: 0.3, defensiveLine: 0.25 } },
   { key: 'tempoup', label: '🚀 템포 업', title: '공격 전개 속도만 끌어올림(체력 소모 증가)', values: { tempo: 0.8 } },
   { key: 'slowdown', label: '⏳ 시간 끌기', title: '템포를 죽이고 신중하게 — 리드 막판 운영용', values: { tempo: 0.2, mentality: 0.35 } },
+];
+
+/** 하프타임 팀토크 선택지(M4 B13) — 엔진 applyTeamTalk과 짝을 이룬다. */
+const TEAM_TALKS: { tone: TeamTalkTone; label: string; desc: string }[] = [
+  { tone: 'encourage', label: '💪 격려', desc: '자신감을 불어넣는다 — 후반 전력 +2%' },
+  { tone: 'critic', label: '🗯 질책', desc: '정신 차리게 다그친다 — 지고 있으면 +4% 반등, 아니면 -2% 역효과' },
+  { tone: 'calm', label: '🧊 침착', desc: '계획대로 차분히 — 후반 전력 +1%' },
 ];
 
 /** 멘탈리티 5단 스테퍼(M2 B3) — 슬라이더를 열지 않고도 한 번에 성향을 바꾼다. */
@@ -174,6 +181,8 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
   const toast = useToast();
   /** 마지막 전술 변경 시각(분, M4 B11) — 쿨다운 계산용. -999 = 아직 변경 없음. */
   const lastTacticChangeRef = useRef(-999);
+  /** 하프타임 팀토크(M4 B13) — 경기당 1회. 선택한 어조를 기억해 재선택을 막는다. */
+  const [teamTalkUsed, setTeamTalkUsed] = useState<TeamTalkTone | null>(null);
   /** 예약 교체(M4 B16): 지정한 분에 도달하면 자동 실행된다. */
   const [subPlans, setSubPlans] = useState<{ minute: number; outId: string; inId: string }[]>([]);
 
@@ -413,6 +422,17 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
     logTactic(label);
     toast(`${label} 적용`, true);
     lastTacticChangeRef.current = minuteRef.current;
+  }
+
+  /** 하프타임 팀토크 실행(M4 B13) — 엔진에 전력 보정을 적용하고 이력·토스트로 알린다. */
+  function giveTeamTalk(tone: TeamTalkTone, label: string) {
+    if (teamTalkUsed) return;
+    const mul = live.applyTeamTalk(userSide, tone);
+    setTeamTalkUsed(tone);
+    const pct = ((mul - 1) * 100).toFixed(0);
+    const sign = mul >= 1 ? '+' : '';
+    logTactic(`팀토크: ${label} (후반 전력 ${sign}${pct}%)`);
+    toast(`${label} — 후반 전력 ${sign}${pct}%`, mul >= 1);
   }
 
   /** 인게임 전술 패널 열기(B1/B2) — 경기를 멈추고 생각할 시간을 확보한다. */
@@ -740,6 +760,23 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
                   : isDerby
                     ? '🔥 라이벌전 하프타임 — 전술을 조정할 수 있습니다'
                     : '하프타임 — 전술을 조정할 수 있습니다'}
+              </div>
+              <div className="team-talk">
+                <h3>🎙 팀토크 {teamTalkUsed && <span className="muted small">(전달 완료)</span>}</h3>
+                {teamTalkUsed ? (
+                  <p className="muted small">
+                    {TEAM_TALKS.find((t) => t.tone === teamTalkUsed)?.label} — 라커룸의 말은 한 번뿐입니다.
+                  </p>
+                ) : (
+                  <div className="team-talk-options">
+                    {TEAM_TALKS.map((t) => (
+                      <button key={t.tone} className="btn-ghost team-talk-btn" title={t.desc}
+                        onClick={() => giveTeamTalk(t.tone, t.label)}>
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
               <HalftimeReport
                 stats={stats} ratings={ratings} tactic={tactic} club={myClub}
