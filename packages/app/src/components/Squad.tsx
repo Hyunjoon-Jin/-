@@ -10,6 +10,7 @@ import { flagFor } from '../flags.js';
 import { useResultToast, useToast } from '../toast.js';
 import { PlayerCompareModal } from './PlayerCompareModal.js';
 import type { ActionOutcome } from '../game.js';
+import { RELEASE_TAG, LOAN_REVIEW_TAG } from '../playerTags.js';
 import {
   loadSquadViewSettings, saveSquadViewSettings, OPTIONAL_COLUMNS,
   type SquadViewSettings, type SquadDensity, type SquadViewMode,
@@ -28,11 +29,6 @@ function roParticle(word: string): '로' | '으로' {
   const finalIndex = (last - 0xac00) % 28;
   return finalIndex === 0 || finalIndex === 8 ? '로' : '으로';
 }
-
-/** 방출·임대 검토 대상을 일괄 표시하는 프리셋 태그(선수관리 개선 항목11/12) — 자유 태그
- *  시스템(Player.tags) 위에 얹은 실용 프리셋 두 가지. */
-const RELEASE_TAG = '방출 후보';
-const LOAN_REVIEW_TAG = '임대 검토';
 
 /** 아직 멘토가 없는 유망주에게 최적의 미배정 멘토를 자동으로 짝지어준다(선수관리 개선
  *  항목15) — 잠재력이 높은 유망주부터, 같은 라인·높은 CA·성향 충돌(다혈질×차분함) 회피

@@ -19,6 +19,11 @@ import { onKeyActivate } from '../a11y.js';
 import { SortableTh } from './SortableTh.js';
 import { useToast } from '../toast.js';
 import { ConfirmDialog } from './ConfirmDialog.js';
+import { RELEASE_TAG } from '../playerTags.js';
+import {
+  loadTransferFilterPresets, saveTransferFilterPreset, deleteTransferFilterPreset,
+  type TransferFilterPreset,
+} from '../transferFilterPresets.js';
 
 interface Props {
   game: GameState;
@@ -42,6 +47,8 @@ interface Props {
   onPanicBuy: (playerId: string) => ActionOutcome;
   onRivalSnipe: (playerId: string, rivalClubId: string, bid: number) => ActionOutcome;
   onToggleWatchlist: (playerId: string) => ActionOutcome;
+  /** 선수 태그 전체를 교체(선수관리 개선 항목43) — 내 스쿼드 패널의 "관심 표시"(방출 후보)에 사용. */
+  onSetPlayerTags: (playerId: string, tags: string[]) => void;
 }
 
 type Msg = { text: string; ok: boolean };
@@ -99,6 +106,7 @@ function TransferMarket({
   game, onNegotiate, onBuyAt, onBuyViaReleaseClause, onOffers, onAcceptSell, onRelease,
   onLoanOut, onLoanIn, onRecallLoan, onExerciseBuyOption, onSwap, onSelect, onNegotiationBreakdown,
   onBuyback, onRenegotiateBuyback, onAttachAddOn, onPanicBuy, onRivalSnipe, onToggleWatchlist, onRenegotiateLoanWage,
+  onSetPlayerTags,
 }: Props) {
   const club = myClub(game);
   const toast = useToast();
@@ -111,6 +119,18 @@ function TransferMarket({
   const [dir, setDir] = useState<SortDir>(-1);
   const [squadSort, setSquadSort] = useState<MarketSortKey>('ca');
   const [squadDir, setSquadDir] = useState<SortDir>(-1);
+
+  // 내 스쿼드 패널 필터/검색(선수관리 개선 항목39/40) — 영입 시장 패널과 대칭으로 추가.
+  const [squadLine, setSquadLine] = useState<LineFilter>('ALL');
+  const [squadAgeFilter, setSquadAgeFilter] = useState<AgeFilter>('ALL');
+  const [squadMinCA, setSquadMinCA] = useState('');
+  const [squadNoInjuryOnly, setSquadNoInjuryOnly] = useState(false);
+  const [squadSearch, setSquadSearch] = useState('');
+
+  // 내 스쿼드 필터 프리셋(선수관리 개선 항목41).
+  const [squadFilterPresets, setSquadFilterPresets] = useState<TransferFilterPreset[]>(() => loadTransferFilterPresets());
+  const [showSaveSquadPresetInput, setShowSaveSquadPresetInput] = useState(false);
+  const [squadPresetNameInput, setSquadPresetNameInput] = useState('');
   const [negotiating, setNegotiating] = useState<TransferTarget | null>(null);
   const [selling, setSelling] = useState<Player | null>(null);
   const [releasing, setReleasing] = useState<Player | null>(null);
@@ -166,7 +186,17 @@ function TransferMarket({
   }, [game, line, ageFilter, affordableOnly, watchlistOnly, search, sort, dir, budget]);
 
   const mySquad = useMemo(() => {
-    const list = [...club.players];
+    let list = [...club.players];
+    if (squadLine !== 'ALL') list = list.filter((p) => lineOf(p.position) === squadLine);
+    const squadAgeTest = AGE_FILTERS.find((f) => f.key === squadAgeFilter)!.test;
+    list = list.filter((p) => squadAgeTest(p.age));
+    const minCA = Number(squadMinCA);
+    if (squadMinCA.trim() && !Number.isNaN(minCA)) list = list.filter((p) => currentAbility(p) >= minCA);
+    if (squadNoInjuryOnly) list = list.filter((p) => (p.careerInjuryCount ?? 0) === 0);
+    if (squadSearch.trim()) {
+      const q = squadSearch.trim().toLowerCase();
+      list = list.filter((p) => p.name.toLowerCase().includes(q));
+    }
     list.sort((a, b) => {
       let cmp: number;
       switch (squadSort) {
@@ -178,7 +208,34 @@ function TransferMarket({
       return cmp * squadDir;
     });
     return list;
-  }, [game, squadSort, squadDir]);
+  }, [game, squadSort, squadDir, squadLine, squadAgeFilter, squadMinCA, squadNoInjuryOnly, squadSearch]);
+
+  function applySquadFilterPreset(p: TransferFilterPreset) {
+    setSquadLine(p.line);
+    setSquadAgeFilter(p.ageFilter);
+    setSquadMinCA(p.minCA > 0 ? String(p.minCA) : '');
+    setSquadNoInjuryOnly(p.noInjuryOnly);
+    setSquadSearch(p.search);
+  }
+
+  function handleSaveSquadFilterPreset() {
+    const label = squadPresetNameInput.trim();
+    if (!label) return;
+    setSquadFilterPresets(saveTransferFilterPreset(label, {
+      line: squadLine, ageFilter: squadAgeFilter, minCA: Number(squadMinCA) || 0,
+      noInjuryOnly: squadNoInjuryOnly, search: squadSearch,
+    }));
+    setSquadPresetNameInput('');
+    setShowSaveSquadPresetInput(false);
+  }
+
+  /** 내 선수 "관심 표시"(선수관리 개선 항목43) — 방출 후보 태그를 개별 토글. 영입 시장의
+   *  ⭐ 워치리스트 토글과 대칭을 이루도록 같은 아이콘을 쓴다. */
+  function toggleReleaseInterest(p: Player) {
+    const tags = p.tags ?? [];
+    const next = tags.includes(RELEASE_TAG) ? tags.filter((t) => t !== RELEASE_TAG) : [...tags, RELEASE_TAG];
+    onSetPlayerTags(p.id, next);
+  }
 
   function act(outcome: ActionOutcome) {
     toast(outcome.message, outcome.ok);
@@ -360,7 +417,82 @@ function TransferMarket({
 
         {/* 내 스쿼드 */}
         <div className="market-panel">
-          <h3>내 스쿼드 ({club.players.length})</h3>
+          <h3>내 스쿼드 ({mySquad.length}/{club.players.length})</h3>
+          <div className="filters">
+            {LINE_FILTERS.map((f) => (
+              <button
+                key={f.key}
+                className={squadLine === f.key ? 'chip active' : 'chip'}
+                onClick={() => setSquadLine(f.key)}
+              >{f.label}</button>
+            ))}
+          </div>
+          <div className="filters">
+            {AGE_FILTERS.map((f) => (
+              <button
+                key={f.key}
+                className={squadAgeFilter === f.key ? 'chip active' : 'chip'}
+                onClick={() => setSquadAgeFilter(f.key)}
+              >{f.label}</button>
+            ))}
+            <input
+              className="ca-min-input" type="number" min={0} max={200} placeholder="CA 최소"
+              aria-label="최소 CA"
+              value={squadMinCA} onChange={(e) => setSquadMinCA(e.target.value)}
+            />
+            <label className="afford" title="통산 부상 이력(careerInjuryCount)이 없는 선수만">
+              <input type="checkbox" checked={squadNoInjuryOnly}
+                onChange={(e) => setSquadNoInjuryOnly(e.target.checked)} />
+              부상 이력 없음
+            </label>
+          </div>
+          <input className="search" placeholder="선수 이름 검색…" aria-label="내 스쿼드 선수 검색"
+            value={squadSearch} onChange={(e) => setSquadSearch(e.target.value)} />
+          <div className="filter-preset-row">
+            {squadFilterPresets.map((p) => (
+              <span key={p.id} className="chip preset-chip custom-preset-chip">
+                <button
+                  className="custom-preset-apply"
+                  title={`라인 ${p.line} · 나이 ${p.ageFilter} · CA ${p.minCA}+`}
+                  onClick={() => applySquadFilterPreset(p)}
+                >
+                  ★ {p.label}
+                </button>
+                <button
+                  className="preset-delete"
+                  title="이 필터 프리셋 삭제"
+                  onClick={() => setSquadFilterPresets(deleteTransferFilterPreset(p.id))}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+            {!showSaveSquadPresetInput ? (
+              <button
+                className="chip small"
+                disabled={squadFilterPresets.length >= 10}
+                title={squadFilterPresets.length >= 10 ? '필터 프리셋은 최대 10개까지 저장할 수 있습니다.' : undefined}
+                onClick={() => setShowSaveSquadPresetInput(true)}
+              >
+                + 현재 필터 저장
+              </button>
+            ) : (
+              <span className="preset-save-form">
+                <input
+                  className="preset-name-input" maxLength={20} placeholder="프리셋 이름"
+                  value={squadPresetNameInput}
+                  onChange={(e) => setSquadPresetNameInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleSaveSquadFilterPreset();
+                    if (e.key === 'Escape') setShowSaveSquadPresetInput(false);
+                  }}
+                  autoFocus
+                />
+                <button className="btn-small" onClick={handleSaveSquadFilterPreset} disabled={!squadPresetNameInput.trim()}>저장</button>
+                <button className="btn-small" onClick={() => { setShowSaveSquadPresetInput(false); setSquadPresetNameInput(''); }}>취소</button>
+              </span>
+            )}
+          </div>
           <div className="table-scroll">
           <table className="data-table compact">
             <thead>
@@ -404,6 +536,9 @@ function TransferMarket({
                         🔁🔓
                       </span>
                     )}
+                    {(p.tags ?? []).map((t) => (
+                      <span key={t} className="player-tag-chip">{t}</span>
+                    ))}
                   </td>
                   <td><span className={`pos-chip pos-${lineOf(p.position).toLowerCase()}`}>{p.position}</span></td>
                   <td>{p.age}</td>
@@ -411,6 +546,17 @@ function TransferMarket({
                   <td className="muted">{p.potential.toFixed(0)}</td>
                   <td>{formatMoney(marketValue(p))}</td>
                   <td className="sell-actions">
+                    <button
+                      className={`btn-small watch-star-btn${(p.tags ?? []).includes(RELEASE_TAG) ? ' active' : ''}`}
+                      title={
+                        (p.tags ?? []).includes(RELEASE_TAG)
+                          ? `${RELEASE_TAG} 표시 해제`
+                          : `${RELEASE_TAG}로 표시 — 워치리스트(영입 후보)와 대칭으로 내 선수도 관심 표시할 수 있습니다(선수관리 개선 항목43)`
+                      }
+                      onClick={(e) => { e.stopPropagation(); toggleReleaseInterest(p); }}
+                    >
+                      {(p.tags ?? []).includes(RELEASE_TAG) ? '⭐' : '☆'}
+                    </button>
                     {p.loanFromClubId === undefined ? (
                       <>
                         <button className="btn-small" onClick={(e) => { e.stopPropagation(); setSelling(p); }}>판매</button>
@@ -1238,7 +1384,11 @@ function TransferHistory({ game }: { game: GameState }) {
   const last = lastSummary(game);
   return (
     <div className="transfers">
-      <p className="muted">시즌 진행 중에는 직접 이적이 불가합니다. (프리시즌에 이용 가능)</p>
+      <p className="muted">
+        시즌 진행 중에는 직접 이적이 불가합니다. (프리시즌에 이용 가능) 다만 방출·임대 검토 대상
+        표시(선수관리 개선 항목44)는 스쿼드 탭에서 시즌 중에도 미리 해둘 수 있습니다 — 프리시즌이
+        되면 바로 처리하면 됩니다.
+      </p>
       {!last || last.transfers.length === 0 ? (
         <p className="muted">지난 시즌 이적 내역이 없습니다.</p>
       ) : (

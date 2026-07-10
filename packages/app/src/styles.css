@@ -320,6 +320,16 @@ body {
 }
 .modal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .modal-head h2 { margin: 0; }
+
+/* 전역 선수 검색(선수관리 개선 항목42) */
+.modal.global-search-modal { max-width: 460px; }
+.global-search-input { margin-bottom: 10px; }
+.global-search-list { list-style: none; margin: 0; padding: 0; max-height: 50vh; overflow-y: auto; }
+.global-search-item {
+  display: flex; align-items: center; gap: 10px; padding: 8px 6px; border-bottom: 1px solid var(--line);
+}
+.global-search-item:hover { background: var(--panel-2); }
+.global-search-item .name { flex: 1; }
 .help-list { list-style: none; padding: 0; margin: 0 0 14px; }
 .help-list li { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
 .help-tab { min-width: 68px; color: var(--accent); }
@@ -1102,6 +1112,10 @@ h3 { font-size: 14px; margin: 0 0 10px; color: var(--muted); text-transform: upp
 .data-table .small { font-size: 12px; }
 .sell-actions { display: flex; gap: 4px; }
 .market-actions { display: flex; gap: 4px; }
+.ca-min-input {
+  width: 70px; background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+  border-radius: 12px; padding: 3px 9px; font-size: 11px;
+}
 .clause-badge { margin-left: 5px; font-size: 12px; cursor: help; }
 .relations-dot { margin-left: 5px; font-size: 9px; cursor: help; vertical-align: middle; }
 .clause-buy { border-color: var(--accent-2); color: var(--accent-2); }
