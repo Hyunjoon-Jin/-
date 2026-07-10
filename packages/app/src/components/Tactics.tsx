@@ -15,6 +15,7 @@ import {
 } from '../customFormations.js';
 import { loadLineupPresets, saveLineupPreset, deleteLineupPreset, type LineupPreset } from '../lineupPresets.js';
 import { useModalA11y } from './useModalA11y.js';
+import { FormationPitchEditor, mirrorSymmetry, OUTFIELD_POSITIONS } from './FormationPitchEditor.js';
 
 interface Props {
   club: Club;
@@ -83,7 +84,16 @@ export function Tactics({ club, tactic, onChange, disabled }: Props) {
 
   const [customFormations, setCustomFormations] = useState<CustomFormation[]>(() => loadCustomFormations());
   const [showFormationEditor, setShowFormationEditor] = useState(false);
+  /** 복제 후 편집(선수관리 개선 항목35) — null이면 빈 4-3-3으로, 값이 있으면 해당 포메이션을
+   *  초기값으로 채워 에디터를 연다. */
+  const [editorSeed, setEditorSeed] = useState<{ label: string; positions: Position[]; tags: string[] } | null>(null);
   const allFormationLabels = [...FORMATION_NAMES, ...customFormations.map((f) => f.label)];
+  /** 커스텀 포메이션 태그 필터(선수관리 개선 항목38) — null이면 전체 표시. */
+  const [formationTagFilter, setFormationTagFilter] = useState<string | null>(null);
+  const allFormationTags = [...new Set(customFormations.flatMap((f) => f.tags ?? []))];
+  const visibleCustomFormations = formationTagFilter
+    ? customFormations.filter((f) => (f.tags ?? []).includes(formationTagFilter))
+    : customFormations;
   const [xiBias, setXiBias] = useState<LineupBias>('balanced');
   const [pickerSlotIndex, setPickerSlotIndex] = useState<number | null>(null);
 
@@ -125,9 +135,10 @@ export function Tactics({ club, tactic, onChange, disabled }: Props) {
       setPieceTakerId: ensureSetPieceTaker(club, repaired.lineup, tactic.setPieceTakerId),
     });
   }
-  function handleSaveFormation(label: string, positions: Position[]) {
-    setCustomFormations(saveCustomFormation(label, positions));
+  function handleSaveFormation(label: string, positions: Position[], tags: string[]) {
+    setCustomFormations(saveCustomFormation(label, positions, tags));
     setShowFormationEditor(false);
+    setEditorSeed(null);
     // 방금 저장한 포메이션 목록은 아직 리렌더 전(state가 비동기 반영)이라, 슬롯 배열을 직접 넘긴다.
     setFormation(label, positions);
   }
@@ -135,6 +146,10 @@ export function Tactics({ club, tactic, onChange, disabled }: Props) {
     setCustomFormations(deleteCustomFormation(id));
     // 삭제한 포메이션을 쓰고 있었다면 기본값으로 되돌린다.
     if (tactic.formation === label) setFormation(FORMATION_NAMES[0]!);
+  }
+  function handleCloneFormation(cf: CustomFormation) {
+    setEditorSeed({ label: `${cf.label} 사본`.slice(0, 20), positions: cf.positions, tags: cf.tags ?? [] });
+    setShowFormationEditor(true);
   }
   function setSlider(key: SliderKey, v: number) {
     onChange({ ...tactic, [key]: v });
@@ -211,14 +226,23 @@ export function Tactics({ club, tactic, onChange, disabled }: Props) {
               {f}
             </button>
           ))}
-          {customFormations.map((cf) => (
+          {visibleCustomFormations.map((cf) => (
             <span key={cf.id} className="chip preset-chip custom-preset-chip">
               <button
                 className={`custom-preset-apply${tactic.formation === cf.label ? ' active' : ''}`}
                 onClick={() => setFormation(cf.label)}
                 disabled={disabled}
+                title={(cf.tags ?? []).join(', ') || undefined}
               >
                 ★ {cf.label}
+              </button>
+              <button
+                className="preset-delete"
+                title="복제해서 편집(선수관리 개선 항목35)"
+                disabled={disabled}
+                onClick={() => handleCloneFormation(cf)}
+              >
+                ⧉
               </button>
               <button
                 className="preset-delete"
@@ -234,7 +258,7 @@ export function Tactics({ club, tactic, onChange, disabled }: Props) {
             className="chip"
             disabled={disabled || customFormations.length >= 8}
             title={customFormations.length >= 8 ? '커스텀 포메이션은 최대 8개까지 저장할 수 있습니다.' : undefined}
-            onClick={() => setShowFormationEditor(true)}
+            onClick={() => { setEditorSeed(null); setShowFormationEditor(true); }}
           >
             + 커스텀 포메이션
           </button>
@@ -242,6 +266,24 @@ export function Tactics({ club, tactic, onChange, disabled }: Props) {
             ⟳ 베스트 XI
           </button>
         </div>
+        {allFormationTags.length > 0 && (
+          <div className="field-controls formation-tag-filter-row">
+            <span className="label small">포메이션 태그</span>
+            <button
+              className={formationTagFilter === null ? 'chip small active' : 'chip small'}
+              onClick={() => setFormationTagFilter(null)}
+            >전체</button>
+            {allFormationTags.map((t) => (
+              <button
+                key={t}
+                className={formationTagFilter === t ? 'chip small active' : 'chip small'}
+                onClick={() => setFormationTagFilter((cur) => (cur === t ? null : t))}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+        )}
 
         <div className="field-controls xi-bias-row">
           <span className="label small">베스트 XI 성향</span>
@@ -313,8 +355,9 @@ export function Tactics({ club, tactic, onChange, disabled }: Props) {
         {showFormationEditor && (
           <FormationEditorModal
             existingLabels={allFormationLabels}
+            seed={editorSeed}
             onSave={handleSaveFormation}
-            onClose={() => setShowFormationEditor(false)}
+            onClose={() => { setShowFormationEditor(false); setEditorSeed(null); }}
           />
         )}
 
@@ -677,21 +720,24 @@ function SlotPickerModal({
 }
 
 /** GK를 제외한 슬롯에 배치 가능한 포지션(커스텀 포메이션 에디터, F14). */
-const OUTFIELD_POSITIONS: Position[] = POSITIONS.filter((p) => p !== 'GK');
-
 /**
  * 커스텀 포메이션 에디터(F14) — 4개 프리셋 외에 5·6번째 포메이션을 직접 정의한다.
  * 슬롯 1은 항상 GK로 고정해, "정확히 11명·GK 1명" 불변식을 UI 구조로 강제한다.
  */
+const FORMATION_TAG_OPTIONS = ['공격형', '수비형', '역습형', '점유형', '균형'];
+
 function FormationEditorModal({
-  existingLabels, onSave, onClose,
+  existingLabels, seed, onSave, onClose,
 }: {
   existingLabels: string[];
-  onSave: (label: string, positions: Position[]) => void;
+  /** 복제 후 편집(항목35) 시 채워 넣을 초기값. null이면 기본 4-3-3에서 새로 시작. */
+  seed: { label: string; positions: Position[]; tags: string[] } | null;
+  onSave: (label: string, positions: Position[], tags: string[]) => void;
   onClose: () => void;
 }) {
-  const [label, setLabel] = useState('');
-  const [outfield, setOutfield] = useState<Position[]>(() => FORMATIONS['4-3-3']!.slice(1));
+  const [label, setLabel] = useState(seed?.label ?? '');
+  const [outfield, setOutfield] = useState<Position[]>(() => (seed?.positions ?? FORMATIONS['4-3-3']!).slice(1));
+  const [tags, setTags] = useState<string[]>(seed?.tags ?? []);
   const ref = useModalA11y<HTMLDivElement>(onClose);
 
   const trimmedLabel = label.trim();
@@ -701,6 +747,16 @@ function FormationEditorModal({
   function setSlot(i: number, pos: Position) {
     setOutfield((prev) => prev.map((p, j) => (j === i ? pos : p)));
   }
+  function toggleTag(t: string) {
+    setTags((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]));
+  }
+
+  // 포메이션 밸런스 실시간 미리보기(항목36) — 실제 선수 능력치가 아직 없으니, 슬롯이
+  // 어느 라인(수비/미드/공격)에 몇 개 배정됐는지 구조적 비율로 보여준다.
+  const defCount = outfield.filter((p) => lineOf(p) === 'DEF').length;
+  const midCount = outfield.filter((p) => lineOf(p) === 'MID').length;
+  const attCount = outfield.filter((p) => lineOf(p) === 'ATT').length;
+  const total = outfield.length;
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -721,26 +777,62 @@ function FormationEditorModal({
           />
         </label>
         {duplicate && <p className="muted small formation-editor-warning">이미 있는 이름입니다. 다른 이름을 입력하세요.</p>}
-        <div className="formation-editor-grid">
-          <div className="formation-slot">
-            <span className="formation-slot-label">슬롯 1</span>
-            <span className="formation-slot-fixed">GK</span>
+
+        <div className="formation-editor-body">
+          <div>
+            <FormationPitchEditor positions={['GK', ...outfield]} onChange={setSlot} />
+            <p className="muted small formation-editor-hint">점을 드래그해서 위치를 바꾸세요. 가장 가까운 포지션으로 스냅됩니다.</p>
+            <button
+              className="chip small"
+              type="button"
+              onClick={() => setOutfield((prev) => mirrorSymmetry(prev))}
+              title="좌우 위/아래 슬롯을 짝지어 역할을 거울상으로 맞춥니다(항목37)"
+            >
+              ⇋ 좌우 대칭 맞춤
+            </button>
           </div>
-          {outfield.map((pos, i) => (
-            <div className="formation-slot" key={i}>
-              <span className="formation-slot-label">슬롯 {i + 2}</span>
-              <select value={pos} onChange={(e) => setSlot(i, e.target.value as Position)}>
-                {OUTFIELD_POSITIONS.map((p) => <option key={p} value={p}>{p}</option>)}
-              </select>
+          <div className="formation-editor-side">
+            <div className="formation-balance-row">
+              <span className="label small">라인 구성</span>
+              <div className="formation-balance-bar">
+                {defCount > 0 && <div className="fb-segment def" style={{ flexGrow: defCount }}>수비 {defCount}</div>}
+                {midCount > 0 && <div className="fb-segment mid" style={{ flexGrow: midCount }}>미드 {midCount}</div>}
+                {attCount > 0 && <div className="fb-segment att" style={{ flexGrow: attCount }}>공격 {attCount}</div>}
+              </div>
+              <span className="muted small">GK 1 + 수비 {defCount} + 미드 {midCount} + 공격 {attCount} = {total + 1}</span>
             </div>
-          ))}
+            <div className="formation-editor-grid formation-editor-grid-compact">
+              {outfield.map((pos, i) => (
+                <div className="formation-slot" key={i}>
+                  <span className="formation-slot-label">슬롯 {i + 2}</span>
+                  <select value={pos} onChange={(e) => setSlot(i, e.target.value as Position)}>
+                    {OUTFIELD_POSITIONS.map((p) => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </div>
+              ))}
+            </div>
+            <div className="formation-tag-row">
+              <span className="label small">태그(목록 필터용, 항목38)</span>
+              {FORMATION_TAG_OPTIONS.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  className={tags.includes(t) ? 'chip small active' : 'chip small'}
+                  onClick={() => toggleTag(t)}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
+
         <div className="confirm-actions">
           <button className="btn-ghost" onClick={onClose}>취소</button>
           <button
             className="btn-advance"
             disabled={!canSave}
-            onClick={() => onSave(trimmedLabel, ['GK', ...outfield])}
+            onClick={() => onSave(trimmedLabel, ['GK', ...outfield], tags)}
           >
             저장
           </button>
