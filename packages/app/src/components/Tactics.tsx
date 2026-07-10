@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core';
 import {
   computeTeamStrength, currentAbility, isInjured, isSuspended, isAvailable, lineOf, familiarityAt,
   eligibleInstructionKinds, POSITIONS, FORMATIONS, rankCaptainCandidates,
@@ -16,6 +17,7 @@ import {
 import { loadLineupPresets, saveLineupPreset, deleteLineupPreset, type LineupPreset } from '../lineupPresets.js';
 import { useModalA11y } from './useModalA11y.js';
 import { FormationPitchEditor, mirrorSymmetry, OUTFIELD_POSITIONS } from './FormationPitchEditor.js';
+import { DndScope, useDraggableItem, useDroppableZone } from './dnd/DndPrimitives.js';
 
 interface Props {
   club: Club;
@@ -96,6 +98,34 @@ export function Tactics({ club, tactic, onChange, disabled }: Props) {
     : customFormations;
   const [xiBias, setXiBias] = useState<LineupBias>('balanced');
   const [pickerSlotIndex, setPickerSlotIndex] = useState<number | null>(null);
+
+  /** 드래그앤드롭 라인업 배치(D25) — 선수 목록/다른 슬롯에서 슬롯 위로 드롭하면 배정·교환한다. */
+  const [activeDragPlayerId, setActiveDragPlayerId] = useState<string | null>(null);
+  const rosterPlayers = useMemo(
+    () => [...club.players].sort((a, b) => currentAbility(b) - currentAbility(a)),
+    [club.players],
+  );
+  function assignPlayerToSlot(slotIndex: number, playerId: string) {
+    const next = swapPlayer(tactic, slotIndex, playerId);
+    const captainId = ensureCaptain(club, next.lineup, next.captainId);
+    onChange({
+      ...next,
+      setPieceTakerId: ensureSetPieceTaker(club, next.lineup, next.setPieceTakerId),
+      captainId,
+      viceCaptainId: ensureViceCaptain(club, next.lineup, next.viceCaptainId, captainId),
+    });
+  }
+  function handleLineupDragStart(e: DragStartEvent) {
+    const data = e.active.data.current as { playerId?: string } | undefined;
+    setActiveDragPlayerId(data?.playerId ?? null);
+  }
+  function handleLineupDragEnd(e: DragEndEvent) {
+    setActiveDragPlayerId(null);
+    const overData = e.over?.data.current as { slotIndex?: number } | undefined;
+    const activeData = e.active.data.current as { playerId?: string } | undefined;
+    if (overData?.slotIndex === undefined || !activeData?.playerId) return;
+    assignPlayerToSlot(overData.slotIndex, activeData.playerId);
+  }
 
   const [lineupPresets, setLineupPresets] = useState<LineupPreset[]>(() => loadLineupPresets(club.id));
   const [showSaveLineupInput, setShowSaveLineupInput] = useState(false);
@@ -212,6 +242,14 @@ export function Tactics({ club, tactic, onChange, disabled }: Props) {
   }
 
   return (
+    <DndScope
+      onDragStart={handleLineupDragStart}
+      onDragEnd={handleLineupDragEnd}
+      onDragCancel={() => setActiveDragPlayerId(null)}
+      dragOverlay={activeDragPlayerId ? (
+        <div className="dnd-drag-overlay roster-chip">{byId.get(activeDragPlayerId)?.name}</div>
+      ) : null}
+    >
     <div className="tactics">
       <div className="tactics-left">
         <div className="field-controls">
@@ -366,77 +404,34 @@ export function Tactics({ club, tactic, onChange, disabled }: Props) {
             <tr><th>슬롯</th><th>선수</th><th>CA</th><th>개인 지시</th></tr>
           </thead>
           <tbody>
-            {tactic.lineup.map((slot, i) => {
-              const p = byId.get(slot.playerId);
-              const unavailable = p ? !isAvailable(p) : false;
-              const mark = (pl: typeof club.players[number]) =>
-                isInjured(pl) ? '🤕 ' : isSuspended(pl) ? '🟥 ' : '';
-              const kinds = eligibleInstructionKinds(slot.position);
-              return (
-                <tr key={i} className={unavailable ? 'slot-injured' : ''}>
-                  <td className="slot-pos">{slot.position}</td>
-                  <td className="slot-player">
-                    <button
-                      className="slot-player-btn"
-                      disabled={disabled}
-                      onClick={() => setPickerSlotIndex(i)}
-                    >
-                      {p ? (
-                        <>
-                          {mark(p)}
-                          {p.id === tactic.captainId ? '(C) ' : p.id === tactic.viceCaptainId ? '(VC) ' : ''}
-                          {p.name}
-                        </>
-                      ) : '(선수 없음)'}
-                    </button>
-                  </td>
-                  <td>
-                    {p && isInjured(p) ? <span className="injury">🤕{p.injuryMatches}</span>
-                      : p && isSuspended(p) ? <span className="suspended">🟥{p.suspensionMatches}</span>
-                      : p ? currentAbility(p).toFixed(0) : '-'}
-                  </td>
-                  <td className="slot-instruction">
-                    {kinds.length === 0 ? (
-                      <span className="muted small">—</span>
-                    ) : (
-                      <>
-                        <select
-                          className="instruction-select"
-                          disabled={disabled}
-                          value={slot.instruction?.kind ?? ''}
-                          onChange={(e) => {
-                            const kind = e.target.value as PlayerInstructionKind | '';
-                            if (kind === '') { onChange(setPlayerInstruction(tactic, i, undefined)); return; }
-                            if (kind === 'manMark') {
-                              onChange(setPlayerInstruction(tactic, i, { kind, targetPosition: MARK_TARGET_POSITIONS[0] }));
-                            } else {
-                              onChange(setPlayerInstruction(tactic, i, { kind }));
-                            }
-                          }}
-                        >
-                          <option value="">지시 없음</option>
-                          {kinds.map((k) => <option key={k} value={k}>{INSTRUCTION_LABEL[k]}</option>)}
-                        </select>
-                        {slot.instruction?.kind === 'manMark' && (
-                          <select
-                            className="instruction-target-select"
-                            disabled={disabled}
-                            value={slot.instruction.targetPosition ?? ''}
-                            onChange={(e) => onChange(setPlayerInstruction(
-                              tactic, i, { kind: 'manMark', targetPosition: e.target.value as Position },
-                            ))}
-                          >
-                            {MARK_TARGET_POSITIONS.map((pos) => <option key={pos} value={pos}>{pos}</option>)}
-                          </select>
-                        )}
-                      </>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
+            {tactic.lineup.map((slot, i) => (
+              <LineupSlotRow
+                key={i}
+                index={i}
+                slot={slot}
+                player={byId.get(slot.playerId)}
+                tactic={tactic}
+                onChange={onChange}
+                disabled={disabled}
+                onOpenPicker={() => setPickerSlotIndex(i)}
+              />
+            ))}
           </tbody>
         </table>
+
+        <div className="lineup-roster">
+          <div className="label">선수 목록 — 드래그해서 슬롯에 배치</div>
+          <div className="lineup-roster-list">
+            {rosterPlayers.map((p) => (
+              <RosterChip
+                key={p.id}
+                player={p}
+                inLineup={tactic.lineup.some((s) => s.playerId === p.id)}
+                disabled={disabled}
+              />
+            ))}
+          </div>
+        </div>
       </div>
 
       {pickerSlotIndex !== null && (
@@ -446,14 +441,7 @@ export function Tactics({ club, tactic, onChange, disabled }: Props) {
           slotIndex={pickerSlotIndex}
           onClose={() => setPickerSlotIndex(null)}
           onPick={(playerId) => {
-            const next = swapPlayer(tactic, pickerSlotIndex, playerId);
-            const captainId = ensureCaptain(club, next.lineup, next.captainId);
-            onChange({
-              ...next,
-              setPieceTakerId: ensureSetPieceTaker(club, next.lineup, next.setPieceTakerId),
-              captainId,
-              viceCaptainId: ensureViceCaptain(club, next.lineup, next.viceCaptainId, captainId),
-            });
+            assignPlayerToSlot(pickerSlotIndex, playerId);
             setPickerSlotIndex(null);
           }}
         />
@@ -648,6 +636,127 @@ export function Tactics({ club, tactic, onChange, disabled }: Props) {
           </div>
         </div>
       </div>
+    </div>
+    </DndScope>
+  );
+}
+
+/**
+ * 라인업 슬롯 한 행(드래그앤드롭 배치, D25) — 슬롯 셀은 드롭 영역이고, 선수가 배정돼
+ * 있으면 그 버튼 자체가 드래그 소스도 겸한다(다른 슬롯이나 선수 목록에서 끌어다 놓으면
+ * swapPlayer와 동일하게 배정·교환). 클릭은 여전히 기존 SlotPickerModal을 연다 — 드래그가
+ * 불편한 키보드·터치 사용자를 위한 대체 경로로 그대로 유지한다.
+ */
+function LineupSlotRow({
+  index, slot, player: p, tactic, onChange, disabled, onOpenPicker,
+}: {
+  index: number;
+  slot: Tactic['lineup'][number];
+  player: Club['players'][number] | undefined;
+  tactic: Tactic;
+  onChange: (t: Tactic) => void;
+  disabled?: boolean;
+  onOpenPicker: () => void;
+}) {
+  const unavailable = p ? !isAvailable(p) : false;
+  const mark = (pl: NonNullable<typeof p>) => (isInjured(pl) ? '🤕 ' : isSuspended(pl) ? '🟥 ' : '');
+  const kinds = eligibleInstructionKinds(slot.position);
+
+  const { setNodeRef: setDropRef, isOver } = useDroppableZone(`slot-${index}`, { slotIndex: index });
+  const { setNodeRef: setDragRef, attributes, listeners, isDragging } = useDraggableItem(
+    `lineup-${index}`, { playerId: p?.id }, !p || disabled,
+  );
+
+  return (
+    <tr className={unavailable ? 'slot-injured' : ''}>
+      <td className="slot-pos">{slot.position}</td>
+      <td ref={setDropRef} className={`slot-player dnd-drop-zone${isOver ? ' drop-over' : ''}`}>
+        <button
+          ref={setDragRef}
+          {...attributes}
+          {...listeners}
+          className={`slot-player-btn dnd-draggable${isDragging ? ' dragging' : ''}`}
+          disabled={disabled}
+          onClick={onOpenPicker}
+        >
+          {p ? (
+            <>
+              {mark(p)}
+              {p.id === tactic.captainId ? '(C) ' : p.id === tactic.viceCaptainId ? '(VC) ' : ''}
+              {p.name}
+            </>
+          ) : '(선수 없음)'}
+        </button>
+      </td>
+      <td>
+        {p && isInjured(p) ? <span className="injury">🤕{p.injuryMatches}</span>
+          : p && isSuspended(p) ? <span className="suspended">🟥{p.suspensionMatches}</span>
+          : p ? currentAbility(p).toFixed(0) : '-'}
+      </td>
+      <td className="slot-instruction">
+        {kinds.length === 0 ? (
+          <span className="muted small">—</span>
+        ) : (
+          <>
+            <select
+              className="instruction-select"
+              disabled={disabled}
+              value={slot.instruction?.kind ?? ''}
+              onChange={(e) => {
+                const kind = e.target.value as PlayerInstructionKind | '';
+                if (kind === '') { onChange(setPlayerInstruction(tactic, index, undefined)); return; }
+                if (kind === 'manMark') {
+                  onChange(setPlayerInstruction(tactic, index, { kind, targetPosition: MARK_TARGET_POSITIONS[0] }));
+                } else {
+                  onChange(setPlayerInstruction(tactic, index, { kind }));
+                }
+              }}
+            >
+              <option value="">지시 없음</option>
+              {kinds.map((k) => <option key={k} value={k}>{INSTRUCTION_LABEL[k]}</option>)}
+            </select>
+            {slot.instruction?.kind === 'manMark' && (
+              <select
+                className="instruction-target-select"
+                disabled={disabled}
+                value={slot.instruction.targetPosition ?? ''}
+                onChange={(e) => onChange(setPlayerInstruction(
+                  tactic, index, { kind: 'manMark', targetPosition: e.target.value as Position },
+                ))}
+              >
+                {MARK_TARGET_POSITIONS.map((pos) => <option key={pos} value={pos}>{pos}</option>)}
+              </select>
+            )}
+          </>
+        )}
+      </td>
+    </tr>
+  );
+}
+
+/** 라인업 슬롯 위로 끌어다 놓을 수 있는 선수 목록 칩 하나(드래그앤드롭 배치, D25). */
+function RosterChip({
+  player, inLineup, disabled,
+}: {
+  player: Club['players'][number];
+  inLineup: boolean;
+  disabled?: boolean;
+}) {
+  const { setNodeRef, attributes, listeners, isDragging, style } = useDraggableItem(
+    `roster-${player.id}`, { playerId: player.id }, disabled,
+  );
+  return (
+    <div
+      ref={setNodeRef}
+      {...attributes}
+      {...listeners}
+      style={style}
+      className={`roster-chip dnd-draggable${inLineup ? ' in-lineup' : ''}${isDragging ? ' dragging' : ''}`}
+      title={`${player.name} · ${player.position} · CA ${currentAbility(player).toFixed(0)}${inLineup ? ' · 현재 라인업 포함' : ''}`}
+    >
+      <span className="rc-name">{player.name}</span>
+      <span className="rc-pos muted small">{player.position}</span>
+      <span className="rc-ca">{currentAbility(player).toFixed(0)}</span>
     </div>
   );
 }
