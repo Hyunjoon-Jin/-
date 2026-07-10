@@ -21,6 +21,7 @@ import { InfoTip } from './InfoTip.js';
 import { flagFor } from '../flags.js';
 import { LINE_X, SIDE_Y } from './MatchPitch.js';
 import { ConfirmDialog } from './ConfirmDialog.js';
+import { ManMarkTargetPicker } from './FormationPitchEditor.js';
 
 const INSTRUCTION_LABEL: Record<PlayerInstructionKind, string> = {
   manMark: '전담마크', cutInside: '좁혀 들어오기',
@@ -586,6 +587,15 @@ export function PlayerDetail({
                     {MARK_TARGET_POSITIONS.map((pos) => <option key={pos} value={pos}>{pos}</option>)}
                   </select>
                 )}
+              </div>
+            )}
+            {onSetInstruction && currentInstruction?.kind === 'manMark' && (
+              <div className="pd-mark-target-row">
+                <span className="muted small">드래그로 전담마크 대상 지정:</span>
+                <ManMarkTargetPicker
+                  value={currentInstruction.targetPosition ?? MARK_TARGET_POSITIONS[0]!}
+                  onChange={(pos) => onSetInstruction({ kind: 'manMark', targetPosition: pos })}
+                />
               </div>
             )}
 

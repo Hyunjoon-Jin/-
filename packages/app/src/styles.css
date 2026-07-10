@@ -623,6 +623,7 @@ body {
   background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
   border-radius: 6px; padding: 5px 10px; font-size: 14px;
 }
+.pd-mark-target-row { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 14px; font-size: 13px; }
 .setpiece-select {
   background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
   border-radius: 6px; padding: 6px 10px; font-size: 14px; width: 100%;
@@ -1331,6 +1332,25 @@ h3 { font-size: 14px; margin: 0 0 10px; color: var(--muted); text-transform: upp
 }
 .fpe-slot-gk { background: var(--color-warning); cursor: default; }
 .fpe-slot.dragging { cursor: grabbing; box-shadow: 0 0 0 4px rgba(255,255,255,0.25); z-index: 5; }
+
+/* 전담마크 대상 드래그 지정(선수관리 전면 도입 D31) — 위 미니 피치와 같은 좌표계·스타일을 축소 재사용. */
+.mark-target-picker {
+  position: relative; width: 220px; max-width: 100%; aspect-ratio: 760 / 460;
+  background: linear-gradient(180deg, #1c4a2e, #163d26); border: 1px solid var(--line);
+  border-radius: 8px; overflow: hidden; touch-action: none;
+}
+.mark-target-picker.disabled { opacity: 0.5; pointer-events: none; }
+.mtp-ref-dot {
+  position: absolute; transform: translate(-50%, -50%); width: 6px; height: 6px; border-radius: 50%;
+  background: rgba(255,255,255,0.25);
+}
+.mtp-ref-dot.active { background: rgba(255,255,255,0.5); }
+.mtp-marker {
+  position: absolute; transform: translate(-50%, -50%); width: 30px; height: 30px; border-radius: 50%;
+  background: var(--color-special); color: #fff; border: 2px solid #fff; font-size: 9px; font-weight: 700;
+  cursor: grab; touch-action: none; padding: 0; line-height: 1;
+}
+.mtp-marker:active { cursor: grabbing; box-shadow: 0 0 0 4px rgba(255,255,255,0.25); }
 
 /* 라인 구성 실시간 미리보기(항목36) */
 .formation-balance-row { display: flex; flex-direction: column; gap: 4px; }
