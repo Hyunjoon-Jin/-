@@ -32,6 +32,10 @@ interface Props {
 }
 
 type Phase = 'ready' | 'playing' | 'halftime' | 'playing2' | 'fulltime';
+/** 스코어보드 히어로에 표시하는 경기 국면 라벨. */
+const PHASE_LABEL: Record<Phase, string> = {
+  ready: '킥오프 전', playing: '전반', halftime: '하프타임', playing2: '후반', fulltime: '경기 종료',
+};
 const TICK_MS = 130;
 /** 경기당 자유 교체 허용 횟수(부상 교체도 이 카운트를 함께 소모한다). */
 const SUB_LIMIT = 3;
@@ -312,12 +316,15 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
       <div className="watch-topbar">
         <button className="btn-ghost" onClick={onCancel}>← 취소</button>
         <span className="muted">상대: <b>{watch.opponent.name}</b> (평균 CA {avgCA(watch.opponent)})</span>
-        {isFinal && <span className="final-badge">🏆 컵 결승</span>}
-        {isDerby && <span className="derby-badge">🔥 라이벌전</span>}
       </div>
 
       <div className="watch-2col">
         <div>
+          <ScoreboardHero
+            homeName={homeName} awayName={awayName} score={view.score} minute={view.minute}
+            phase={phase} kit={kit} userIsHome={watch.userIsHome} goalFlash={goalFlash}
+            isDerby={isDerby} isFinal={isFinal}
+          />
           <MatchPitch {...pitch} />
           <div className="watch-controls">
             {phase === 'ready' && (
@@ -436,6 +443,48 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
           onDismiss={() => setSubModalOpen(false)}
         />
       )}
+    </div>
+  );
+}
+
+/**
+ * 피치 위 HTML 스코어보드 히어로 — 이전에는 캔버스 안에 작은 반투명 바로 그려
+ * 구단명이 잘리고 스코어가 눈에 안 들어왔다. 킷 색상 스와치·경기 국면·분 표시를
+ * 한곳에 모으고, 골이 터지면 보드 전체가 초록 글로우로 펄스한다.
+ */
+function ScoreboardHero({
+  homeName, awayName, score, minute, phase, kit, userIsHome, goalFlash, isDerby, isFinal,
+}: {
+  homeName: string; awayName: string; score: [number, number]; minute: number;
+  phase: Phase; kit: ReturnType<typeof resolveKitColors>; userIsHome: boolean;
+  goalFlash: 'home' | 'away' | null; isDerby: boolean; isFinal: boolean;
+}) {
+  const cls = [
+    'sb-hero',
+    isFinal ? 'final' : isDerby ? 'derby' : '',
+    goalFlash ? 'goal-pulse' : '',
+  ].filter(Boolean).join(' ');
+  return (
+    <div className={cls}>
+      <div className="sbh-team home">
+        <span className={userIsHome ? 'sbh-name mine' : 'sbh-name'}>{homeName}</span>
+        <span className="sbh-kit" style={{ background: kit.home }} aria-hidden="true" />
+      </div>
+      <div className="sbh-center">
+        <div className="sbh-score">
+          {score[0]}<span className="sbh-colon">:</span>{score[1]}
+        </div>
+        <div className="sbh-sub">
+          {isFinal && <span className="sbh-badge final">🏆 결승</span>}
+          {!isFinal && isDerby && <span className="sbh-badge derby">🔥 라이벌전</span>}
+          {(phase === 'playing' || phase === 'playing2') && <span className="sbh-minute">{minute}'</span>}
+          <span className="sbh-phase">{PHASE_LABEL[phase]}</span>
+        </div>
+      </div>
+      <div className="sbh-team away">
+        <span className="sbh-kit" style={{ background: kit.away }} aria-hidden="true" />
+        <span className={!userIsHome ? 'sbh-name mine' : 'sbh-name'}>{awayName}</span>
+      </div>
     </div>
   );
 }

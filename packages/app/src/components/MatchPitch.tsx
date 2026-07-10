@@ -232,7 +232,8 @@ function draw(ctx: CanvasRenderingContext2D, s: PitchState) {
   ctx.fill();
   ctx.strokeStyle = '#111'; ctx.lineWidth = 1.5; ctx.stroke();
 
-  // 골 하이라이트
+  // 골 하이라이트 — 스코어·시계·구단명은 캔버스 밖 HTML 스코어보드 히어로(ScoreboardHero)가
+  // 전담하므로, 캔버스에는 경기장 안에서 일어나는 순간 연출만 남긴다.
   if (s.goalFlash) {
     const gx = s.goalFlash === 'away' ? m + 12 : m + pw - 12;
     ctx.fillStyle = 'rgba(255,215,0,0.95)';
@@ -240,44 +241,4 @@ function draw(ctx: CanvasRenderingContext2D, s: PitchState) {
     ctx.textAlign = 'center';
     ctx.fillText('⚽ GOAL!', gx > W / 2 ? W / 2 + 120 : W / 2 - 120, H / 2);
   }
-
-  // 상단 스코어/시계 바 (컵 결승이면 금색, 라이벌전이면 적색으로 강조 — 결승이 우선)
-  const highlight = s.isFinal ? 'final' : s.isDerby ? 'derby' : null;
-  const barW = 300;
-  ctx.fillStyle = highlight === 'final' ? 'rgba(110,88,10,0.85)' : highlight === 'derby' ? 'rgba(90,20,15,0.8)' : 'rgba(0,0,0,0.55)';
-  ctx.fillRect(W / 2 - barW / 2, 4, barW, 26);
-  if (highlight) {
-    ctx.strokeStyle = highlight === 'final' ? '#f0be46' : '#ff6b4a';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(W / 2 - barW / 2, 4, barW, 26);
-  }
-  ctx.fillStyle = '#fff';
-  ctx.textAlign = 'center';
-  const homeMark = s.userIsHome ? '●' : '';
-  const awayMark = !s.userIsHome ? '●' : '';
-  const scoreboardText = `${homeMark}${s.homeName} ${s.score[0]} : ${s.score[1]} ${s.awayName}${awayMark}`;
-  // 절차 생성된 긴 구단명이 고정폭 바를 넘으면 라이벌전·결승 트로피 아이콘과 겹치므로,
-  // measureText로 실제 폭을 확인해 넘칠 때만 최소 폰트까지 점진적으로 축소한다.
-  const maxTextW = barW - 16;
-  let fontSize = 15;
-  ctx.font = `bold ${fontSize}px sans-serif`;
-  while (ctx.measureText(scoreboardText).width > maxTextW && fontSize > 10) {
-    fontSize -= 1;
-    ctx.font = `bold ${fontSize}px sans-serif`;
-  }
-  ctx.fillText(scoreboardText, W / 2, 22);
-  // 킷 색상 스와치(항목 C4) — 스코어보드에서도 양 팀 색상을 바로 확인할 수 있게 한다.
-  ctx.beginPath(); ctx.arc(W / 2 - barW / 2 + 10, 17, 4, 0, Math.PI * 2); ctx.fillStyle = s.kit.home; ctx.fill();
-  ctx.beginPath(); ctx.arc(W / 2 + barW / 2 - 10, 17, 4, 0, Math.PI * 2); ctx.fillStyle = s.kit.away; ctx.fill();
-  if (highlight) {
-    ctx.font = '16px sans-serif';
-    const icon = highlight === 'final' ? '🏆' : '🔥';
-    ctx.fillText(icon, W / 2 - barW / 2 - 14, 22);
-    ctx.fillText(icon, W / 2 + barW / 2 + 14, 22);
-  }
-  // 시계
-  ctx.fillStyle = 'rgba(0,0,0,0.55)';
-  ctx.fillRect(W / 2 - 26, H - 30, 52, 24);
-  ctx.fillStyle = '#3ddc84';
-  ctx.fillText(`${s.minute}'`, W / 2, H - 13);
 }
