@@ -1521,6 +1521,25 @@ h3 { font-size: 14px; margin: 0 0 10px; color: var(--muted); text-transform: upp
   user-select: none;
 }
 .watch-toggle:hover { color: var(--text); }
+
+/* 퀵 전술 바(M2 B3/B4/B5) — 컨트롤 아래 둘째 줄. 멘탈리티 스테퍼 + 프리셋 6종. */
+.quick-bar {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+  margin-top: 8px; max-width: 760px;
+}
+.qb-label { color: var(--muted); font-size: 12px; }
+.qb-sep { width: 1px; height: 20px; background: var(--line); margin: 0 2px; }
+.btn-quick { font-size: 12px; padding: 5px 10px; white-space: nowrap; }
+/* 스코어 상황상 지금 권장되는 프리셋(뒤질 때 추격, 앞설 때 리드 지키기)을 은은히 발광. */
+.btn-quick.suggested.chase { box-shadow: 0 0 0 1px rgba(224, 87, 75, 0.4), 0 0 12px rgba(224, 87, 75, 0.25); }
+.btn-quick.suggested.protect { box-shadow: 0 0 0 1px rgba(74, 163, 255, 0.4), 0 0 12px rgba(74, 163, 255, 0.25); }
+
+/* 전술 변경 이력(M2 E1) — 중계 피드 안에서 파란 계열로 구분. */
+.feed li.tactic-feed {
+  background: linear-gradient(90deg, rgba(74, 163, 255, 0.12), rgba(74, 163, 255, 0.02));
+  border-left-color: var(--accent-2); border-radius: 0 6px 6px 0; color: var(--accent-2);
+}
+.tactic-panel-btn.open { border-color: var(--accent-2); color: var(--accent-2); }
 .quick-tactic.chase { border-color: rgba(224,87,75,0.4); color: var(--color-danger); }
 .quick-tactic.chase:hover { border-color: var(--color-danger); }
 .quick-tactic.protect { border-color: rgba(74,163,255,0.4); color: var(--accent-2); }

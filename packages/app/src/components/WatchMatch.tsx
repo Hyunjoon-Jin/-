@@ -12,6 +12,7 @@ import { swapPlayer } from '../tactics.js';
 import { resolveKitColors } from '../clubColors.js';
 import { loadSubPriority, saveSubPriority, sortByPriority } from '../subPriority.js';
 import { WATCH_SPEEDS, loadWatchPrefs, saveWatchPrefs, type WatchPrefs } from '../watchPrefs.js';
+import { useToast } from '../toast.js';
 import { Tactics } from './Tactics.js';
 import { MatchPitch, type PitchState } from './MatchPitch.js';
 import { MatchStats } from './MatchStats.js';
@@ -51,11 +52,39 @@ const OUTCOME: Record<string, string> = {
   GOAL: '⚽ 골!', SAVE: '🧤 선방', OFF_TARGET: '➡️ 빗나감', BLOCKED: '🛡️ 블록', OWN_GOAL: '🥅 자책골',
 };
 
-type QuickTacticValues = Pick<Tactic, 'mentality' | 'tempo' | 'pressing' | 'width' | 'defensiveLine'>;
-/** 뒤지고 있을 때 한 번에 적용하는 공격적 지시. */
-const CHASE_TACTIC: QuickTacticValues = { mentality: 0.75, tempo: 0.8, pressing: 0.75, width: 0.6, defensiveLine: 0.65 };
-/** 앞서고 있을 때 한 번에 적용하는 안정적 지시. */
-const PROTECT_TACTIC: QuickTacticValues = { mentality: 0.3, tempo: 0.35, pressing: 0.35, width: 0.4, defensiveLine: 0.35 };
+type QuickTacticValues = Partial<Pick<Tactic, 'mentality' | 'tempo' | 'pressing' | 'width' | 'defensiveLine'>>;
+type SliderKey = 'mentality' | 'tempo' | 'pressing' | 'width' | 'defensiveLine';
+const SLIDER_LABEL: Record<SliderKey, string> = {
+  mentality: '멘탈리티', tempo: '템포', pressing: '압박', width: '폭', defensiveLine: '수비라인',
+};
+
+/** 퀵 전술 프리셋(M2 B4/B5) — 스코어 조건과 무관하게 상시 노출된다. 값을 지정한
+ *  슬라이더만 갈아 끼우는 부분 패치라, 나머지 지시는 현재 설정을 그대로 유지한다. */
+const QUICK_PRESETS: { key: string; label: string; title: string; values: QuickTacticValues; tone?: 'chase' | 'protect' }[] = [
+  {
+    key: 'chase', label: '🔥 추격', tone: 'chase',
+    title: '공격 전면 전환 — 멘탈리티·템포·압박·수비라인 상향',
+    values: { mentality: 0.75, tempo: 0.8, pressing: 0.75, width: 0.6, defensiveLine: 0.65 },
+  },
+  {
+    key: 'protect', label: '🛡 리드 지키기', tone: 'protect',
+    title: '안정 운영 — 낮은 템포·압박·수비라인으로 전환',
+    values: { mentality: 0.3, tempo: 0.35, pressing: 0.35, width: 0.4, defensiveLine: 0.35 },
+  },
+  { key: 'highpress', label: '⚡ 하이 프레스', title: '강한 전방 압박 + 높은 수비라인(뒷공간 위험 감수)', values: { pressing: 0.8, defensiveLine: 0.7 } },
+  { key: 'lowblock', label: '🧱 로우 블록', title: '낮은 압박 + 낮은 수비라인으로 골문 앞을 걸어 잠금', values: { pressing: 0.3, defensiveLine: 0.25 } },
+  { key: 'tempoup', label: '🚀 템포 업', title: '공격 전개 속도만 끌어올림(체력 소모 증가)', values: { tempo: 0.8 } },
+  { key: 'slowdown', label: '⏳ 시간 끌기', title: '템포를 죽이고 신중하게 — 리드 막판 운영용', values: { tempo: 0.2, mentality: 0.35 } },
+];
+
+/** 멘탈리티 5단 스테퍼(M2 B3) — 슬라이더를 열지 않고도 한 번에 성향을 바꾼다. */
+const MENTALITY_STEPS: { label: string; value: number }[] = [
+  { label: '초수비', value: 0.1 },
+  { label: '수비', value: 0.3 },
+  { label: '균형', value: 0.5 },
+  { label: '공격', value: 0.7 },
+  { label: '초공격', value: 0.9 },
+];
 
 interface View {
   minute: number;
@@ -124,6 +153,13 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
   /** 하프타임에 AI(상대) 측이 조정한 전술 — 없으면 킥오프 셋업 그대로. */
   const [aiTacticOverride, setAiTacticOverride] = useState<Tactic | null>(null);
   const [aiHalftimeNote, setAiHalftimeNote] = useState<string | null>(null);
+  /** 인게임 전술 패널(M2 B1/B2) — 열면 자동 일시정지, 닫으면 재개. */
+  const [tacticPanelOpen, setTacticPanelOpen] = useState(false);
+  /** 패널을 연 시점의 전술 스냅샷 — 닫을 때 diff를 요약해 변경 이력(E1)에 남긴다. */
+  const tacticSnapshotRef = useRef<Tactic | null>(null);
+  /** 전술 변경 이력(M2 E1) — 중계 피드에 함께 흐른다. */
+  const [tacticLog, setTacticLog] = useState<{ minute: number; text: string }[]>([]);
+  const toast = useToast();
 
   // 부상 스케줄은 킥오프 시점에 확정(재현성) — 관전 중 분이 지날 때마다 하나씩 노출.
   const injuryScheduleRef = useRef<InjuryEvent[] | null>(null);
@@ -334,9 +370,44 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
     setSubModalOpen(false);
   }
 
-  /** 스코어라인 기반 빠른 지시: 슬라이더 5개를 한 번에 갈아 끼운다. */
-  function applyQuickTactic(values: QuickTacticValues) {
+  /** 전술 변경 이력(E1)에 한 줄 기록. */
+  function logTactic(text: string) {
+    setTacticLog((l) => [{ minute: minuteRef.current, text }, ...l]);
+  }
+
+  /** 퀵 지시(M2 B3/B4/B5): 지정한 슬라이더만 갈아 끼우고, 이력·토스트로 확인시킨다(E3). */
+  function applyQuickTactic(values: QuickTacticValues, label: string) {
     const next = { ...tactic, ...values };
+    setTactic(next);
+    live.setTactic(userSide, next);
+    logTactic(label);
+    toast(`${label} 적용`, true);
+  }
+
+  /** 인게임 전술 패널 열기(B1/B2) — 경기를 멈추고 생각할 시간을 확보한다. */
+  function openTacticPanel() {
+    tacticSnapshotRef.current = tactic;
+    setTacticPanelOpen(true);
+    setPaused(true);
+  }
+
+  /** 전술 패널 닫기 — 연 시점 대비 바뀐 지시를 요약해 이력에 남기고 경기를 재개한다. */
+  function closeTacticPanel() {
+    const prev = tacticSnapshotRef.current;
+    if (prev) {
+      const diff = describeTacticDiff(prev, tactic);
+      if (diff) {
+        logTactic(diff);
+        toast('전술 변경 적용', true);
+      }
+    }
+    tacticSnapshotRef.current = null;
+    setTacticPanelOpen(false);
+    setPaused(false);
+  }
+
+  /** 인게임 전술 편집 반영(B1) — 하프타임과 달리 변경 즉시 엔진에 적용된다. */
+  function handleLiveTacticChange(next: Tactic) {
     setTactic(next);
     live.setTactic(userSide, next);
   }
@@ -376,6 +447,9 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
   const oppGoals = watch.userIsHome ? view.score[1] : view.score[0];
   const userBehind = myGoals < oppGoals;
   const userAhead = myGoals > oppGoals;
+  /** 현재 멘탈리티에 가장 가까운 스테퍼 단계(활성 표시용). */
+  const nearestMentality = MENTALITY_STEPS.reduce((a, b) =>
+    Math.abs(b.value - tactic.mentality) < Math.abs(a.value - tactic.mentality) ? b : a).value;
   const pitch: PitchState = {
     homeName, awayName, score: view.score, minute: view.minute + view.frac,
     ball: view.ball, goalFlash, cardFlash, injuryFlash, userIsHome: watch.userIsHome,
@@ -444,16 +518,13 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
                 >
                   🔄 교체 ({subsUsed}/{SUB_LIMIT})
                 </button>
-                {userBehind && (
-                  <button className="btn-ghost quick-tactic chase" onClick={() => applyQuickTactic(CHASE_TACTIC)}>
-                    🔥 추격 모드
-                  </button>
-                )}
-                {userAhead && (
-                  <button className="btn-ghost quick-tactic protect" onClick={() => applyQuickTactic(PROTECT_TACTIC)}>
-                    🛡 리드 지키기
-                  </button>
-                )}
+                <button
+                  className={tacticPanelOpen ? 'btn-ghost tactic-panel-btn open' : 'btn-ghost tactic-panel-btn'}
+                  onClick={tacticPanelOpen ? closeTacticPanel : openTacticPanel}
+                  title="경기를 멈추고 전술(포메이션·슬라이더·개인 지시)을 조정합니다"
+                >
+                  📋 전술 {tacticPanelOpen ? '닫기' : ''}
+                </button>
                 <span className="watch-toggles">
                   <label className="watch-toggle" title="골이 터지면 자동으로 일시정지해 전술을 다시 생각할 시간을 줍니다">
                     <input
@@ -483,6 +554,37 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
               </button>
             )}
           </div>
+
+          {(phase === 'playing' || phase === 'playing2') && (
+            <div className="quick-bar">
+              <span className="qb-label" title="슬라이더를 열지 않고 팀 성향을 한 번에 바꿉니다">멘탈리티</span>
+              <div className="speed-toggle mentality-stepper">
+                {MENTALITY_STEPS.map((s) => (
+                  <button
+                    key={s.label}
+                    className={nearestMentality === s.value ? 'speed-btn active' : 'speed-btn'}
+                    onClick={() => applyQuickTactic({ mentality: s.value }, `멘탈리티 → ${s.label}`)}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+              <span className="qb-sep" aria-hidden="true" />
+              {QUICK_PRESETS.map((p) => (
+                <button
+                  key={p.key}
+                  className={[
+                    'btn-ghost', 'btn-quick', p.tone ? `quick-tactic ${p.tone}` : '',
+                    (p.tone === 'chase' && userBehind) || (p.tone === 'protect' && userAhead) ? 'suggested' : '',
+                  ].filter(Boolean).join(' ')}
+                  title={p.title}
+                  onClick={() => applyQuickTactic(p.values, p.label)}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="watch-side">
@@ -507,6 +609,12 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
               aiHalftimeNote={aiHalftimeNote}
             />
 
+          ) : tacticPanelOpen && (phase === 'playing' || phase === 'playing2') ? (
+            <>
+              <div className="ht-banner">⏸ {view.minute}' 경기 일시정지 — 전술을 조정하세요 (변경 즉시 반영)</div>
+              <Tactics club={myClub} tactic={tactic} onChange={handleLiveTacticChange} />
+              <button className="btn-advance" onClick={closeTacticPanel}>적용하고 경기 재개 ▶</button>
+            </>
           ) : (
             <div className="commentary">
               <BenchPanel
@@ -521,7 +629,7 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
               <LiveStatsPanel stats={stats} homeName={homeName} awayName={awayName} userSide={userSide} />
               {aiHalftimeNote && <p className="muted small ai-halftime-note">🔄 {aiHalftimeNote}</p>}
               <h3>중계</h3>
-              <Feed events={feed} injuries={injuryFeed} cards={cardFeed} userSide={userSide} />
+              <Feed events={feed} injuries={injuryFeed} cards={cardFeed} tacticLog={tacticLog} userSide={userSide} />
             </div>
           )}
         </div>
@@ -732,22 +840,32 @@ function LiveStatsPanel({
 type FeedItem =
   | { kind: 'match'; minute: number; ev: MatchEvent }
   | { kind: 'injury'; minute: number; ev: InjuryEvent }
-  | { kind: 'card'; minute: number; ev: CardEvent };
+  | { kind: 'card'; minute: number; ev: CardEvent }
+  | { kind: 'tactic'; minute: number; ev: { minute: number; text: string } };
 
 function Feed({
-  events, injuries, cards, userSide,
-}: { events: MatchEvent[]; injuries: InjuryEvent[]; cards: CardEvent[]; userSide: 'home' | 'away' }) {
+  events, injuries, cards, tacticLog, userSide,
+}: {
+  events: MatchEvent[]; injuries: InjuryEvent[]; cards: CardEvent[];
+  tacticLog: { minute: number; text: string }[]; userSide: 'home' | 'away';
+}) {
   const items: FeedItem[] = [
     ...events.map((ev): FeedItem => ({ kind: 'match', minute: ev.minute, ev })),
     ...injuries.map((ev): FeedItem => ({ kind: 'injury', minute: ev.minute, ev })),
     ...cards.map((ev): FeedItem => ({ kind: 'card', minute: ev.minute, ev })),
+    ...tacticLog.map((ev): FeedItem => ({ kind: 'tactic', minute: ev.minute, ev })),
   ];
   // 각 목록은 이미 최신순으로 쌓이므로, 삽입 순서를 보존하며 안정적으로 합친다.
   items.sort((a, b) => b.minute - a.minute);
   if (items.length === 0) return <p className="muted small">아직 주요 장면이 없습니다.</p>;
   return (
     <ul className="feed">
-      {items.map((it) => it.kind === 'match' ? (
+      {items.map((it, idx) => it.kind === 'tactic' ? (
+        <li key={`tactic-${it.minute}-${idx}`} className="tactic-feed">
+          <span className="feed-min">{it.minute}'</span>
+          <span className="feed-text">📋 {it.ev.text}</span>
+        </li>
+      ) : it.kind === 'match' ? (
         <li
           key={`match-${it.ev.minute}-${it.ev.playerId}`}
           className={(it.ev.outcome === 'GOAL' || it.ev.outcome === 'OWN_GOAL')
@@ -965,6 +1083,18 @@ function FullTime({
 
 function avgCA(club: Club): number {
   return Math.round(club.players.reduce((s, p) => s + currentAbility(p), 0) / club.players.length);
+}
+
+/** 전술 스냅샷 diff 요약(M2 E1) — 포메이션과 슬라이더 5종의 변경만 짧게 적는다. */
+function describeTacticDiff(prev: Tactic, next: Tactic): string | null {
+  const parts: string[] = [];
+  if (prev.formation !== next.formation) parts.push(`포메이션 ${prev.formation} → ${next.formation}`);
+  (Object.keys(SLIDER_LABEL) as SliderKey[]).forEach((k) => {
+    if (prev[k] !== next[k]) {
+      parts.push(`${SLIDER_LABEL[k]} ${Math.round(prev[k] * 100)} → ${Math.round(next[k] * 100)}`);
+    }
+  });
+  return parts.length ? `전술 변경: ${parts.join(' · ')}` : null;
 }
 
 /** 등번호가 없으므로 이름 이니셜 2자로 피치 위 선수를 구분한다. */
