@@ -11,6 +11,7 @@ import type { WatchSetup, MatchPreview as MatchPreviewData } from '../game.js';
 import { swapPlayer } from '../tactics.js';
 import { resolveKitColors } from '../clubColors.js';
 import { loadSubPriority, saveSubPriority, sortByPriority } from '../subPriority.js';
+import { WATCH_SPEEDS, loadWatchPrefs, saveWatchPrefs, type WatchPrefs } from '../watchPrefs.js';
 import { Tactics } from './Tactics.js';
 import { MatchPitch, type PitchState } from './MatchPitch.js';
 import { MatchStats } from './MatchStats.js';
@@ -36,7 +37,13 @@ type Phase = 'ready' | 'playing' | 'halftime' | 'playing2' | 'fulltime';
 const PHASE_LABEL: Record<Phase, string> = {
   ready: '킥오프 전', playing: '전반', halftime: '하프타임', playing2: '후반', fulltime: '경기 종료',
 };
-const TICK_MS = 130;
+/** 1x 배속에서 경기 1분이 흐르는 실제 시간(ms) — 경기 개입 개선 M1(A1).
+ *  이전 130ms/분(90분 ≈ 12초)에서 대폭 감속해, 1x가 "경기를 읽고 개입하는"
+ *  기본 관전 경험이 되도록 재정의한다. 예전 속도감은 8x 배속이 대신한다. */
+const MINUTE_MS = 1000;
+/** 분 내부 시각적 서브틱 수(A3) — 엔진은 분 단위 결정성을 그대로 유지하고,
+ *  화면(공 드리프트·선수 흔들림)만 서브틱으로 잘게 쪼개 연속적으로 움직인다. */
+const SUBTICKS = 4;
 /** 경기당 자유 교체 허용 횟수(부상 교체도 이 카운트를 함께 소모한다). */
 const SUB_LIMIT = 3;
 
@@ -52,6 +59,8 @@ const PROTECT_TACTIC: QuickTacticValues = { mentality: 0.3, tempo: 0.35, pressin
 
 interface View {
   minute: number;
+  /** 분 내부 서브틱 진행률(0~1 미만) — 캔버스 애니메이션용. 스코어보드에는 정수 분만 표시. */
+  frac: number;
   score: [number, number];
   ball: { x: number; y: number };
 }
@@ -76,8 +85,17 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
 
   const [phase, setPhase] = useState<Phase>('ready');
   const [paused, setPaused] = useState(false);
-  const [speed, setSpeed] = useState<1 | 2 | 4>(1);
-  const [view, setView] = useState<View>({ minute: 0, score: [0, 0], ball: { x: 0.5, y: 0.5 } });
+  /** 배속·자동 일시정지 설정(M1 A5/A8) — 변경 즉시 저장돼 다음 경기에도 유지. */
+  const [prefs, setPrefs] = useState<WatchPrefs>(() => loadWatchPrefs());
+  function updatePrefs(patch: Partial<WatchPrefs>) {
+    setPrefs((p) => {
+      const next = { ...p, ...patch };
+      saveWatchPrefs(next);
+      return next;
+    });
+  }
+  const subtickRef = useRef(0);
+  const [view, setView] = useState<View>({ minute: 0, frac: 0, score: [0, 0], ball: { x: 0.5, y: 0.5 } });
   const [goalFlash, setGoalFlash] = useState<'home' | 'away' | null>(null);
   const goalFlashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [cardFlash, setCardFlash] = useState<{ side: 'home' | 'away'; slotIndex: number; type: 'yellow' | 'red' } | null>(null);
@@ -154,7 +172,7 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
    * 🟨/🟥 하이라이트를 띄운다(고도화 항목 B1) — 이전에는 카드가 경기 종료 후 결과 패널에만
    * 노출돼 관전 중에는 전혀 알 수 없었다.
    */
-  function revealCardsUpTo(target: number) {
+  function revealCardsUpTo(target: number, allowAutoPause = true) {
     const schedule = cardScheduleRef.current!;
     const newlyShown: CardEvent[] = [];
     while (revealedCardIdxRef.current < schedule.length && schedule[revealedCardIdxRef.current]!.minute <= target) {
@@ -172,6 +190,7 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
         setCardFlash({ side: last.side, slotIndex, type: last.type });
         cardFlashTimerRef.current = setTimeout(() => setCardFlash(null), CARD_FLASH_MS);
       }
+      if (allowAutoPause && prefs.pauseOnCard) setPaused(true);
     }
   }
 
@@ -182,33 +201,51 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
     }
   });
 
-  function applyMinute(target: number, evs: MatchEvent[]) {
+  function applyMinute(target: number, evs: MatchEvent[], allowAutoPause = true) {
     const last = evs[evs.length - 1];
     const goal = evs.find((e) => e.outcome === 'GOAL' || e.outcome === 'OWN_GOAL');
     const ball = last
       ? { x: last.side === 'home' ? 0.84 : 0.16, y: 0.28 + Math.random() * 0.44 }
       : { x: 0.4 + Math.random() * 0.2, y: 0.34 + Math.random() * 0.32 };
-    setView({ minute: target, score: live.score(), ball });
+    setView({ minute: target, frac: 0, score: live.score(), ball });
     if (goal) {
-      // 틱 주기(130ms)에 얹으면 다음 틱이 없을 때(하프타임 경계 등) 배너가 얼어붙어
+      // 틱 주기에 얹으면 다음 틱이 없을 때(하프타임 경계 등) 배너가 얼어붙어
       // 남아있거나, 반대로 다음 틱이 바로 이어지면 한 프레임만 스쳐 지나간다 —
       // 틱과 무관한 고정 지속시간을 직접 타이머로 관리한다.
       if (goalFlashTimerRef.current) clearTimeout(goalFlashTimerRef.current);
       setGoalFlash(goal.side);
       goalFlashTimerRef.current = setTimeout(() => setGoalFlash(null), GOAL_FLASH_MS);
+      // 골 후 자동 일시정지(M1 A5) — 스코어가 바뀐 순간이 전술을 다시 생각할 시점이다.
+      if (allowAutoPause && prefs.pauseOnGoal) setPaused(true);
     }
     setStats(live.stats());
     const notable = evs.filter((e) => e.outcome === 'GOAL' || e.outcome === 'OWN_GOAL' || e.outcome === 'SAVE');
     if (notable.length) setFeed((f) => [...notable.reverse(), ...f]);
   }
 
-  // 분 단위 진행 타이머 (phase가 진행 중이고, 교체 결정 대기 중이 아니고, 일시정지 상태가 아닐 때만)
+  // 진행 타이머 — 1분을 SUBTICKS개의 시각 서브틱으로 쪼갠다(M1 A1/A3). 서브틱에서는
+  // 공이 현재 위치 주변을 짧게 드리프트하며 "경기가 흐르는" 감각만 만들고, 마지막
+  // 서브틱에서 엔진을 정확히 1분 전진시킨다(엔진 결정성은 분 단위 그대로).
   useEffect(() => {
     if (phase !== 'playing' && phase !== 'playing2') return;
     if (activeInjury) return; // 부상 교체 프롬프트 응답 전에는 진행 정지
     if (subModalOpen) return; // 자유 교체 창이 열려 있는 동안도 진행 정지
     if (paused) return;
     const id = setInterval(() => {
+      if (subtickRef.current < SUBTICKS - 1) {
+        subtickRef.current++;
+        const frac = subtickRef.current / SUBTICKS;
+        setView((v) => ({
+          ...v,
+          frac,
+          ball: {
+            x: Math.min(0.94, Math.max(0.06, v.ball.x + (Math.random() - 0.5) * 0.07)),
+            y: Math.min(0.9, Math.max(0.1, v.ball.y + (Math.random() - 0.5) * 0.07)),
+          },
+        }));
+        return;
+      }
+      subtickRef.current = 0;
       const target = Math.min(minuteRef.current + 1, MATCH_LENGTH);
       if (target === minuteRef.current) return;
       const evs = live.runUntil(target);
@@ -216,10 +253,10 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
       applyMinute(target, evs);
       revealInjuriesUpTo(target, tactic);
       revealCardsUpTo(target);
-    }, TICK_MS / speed);
+    }, MINUTE_MS / SUBTICKS / prefs.speed);
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, activeInjury, subModalOpen, tactic, paused, speed]);
+  }, [phase, activeInjury, subModalOpen, tactic, paused, prefs]);
 
   // 경계(하프타임·풀타임) 전환
   useEffect(() => {
@@ -231,9 +268,48 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
     const boundary = phase === 'playing' ? HALF_TIME : MATCH_LENGTH;
     const evs = live.runUntil(boundary);
     minuteRef.current = boundary;
-    applyMinute(boundary, evs);
+    subtickRef.current = 0;
+    applyMinute(boundary, evs, false);
     revealInjuriesUpTo(boundary, tactic, false);
-    revealCardsUpTo(boundary);
+    revealCardsUpTo(boundary, false);
+  }
+
+  /** +N분 빠른 진행(M1 A7) — 요청한 만큼만 조용히 건너뛴다(자동 일시정지 없음). */
+  function skipMinutes(n: number) {
+    const boundary = phase === 'playing' ? HALF_TIME : MATCH_LENGTH;
+    const target = Math.min(minuteRef.current + n, boundary);
+    if (target === minuteRef.current) return;
+    const evs = live.runUntil(target);
+    minuteRef.current = target;
+    subtickRef.current = 0;
+    applyMinute(target, evs, false);
+    revealInjuriesUpTo(target, tactic);
+    revealCardsUpTo(target, false);
+  }
+
+  /** 다음 주요 장면(슈팅 결과·카드·부상)까지 건너뛰고 그 앞에서 일시정지(M1 A7) —
+   *  "조용한 구간은 넘기되, 장면마다 개입할 기회는 남긴다"는 관전 리듬을 만든다. */
+  function skipToNextEvent() {
+    const boundary = phase === 'playing' ? HALF_TIME : MATCH_LENGTH;
+    const injurySchedule = injuryScheduleRef.current!;
+    const cardSchedule = cardScheduleRef.current!;
+    const collected: MatchEvent[] = [];
+    let m = minuteRef.current;
+    while (m < boundary) {
+      m++;
+      const evs = live.runUntil(m);
+      collected.push(...evs);
+      const hit = evs.length > 0
+        || injurySchedule.some((e) => e.minute === m)
+        || cardSchedule.some((e) => e.minute === m);
+      if (hit) break;
+    }
+    minuteRef.current = m;
+    subtickRef.current = 0;
+    applyMinute(m, collected, false);
+    revealInjuriesUpTo(m, tactic);
+    revealCardsUpTo(m, false);
+    if (m < boundary) setPaused(true);
   }
 
   /** 라인업 슬롯 교체를 즉시 엔진에 반영(부상 교체·자유 교체 공통 경로). 교체 카드 1장 소모. */
@@ -285,6 +361,7 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
     }
 
     setPaused(false);
+    subtickRef.current = 0;
     setPhase('playing2');
   }
 
@@ -300,7 +377,7 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
   const userBehind = myGoals < oppGoals;
   const userAhead = myGoals > oppGoals;
   const pitch: PitchState = {
-    homeName, awayName, score: view.score, minute: view.minute,
+    homeName, awayName, score: view.score, minute: view.minute + view.frac,
     ball: view.ball, goalFlash, cardFlash, injuryFlash, userIsHome: watch.userIsHome,
     homeFormation: homeTactic.lineup.map((s) => s.position),
     awayFormation: awayTactic.lineup.map((s) => s.position),
@@ -336,18 +413,28 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
                   {paused ? '▶ 재개' : '⏸ 일시정지'}
                 </button>
                 <div className="speed-toggle">
-                  {([1, 2, 4] as const).map((s) => (
+                  {WATCH_SPEEDS.map((s) => (
                     <button
                       key={s}
-                      className={speed === s ? 'speed-btn active' : 'speed-btn'}
-                      onClick={() => setSpeed(s)}
+                      className={prefs.speed === s ? 'speed-btn active' : 'speed-btn'}
+                      onClick={() => updatePrefs({ speed: s })}
                     >
                       {s}x
                     </button>
                   ))}
                 </div>
+                <button
+                  className="btn-ghost"
+                  onClick={skipToNextEvent}
+                  title="다음 슈팅·카드·부상 장면까지 건너뛰고 일시정지"
+                >
+                  ▶▶ 다음 장면
+                </button>
+                <button className="btn-ghost" onClick={() => skipMinutes(5)} title="5분 빠르게 진행">
+                  +5분
+                </button>
                 <button className="btn-ghost" onClick={skip}>
-                  빠르게 ▶▶ ({phase === 'playing' ? '하프타임' : '경기 종료'}까지)
+                  {phase === 'playing' ? '하프타임' : '경기 종료'}까지 ▶▶
                 </button>
                 <button
                   className="btn-ghost"
@@ -367,6 +454,24 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
                     🛡 리드 지키기
                   </button>
                 )}
+                <span className="watch-toggles">
+                  <label className="watch-toggle" title="골이 터지면 자동으로 일시정지해 전술을 다시 생각할 시간을 줍니다">
+                    <input
+                      type="checkbox"
+                      checked={prefs.pauseOnGoal}
+                      onChange={(e) => updatePrefs({ pauseOnGoal: e.target.checked })}
+                    />
+                    골 후 정지
+                  </label>
+                  <label className="watch-toggle" title="카드(옐로/레드)가 나오면 자동으로 일시정지합니다">
+                    <input
+                      type="checkbox"
+                      checked={prefs.pauseOnCard}
+                      onChange={(e) => updatePrefs({ pauseOnCard: e.target.checked })}
+                    />
+                    카드 후 정지
+                  </label>
+                </span>
               </>
             )}
             {phase === 'halftime' && (
