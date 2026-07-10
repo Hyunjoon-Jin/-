@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import type { Position } from '@soccer-tycoon/engine';
+import type { Position, Weather } from '@soccer-tycoon/engine';
 import type { KitColors } from '../clubColors.js';
 
 export interface PitchState {
@@ -17,6 +17,10 @@ export interface PitchState {
   injuryFlash?: { side: 'home' | 'away'; slotIndex: number } | null;
   /** 득점자 세리머니 링(M5 D4) — 골 플래시 동안 해당 슬롯 점 주위로 확장 링을 그린다. */
   goalCelebrate?: { side: 'home' | 'away'; slotIndex: number } | null;
+  /** 슈팅 궤적선(M7 D5) — 슈팅 순간 공 위치에서 골문 방향으로 잠깐 그려지는 선. */
+  shotTrail?: { side: 'home' | 'away'; fromX: number; fromY: number; outcome: string; start: number } | null;
+  /** 경기 날씨(M7 D8) — 비/혹한이면 캔버스에 파티클을 얹는다. */
+  weather?: Weather;
   userIsHome: boolean;
   /** 홈/원정 선발 포메이션(슬롯 포지션 순서). 선수 점 배치에 사용. */
   homeFormation: Position[];
@@ -243,6 +247,50 @@ function draw(ctx: CanvasRenderingContext2D, s: PitchState, now: number) {
   ctx.fill();
   ctx.strokeStyle = '#111'; ctx.lineWidth = 1.5; ctx.stroke();
 
-  // 골 순간 연출은 득점자 세리머니 링(위)과 HTML 리플레이 오버레이(A11)가 담당한다 —
-  // 예전 캔버스 "GOAL!" 텍스트는 오버레이와 중복이라 제거했다.
+  // 슈팅 궤적선(M7 D5) — 0.6초 동안 페이드아웃. 결과별로 도착점이 달라
+  // 빗나감은 골대 밖, 블록은 중간에 끊긴다.
+  const TRAIL_MS = 600;
+  if (s.shotTrail && now - s.shotTrail.start < TRAIL_MS) {
+    const tr = s.shotTrail;
+    const t = (now - tr.start) / TRAIL_MS;
+    const fx = m + tr.fromX * pw;
+    const fy = m + tr.fromY * ph;
+    const goalX = tr.side === 'home' ? m + pw : m;
+    // 결과별 도착 y — 같은 이벤트는 같은 곳으로(분+아웃컴 해시).
+    const jitter = ((tr.fromY * 997) % 1) - 0.5;
+    let tx = goalX;
+    let ty = H / 2 + jitter * 60;
+    if (tr.outcome === 'OFF_TARGET') ty = H / 2 + (jitter >= 0 ? 1 : -1) * (70 + Math.abs(jitter) * 40);
+    if (tr.outcome === 'BLOCKED') tx = fx + (goalX - fx) * 0.45;
+    ctx.beginPath();
+    ctx.moveTo(fx, fy);
+    ctx.lineTo(tx, ty);
+    ctx.strokeStyle = `rgba(255, 255, 255, ${(1 - t) * 0.7})`;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+
+  // 날씨 파티클(M7 D8) — 비는 빗줄기, 혹한은 눈송이. 시간·인덱스 기반 의사난수라
+  // 시뮬레이션 결정성과 무관한 순수 표시용이다.
+  if (s.weather === 'rain') {
+    ctx.strokeStyle = 'rgba(180, 205, 255, 0.32)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 46; i++) {
+      const x = ((i * 127.3 + now * 0.38) % (W + 20)) - 10;
+      const y = ((i * 211.7 + now * 0.62) % (H + 20)) - 10;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x - 3, y + 11);
+      ctx.stroke();
+    }
+  } else if (s.weather === 'cold') {
+    ctx.fillStyle = 'rgba(240, 246, 255, 0.5)';
+    for (let i = 0; i < 34; i++) {
+      const x = ((i * 149.9 + now * 0.06 + Math.sin(now / 900 + i) * 18) % (W + 10)) - 5;
+      const y = ((i * 233.1 + now * 0.13) % (H + 10)) - 5;
+      ctx.beginPath();
+      ctx.arc(x, y, 1.6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
 }

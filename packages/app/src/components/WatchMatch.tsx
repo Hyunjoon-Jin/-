@@ -163,6 +163,11 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
   const goalFlashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** 골 리플레이 오버레이(M5 A11)·세리머니 링(D4)용 — 마지막 득점 정보. */
   const [lastGoal, setLastGoal] = useState<{ side: 'home' | 'away'; name: string; minute: number; slotIndex: number } | null>(null);
+  /** 슈팅 궤적선(M7 D5) — 마지막 슈팅의 시작점·결과. 그리기는 캔버스가 시간 기반으로 페이드. */
+  const [shotTrail, setShotTrail] = useState<{ side: 'home' | 'away'; fromX: number; fromY: number; outcome: string; start: number } | null>(null);
+  /** 교체 보드 오버레이(M7 D10) — 교체 순간 IN/OUT 카드. */
+  const [subFlash, setSubFlash] = useState<{ out: string; in: string } | null>(null);
+  const subFlashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** 소프트 중계(M5 D2) — 무이벤트 연속 분 카운터와 흘린 문구들. */
   const quietRef = useRef(0);
   const [flavorLog, setFlavorLog] = useState<{ minute: number; text: string }[]>([]);
@@ -174,6 +179,7 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
     if (goalFlashTimerRef.current) clearTimeout(goalFlashTimerRef.current);
     if (cardFlashTimerRef.current) clearTimeout(cardFlashTimerRef.current);
     if (injuryFlashTimerRef.current) clearTimeout(injuryFlashTimerRef.current);
+    if (subFlashTimerRef.current) clearTimeout(subFlashTimerRef.current);
   }, []);
   const [feed, setFeed] = useState<MatchEvent[]>([]);
   const [tactic, setTactic] = useState<Tactic>(initialTactic);
@@ -297,6 +303,10 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
       ? { x: last.side === 'home' ? 0.84 : 0.16, y: 0.28 + Math.random() * 0.44 }
       : { x: 0.4 + Math.random() * 0.2, y: 0.34 + Math.random() * 0.32 };
     setView({ minute: target, frac: 0, score: live.score(), ball });
+    if (last) {
+      // 슈팅 궤적선(D5): 이 분의 마지막 슈팅을 공 위치에서 골문 방향으로 표시.
+      setShotTrail({ side: last.side, fromX: ball.x, fromY: ball.y, outcome: last.outcome, start: performance.now() });
+    }
     if (goal) {
       // 틱 주기에 얹으면 다음 틱이 없을 때(하프타임 경계 등) 배너가 얼어붙어
       // 남아있거나, 반대로 다음 틱이 바로 이어지면 한 프레임만 스쳐 지나간다 —
@@ -482,7 +492,13 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
     // 모든 교체(수동·부상·드래그·예약)를 개입 이력(E1)에 남긴다 — 경기 후 타임라인(E5) 재료.
     const outP = myClub.players.find((pl) => pl.id === outPlayerId);
     const inP = myClub.players.find((pl) => pl.id === inPlayerId);
-    if (outP && inP) logTactic(`교체: ${outP.name} → ${inP.name}`);
+    if (outP && inP) {
+      logTactic(`교체: ${outP.name} → ${inP.name}`);
+      // 교체 보드 오버레이(M7 D10) — 2초간 IN/OUT 카드.
+      if (subFlashTimerRef.current) clearTimeout(subFlashTimerRef.current);
+      setSubFlash({ out: outP.name, in: inP.name });
+      subFlashTimerRef.current = setTimeout(() => setSubFlash(null), 2000);
+    }
   }
 
   /** 부상 교체 확정: 라인업을 즉시 교체하고(경기 재개), 하프타임 UI에도 반영. */
@@ -706,6 +722,8 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
     ball: view.ball, goalFlash, cardFlash, injuryFlash, userIsHome: watch.userIsHome,
     goalCelebrate: goalFlash && lastGoal && lastGoal.slotIndex >= 0
       ? { side: lastGoal.side, slotIndex: lastGoal.slotIndex } : null,
+    shotTrail,
+    weather: live.weather(),
     homeFormation: homeTactic.lineup.map((s) => s.position),
     awayFormation: awayTactic.lineup.map((s) => s.position),
     homeLabels: homeTactic.lineup.map((slot) => playerInitials(homeClub, slot.playerId)),
@@ -742,6 +760,12 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
               <div className="goal-overlay phase-overlay" aria-live="polite">
                 <div className="po-title">{phaseFlash}</div>
                 <div className="go-score">{homeName} {view.score[0]} : {view.score[1]} {awayName}</div>
+              </div>
+            )}
+            {!goalFlash && !phaseFlash && subFlash && (
+              <div className="sub-overlay" aria-live="polite">
+                <span className="so-out">▼ {subFlash.out}</span>
+                <span className="so-in">▲ {subFlash.in}</span>
               </div>
             )}
           </div>
