@@ -98,6 +98,21 @@ export function App() {
     if (tab === 'transfers' || tab === 'staff') setVisitedSquadPrep(true);
   }, [tab]);
 
+  /** 전역 선수 검색 단축키(선수관리 개선 항목46) — "/"로 어디서든 열기. 입력 필드에 타이핑
+   *  중이면(메모·검색창 등) 가로채지 않는다. */
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      if (e.key === '/' && !showGlobalSearch) {
+        e.preventDefault();
+        setShowGlobalSearch(true);
+      }
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [showGlobalSearch]);
+
   /** 상태 갱신 + 자동 저장. 경질로 새로 전환되면 커리어 아카이브에 재임 기록을 남긴다.
    *  게임 상태 반영(setGame)을 항상 먼저 수행 — 커리어 기록·저장은 부수 효과이므로
    *  그 쪽에서 예외(저장 공간 부족 등)가 나더라도 경질 전이 자체가 막히면 안 된다. */
@@ -385,7 +400,7 @@ export function App() {
           <span className="season-badge">시즌 {game.season}{game.live ? ' 진행중' : ' 프리시즌'}</span>
           <button
             className="btn-ghost help-btn" onClick={() => setShowGlobalSearch(true)}
-            title="선수 검색 — 현재 탭과 무관하게 전 스쿼드에서 바로 찾기(선수관리 개선 항목42)"
+            title="선수 검색 — 현재 탭과 무관하게 전 스쿼드에서 바로 찾기 (단축키: /)"
           >
             🔎
           </button>

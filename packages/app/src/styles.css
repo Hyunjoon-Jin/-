@@ -1407,3 +1407,17 @@ h3 { font-size: 14px; margin: 0 0 10px; color: var(--muted); text-transform: upp
   .pd-cols { grid-template-columns: 1fr; }
   .cards { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
 }
+
+/* 목록 행 우클릭 컨텍스트 메뉴(선수관리 개선 항목47) */
+.context-menu {
+  position: fixed; z-index: 300; background: var(--panel); border: 1px solid var(--line);
+  border-radius: 8px; padding: 4px; display: flex; flex-direction: column; min-width: 170px;
+  box-shadow: var(--shadow-lg);
+  animation: modal-backdrop-in var(--dur-fast) var(--ease);
+}
+.context-menu-item {
+  background: none; border: none; color: var(--text); text-align: left; font-size: 13px;
+  padding: 7px 10px; border-radius: 5px; cursor: pointer; white-space: nowrap;
+}
+.context-menu-item:hover { background: var(--panel-2); }
+.context-menu-item.danger:hover { background: var(--color-danger-bg); color: var(--color-danger); }

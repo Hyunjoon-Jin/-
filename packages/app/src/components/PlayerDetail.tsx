@@ -9,7 +9,7 @@ import {
   type PlayerFormEntry, type OverallTier, type PotentialTier, type AgeProfile, type ScoutingReport,
   type PlayerInstruction, type PlayerInstructionKind,
 } from '@soccer-tycoon/engine';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   formStability, revealPotential, RENEWAL_MIN_YEARS, RENEWAL_MAX_YEARS,
   type TimelineEntry, type SeasonRatingEntry,
@@ -240,6 +240,31 @@ export function PlayerDetail({
   const [tagDraft, setTagDraft] = useState('');
   const [confirmingRelease, setConfirmingRelease] = useState(false);
 
+  // 키보드 단축키(선수관리 개선 항목46) — 이전/다음 선수 이동, 빠른 방출 확인. 입력 필드에
+  // 포커스가 있을 때는(메모·태그·등번호 편집 중) 타이핑을 가로채지 않도록 무시한다.
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      // 방출 확인 다이얼로그가 위에 떠 있는 동안은(모달 위 모달) 뒤쪽 선수 탐색·재확인이
+      // 끼어들지 않도록 모든 단축키를 막는다 — 그 다이얼로그 자체의 Escape/Enter는
+      // ConfirmDialog·useModalA11y가 별도로 처리한다.
+      if (confirmingRelease) return;
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      if (e.key === 'ArrowLeft' && onNavigate && canNavigatePrev) {
+        e.preventDefault();
+        onNavigate('prev');
+      } else if (e.key === 'ArrowRight' && onNavigate && canNavigateNext) {
+        e.preventDefault();
+        onNavigate('next');
+      } else if ((e.key === 'r' || e.key === 'R') && onRelease) {
+        e.preventDefault();
+        setConfirmingRelease(true);
+      }
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [onNavigate, canNavigatePrev, canNavigateNext, onRelease, confirmingRelease]);
+
   return (
     <>
     <div className="modal-backdrop" onClick={onClose}>
@@ -272,8 +297,14 @@ export function PlayerDetail({
             )}
             {onNavigate && (
               <>
-                <button className="btn-ghost" disabled={!canNavigatePrev} onClick={() => onNavigate('prev')}>‹ 이전</button>
-                <button className="btn-ghost" disabled={!canNavigateNext} onClick={() => onNavigate('next')}>다음 ›</button>
+                <button
+                  className="btn-ghost" disabled={!canNavigatePrev} onClick={() => onNavigate('prev')}
+                  title="이전 선수 (←)"
+                >‹ 이전</button>
+                <button
+                  className="btn-ghost" disabled={!canNavigateNext} onClick={() => onNavigate('next')}
+                  title="다음 선수 (→)"
+                >다음 ›</button>
               </>
             )}
             <button className="btn-ghost" title="전체화면 전환" onClick={() => setFullscreen((f) => !f)}>
@@ -339,7 +370,10 @@ export function PlayerDetail({
                   <button className="btn-ghost" onClick={onGoToTransfers}>💰 이적 시장에서 판매·임대</button>
                 )}
                 {onRelease && (
-                  <button className="btn-ghost danger" onClick={() => setConfirmingRelease(true)}>🗑 방출</button>
+                  <button
+                    className="btn-ghost danger" onClick={() => setConfirmingRelease(true)}
+                    title="방출 확인 열기 (R)"
+                  >🗑 방출</button>
                 )}
               </div>
             )}
