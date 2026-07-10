@@ -110,6 +110,46 @@ describe('LiveMatch', () => {
     }
   });
 
+  it('liveRatings(): 라인업 전원 포함, 0~10 범위, 득점자는 기본치(6.0)보다 높다 (F3/C1)', () => {
+    const s = setup(123);
+    const live = new LiveMatch(s);
+    live.runUntil(60);
+    const ratings = live.liveRatings();
+
+    for (const slot of [...s.home.tactic.lineup, ...s.away.tactic.lineup]) {
+      const r = ratings.get(slot.playerId);
+      expect(r).toBeDefined();
+      expect(r!).toBeGreaterThanOrEqual(0);
+      expect(r!).toBeLessThanOrEqual(10);
+    }
+  });
+
+  it('liveRatings(): 득점 이벤트가 있으면 해당 선수 평점이 6.0을 넘는다', () => {
+    // 골이 나오는 시드를 찾아 검증(결정적 — 같은 시드는 항상 같은 전개).
+    for (let seed = 1; seed < 60; seed++) {
+      const s = setup(seed);
+      const live = new LiveMatch(s);
+      const evs = live.runToEnd();
+      const goal = evs.find((e) => e.outcome === 'GOAL');
+      if (!goal) continue;
+      const ratings = live.liveRatings();
+      expect(ratings.get(goal.playerId)!).toBeGreaterThan(6.0);
+      return;
+    }
+    throw new Error('60개 시드에서 골이 한 번도 없음 — 비정상');
+  });
+
+  it('stats().bigChances: 경기 종료 시 선수별 빅찬스 합계와 일치한다 (F3/C5)', () => {
+    const live = new LiveMatch(setup(321));
+    live.runToEnd();
+    const st = live.stats();
+    const r = live.result();
+    const sum = (side: 'home' | 'away') =>
+      r.playerStats[side].reduce((s, p) => s + (p.bigChancesCreated ?? 0), 0);
+    expect(st.bigChances[0]).toBe(sum('home'));
+    expect(st.bigChances[1]).toBe(sum('away'));
+  });
+
   it('하프타임 전술 변경은 결과를 바꾼다(공격적으로 전환 시 다른 전개)', () => {
     const base = setup(2024);
     // 기준: 변경 없음

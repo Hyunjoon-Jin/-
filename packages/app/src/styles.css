@@ -1540,6 +1540,45 @@ h3 { font-size: 14px; margin: 0 0 10px; color: var(--muted); text-transform: upp
   border-left-color: var(--accent-2); border-radius: 0 6px 6px 0; color: var(--accent-2);
 }
 .tactic-panel-btn.open { border-color: var(--accent-2); color: var(--accent-2); }
+
+/* 실시간 평점·체력·경고 표시(M3 C1/C2/C3) — 벤치 패널 미니 라인업 행. */
+.bench-lineup-mini { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
+.blr-yellow { margin-right: 3px; font-size: 10px; }
+.blr-rating {
+  margin-left: auto; flex-shrink: 0; font-weight: 700; font-size: 11px;
+  font-variant-numeric: tabular-nums; color: var(--muted);
+}
+.blr-rating.good { color: var(--accent); }
+.blr-rating.poor { color: var(--color-danger); }
+.blr-stamina {
+  flex-shrink: 0; width: 26px; height: 4px; border-radius: 2px;
+  background: var(--panel); overflow: hidden; display: inline-block;
+}
+.blr-stamina-fill { display: block; height: 100%; background: var(--accent); border-radius: 2px; }
+.blr-stamina-fill.low { background: var(--color-danger); }
+
+/* 코치 제안 카드(M3 C7) — 지금 데이터로 판단 가능한 조언을 관전 사이드 상단에. */
+.coach-tips {
+  background: linear-gradient(135deg, rgba(240, 190, 70, 0.12), rgba(240, 190, 70, 0.02));
+  border: 1px solid rgba(240, 190, 70, 0.35); border-radius: var(--radius-md);
+  padding: 8px 12px; margin-bottom: 12px; font-size: 13px;
+}
+.coach-tips p { margin: 0; }
+.coach-tips p + p { margin-top: 4px; }
+
+/* 모멘텀 바(M3 C4) + 하프타임 리포트(C10) */
+.ls-momentum { margin-top: 8px; }
+.ls-momentum-bar {
+  display: flex; height: 6px; border-radius: 3px; overflow: hidden;
+  background: var(--panel-2); margin-top: 3px;
+}
+.ht-report {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  padding: 12px 14px; margin-bottom: 12px; box-shadow: var(--shadow-sm); font-size: 13px;
+}
+.ht-report h3 { margin: 0 0 8px; }
+.ht-report p { margin: 0 0 4px; }
+.ht-report p:last-child { margin-bottom: 0; }
 .quick-tactic.chase { border-color: rgba(224,87,75,0.4); color: var(--color-danger); }
 .quick-tactic.chase:hover { border-color: var(--color-danger); }
 .quick-tactic.protect { border-color: rgba(74,163,255,0.4); color: var(--accent-2); }

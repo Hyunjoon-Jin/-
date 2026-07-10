@@ -17,6 +17,8 @@ export interface LiveStats {
   possession: [number, number];
   shots: [number, number];
   shotsOnTarget: [number, number];
+  /** 빅찬스 생성 수(경기 개입 개선 F3 — 관전 중 판단 근거용). [홈, 원정]. */
+  bigChances: [number, number];
 }
 
 export class LiveMatch {
@@ -48,12 +50,15 @@ export class LiveMatch {
     return this.ctx.weather;
   }
 
-  /** 현재까지 실시간 통계(점유율·슈팅·유효슈팅). 유효슈팅=골+선방. */
+  /** 현재까지 실시간 통계(점유율·슈팅·유효슈팅·빅찬스). 유효슈팅=골+선방. */
   stats(): LiveStats {
     const { home, away, events } = this.ctx;
     const totalTicks = home.possessionTicks + away.possessionTicks || 1;
     const onTarget = (side: 'home' | 'away'): number =>
       events.filter((e) => e.side === side && (e.outcome === 'GOAL' || e.outcome === 'SAVE')).length;
+    // 빅찬스는 선수별 statMap에 쌓이므로 소속 구단 로스터 기준으로 팀 합계를 낸다.
+    const bigChancesOf = (team: typeof home): number =>
+      team.club.players.reduce((s, p) => s + (this.ctx.statMap.get(p.id)?.bigChancesCreated ?? 0), 0);
     return {
       possession: [
         Math.round((home.possessionTicks / totalTicks) * 100),
@@ -61,7 +66,22 @@ export class LiveMatch {
       ],
       shots: [home.shots, away.shots],
       shotsOnTarget: [onTarget('home'), onTarget('away')],
+      bigChances: [bigChancesOf(home), bigChancesOf(away)],
     };
+  }
+
+  /**
+   * 진행 중 실시간 선수 평점(경기 개입 개선 F3) — finalize의 승패·실점 보정이 붙기 전
+   * 순수 누적 평점. 아직 이벤트에 관여하지 않은 선수는 기본 6.0으로 채워, 현재
+   * 라인업 전원의 평점을 언제든 조회할 수 있다(관전 중 교체 판단 근거 C1).
+   */
+  liveRatings(): Map<string, number> {
+    const m = new Map<string, number>();
+    for (const team of [this.ctx.home, this.ctx.away]) {
+      for (const slot of team.tactic.lineup) m.set(slot.playerId, 6.0);
+    }
+    for (const [id, st] of this.ctx.statMap) m.set(id, st.rating);
+    return m;
   }
 
   /** 지정 분까지 진행하고, 그 구간에 발생한 이벤트만 반환. */
