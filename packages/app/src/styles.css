@@ -1390,6 +1390,19 @@ h3 { font-size: 14px; margin: 0 0 10px; color: var(--muted); text-transform: upp
 .feed li.injury-feed { background: #3a2a24; border-radius: 6px; color: var(--color-warning); }
 .feed li.card-feed { background: #3a3420; border-radius: 6px; }
 
+/* 벤치 상시 노출 + 교체 드래그 + 교체 우선순위(선수관리 전면 도입 D27/D28) */
+.bench-panel { margin-bottom: 12px; }
+.bench-panel h3 { margin: 0 0 8px; font-size: 14px; }
+.bench-lineup-mini {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 4px; margin-bottom: 8px;
+}
+.bench-lineup-row {
+  display: flex; align-items: center; gap: 6px; background: var(--panel-2); border: 1px solid var(--line);
+  border-radius: var(--radius-sm); padding: 4px 8px; font-size: 12px;
+}
+.bench-lineup-row .blr-pos { font-weight: 700; color: var(--accent); width: 30px; flex-shrink: 0; }
+.bench-lineup-row .blr-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 /* 확인 모달(삭제·방출·판매 확정 등 되돌릴 수 없는 동작) */
 .modal.confirm-modal { max-width: 420px; }
 .confirm-modal p { margin: 0 0 18px; color: var(--text); }
