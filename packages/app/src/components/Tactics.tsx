@@ -1,17 +1,19 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  computeTeamStrength, currentAbility, isInjured, isSuspended, isAvailable, lineOf,
+  computeTeamStrength, currentAbility, isInjured, isSuspended, isAvailable, lineOf, familiarityAt,
   eligibleInstructionKinds, POSITIONS, FORMATIONS, rankCaptainCandidates,
   type Club, type Tactic, type TeamStrength, type PlayerInstructionKind, type Position,
 } from '@soccer-tycoon/engine';
 import {
   FORMATION_NAMES, autoPickLineup, swapPlayer, pickSetPieceTaker, ensureSetPieceTaker,
   pickCaptain, ensureCaptain, pickViceCaptain, ensureViceCaptain, setPlayerInstruction,
+  repairTactic, type LineupBias,
 } from '../tactics.js';
 import { loadCustomPresets, saveCustomPreset, deleteCustomPreset, type CustomPreset } from '../customPresets.js';
 import {
   loadCustomFormations, saveCustomFormation, deleteCustomFormation, type CustomFormation,
 } from '../customFormations.js';
+import { loadLineupPresets, saveLineupPreset, deleteLineupPreset, type LineupPreset } from '../lineupPresets.js';
 import { useModalA11y } from './useModalA11y.js';
 
 interface Props {
@@ -38,6 +40,13 @@ const INSTRUCTION_LABEL: Record<PlayerInstructionKind, string> = {
 /** 전담마크 대상으로 지정 가능한 상대 포지션(GK 제외). */
 const MARK_TARGET_POSITIONS: Position[] = POSITIONS.filter((p) => p !== 'GK');
 
+/** 베스트 XI 자동 선발 성향 선택지(선수관리 개선 항목32). */
+const BIAS_OPTIONS: { key: LineupBias; label: string }[] = [
+  { key: 'balanced', label: '균형' },
+  { key: 'attacking', label: '공격 우선' },
+  { key: 'defensive', label: '수비 우선' },
+];
+
 /** 슬라이더 5개 조합 한 번에 적용하는 전술 스타일 프리셋. */
 const PRESETS: { key: string; label: string; desc: string; values: Pick<Tactic, SliderKey> }[] = [
   {
@@ -61,19 +70,59 @@ export function Tactics({ club, tactic, onChange, disabled }: Props) {
   const rawBalance = (strength.attack + strength.creation) - (strength.defense + strength.midfield);
   const balance = Math.round(Math.max(-100, Math.min(100, rawBalance / 2.2)));
 
+  // 전술 변경 전후 전력 변화 하이라이트(선수관리 개선 항목33) — 직전 렌더의 전력을 ref에
+  // 담아두고 이번 렌더의 값과 비교, 커밋 후(useEffect) 다음 비교를 위해 갱신한다.
+  const prevStrengthRef = useRef<TeamStrength | null>(null);
+  const strengthDiff = prevStrengthRef.current
+    ? (Object.keys(strength) as (keyof TeamStrength)[]).reduce((acc, k) => {
+        acc[k] = strength[k] - prevStrengthRef.current![k];
+        return acc;
+      }, {} as Record<keyof TeamStrength, number>)
+    : null;
+  useEffect(() => { prevStrengthRef.current = strength; }, [strength]);
+
   const [customFormations, setCustomFormations] = useState<CustomFormation[]>(() => loadCustomFormations());
   const [showFormationEditor, setShowFormationEditor] = useState(false);
   const allFormationLabels = [...FORMATION_NAMES, ...customFormations.map((f) => f.label)];
+  const [xiBias, setXiBias] = useState<LineupBias>('balanced');
+  const [pickerSlotIndex, setPickerSlotIndex] = useState<number | null>(null);
 
-  function setFormation(f: string, customPositions?: Position[]) {
+  const [lineupPresets, setLineupPresets] = useState<LineupPreset[]>(() => loadLineupPresets(club.id));
+  const [showSaveLineupInput, setShowSaveLineupInput] = useState(false);
+  const [lineupPresetNameInput, setLineupPresetNameInput] = useState('');
+
+  function setFormation(f: string, customPositions?: Position[], bias: LineupBias = xiBias) {
     const positions = customPositions ?? customFormations.find((cf) => cf.label === f)?.positions;
-    const lineup = autoPickLineup(club, f, positions);
+    const lineup = autoPickLineup(club, f, positions, bias);
     const captainId = pickCaptain(club, lineup);
     onChange({
       ...tactic, formation: f, lineup,
       setPieceTakerId: pickSetPieceTaker(club, lineup),
       captainId,
       viceCaptainId: pickViceCaptain(club, lineup, captainId),
+    });
+  }
+
+  function handleSaveLineupPreset() {
+    const label = lineupPresetNameInput.trim();
+    if (!label) return;
+    setLineupPresets(saveLineupPreset(club.id, label, tactic.formation, tactic.lineup));
+    setLineupPresetNameInput('');
+    setShowSaveLineupInput(false);
+  }
+  function handleDeleteLineupPreset(id: string) {
+    setLineupPresets(deleteLineupPreset(club.id, id));
+  }
+  function handleApplyLineupPreset(preset: LineupPreset) {
+    // 저장 이후 이적·방출·은퇴로 선수가 사라졌을 수 있어, repairTactic으로 빈 슬롯을
+    // 현재 스쿼드 기준 베스트로 채워 넣는다(자유 포메이션도 그대로 적용).
+    const repaired = repairTactic(club, { ...tactic, formation: preset.formation, lineup: preset.lineup });
+    const captainId = ensureCaptain(club, repaired.lineup, tactic.captainId);
+    onChange({
+      ...repaired,
+      captainId,
+      viceCaptainId: ensureViceCaptain(club, repaired.lineup, tactic.viceCaptainId, captainId),
+      setPieceTakerId: ensureSetPieceTaker(club, repaired.lineup, tactic.setPieceTakerId),
     });
   }
   function handleSaveFormation(label: string, positions: Position[]) {
@@ -194,6 +243,73 @@ export function Tactics({ club, tactic, onChange, disabled }: Props) {
           </button>
         </div>
 
+        <div className="field-controls xi-bias-row">
+          <span className="label small">베스트 XI 성향</span>
+          {BIAS_OPTIONS.map((b) => (
+            <button
+              key={b.key}
+              className={xiBias === b.key ? 'chip small active' : 'chip small'}
+              disabled={disabled}
+              onClick={() => setXiBias(b.key)}
+              title="라인 간에 실력이 겹치는 자원이 있을 때 어느 라인에 먼저 배정할지 우선순위를 바꿉니다."
+            >
+              {b.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="field-controls lineup-preset-row">
+          <span className="label small">라인업 프리셋</span>
+          {lineupPresets.map((p) => (
+            <span key={p.id} className="chip preset-chip custom-preset-chip">
+              <button
+                className="custom-preset-apply"
+                title={`${p.label} (${p.formation})`}
+                disabled={disabled}
+                onClick={() => handleApplyLineupPreset(p)}
+              >
+                ★ {p.label}
+              </button>
+              <button
+                className="preset-delete"
+                title="이 라인업 프리셋 삭제"
+                disabled={disabled}
+                onClick={() => handleDeleteLineupPreset(p.id)}
+              >
+                ×
+              </button>
+            </span>
+          ))}
+          {!showSaveLineupInput ? (
+            <button
+              className="chip small"
+              disabled={disabled || lineupPresets.length >= 10}
+              title={lineupPresets.length >= 10 ? '라인업 프리셋은 최대 10개까지 저장할 수 있습니다.' : undefined}
+              onClick={() => setShowSaveLineupInput(true)}
+            >
+              + 현재 라인업 저장
+            </button>
+          ) : (
+            <span className="preset-save-row">
+              <input
+                className="preset-name-input"
+                type="text"
+                maxLength={20}
+                placeholder="프리셋 이름"
+                value={lineupPresetNameInput}
+                onChange={(e) => setLineupPresetNameInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleSaveLineupPreset();
+                  if (e.key === 'Escape') setShowSaveLineupInput(false);
+                }}
+                autoFocus
+              />
+              <button className="btn-small" onClick={handleSaveLineupPreset} disabled={!lineupPresetNameInput.trim()}>저장</button>
+              <button className="btn-small" onClick={() => { setShowSaveLineupInput(false); setLineupPresetNameInput(''); }}>취소</button>
+            </span>
+          )}
+        </div>
+
         {showFormationEditor && (
           <FormationEditorModal
             existingLabels={allFormationLabels}
@@ -217,28 +333,19 @@ export function Tactics({ club, tactic, onChange, disabled }: Props) {
                 <tr key={i} className={unavailable ? 'slot-injured' : ''}>
                   <td className="slot-pos">{slot.position}</td>
                   <td className="slot-player">
-                    <select
-                      value={slot.playerId}
+                    <button
+                      className="slot-player-btn"
                       disabled={disabled}
-                      onChange={(e) => {
-                        const next = swapPlayer(tactic, i, e.target.value);
-                        const captainId = ensureCaptain(club, next.lineup, next.captainId);
-                        onChange({
-                          ...next,
-                          setPieceTakerId: ensureSetPieceTaker(club, next.lineup, next.setPieceTakerId),
-                          captainId,
-                          viceCaptainId: ensureViceCaptain(club, next.lineup, next.viceCaptainId, captainId),
-                        });
-                      }}
+                      onClick={() => setPickerSlotIndex(i)}
                     >
-                      {club.players.map((pl) => (
-                        <option key={pl.id} value={pl.id}>
-                          {mark(pl)}
-                          {pl.id === tactic.captainId ? '(C) ' : pl.id === tactic.viceCaptainId ? '(VC) ' : ''}
-                          {pl.name} ({pl.position} · {currentAbility(pl).toFixed(0)})
-                        </option>
-                      ))}
-                    </select>
+                      {p ? (
+                        <>
+                          {mark(p)}
+                          {p.id === tactic.captainId ? '(C) ' : p.id === tactic.viceCaptainId ? '(VC) ' : ''}
+                          {p.name}
+                        </>
+                      ) : '(선수 없음)'}
+                    </button>
                   </td>
                   <td>
                     {p && isInjured(p) ? <span className="injury">🤕{p.injuryMatches}</span>
@@ -288,6 +395,26 @@ export function Tactics({ club, tactic, onChange, disabled }: Props) {
           </tbody>
         </table>
       </div>
+
+      {pickerSlotIndex !== null && (
+        <SlotPickerModal
+          club={club}
+          tactic={tactic}
+          slotIndex={pickerSlotIndex}
+          onClose={() => setPickerSlotIndex(null)}
+          onPick={(playerId) => {
+            const next = swapPlayer(tactic, pickerSlotIndex, playerId);
+            const captainId = ensureCaptain(club, next.lineup, next.captainId);
+            onChange({
+              ...next,
+              setPieceTakerId: ensureSetPieceTaker(club, next.lineup, next.setPieceTakerId),
+              captainId,
+              viceCaptainId: ensureViceCaptain(club, next.lineup, next.viceCaptainId, captainId),
+            });
+            setPickerSlotIndex(null);
+          }}
+        />
+      )}
 
       <div className="tactics-right">
         <div className="panel">
@@ -445,15 +572,23 @@ export function Tactics({ club, tactic, onChange, disabled }: Props) {
 
         <div className="panel">
           <h3>팀 전력 (현재 라인업)</h3>
-          {STRENGTH_LABELS.map(({ key, label }) => (
-            <div className="bar-row" key={key}>
-              <span className="bar-label">{label}</span>
-              <div className="bar-track">
-                <div className="bar-fill" style={{ width: `${Math.min(100, strength[key])}%` }} />
+          {STRENGTH_LABELS.map(({ key, label }) => {
+            const d = strengthDiff?.[key] ?? 0;
+            return (
+              <div className="bar-row" key={key}>
+                <span className="bar-label">{label}</span>
+                <div className="bar-track">
+                  <div className="bar-fill" style={{ width: `${Math.min(100, strength[key])}%` }} />
+                </div>
+                <span className="bar-val">{strength[key].toFixed(0)}</span>
+                {Math.abs(d) >= 0.5 && (
+                  <span className={`strength-diff ${d > 0 ? 'up' : 'down'}`}>
+                    {d > 0 ? '▲' : '▼'}{Math.abs(d).toFixed(1)}
+                  </span>
+                )}
               </div>
-              <span className="bar-val">{strength[key].toFixed(0)}</span>
-            </div>
-          ))}
+            );
+          })}
           <div className="balance-row" title="공격(공격+창출) 대 수비(수비+중원) 편중도">
             <span className="bar-label">밸런스</span>
             <div className="balance-track">
@@ -469,6 +604,73 @@ export function Tactics({ club, tactic, onChange, disabled }: Props) {
             <span className="bar-val">{balance > 0 ? `공격 +${balance}` : balance < 0 ? `수비 +${-balance}` : '중립'}</span>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * 슬롯 선수 선택 팝업(선수관리 개선 항목26/29) — select 드롭다운 대신 카드형 목록으로,
+ * 각 후보의 이 포지션 적합도(숙련도 기반 %)를 함께 보여줘 드롭다운보다 한눈에 비교할 수
+ * 있게 한다. 이미 다른 슬롯에 있는 선수를 고르면 두 슬롯이 맞교환된다(swapPlayer와 동일).
+ */
+function SlotPickerModal({
+  club, tactic, slotIndex, onClose, onPick,
+}: {
+  club: Club; tactic: Tactic; slotIndex: number; onClose: () => void; onPick: (playerId: string) => void;
+}) {
+  const slot = tactic.lineup[slotIndex]!;
+  const [search, setSearch] = useState('');
+  const ref = useModalA11y<HTMLDivElement>(onClose);
+
+  const candidates = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return club.players
+      .filter((p) => !q || p.name.toLowerCase().includes(q))
+      .map((p) => ({
+        player: p,
+        fit: p.position === slot.position ? 1 : familiarityAt(p, slot.position),
+        otherSlot: tactic.lineup.findIndex((s) => s.playerId === p.id),
+      }))
+      .sort((a, b) => (b.fit - a.fit) || (currentAbility(b.player) - currentAbility(a.player)));
+  }, [club.players, search, slot.position, tactic.lineup]);
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div
+        className="modal slot-picker-modal" role="dialog" aria-modal="true"
+        aria-label={`${slot.position} 슬롯 선수 선택`} tabIndex={-1} ref={ref}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="modal-head">
+          <h2>{slot.position} 슬롯 — 선수 선택</h2>
+          <button className="btn-ghost" onClick={onClose}>닫기 ✕</button>
+        </div>
+        <input
+          className="search" placeholder="선수 이름 검색…" aria-label="선수 이름 검색"
+          value={search} onChange={(e) => setSearch(e.target.value)} autoFocus
+        />
+        <ul className="slot-picker-list">
+          {candidates.map(({ player: p, fit, otherSlot }) => (
+            <li key={p.id} className={p.id === slot.playerId ? 'slot-picker-row current' : 'slot-picker-row'}>
+              <button onClick={() => onPick(p.id)}>
+                <span className="spr-name">
+                  {isInjured(p) ? '🤕 ' : isSuspended(p) ? '🟥 ' : ''}
+                  {p.id === tactic.captainId ? '(C) ' : p.id === tactic.viceCaptainId ? '(VC) ' : ''}
+                  {p.name}
+                </span>
+                <span className="spr-pos muted small">{p.position}</span>
+                <span className="spr-ca">CA {currentAbility(p).toFixed(0)}</span>
+                <span className={`spr-fit ${fit >= 0.8 ? 'good' : fit >= 0.4 ? 'mid' : 'low'}`}>
+                  적합 {Math.round(fit * 100)}%
+                </span>
+                {otherSlot >= 0 && otherSlot !== slotIndex && (
+                  <span className="muted small">(슬롯 {otherSlot + 1}과 교환)</span>
+                )}
+              </button>
+            </li>
+          ))}
+        </ul>
       </div>
     </div>
   );
