@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type MouseEvent } from 'react';
 import {
   formatMoney, currentAbility, marketValue, isInjured, isSuspended, lineOf, MENTOR_PAIRING_MAX, hasTrait,
   ROTATION_WARNING_THRESHOLD, TRAINING_FOCUSES, TRAINING_LABELS, TRAIT_LABELS,
@@ -9,6 +9,7 @@ import { SortableTh } from './SortableTh.js';
 import { flagFor } from '../flags.js';
 import { useResultToast, useToast } from '../toast.js';
 import { PlayerCompareModal } from './PlayerCompareModal.js';
+import { useContextMenu, ContextMenu, type ContextMenuItem } from './ContextMenu.js';
 import type { ActionOutcome } from '../game.js';
 import { RELEASE_TAG, LOAN_REVIEW_TAG } from '../playerTags.js';
 import {
@@ -252,14 +253,15 @@ function ConditionCell({ player }: { player: Player }) {
 }
 
 /** 카드형 뷰(선수관리 개선 항목6)의 선수 1명 카드. */
-function PlayerCard({ player, ca, value, selected, onToggleSelect, onSelect }: {
+function PlayerCard({ player, ca, value, selected, onToggleSelect, onSelect, onContextMenu }: {
   player: Player; ca: number; value: number; selected: boolean;
-  onToggleSelect: () => void; onSelect: () => void;
+  onToggleSelect: () => void; onSelect: () => void; onContextMenu: (e: MouseEvent) => void;
 }) {
   return (
     <div
       className="squad-card clickable"
       onClick={onSelect}
+      onContextMenu={onContextMenu}
       role="button"
       tabIndex={0}
       onKeyDown={onKeyActivate(onSelect)}
@@ -366,6 +368,26 @@ export function Squad({
       onSetPlayerTags(p.id, next);
     });
     showToast(allHave ? `${tag} 표시를 해제했습니다.` : `${targets.length}명을 ${tag}로 표시했습니다.`, true);
+  }
+
+  /** 목록 행 우클릭 컨텍스트 메뉴(선수관리 개선 항목47) — 빠른 액션 모음. toggleBulkTag를
+   *  단일 선수 id 배열로 호출하면 그 선수 하나만 토글하는 것과 동일하게 동작한다. */
+  const { menu, open: openContextMenu, close: closeContextMenu } = useContextMenu();
+  function buildContextMenuItems(player: Player): ContextMenuItem[] {
+    const hasReleaseTag = (player.tags ?? []).includes(RELEASE_TAG);
+    const hasLoanTag = (player.tags ?? []).includes(LOAN_REVIEW_TAG);
+    return [
+      { label: '상세 보기', onClick: () => onSelect(player) },
+      { label: selected.has(player.id) ? '선택 해제' : '선택', onClick: () => toggleSelected(player.id) },
+      {
+        label: hasReleaseTag ? `🏷 ${RELEASE_TAG} 해제` : `🏷 ${RELEASE_TAG}로 표시`,
+        onClick: () => toggleBulkTag(RELEASE_TAG, [player.id]),
+      },
+      {
+        label: hasLoanTag ? `🏷 ${LOAN_REVIEW_TAG} 해제` : `🏷 ${LOAN_REVIEW_TAG}로 표시`,
+        onClick: () => toggleBulkTag(LOAN_REVIEW_TAG, [player.id]),
+      },
+    ];
   }
 
   function toggleColumn(key: string) {
@@ -654,6 +676,7 @@ export function Squad({
               selected={selected.has(player.id)}
               onToggleSelect={() => toggleSelected(player.id)}
               onSelect={() => onSelect(player)}
+              onContextMenu={(e) => openContextMenu(e, buildContextMenuItems(player))}
             />
           ))}
         </div>
@@ -692,6 +715,7 @@ export function Squad({
                 key={player.id}
                 className="clickable"
                 onClick={() => onSelect(player)}
+                onContextMenu={(e) => openContextMenu(e, buildContextMenuItems(player))}
                 role="button"
                 tabIndex={0}
                 onKeyDown={onKeyActivate(() => onSelect(player))}
@@ -741,6 +765,7 @@ export function Squad({
           onClose={() => setCompareOpen(false)}
         />
       )}
+      <ContextMenu menu={menu} onClose={closeContextMenu} />
     </div>
   );
 }
