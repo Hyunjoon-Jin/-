@@ -935,6 +935,38 @@ h3 { font-size: 14px; margin: 0 0 10px; color: var(--muted); text-transform: upp
 .lineup-table .instruction-target-select { min-width: 58px; }
 .tactics-right { display: flex; flex-direction: column; gap: 14px; }
 
+/* 선수관리 개선 항목25-33 — 슬롯 선수 선택 팝업, 베스트 XI 성향, 라인업 프리셋, 전력 diff */
+.field-controls .label.small { font-size: 11px; }
+.chip.small { padding: 3px 9px; font-size: 11px; border-radius: 12px; }
+.xi-bias-row, .lineup-preset-row { margin-bottom: 10px; }
+.slot-player-btn {
+  width: 100%; text-align: left; background: var(--panel-2); color: var(--text);
+  border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; font-size: 13px; cursor: pointer;
+}
+.slot-player-btn:hover:not(:disabled) { border-color: var(--accent-2); }
+.slot-picker-modal { max-width: 560px; }
+.slot-picker-list {
+  list-style: none; margin: 10px 0 0; padding: 0; max-height: 50vh; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.slot-picker-row button {
+  width: 100%; display: flex; align-items: center; gap: 10px; text-align: left;
+  background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+  border-radius: 6px; padding: 7px 10px; cursor: pointer; font-size: 13px;
+}
+.slot-picker-row button:hover { border-color: var(--accent-2); }
+.slot-picker-row.current button { border-color: var(--accent); }
+.spr-name { flex: 1; font-weight: 600; }
+.spr-pos { width: 34px; }
+.spr-ca { width: 60px; color: var(--muted); }
+.spr-fit { width: 70px; font-weight: 700; font-size: 12px; }
+.spr-fit.good { color: var(--accent); }
+.spr-fit.mid { color: var(--color-warning); }
+.spr-fit.low { color: var(--muted); }
+.strength-diff { margin-left: 6px; font-size: 11px; font-weight: 700; }
+.strength-diff.up { color: var(--accent); }
+.strength-diff.down { color: var(--color-danger); }
+
 .slider { margin-bottom: 14px; }
 .slider-head { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; }
 .slider input[type=range] { width: 100%; accent-color: var(--accent); }

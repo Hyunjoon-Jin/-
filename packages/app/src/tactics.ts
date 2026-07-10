@@ -80,25 +80,47 @@ export function ensureViceCaptain(
   return pickViceCaptain(club, lineup, captainId);
 }
 
+/** 베스트 XI 자동 선발 성향(선수관리 개선 항목32) — 슬롯 간에 겹치는 우수 자원이 있을 때
+ *  어느 라인에 먼저 배정할지 우선순위를 바꾼다. 기본(balanced)은 포메이션 슬롯 순서 그대로. */
+export type LineupBias = 'balanced' | 'attacking' | 'defensive';
+
+const BIAS_LINE_ORDER: Record<Exclude<LineupBias, 'balanced'>, ReturnType<typeof lineOf>[]> = {
+  attacking: ['ATT', 'MID', 'DEF', 'GK'],
+  defensive: ['DEF', 'GK', 'MID', 'ATT'],
+};
+
+/** 성향에 따라 포지션 배정 처리 순서(인덱스)를 재정렬 — 반환되는 라인업 배열 자체의 슬롯
+ *  순서(포메이션 순서)는 그대로 유지되고, "누구를 먼저 뽑을지"만 바뀐다. */
+function biasProcessingOrder(positions: Position[], bias: LineupBias): number[] {
+  const idxs = positions.map((_, i) => i);
+  if (bias === 'balanced') return idxs;
+  const order = BIAS_LINE_ORDER[bias];
+  return idxs.sort((a, b) => order.indexOf(lineOf(positions[a]!)) - order.indexOf(lineOf(positions[b]!)));
+}
+
 /**
  * 포메이션에 맞춰 자동으로 베스트 XI를 뽑는다.
  * @param customPositions 커스텀 포메이션(F14)의 슬롯 배열 — 넘기면 이름 대신 이걸 그대로 쓴다
  *   (커스텀 포메이션은 기본 4종과 달리 engine의 FORMATIONS에 등록돼 있지 않다).
+ * @param bias 라인 간 우선순위(선수관리 개선 항목32) — 기본은 균형(포메이션 순서 그대로).
  */
-export function autoPickLineup(club: Club, formation: string, customPositions?: Position[]): Tactic['lineup'] {
+export function autoPickLineup(
+  club: Club, formation: string, customPositions?: Position[], bias: LineupBias = 'balanced',
+): Tactic['lineup'] {
   const positions = customPositions ?? FORMATIONS[formation] ?? FORMATIONS['4-3-3']!;
   const used = new Set<string>();
-  const lineup: Tactic['lineup'] = [];
-  for (const pos of positions) {
+  const picks = new Array<Tactic['lineup'][number] | null>(positions.length).fill(null);
+  for (const idx of biasProcessingOrder(positions, bias)) {
+    const pos = positions[idx]!;
     const pick = club.players
       .filter((p) => !used.has(p.id))
       .sort((a, b) => slotScore(b, pos) - slotScore(a, pos))[0];
     if (pick) {
       used.add(pick.id);
-      lineup.push({ position: pos, playerId: pick.id });
+      picks[idx] = { position: pos, playerId: pick.id };
     }
   }
-  return lineup;
+  return picks.filter((s): s is Tactic['lineup'][number] => s !== null);
 }
 
 /** 기본 전술(4-3-3, 베스트 XI, 중립 슬라이더). */
