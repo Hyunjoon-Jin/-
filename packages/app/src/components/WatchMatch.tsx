@@ -94,6 +94,10 @@ interface View {
   ball: { x: number; y: number };
 }
 
+/** 전술 변경 후 재변경까지 걸리는 경기 시간(분, M4 B11) — 지시가 선수들에게 스며들
+ *  시간을 주고, 슬라이더를 매분 흔드는 것이 최적해가 되는 것을 막는다. */
+const TACTIC_COOLDOWN_MIN = 5;
+
 /** "GOAL!" 배너 표시 지속시간(ms) — 틱 주기(TICK_MS)와 무관하게 고정. */
 const GOAL_FLASH_MS = 1500;
 /** 피치 위 카드/부상 아이콘 하이라이트 표시 지속시간(ms, 고도화 항목 B1/B2). */
@@ -168,6 +172,10 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
   /** 전술 변경 이력(M2 E1) — 중계 피드에 함께 흐른다. */
   const [tacticLog, setTacticLog] = useState<{ minute: number; text: string }[]>([]);
   const toast = useToast();
+  /** 마지막 전술 변경 시각(분, M4 B11) — 쿨다운 계산용. -999 = 아직 변경 없음. */
+  const lastTacticChangeRef = useRef(-999);
+  /** 예약 교체(M4 B16): 지정한 분에 도달하면 자동 실행된다. */
+  const [subPlans, setSubPlans] = useState<{ minute: number; outId: string; inId: string }[]>([]);
 
   // 부상 스케줄은 킥오프 시점에 확정(재현성) — 관전 중 분이 지날 때마다 하나씩 노출.
   const injuryScheduleRef = useRef<InjuryEvent[] | null>(null);
@@ -299,6 +307,7 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
       applyMinute(target, evs);
       revealInjuriesUpTo(target, tactic);
       revealCardsUpTo(target);
+      executeSubPlans(target);
     }, MINUTE_MS / SUBTICKS / prefs.speed);
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -318,6 +327,7 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
     applyMinute(boundary, evs, false);
     revealInjuriesUpTo(boundary, tactic, false);
     revealCardsUpTo(boundary, false);
+    executeSubPlans(boundary);
   }
 
   /** +N분 빠른 진행(M1 A7) — 요청한 만큼만 조용히 건너뛴다(자동 일시정지 없음). */
@@ -331,6 +341,7 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
     applyMinute(target, evs, false);
     revealInjuriesUpTo(target, tactic);
     revealCardsUpTo(target, false);
+    executeSubPlans(target);
   }
 
   /** 다음 주요 장면(슈팅 결과·카드·부상)까지 건너뛰고 그 앞에서 일시정지(M1 A7) —
@@ -355,6 +366,7 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
     applyMinute(m, collected, false);
     revealInjuriesUpTo(m, tactic);
     revealCardsUpTo(m, false);
+    executeSubPlans(m);
     if (m < boundary) setPaused(true);
   }
 
@@ -386,17 +398,29 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
     setTacticLog((l) => [{ minute: minuteRef.current, text }, ...l]);
   }
 
+  /** 전술 변경 쿨다운 잔여(경기 분, M4 B11). 0이면 변경 가능. */
+  const tacticCooldownLeft = Math.max(0, TACTIC_COOLDOWN_MIN - (view.minute - lastTacticChangeRef.current));
+
   /** 퀵 지시(M2 B3/B4/B5): 지정한 슬라이더만 갈아 끼우고, 이력·토스트로 확인시킨다(E3). */
   function applyQuickTactic(values: QuickTacticValues, label: string) {
+    if (tacticCooldownLeft > 0) {
+      toast(`지시가 스며드는 중 — ${tacticCooldownLeft}분 후 변경 가능`, false);
+      return;
+    }
     const next = { ...tactic, ...values };
     setTactic(next);
     live.setTactic(userSide, next);
     logTactic(label);
     toast(`${label} 적용`, true);
+    lastTacticChangeRef.current = minuteRef.current;
   }
 
   /** 인게임 전술 패널 열기(B1/B2) — 경기를 멈추고 생각할 시간을 확보한다. */
   function openTacticPanel() {
+    if (tacticCooldownLeft > 0) {
+      toast(`지시가 스며드는 중 — ${tacticCooldownLeft}분 후 변경 가능`, false);
+      return;
+    }
     tacticSnapshotRef.current = tactic;
     setTacticPanelOpen(true);
     setPaused(true);
@@ -410,11 +434,52 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
       if (diff) {
         logTactic(diff);
         toast('전술 변경 적용', true);
+        lastTacticChangeRef.current = minuteRef.current;
       }
     }
     tacticSnapshotRef.current = null;
     setTacticPanelOpen(false);
     setPaused(false);
+  }
+
+  /** 교체 예약 추가(M4 B16) — 지정한 분에 도달하면 자동 실행된다. */
+  const subPlansRef = useRef(subPlans);
+  function addSubPlan(outId: string, inId: string, minute: number) {
+    const next = [...subPlansRef.current, { minute, outId, inId }];
+    subPlansRef.current = next;
+    setSubPlans(next);
+    const outP = myClub.players.find((p) => p.id === outId);
+    const inP = myClub.players.find((p) => p.id === inId);
+    toast(`${minute}' 교체 예약: ${outP?.name} → ${inP?.name}`, true);
+  }
+  function cancelSubPlan(index: number) {
+    const next = subPlansRef.current.filter((_, i) => i !== index);
+    subPlansRef.current = next;
+    setSubPlans(next);
+  }
+
+  /** 예약 교체 실행 — 분이 지날 때마다 대기열을 확인한다. 조건이 깨졌으면(선수 이미
+   *  교체됨·카드 소진 등) 조용히 버리지 않고 토스트로 사유를 알린다. */
+  function executeSubPlans(target: number) {
+    const due = subPlansRef.current.filter((p) => p.minute <= target);
+    if (!due.length) return;
+    const rest = subPlansRef.current.filter((p) => p.minute > target);
+    subPlansRef.current = rest;
+    setSubPlans(rest);
+    for (const plan of due) {
+      if (subsUsed >= SUB_LIMIT) { toast('예약 교체 실패 — 교체 카드 소진', false); continue; }
+      const outP = myClub.players.find((p) => p.id === plan.outId);
+      const inP = myClub.players.find((p) => p.id === plan.inId);
+      const outOnPitch = tactic.lineup.some((s) => s.playerId === plan.outId);
+      const inAvailable = !!inP && isAvailable(inP) && !tactic.lineup.some((s) => s.playerId === plan.inId);
+      if (!outP || !outOnPitch || !inAvailable) {
+        toast('예약 교체 취소 — 선수 상태가 바뀌었습니다', false);
+        continue;
+      }
+      performSubstitution(plan.outId, plan.inId);
+      logTactic(`예약 교체: ${outP.name} → ${inP.name}`);
+      toast(`예약 교체 실행: ${inP.name} 투입`, true);
+    }
   }
 
   /** 인게임 전술 편집 반영(B1) — 하프타임과 달리 변경 즉시 엔진에 적용된다. */
@@ -588,7 +653,10 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
                 <button
                   className={tacticPanelOpen ? 'btn-ghost tactic-panel-btn open' : 'btn-ghost tactic-panel-btn'}
                   onClick={tacticPanelOpen ? closeTacticPanel : openTacticPanel}
-                  title="경기를 멈추고 전술(포메이션·슬라이더·개인 지시)을 조정합니다"
+                  disabled={!tacticPanelOpen && tacticCooldownLeft > 0}
+                  title={!tacticPanelOpen && tacticCooldownLeft > 0
+                    ? `지시 전달 중 — ${tacticCooldownLeft}분 후 변경 가능`
+                    : '경기를 멈추고 전술(포메이션·슬라이더·개인 지시)을 조정합니다'}
                 >
                   📋 전술 {tacticPanelOpen ? '닫기' : ''}
                 </button>
@@ -630,6 +698,7 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
                   <button
                     key={s.label}
                     className={nearestMentality === s.value ? 'speed-btn active' : 'speed-btn'}
+                    disabled={tacticCooldownLeft > 0}
                     onClick={() => applyQuickTactic({ mentality: s.value }, `멘탈리티 → ${s.label}`)}
                   >
                     {s.label}
@@ -645,11 +714,17 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
                     (p.tone === 'chase' && userBehind) || (p.tone === 'protect' && userAhead) ? 'suggested' : '',
                   ].filter(Boolean).join(' ')}
                   title={p.title}
+                  disabled={tacticCooldownLeft > 0}
                   onClick={() => applyQuickTactic(p.values, p.label)}
                 >
                   {p.label}
                 </button>
               ))}
+              {tacticCooldownLeft > 0 && (
+                <span className="qb-cooldown" title="방금 바꾼 지시가 선수들에게 전달되는 중입니다">
+                  ⏳ 지시 전달 중 · {tacticCooldownLeft}분
+                </span>
+              )}
             </div>
           )}
         </div>
@@ -704,6 +779,8 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
                 ratings={ratings}
                 staminaOf={staminaEstimate}
                 yellowIds={yellowIds}
+                subPlans={subPlans}
+                onCancelPlan={cancelSubPlan}
               />
               <LiveStatsPanel stats={stats} homeName={homeName} awayName={awayName} userSide={userSide} momentum={momentum} />
               {aiHalftimeNote && <p className="muted small ai-halftime-note">🔄 {aiHalftimeNote}</p>}
@@ -731,7 +808,9 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
           tactic={tactic}
           subsUsed={subsUsed}
           subLimit={SUB_LIMIT}
+          currentMinute={view.minute}
           onConfirm={confirmFreeSubstitution}
+          onReserve={(outId, inId, minute) => { addSubPlan(outId, inId, minute); setSubModalOpen(false); }}
           onDismiss={() => setSubModalOpen(false)}
         />
       )}
@@ -837,7 +916,7 @@ function BenchChip({ player, disabled }: { player: Player; disabled?: boolean })
  *  그 순서가 "선호 교체 우선순위"로 저장돼 다음 경기에도 이어진다. */
 function BenchPanel({
   club, tactic, subsUsed, subLimit, subPriority, onReorderPriority, onSubstitute,
-  ratings, staminaOf, yellowIds,
+  ratings, staminaOf, yellowIds, subPlans, onCancelPlan,
 }: {
   club: Club; tactic: Tactic; subsUsed: number; subLimit: number;
   subPriority: string[];
@@ -846,6 +925,8 @@ function BenchPanel({
   ratings?: Map<string, number>;
   staminaOf?: (p: Player) => number;
   yellowIds?: Set<string>;
+  subPlans?: { minute: number; outId: string; inId: string }[];
+  onCancelPlan?: (index: number) => void;
 }) {
   const exhausted = subsUsed >= subLimit;
   const benchPlayers = sortByPriority(
@@ -878,6 +959,22 @@ function BenchPanel({
   return (
     <div className="bench-panel">
       <h3>🪑 벤치{exhausted && <span className="muted small"> (교체 카드 소진)</span>}</h3>
+      {subPlans && subPlans.length > 0 && (
+        <ul className="sub-plans">
+          {subPlans.map((plan, i) => {
+            const outP = club.players.find((p) => p.id === plan.outId);
+            const inP = club.players.find((p) => p.id === plan.inId);
+            return (
+              <li key={`${plan.minute}-${plan.outId}-${i}`}>
+                <span>⏰ {plan.minute}' {outP?.name} → {inP?.name}</span>
+                {onCancelPlan && (
+                  <button className="btn-ghost sub-plan-cancel" onClick={() => onCancelPlan(i)} title="예약 취소">✕</button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
       <DndScope onDragEnd={handleDragEnd}>
         <div className="bench-lineup-mini">
           {tactic.lineup.map((slot, i) => {
@@ -1116,15 +1213,19 @@ function InjurySubModal({
   );
 }
 
-/** 부상과 무관하게 관전 중 언제든 선수를 교체하는 모달 — 나갈 선수 → 들어올 선수 2단계 선택. */
+/** 부상과 무관하게 관전 중 언제든 선수를 교체하는 모달 — 나갈 선수 → 들어올 선수 2단계 선택.
+ *  M4(B16): 즉시 교체 대신 특정 분에 실행되는 "예약"도 걸 수 있다. */
 function FreeSubModal({
-  club, tactic, subsUsed, subLimit, onConfirm, onDismiss,
+  club, tactic, subsUsed, subLimit, currentMinute, onConfirm, onReserve, onDismiss,
 }: {
   club: Club; tactic: Tactic; subsUsed: number; subLimit: number;
+  currentMinute: number;
   onConfirm: (outPlayerId: string, inPlayerId: string) => void;
+  onReserve?: (outPlayerId: string, inPlayerId: string, minute: number) => void;
   onDismiss: () => void;
 }) {
   const [outId, setOutId] = useState<string | null>(null);
+  const [planMinute, setPlanMinute] = useState(() => Math.min(MATCH_LENGTH - 1, currentMinute + 10));
   const outPlayer = outId ? club.players.find((p) => p.id === outId) : null;
   const bench = club.players
     .filter((p) => isAvailable(p) && !tactic.lineup.some((s) => s.playerId === p.id))
@@ -1165,6 +1266,18 @@ function FreeSubModal({
         ) : (
           <>
             <p className="muted small"><b>{outPlayer.name}</b> 대신 들어올 선수를 선택하세요.</p>
+            {onReserve && (
+              <label className="sub-reserve-minute muted small">
+                예약 시각(분) —  "예약"을 누르면 이 시각에 자동 교체됩니다
+                <input
+                  type="number"
+                  min={currentMinute + 1}
+                  max={MATCH_LENGTH - 1}
+                  value={planMinute}
+                  onChange={(e) => setPlanMinute(Number(e.target.value))}
+                />
+              </label>
+            )}
             {bench.length === 0 ? (
               <p className="muted small">교체 가능한 벤치 선수가 없습니다.</p>
             ) : (
@@ -1172,7 +1285,19 @@ function FreeSubModal({
                 {bench.slice(0, 10).map((p) => (
                   <li key={p.id}>
                     <span>{p.name} ({p.position} · {currentAbility(p).toFixed(0)})</span>
-                    <button className="btn-small" onClick={() => onConfirm(outPlayer.id, p.id)}>교체</button>
+                    <span className="sub-actions">
+                      <button className="btn-small" onClick={() => onConfirm(outPlayer.id, p.id)}>교체</button>
+                      {onReserve && (
+                        <button
+                          className="btn-small"
+                          disabled={planMinute <= currentMinute || planMinute >= MATCH_LENGTH}
+                          onClick={() => onReserve(outPlayer.id, p.id, planMinute)}
+                          title={`${planMinute}'에 자동 교체 예약`}
+                        >
+                          ⏰ 예약
+                        </button>
+                      )}
+                    </span>
                   </li>
                 ))}
               </ul>
