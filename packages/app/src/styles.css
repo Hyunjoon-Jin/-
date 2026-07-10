@@ -1137,6 +1137,36 @@ h3 { font-size: 14px; margin: 0 0 10px; color: var(--muted); text-transform: upp
 .compare-table td:first-child, .compare-table th:first-child { text-align: left; }
 .agent-badge.agent-hardliner { color: var(--color-danger); border: 1px solid var(--color-danger); }
 .agent-badge.agent-flexible { color: var(--accent); border: 1px solid var(--accent); }
+
+/* 스쿼드 목록 편의성(선수관리 개선 항목1-8) — 밀도/컬럼/카드뷰/필터 프리셋/리저브 탭 정렬 */
+.squad-toolbar-spacer { flex: 1; }
+.density-toggle, .view-mode-toggle { display: flex; gap: 4px; }
+.column-toggle { position: relative; }
+.column-toggle-panel {
+  position: absolute; right: 0; top: calc(100% + 4px); z-index: 20;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+  padding: 8px 10px; display: flex; flex-direction: column; gap: 6px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.35); min-width: 130px;
+}
+.column-toggle-item { display: flex; align-items: center; gap: 6px; font-size: 12px; white-space: nowrap; cursor: pointer; }
+.filter-preset-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 10px; }
+.preset-save-form { display: inline-flex; align-items: center; gap: 6px; }
+
+.squad-cards {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px;
+}
+.squad-card {
+  position: relative; background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; cursor: pointer;
+}
+.squad-card:hover { border-color: var(--accent-2); }
+.squad-card-select { position: absolute; top: 8px; right: 8px; }
+.squad-card-header { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding-right: 20px; }
+.squad-card-name { font-size: 14px; }
+.squad-card-body { display: flex; gap: 10px; font-size: 12px; flex-wrap: wrap; }
+.squad-card-footer { font-size: 11px; }
+.squad-card-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.squad-card-tags .player-tag-chip { margin-left: 0; }
 .agent-badge.agent-unknown { color: var(--muted); border: 1px solid var(--line); }
 .loan-field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; font-size: 13px; }
 .loan-field select, .loan-field input[type="number"], .loan-field input[type="text"] {

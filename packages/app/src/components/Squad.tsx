@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
   formatMoney, currentAbility, marketValue, isInjured, isSuspended, lineOf, MENTOR_PAIRING_MAX, hasTrait,
-  ROTATION_WARNING_THRESHOLD, TRAINING_FOCUSES, TRAINING_LABELS,
+  ROTATION_WARNING_THRESHOLD, TRAINING_FOCUSES, TRAINING_LABELS, TRAIT_LABELS,
   type Club, type Player, type Line, type TrainingFocus,
 } from '@soccer-tycoon/engine';
 import { onKeyActivate } from '../a11y.js';
@@ -10,6 +10,13 @@ import { flagFor } from '../flags.js';
 import { useResultToast, useToast } from '../toast.js';
 import { PlayerCompareModal } from './PlayerCompareModal.js';
 import type { ActionOutcome } from '../game.js';
+import {
+  loadSquadViewSettings, saveSquadViewSettings, OPTIONAL_COLUMNS,
+  type SquadViewSettings, type SquadDensity, type SquadViewMode,
+} from '../squadViewSettings.js';
+import {
+  loadSquadFilterPresets, saveSquadFilterPreset, deleteSquadFilterPreset, type SquadFilterPreset,
+} from '../squadFilterPresets.js';
 
 /** 멘토링 대상은 아직 성장 중인 유망주(엔진 MENTEE_MAX_AGE와 동일 기준)만. */
 const MENTEE_MAX_AGE = 23;
@@ -142,10 +149,13 @@ function MentorPanel({ club, onAssignMentor, onClearMentor }: {
   );
 }
 
-type SortKey = 'ca' | 'age' | 'value' | 'wage' | 'condition';
+/** 정렬 컬럼(선수관리 개선 항목5) — 등번호·사기·특성 수까지 확장. */
+type SortKey = 'ca' | 'age' | 'value' | 'wage' | 'condition' | 'number' | 'morale' | 'traits';
 type SortDir = 1 | -1;
 /** 컬럼별 기본 정렬 방향(재클릭 시 이 방향을 뒤집는다). */
-const DEFAULT_DIR: Record<SortKey, SortDir> = { ca: -1, age: 1, value: -1, wage: -1, condition: 1 };
+const DEFAULT_DIR: Record<SortKey, SortDir> = {
+  ca: -1, age: 1, value: -1, wage: -1, condition: 1, number: 1, morale: -1, traits: -1,
+};
 
 type LineFilter = 'ALL' | Line;
 const LINE_FILTERS: { key: LineFilter; label: string }[] = [
@@ -158,6 +168,50 @@ const LINE_FILTERS: { key: LineFilter; label: string }[] = [
 
 /** 재계약 임박 기준(renewContract가 허용하는 문턱과 동일 — 2년 이하). */
 const CONTRACT_SOON = 2;
+
+type Row = { player: Player; ca: number; value: number };
+
+/** 복합 검색(선수관리 개선 항목4) — 이름뿐 아니라 포지션·국적·특성 라벨까지 매칭. */
+function matchesSearch(player: Player, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  if (player.name.toLowerCase().includes(q)) return true;
+  if (player.position.toLowerCase().includes(q)) return true;
+  if (player.nationality.toLowerCase().includes(q)) return true;
+  return player.traits.some((t) => TRAIT_LABELS[t].toLowerCase().includes(q));
+}
+
+function sortCompare(a: Row, b: Row, sort: SortKey): number {
+  switch (sort) {
+    case 'age': return a.player.age - b.player.age;
+    case 'value': return a.value - b.value;
+    case 'wage': return a.player.wage - b.player.wage;
+    case 'condition': return a.player.condition - b.player.condition;
+    case 'number': return (a.player.squadNumber ?? 999) - (b.player.squadNumber ?? 999);
+    case 'morale': return a.player.morale - b.player.morale;
+    case 'traits': return a.player.traits.length - b.player.traits.length;
+    default: return a.ca - b.ca;
+  }
+}
+
+interface RowFilters {
+  line: LineFilter;
+  search: string;
+  troubledOnly?: boolean;
+  contractSoonOnly?: boolean;
+  sort: SortKey;
+  dir: SortDir;
+}
+
+function computeRows(players: Player[], f: RowFilters): Row[] {
+  let list: Row[] = players.map((p) => ({ player: p, ca: currentAbility(p), value: marketValue(p) }));
+  if (f.line !== 'ALL') list = list.filter((r) => lineOf(r.player.position) === f.line);
+  if (f.troubledOnly) list = list.filter((r) => isInjured(r.player) || isSuspended(r.player));
+  if (f.contractSoonOnly) list = list.filter((r) => r.player.contractYears <= CONTRACT_SOON);
+  if (f.search.trim()) list = list.filter((r) => matchesSearch(r.player, f.search));
+  list.sort((a, b) => sortCompare(a, b, f.sort) * f.dir);
+  return list;
+}
 
 /** 복귀 직후 재부상 위험/능력치 회복 지연 중이면 작은 배지를 붙인다(공간이 좁은 표 셀용). */
 function RecoveryHint({ player }: { player: Player }) {
@@ -201,6 +255,46 @@ function ConditionCell({ player }: { player: Player }) {
   );
 }
 
+/** 카드형 뷰(선수관리 개선 항목6)의 선수 1명 카드. */
+function PlayerCard({ player, ca, value, selected, onToggleSelect, onSelect }: {
+  player: Player; ca: number; value: number; selected: boolean;
+  onToggleSelect: () => void; onSelect: () => void;
+}) {
+  return (
+    <div
+      className="squad-card clickable"
+      onClick={onSelect}
+      role="button"
+      tabIndex={0}
+      onKeyDown={onKeyActivate(onSelect)}
+    >
+      <div className="squad-card-select" onClick={(e) => e.stopPropagation()}>
+        <input type="checkbox" aria-label={`${player.name} 선택`} checked={selected} onChange={onToggleSelect} />
+      </div>
+      <div className="squad-card-header">
+        <span className="squad-number muted">{player.squadNumber ?? '-'}</span>
+        <span className={`pos-chip pos-${lineOf(player.position).toLowerCase()}`}>{player.position}</span>
+        <b className="squad-card-name">{player.name}</b>
+        {player.loanFromClubId !== undefined && <span className="loan-badge" title="임대 선수">🔁</span>}
+      </div>
+      <div className="squad-card-body">
+        <span>나이 <b>{player.age}</b></span>
+        <span>CA <b>{ca.toFixed(0)}</b></span>
+        <span className="muted">잠재 {player.potential.toFixed(0)}</span>
+        <ConditionCell player={player} />
+      </div>
+      <div className="squad-card-footer muted">
+        {flagFor(player.nationality)} {player.nationality} · {player.contractYears}년 · {formatMoney(value)}
+      </div>
+      {(player.tags ?? []).length > 0 && (
+        <div className="squad-card-tags">
+          {(player.tags ?? []).map((t) => <span key={t} className="player-tag-chip">{t}</span>)}
+        </div>
+      )}
+    </div>
+  );
+}
+
 type SquadView = 'first' | 'reserves';
 
 interface SquadProps {
@@ -230,10 +324,31 @@ export function Squad({
   const reserves = club.reserves ?? [];
   const showToast = useToast();
 
+  // 리저브 탭 전용 필터/정렬/검색(선수관리 개선 항목3) — 1군 탭과 별개로 유지.
+  const [reserveLine, setReserveLine] = useState<LineFilter>('ALL');
+  const [reserveSearch, setReserveSearch] = useState('');
+  const [reserveSort, setReserveSort] = useState<SortKey>('ca');
+  const [reserveDir, setReserveDir] = useState<SortDir>(-1);
+
+  // 목록 표시 설정(항목1/2/6) — 컬럼 표시/숨김, 밀도, 표/카드 뷰.
+  const [viewSettings, setViewSettings] = useState<SquadViewSettings>(() => loadSquadViewSettings());
+  const [columnsOpen, setColumnsOpen] = useState(false);
+
+  // 필터 프리셋(항목7) — 라인·검색·부상·재계약 조합을 이름 붙여 저장.
+  const [filterPresets, setFilterPresets] = useState<SquadFilterPreset[]>(() => loadSquadFilterPresets());
+  const [showSavePresetInput, setShowSavePresetInput] = useState(false);
+  const [presetNameInput, setPresetNameInput] = useState('');
+
   function toggleSort(k: SortKey) {
     if (k === sort) { setDir((d) => (d === 1 ? -1 : 1) as SortDir); return; }
     setSort(k);
     setDir(DEFAULT_DIR[k]);
+  }
+
+  function toggleReserveSort(k: SortKey) {
+    if (k === reserveSort) { setReserveDir((d) => (d === 1 ? -1 : 1) as SortDir); return; }
+    setReserveSort(k);
+    setReserveDir(DEFAULT_DIR[k]);
   }
 
   function toggleSelected(id: string) {
@@ -257,32 +372,61 @@ export function Squad({
     showToast(allHave ? `${tag} 표시를 해제했습니다.` : `${targets.length}명을 ${tag}로 표시했습니다.`, true);
   }
 
-  const rows = useMemo(() => {
-    let list = club.players.map((p) => ({
-      player: p,
-      ca: currentAbility(p),
-      value: marketValue(p),
-    }));
-    if (line !== 'ALL') list = list.filter((r) => lineOf(r.player.position) === line);
-    if (troubledOnly) list = list.filter((r) => isInjured(r.player) || isSuspended(r.player));
-    if (contractSoonOnly) list = list.filter((r) => r.player.contractYears <= CONTRACT_SOON);
-    if (search.trim()) {
-      const q = search.trim().toLowerCase();
-      list = list.filter((r) => r.player.name.toLowerCase().includes(q));
-    }
-    list.sort((a, b) => {
-      let cmp: number;
-      switch (sort) {
-        case 'age': cmp = a.player.age - b.player.age; break;
-        case 'value': cmp = a.value - b.value; break;
-        case 'wage': cmp = a.player.wage - b.player.wage; break;
-        case 'condition': cmp = a.player.condition - b.player.condition; break;
-        default: cmp = a.ca - b.ca;
-      }
-      return cmp * dir;
+  function toggleColumn(key: string) {
+    setViewSettings((prev) => {
+      const hiddenColumns = prev.hiddenColumns.includes(key)
+        ? prev.hiddenColumns.filter((k) => k !== key)
+        : [...prev.hiddenColumns, key];
+      const next = { ...prev, hiddenColumns };
+      saveSquadViewSettings(next);
+      return next;
     });
-    return list;
-  }, [club.players, sort, dir, line, troubledOnly, contractSoonOnly, search]);
+  }
+
+  function setDensity(density: SquadDensity) {
+    setViewSettings((prev) => {
+      const next = { ...prev, density };
+      saveSquadViewSettings(next);
+      return next;
+    });
+  }
+
+  function setViewMode(viewMode: SquadViewMode) {
+    setViewSettings((prev) => {
+      const next = { ...prev, viewMode };
+      saveSquadViewSettings(next);
+      return next;
+    });
+  }
+
+  const isColVisible = (key: string) => !viewSettings.hiddenColumns.includes(key);
+
+  function applyFilterPreset(p: SquadFilterPreset) {
+    setLine(p.line);
+    setSearch(p.search);
+    setTroubledOnly(p.troubledOnly);
+    setContractSoonOnly(p.contractSoonOnly);
+  }
+
+  function handleSaveFilterPreset() {
+    const label = presetNameInput.trim();
+    if (!label) return;
+    setFilterPresets(saveSquadFilterPreset(label, { line, search, troubledOnly, contractSoonOnly }));
+    setPresetNameInput('');
+    setShowSavePresetInput(false);
+  }
+
+  const rows = useMemo(
+    () => computeRows(club.players, { line, search, troubledOnly, contractSoonOnly, sort, dir }),
+    [club.players, sort, dir, line, troubledOnly, contractSoonOnly, search],
+  );
+
+  const reserveRows = useMemo(
+    () => computeRows(reserves, { line: reserveLine, search: reserveSearch, sort: reserveSort, dir: reserveDir }),
+    [reserves, reserveLine, reserveSearch, reserveSort, reserveDir],
+  );
+
+  const density = viewSettings.density;
 
   return (
     <div className="squad">
@@ -295,21 +439,87 @@ export function Squad({
           className={view === 'reserves' ? 'chip active' : 'chip'}
           onClick={() => setView('reserves')}
         >리저브 ({reserves.length})</button>
+
+        <span className="squad-toolbar-spacer" />
+
+        <div className="density-toggle" role="group" aria-label="목록 밀도">
+          <button
+            className={density === 'default' ? 'chip small active' : 'chip small'}
+            onClick={() => setDensity('default')}
+          >보통</button>
+          <button
+            className={density === 'compact' ? 'chip small active' : 'chip small'}
+            onClick={() => setDensity('compact')}
+          >컴팩트</button>
+        </div>
+        {view === 'first' && (
+          <div className="view-mode-toggle" role="group" aria-label="목록 형식">
+            <button
+              className={viewSettings.viewMode === 'table' ? 'chip small active' : 'chip small'}
+              onClick={() => setViewMode('table')}
+            >☰ 표</button>
+            <button
+              className={viewSettings.viewMode === 'cards' ? 'chip small active' : 'chip small'}
+              onClick={() => setViewMode('cards')}
+            >▦ 카드</button>
+          </div>
+        )}
+        <div className="column-toggle">
+          <button className="chip small" onClick={() => setColumnsOpen((v) => !v)}>⚙ 컬럼</button>
+          {columnsOpen && (
+            <div className="column-toggle-panel">
+              {OPTIONAL_COLUMNS.map((c) => (
+                <label key={c.key} className="column-toggle-item">
+                  <input
+                    type="checkbox"
+                    checked={isColVisible(c.key)}
+                    onChange={() => toggleColumn(c.key)}
+                  />
+                  {c.label}
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {view === 'reserves' ? (
         reserves.length === 0 ? (
           <p className="muted">리저브 선수가 없습니다. 유스 아카데미에서 배출되면 여기에 합류합니다.</p>
         ) : (
+          <>
+          <div className="filters">
+            {LINE_FILTERS.map((f) => (
+              <button
+                key={f.key}
+                className={reserveLine === f.key ? 'chip active' : 'chip'}
+                onClick={() => setReserveLine(f.key)}
+              >{f.label}</button>
+            ))}
+          </div>
+          <input
+            className="search" placeholder="리저브 선수 검색…" aria-label="리저브 선수 검색"
+            value={reserveSearch} onChange={(e) => setReserveSearch(e.target.value)}
+          />
+          {reserveRows.length === 0 ? (
+            <p className="muted">조건에 맞는 선수가 없습니다.</p>
+          ) : (
           <div className="table-scroll">
-          <table className="data-table">
+          <table className={density === 'compact' ? 'data-table compact' : 'data-table'}>
             <thead>
               <tr>
-                <th>이름</th><th>포지션</th><th>나이</th><th>CA</th><th>잠재력</th><th>국적</th>
+                <th>번호</th>
+                <th>이름</th><th>포지션</th>
+                <SortableTh label="나이" k="age" sort={reserveSort} dir={reserveDir} onClick={toggleReserveSort} />
+                <SortableTh label="CA" k="ca" sort={reserveSort} dir={reserveDir} onClick={toggleReserveSort} />
+                {isColVisible('potential') && <th>잠재력</th>}
+                <SortableTh label="컨디션" k="condition" sort={reserveSort} dir={reserveDir} onClick={toggleReserveSort} />
+                {isColVisible('nationality') && <th>국적</th>}
+                {isColVisible('training') && <th>훈련 포커스</th>}
               </tr>
             </thead>
             <tbody>
-              {[...reserves].sort((a, b) => currentAbility(b) - currentAbility(a)).map((p) => (
+              {reserveRows.map(({ player: p, ca }) => (
                 <tr
                   key={p.id}
                   className="clickable"
@@ -318,17 +528,22 @@ export function Squad({
                   tabIndex={0}
                   onKeyDown={onKeyActivate(() => onSelect(p))}
                 >
+                  <td className="squad-number muted">{p.squadNumber ?? '-'}</td>
                   <td className="name">{p.name}</td>
                   <td><span className={`pos-chip pos-${lineOf(p.position).toLowerCase()}`}>{p.position}</span></td>
                   <td>{p.age}</td>
-                  <td><b>{currentAbility(p).toFixed(0)}</b></td>
-                  <td className="muted">{p.potential.toFixed(0)}</td>
-                  <td className="muted">{flagFor(p.nationality)} {p.nationality}</td>
+                  <td><b>{ca.toFixed(0)}</b></td>
+                  {isColVisible('potential') && <td className="muted">{p.potential.toFixed(0)}</td>}
+                  <td><ConditionCell player={p} /></td>
+                  {isColVisible('nationality') && <td className="muted">{flagFor(p.nationality)} {p.nationality}</td>}
+                  {isColVisible('training') && <td className="muted">{TRAINING_LABELS[p.trainingFocus]}</td>}
                 </tr>
               ))}
             </tbody>
           </table>
           </div>
+          )}
+          </>
         )
       ) : (
       <>
@@ -351,9 +566,57 @@ export function Squad({
         >📋 재계약 임박</button>
       </div>
       <input
-        className="search" placeholder="선수 이름 검색…" aria-label="선수 이름 검색"
+        className="search" placeholder="선수 이름·포지션·국적·특성 검색…" aria-label="선수 검색"
         value={search} onChange={(e) => setSearch(e.target.value)}
       />
+
+      <div className="filter-preset-row">
+        {filterPresets.map((p) => (
+          <span key={p.id} className="chip preset-chip custom-preset-chip">
+            <button
+              className="custom-preset-apply"
+              title={`라인 ${p.line} · 검색 "${p.search}"`}
+              onClick={() => applyFilterPreset(p)}
+            >
+              ★ {p.label}
+            </button>
+            <button
+              className="preset-delete"
+              title="이 필터 프리셋 삭제"
+              onClick={() => setFilterPresets(deleteSquadFilterPreset(p.id))}
+            >
+              ×
+            </button>
+          </span>
+        ))}
+        {!showSavePresetInput ? (
+          <button
+            className="chip small"
+            disabled={filterPresets.length >= 10}
+            title={filterPresets.length >= 10 ? '필터 프리셋은 최대 10개까지 저장할 수 있습니다.' : undefined}
+            onClick={() => setShowSavePresetInput(true)}
+          >
+            + 현재 필터 저장
+          </button>
+        ) : (
+          <span className="preset-save-form">
+            <input
+              className="preset-name-input"
+              maxLength={20}
+              placeholder="프리셋 이름"
+              value={presetNameInput}
+              onChange={(e) => setPresetNameInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleSaveFilterPreset();
+                if (e.key === 'Escape') setShowSavePresetInput(false);
+              }}
+              autoFocus
+            />
+            <button className="btn-small" onClick={handleSaveFilterPreset} disabled={!presetNameInput.trim()}>저장</button>
+            <button className="btn-small" onClick={() => { setShowSavePresetInput(false); setPresetNameInput(''); }}>취소</button>
+          </span>
+        )}
+      </div>
 
       {selected.size > 0 && (
         <div className="bulk-action-bar">
@@ -384,9 +647,23 @@ export function Squad({
 
       {rows.length === 0 ? (
         <p className="muted">조건에 맞는 선수가 없습니다.</p>
+      ) : viewSettings.viewMode === 'cards' ? (
+        <div className="squad-cards">
+          {rows.map(({ player, ca, value }) => (
+            <PlayerCard
+              key={player.id}
+              player={player}
+              ca={ca}
+              value={value}
+              selected={selected.has(player.id)}
+              onToggleSelect={() => toggleSelected(player.id)}
+              onSelect={() => onSelect(player)}
+            />
+          ))}
+        </div>
       ) : (
         <div className="table-scroll">
-        <table className="data-table">
+        <table className={density === 'compact' ? 'data-table compact' : 'data-table'}>
           <thead>
             <tr>
               <th className="select-col">
@@ -399,17 +676,18 @@ export function Squad({
                   }}
                 />
               </th>
-              <th>번호</th>
+              <SortableTh label="번호" k="number" sort={sort} dir={dir} onClick={toggleSort} />
               <th>이름</th>
               <th>포지션</th>
               <SortableTh label="나이" k="age" sort={sort} dir={dir} onClick={toggleSort} />
               <SortableTh label="CA" k="ca" sort={sort} dir={dir} onClick={toggleSort} />
-              <th>잠재력</th>
+              {isColVisible('potential') && <th>잠재력</th>}
               <SortableTh label="컨디션" k="condition" sort={sort} dir={dir} onClick={toggleSort} />
-              <th>국적</th>
-              <th>계약</th>
-              <SortableTh label="가치" k="value" sort={sort} dir={dir} onClick={toggleSort} />
-              <SortableTh label="주급" k="wage" sort={sort} dir={dir} onClick={toggleSort} />
+              {isColVisible('nationality') && <th>국적</th>}
+              {isColVisible('contract') && <th>계약</th>}
+              {isColVisible('value') && <SortableTh label="가치" k="value" sort={sort} dir={dir} onClick={toggleSort} />}
+              {isColVisible('wage') && <SortableTh label="주급" k="wage" sort={sort} dir={dir} onClick={toggleSort} />}
+              {isColVisible('training') && <th>훈련 포커스</th>}
             </tr>
           </thead>
           <tbody>
@@ -443,12 +721,15 @@ export function Squad({
                 <td><span className={`pos-chip pos-${lineOf(player.position).toLowerCase()}`}>{player.position}</span></td>
                 <td>{player.age}</td>
                 <td><b>{ca.toFixed(0)}</b></td>
-                <td className="muted">{player.potential.toFixed(0)}</td>
+                {isColVisible('potential') && <td className="muted">{player.potential.toFixed(0)}</td>}
                 <td><ConditionCell player={player} /></td>
-                <td className="muted">{flagFor(player.nationality)} {player.nationality}</td>
-                <td className={player.contractYears <= CONTRACT_SOON ? 'neg' : ''}>{player.contractYears}년</td>
-                <td>{formatMoney(value)}</td>
-                <td className="muted">{formatMoney(player.wage)}</td>
+                {isColVisible('nationality') && <td className="muted">{flagFor(player.nationality)} {player.nationality}</td>}
+                {isColVisible('contract') && (
+                  <td className={player.contractYears <= CONTRACT_SOON ? 'neg' : ''}>{player.contractYears}년</td>
+                )}
+                {isColVisible('value') && <td>{formatMoney(value)}</td>}
+                {isColVisible('wage') && <td className="muted">{formatMoney(player.wage)}</td>}
+                {isColVisible('training') && <td className="muted">{TRAINING_LABELS[player.trainingFocus]}</td>}
               </tr>
             ))}
           </tbody>
