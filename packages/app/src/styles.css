@@ -1046,6 +1046,21 @@ h3 { font-size: 14px; margin: 0 0 10px; color: var(--muted); text-transform: upp
 .strength-diff.up { color: var(--accent); }
 .strength-diff.down { color: var(--color-danger); }
 
+/* 라인업 드래그앤드롭 배치(선수관리 전면 도입 D25) — 선수 목록 칩을 슬롯 위로 끌어다 놓는다. */
+.lineup-roster { margin-top: 14px; }
+.lineup-roster-list {
+  display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;
+  max-height: 240px; overflow-y: auto; padding: 4px 2px;
+}
+.roster-chip {
+  display: flex; align-items: center; gap: 6px; background: var(--panel-2); border: 1px solid var(--line);
+  border-radius: var(--radius-sm); padding: 5px 9px; font-size: var(--text-sm); user-select: none;
+}
+.roster-chip.in-lineup { border-color: var(--accent-2); }
+.roster-chip .rc-name { font-weight: 600; }
+.roster-chip .rc-pos { color: var(--muted); }
+.roster-chip .rc-ca { color: var(--muted); font-variant-numeric: tabular-nums; }
+
 .slider { margin-bottom: 14px; }
 .slider-head { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; }
 .slider input[type=range] { width: 100%; accent-color: var(--accent); }
@@ -1492,3 +1507,25 @@ h3 { font-size: 14px; margin: 0 0 10px; color: var(--muted); text-transform: upp
 }
 .context-menu-item:hover { background: var(--panel-2); }
 .context-menu-item.danger:hover { background: var(--color-danger-bg); color: var(--color-danger); }
+
+/* ── 드래그앤드롭 공용 스타일(전면 도입 Phase 0) ── */
+.dnd-draggable {
+  cursor: grab;
+  touch-action: none;
+  transition: box-shadow var(--dur-fast) var(--ease), opacity var(--dur-fast) var(--ease);
+}
+.dnd-draggable:active { cursor: grabbing; }
+.dnd-draggable.dragging { opacity: 0.35; }
+.dnd-drag-overlay {
+  cursor: grabbing;
+  box-shadow: var(--shadow-lg), var(--shadow-glow-accent2);
+  border-radius: var(--radius-md);
+}
+.dnd-drop-zone {
+  transition: background var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+  border-radius: var(--radius-md);
+}
+.dnd-drop-zone.drop-over {
+  background: rgba(74, 163, 255, 0.14);
+  box-shadow: inset 0 0 0 2px var(--accent-2);
+}
