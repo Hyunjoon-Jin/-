@@ -1,17 +1,25 @@
 import { useEffect, useRef, useState } from 'react';
+import type { DragEndEvent } from '@dnd-kit/core';
+import { CSS } from '@dnd-kit/utilities';
 import {
   LiveMatch, HALF_TIME, MATCH_LENGTH, currentAbility, isAvailable, SEVERITY_LABEL,
   CUP_FINAL_ROUND_NAME, decideAiHalftimeTactic,
-  type Club, type Tactic, type MatchEvent, type MatchResult, type LiveStats, type InjuryEvent, type CardEvent,
+  type Club, type Player, type Tactic, type MatchEvent, type MatchResult, type LiveStats,
+  type InjuryEvent, type CardEvent,
 } from '@soccer-tycoon/engine';
 import type { WatchSetup, MatchPreview as MatchPreviewData } from '../game.js';
 import { swapPlayer } from '../tactics.js';
 import { resolveKitColors } from '../clubColors.js';
+import { loadSubPriority, saveSubPriority, sortByPriority } from '../subPriority.js';
 import { Tactics } from './Tactics.js';
 import { MatchPitch, type PitchState } from './MatchPitch.js';
 import { MatchStats } from './MatchStats.js';
 import { MatchPreview } from './MatchPreview.js';
 import { useModalA11y } from './useModalA11y.js';
+import {
+  DndScope, useDroppableZone,
+  SortableContext, useSortable, arrayMove, verticalListSortingStrategy,
+} from './dnd/DndPrimitives.js';
 
 interface Props {
   watch: WatchSetup;
@@ -85,6 +93,12 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
   const [activeInjury, setActiveInjury] = useState<InjuryEvent | null>(null);
   const [subsUsed, setSubsUsed] = useState(0);
   const [subModalOpen, setSubModalOpen] = useState(false);
+  /** 벤치 드래그 교체 우선순위(D28) — 관전 화면에서 벤치 칩을 재정렬하면 저장된다. */
+  const [subPriority, setSubPriority] = useState<string[]>(() => loadSubPriority());
+  function handleReorderSubPriority(order: string[]) {
+    setSubPriority(order);
+    saveSubPriority(order);
+  }
   /** 하프타임에 AI(상대) 측이 조정한 전술 — 없으면 킥오프 셋업 그대로. */
   const [aiTacticOverride, setAiTacticOverride] = useState<Tactic | null>(null);
   const [aiHalftimeNote, setAiHalftimeNote] = useState<string | null>(null);
@@ -383,6 +397,15 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
 
           ) : (
             <div className="commentary">
+              <BenchPanel
+                club={myClub}
+                tactic={tactic}
+                subsUsed={subsUsed}
+                subLimit={SUB_LIMIT}
+                subPriority={subPriority}
+                onReorderPriority={handleReorderSubPriority}
+                onSubstitute={performSubstitution}
+              />
               <LiveStatsPanel stats={stats} homeName={homeName} awayName={awayName} userSide={userSide} />
               {aiHalftimeNote && <p className="muted small ai-halftime-note">🔄 {aiHalftimeNote}</p>}
               <h3>중계</h3>
@@ -413,6 +436,108 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
           onDismiss={() => setSubModalOpen(false)}
         />
       )}
+    </div>
+  );
+}
+
+/** 라인업 슬롯 하나(벤치 교체 드래그 드롭 대상, D27) — 상시 노출되는 미니 라인업 목록의 한 행. */
+function BenchLineupRow({ index, position, player }: {
+  index: number; position: string; player: Player | undefined;
+}) {
+  const { setNodeRef, isOver } = useDroppableZone(`lineup-slot-${index}`, { slotIndex: index });
+  return (
+    <div ref={setNodeRef} className={`bench-lineup-row dnd-drop-zone${isOver ? ' drop-over' : ''}`}>
+      <span className="blr-pos">{position}</span>
+      <span className="blr-name">{player ? player.name : '(선수 없음)'}</span>
+    </div>
+  );
+}
+
+/** 드래그 가능한 벤치 선수 칩(D27/D28) — 라인업 위로 드래그하면 교체, 칩끼리 재정렬하면 우선순위 변경. */
+function BenchChip({ player, disabled }: { player: Player; disabled?: boolean }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: `bench-${player.id}`, disabled,
+  });
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 };
+  return (
+    <div
+      ref={setNodeRef} {...attributes} {...listeners} style={style}
+      className={`roster-chip dnd-draggable${isDragging ? ' dragging' : ''}`}
+      title={disabled
+        ? `${player.name} · 교체 카드를 모두 사용했습니다`
+        : `${player.name} · ${player.position} · CA ${currentAbility(player).toFixed(0)} — 드래그해서 순서 변경 또는 라인업에 투입`}
+    >
+      <span className="rc-name">{player.name}</span>
+      <span className="rc-pos muted small">{player.position}</span>
+      <span className="rc-ca">{currentAbility(player).toFixed(0)}</span>
+    </div>
+  );
+}
+
+/** 관전 중 상시 노출되는 벤치 패널(선수관리 전면 도입 D27/D28) — 미니 라인업 위로
+ *  벤치 선수를 드래그하면 즉시 교체하고, 벤치 칩끼리 드래그로 순서를 바꾸면
+ *  그 순서가 "선호 교체 우선순위"로 저장돼 다음 경기에도 이어진다. */
+function BenchPanel({
+  club, tactic, subsUsed, subLimit, subPriority, onReorderPriority, onSubstitute,
+}: {
+  club: Club; tactic: Tactic; subsUsed: number; subLimit: number;
+  subPriority: string[];
+  onReorderPriority: (order: string[]) => void;
+  onSubstitute: (outPlayerId: string, inPlayerId: string) => void;
+}) {
+  const exhausted = subsUsed >= subLimit;
+  const benchPlayers = sortByPriority(
+    club.players.filter((p) => isAvailable(p) && !tactic.lineup.some((s) => s.playerId === p.id)),
+    subPriority,
+    (p) => currentAbility(p),
+  );
+
+  function handleDragEnd(e: DragEndEvent) {
+    const { active, over } = e;
+    if (!over) return;
+    const overId = String(over.id);
+    const activeId = String(active.id).replace(/^bench-/, '');
+    if (overId.startsWith('lineup-slot-')) {
+      if (exhausted) return;
+      const slotIndex = Number(overId.slice('lineup-slot-'.length));
+      const outPlayerId = tactic.lineup[slotIndex]?.playerId;
+      if (outPlayerId) onSubstitute(outPlayerId, activeId);
+      return;
+    }
+    const overCleanId = overId.replace(/^bench-/, '');
+    if (activeId === overCleanId) return;
+    const ids = benchPlayers.map((p) => p.id);
+    const from = ids.indexOf(activeId);
+    const to = ids.indexOf(overCleanId);
+    if (from < 0 || to < 0) return;
+    onReorderPriority(arrayMove(ids, from, to));
+  }
+
+  return (
+    <div className="bench-panel">
+      <h3>🪑 벤치{exhausted && <span className="muted small"> (교체 카드 소진)</span>}</h3>
+      <DndScope onDragEnd={handleDragEnd}>
+        <div className="bench-lineup-mini">
+          {tactic.lineup.map((slot, i) => (
+            <BenchLineupRow
+              key={i}
+              index={i}
+              position={slot.position}
+              player={club.players.find((p) => p.id === slot.playerId)}
+            />
+          ))}
+        </div>
+        <div className="label small">벤치 — 드래그로 순서 변경(교체 우선순위) · 라인업 위로 드래그하면 교체</div>
+        <SortableContext items={benchPlayers.map((p) => `bench-${p.id}`)} strategy={verticalListSortingStrategy}>
+          <div className="lineup-roster-list">
+            {benchPlayers.length === 0 ? (
+              <p className="muted small">교체 가능한 벤치 선수가 없습니다.</p>
+            ) : benchPlayers.map((p) => (
+              <BenchChip key={p.id} player={p} disabled={exhausted} />
+            ))}
+          </div>
+        </SortableContext>
+      </DndScope>
     </div>
   );
 }
