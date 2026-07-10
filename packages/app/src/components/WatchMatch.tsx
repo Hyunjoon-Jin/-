@@ -121,6 +121,9 @@ interface View {
   ball: { x: number; y: number };
 }
 
+/** 하이라이트 모드(M6 A6)에서 장면을 보여준 뒤 다음 장면으로 건너뛰기까지의 관찰 시간(ms). */
+const HIGHLIGHT_DWELL_MS = 1800;
+
 /** 전술 변경 후 재변경까지 걸리는 경기 시간(분, M4 B11) — 지시가 선수들에게 스며들
  *  시간을 주고, 슬라이더를 매분 흔드는 것이 최적해가 되는 것을 막는다. */
 const TACTIC_COOLDOWN_MIN = 5;
@@ -332,6 +335,7 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
   // 서브틱에서 엔진을 정확히 1분 전진시킨다(엔진 결정성은 분 단위 그대로).
   useEffect(() => {
     if (phase !== 'playing' && phase !== 'playing2') return;
+    if (prefs.mode === 'highlight') return; // 하이라이트 모드는 아래 전용 루프가 진행(M6 A6)
     if (activeInjury) return; // 부상 교체 프롬프트 응답 전에는 진행 정지
     if (subModalOpen) return; // 자유 교체 창이 열려 있는 동안도 진행 정지
     if (paused) return;
@@ -363,11 +367,57 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase, activeInjury, subModalOpen, tactic, paused, prefs]);
 
-  // 경계(하프타임·풀타임) 전환
+  // 하이라이트 관전 모드(M6 A6) — 장면(슈팅·카드·부상)에서 잠시 머무른 뒤 다음
+  // 장면으로 자동 점프한다. 조용한 구간은 화면에 존재하지 않는다.
+  useEffect(() => {
+    if (prefs.mode !== 'highlight') return;
+    if (phase !== 'playing' && phase !== 'playing2') return;
+    if (activeInjury || subModalOpen || paused) return;
+    const t = setTimeout(() => skipToNextEvent(false), HIGHLIGHT_DWELL_MS);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefs.mode, phase, view.minute, activeInjury, subModalOpen, paused]);
+
+  // 경계(하프타임·풀타임) 전환 + 휘슬 오버레이(M6 D7)
   useEffect(() => {
     if (phase === 'playing' && view.minute >= HALF_TIME) setPhase('halftime');
     if (phase === 'playing2' && view.minute >= MATCH_LENGTH) setPhase('fulltime');
   }, [view.minute, phase]);
+
+  // 키보드 단축키(M6 A9): Space 일시정지 · 1~5 배속 · N 다음 장면 · T 전술 패널.
+  // 입력 요소에 포커스가 있거나 모달이 떠 있으면 무시한다.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (phase !== 'playing' && phase !== 'playing2') return;
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      if (activeInjury || subModalOpen) return;
+      if (e.key === ' ') {
+        e.preventDefault();
+        setPaused((p) => !p);
+      } else if (e.key >= '1' && e.key <= '5') {
+        const sp = WATCH_SPEEDS[Number(e.key) - 1];
+        if (sp !== undefined) updatePrefs({ speed: sp });
+      } else if (e.key === 'n' || e.key === 'N') {
+        skipToNextEvent();
+      } else if (e.key === 't' || e.key === 'T') {
+        if (tacticPanelOpen) closeTacticPanel();
+        else openTacticPanel();
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, activeInjury, subModalOpen, tacticPanelOpen, tactic, paused, prefs]);
+
+  /** 전반 종료·경기 종료 순간 잠깐 뜨는 휘슬 오버레이(M6 D7). */
+  const [phaseFlash, setPhaseFlash] = useState<string | null>(null);
+  useEffect(() => {
+    if (phase !== 'halftime' && phase !== 'fulltime') return;
+    setPhaseFlash(phase === 'halftime' ? '📢 전반 종료' : '📢 경기 종료');
+    const t = setTimeout(() => setPhaseFlash(null), 1600);
+    return () => clearTimeout(t);
+  }, [phase]);
 
   function skip() {
     const boundary = phase === 'playing' ? HALF_TIME : MATCH_LENGTH;
@@ -396,7 +446,7 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
 
   /** 다음 주요 장면(슈팅 결과·카드·부상)까지 건너뛰고 그 앞에서 일시정지(M1 A7) —
    *  "조용한 구간은 넘기되, 장면마다 개입할 기회는 남긴다"는 관전 리듬을 만든다. */
-  function skipToNextEvent() {
+  function skipToNextEvent(pauseAtScene = true) {
     const boundary = phase === 'playing' ? HALF_TIME : MATCH_LENGTH;
     const injurySchedule = injuryScheduleRef.current!;
     const cardSchedule = cardScheduleRef.current!;
@@ -417,7 +467,7 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
     revealInjuriesUpTo(m, tactic);
     revealCardsUpTo(m, false);
     executeSubPlans(m);
-    if (m < boundary) setPaused(true);
+    if (pauseAtScene && m < boundary) setPaused(true);
   }
 
   /** 라인업 슬롯 교체를 즉시 엔진에 반영(부상 교체·자유 교체 공통 경로). 교체 카드 1장 소모. */
@@ -429,6 +479,10 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
     live.setTactic(userSide, next);
     setSubsUsed((n) => n + 1);
     entryMinuteRef.current.set(inPlayerId, minuteRef.current);
+    // 모든 교체(수동·부상·드래그·예약)를 개입 이력(E1)에 남긴다 — 경기 후 타임라인(E5) 재료.
+    const outP = myClub.players.find((pl) => pl.id === outPlayerId);
+    const inP = myClub.players.find((pl) => pl.id === inPlayerId);
+    if (outP && inP) logTactic(`교체: ${outP.name} → ${inP.name}`);
   }
 
   /** 부상 교체 확정: 라인업을 즉시 교체하고(경기 재개), 하프타임 UI에도 반영. */
@@ -542,8 +596,7 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
         toast('예약 교체 취소 — 선수 상태가 바뀌었습니다', false);
         continue;
       }
-      performSubstitution(plan.outId, plan.inId);
-      logTactic(`예약 교체: ${outP.name} → ${inP.name}`);
+      performSubstitution(plan.outId, plan.inId); // 교체 이력은 공통 경로에서 기록된다
       toast(`예약 교체 실행: ${inP.name} 투입`, true);
     }
   }
@@ -685,6 +738,12 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
                 <div className="go-score">{homeName} {view.score[0]} : {view.score[1]} {awayName}</div>
               </div>
             )}
+            {!goalFlash && phaseFlash && (
+              <div className="goal-overlay phase-overlay" aria-live="polite">
+                <div className="po-title">{phaseFlash}</div>
+                <div className="go-score">{homeName} {view.score[0]} : {view.score[1]} {awayName}</div>
+              </div>
+            )}
           </div>
           <div className="watch-controls">
             {phase === 'ready' && (
@@ -695,20 +754,36 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
                 <button className="btn-ghost" onClick={() => setPaused((p) => !p)}>
                   {paused ? '▶ 재개' : '⏸ 일시정지'}
                 </button>
-                <div className="speed-toggle">
-                  {WATCH_SPEEDS.map((s) => (
-                    <button
-                      key={s}
-                      className={prefs.speed === s ? 'speed-btn active' : 'speed-btn'}
-                      onClick={() => updatePrefs({ speed: s })}
-                    >
-                      {s}x
-                    </button>
-                  ))}
+                <div className="speed-toggle" title="전체: 전 구간 실시간 · 하이라이트: 장면 사이 자동 스킵">
+                  <button
+                    className={prefs.mode === 'full' ? 'speed-btn active' : 'speed-btn'}
+                    onClick={() => updatePrefs({ mode: 'full' })}
+                  >
+                    전체
+                  </button>
+                  <button
+                    className={prefs.mode === 'highlight' ? 'speed-btn active' : 'speed-btn'}
+                    onClick={() => updatePrefs({ mode: 'highlight' })}
+                  >
+                    하이라이트
+                  </button>
                 </div>
+                {prefs.mode === 'full' && (
+                  <div className="speed-toggle">
+                    {WATCH_SPEEDS.map((s) => (
+                      <button
+                        key={s}
+                        className={prefs.speed === s ? 'speed-btn active' : 'speed-btn'}
+                        onClick={() => updatePrefs({ speed: s })}
+                      >
+                        {s}x
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <button
                   className="btn-ghost"
-                  onClick={skipToNextEvent}
+                  onClick={() => skipToNextEvent()}
                   title="다음 슈팅·카드·부상 장면까지 건너뛰고 일시정지"
                 >
                   ▶▶ 다음 장면
@@ -941,7 +1016,7 @@ function ScoreboardHero({
         <span className="sbh-kit" style={{ background: kit.home }} aria-hidden="true" />
       </div>
       <div className="sbh-center">
-        <div className="sbh-score">
+        <div className="sbh-score" key={`${score[0]}-${score[1]}`}>
           {score[0]}<span className="sbh-colon">:</span>{score[1]}
         </div>
         <div className="sbh-sub">
