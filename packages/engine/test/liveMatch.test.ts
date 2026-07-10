@@ -150,6 +150,51 @@ describe('LiveMatch', () => {
     expect(st.bigChances[1]).toBe(sum('away'));
   });
 
+  it('applyTeamTalk: 어조별 배율(격려 1.02·침착 1.01·질책은 스코어 따라 1.04/0.98)이 전력에 곱해진다 (B13/F4)', () => {
+    const s = setup(11);
+    const live = new LiveMatch(s);
+    const base = live.strengthOf('home');
+    expect(live.applyTeamTalk('home', 'encourage')).toBeCloseTo(1.02);
+    expect(live.strengthOf('home')).toBeCloseTo(base * 1.02);
+
+    // 0:0(지고 있지 않음)에서 질책은 역효과
+    const live2 = new LiveMatch(setup(12));
+    expect(live2.applyTeamTalk('home', 'critic')).toBeCloseTo(0.98);
+
+    const live3 = new LiveMatch(setup(13));
+    expect(live3.applyTeamTalk('away', 'calm')).toBeCloseTo(1.01);
+  });
+
+  it('applyTeamTalk: 지고 있는 팀의 질책은 +4% 반등이 된다', () => {
+    // 45분 시점에 한쪽이 뒤지는 시드를 찾아 결정적으로 검증한다.
+    for (let seed = 1; seed < 80; seed++) {
+      const live = new LiveMatch(setup(seed));
+      live.runFirstHalf();
+      const [h, a] = live.score();
+      if (h === a) continue;
+      const losing = h < a ? 'home' : 'away';
+      expect(live.applyTeamTalk(losing, 'critic')).toBeCloseTo(1.04);
+      return;
+    }
+    throw new Error('80개 시드에서 전반 리드가 한 번도 없음 — 비정상');
+  });
+
+  it('applyTeamTalk 보정은 이후 setTactic(전력 재계산)에도 유지된다', () => {
+    const s = setup(2024);
+    const withTalk = new LiveMatch(s);
+    const control = new LiveMatch(s);
+    withTalk.runFirstHalf();
+    control.runFirstHalf();
+
+    withTalk.applyTeamTalk('home', 'encourage');
+    // 하프타임 전술 변경 — applyTactic이 전력을 재계산하는 경로
+    withTalk.setTactic('home', { ...s.home.tactic, tempo: 0.9 });
+    control.setTactic('home', { ...s.home.tactic, tempo: 0.9 });
+
+    const ratio = withTalk.strengthOf('home') / control.strengthOf('home');
+    expect(ratio).toBeCloseTo(1.02);
+  });
+
   it('하프타임 전술 변경은 결과를 바꾼다(공격적으로 전환 시 다른 전개)', () => {
     const base = setup(2024);
     // 기준: 변경 없음
