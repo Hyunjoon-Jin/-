@@ -15,6 +15,8 @@ export interface PitchState {
   cardFlash?: { side: 'home' | 'away'; slotIndex: number; type: 'yellow' | 'red' } | null;
   /** 방금 부상 이벤트 하이라이트 — 해당 슬롯 선수 위에 🚑 표시(고도화 항목 B2). */
   injuryFlash?: { side: 'home' | 'away'; slotIndex: number } | null;
+  /** 득점자 세리머니 링(M5 D4) — 골 플래시 동안 해당 슬롯 점 주위로 확장 링을 그린다. */
+  goalCelebrate?: { side: 'home' | 'away'; slotIndex: number } | null;
   userIsHome: boolean;
   /** 홈/원정 선발 포메이션(슬롯 포지션 순서). 선수 점 배치에 사용. */
   homeFormation: Position[];
@@ -121,7 +123,7 @@ export function MatchPitch(props: PitchState) {
         y: tw.from.y + (tw.to.y - tw.from.y) * eased,
       };
       lastInterpolatedRef.current = interpolated;
-      draw(ctx, { ...propsRef.current, ball: interpolated });
+      draw(ctx, { ...propsRef.current, ball: interpolated }, now);
       raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
@@ -131,7 +133,7 @@ export function MatchPitch(props: PitchState) {
   return <canvas ref={ref} width={W} height={H} className="pitch-canvas" />;
 }
 
-function draw(ctx: CanvasRenderingContext2D, s: PitchState) {
+function draw(ctx: CanvasRenderingContext2D, s: PitchState, now: number) {
   const m = 24; // 여백
   const pw = W - m * 2;
   const ph = H - m * 2;
@@ -217,6 +219,15 @@ function draw(ctx: CanvasRenderingContext2D, s: PitchState) {
         ctx.textBaseline = 'alphabetic';
         ctx.fillText('🚑', px, py - 12);
       }
+      // 득점자 세리머니 링(M5 D4) — 0.6초 주기로 확장·소멸을 반복하는 금색 링.
+      if (s.goalCelebrate && s.goalCelebrate.side === side && s.goalCelebrate.slotIndex === i) {
+        const t = (now / 600) % 1;
+        ctx.beginPath();
+        ctx.arc(px, py, 10 + t * 14, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(255, 215, 0, ${(1 - t) * 0.9})`;
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+      }
     });
   };
   drawTeam(s.homeFormation, s.homeLabels, false, s.kit.home, s.kit.homeGk, 'home');
@@ -232,13 +243,6 @@ function draw(ctx: CanvasRenderingContext2D, s: PitchState) {
   ctx.fill();
   ctx.strokeStyle = '#111'; ctx.lineWidth = 1.5; ctx.stroke();
 
-  // 골 하이라이트 — 스코어·시계·구단명은 캔버스 밖 HTML 스코어보드 히어로(ScoreboardHero)가
-  // 전담하므로, 캔버스에는 경기장 안에서 일어나는 순간 연출만 남긴다.
-  if (s.goalFlash) {
-    const gx = s.goalFlash === 'away' ? m + 12 : m + pw - 12;
-    ctx.fillStyle = 'rgba(255,215,0,0.95)';
-    ctx.font = 'bold 22px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('⚽ GOAL!', gx > W / 2 ? W / 2 + 120 : W / 2 - 120, H / 2);
-  }
+  // 골 순간 연출은 득점자 세리머니 링(위)과 HTML 리플레이 오버레이(A11)가 담당한다 —
+  // 예전 캔버스 "GOAL!" 텍스트는 오버레이와 중복이라 제거했다.
 }

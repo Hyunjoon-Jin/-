@@ -1817,3 +1817,40 @@ h3 { font-size: 14px; margin: 0 0 10px; color: var(--muted); text-transform: upp
 .team-talk p { margin: 0; }
 .team-talk-options { display: flex; gap: 6px; flex-wrap: wrap; }
 .team-talk-btn { font-size: 13px; }
+
+/* 골 리플레이 오버레이(M5 A11) — 피치 위에 잠깐 떠오르는 득점 카드. */
+.pitch-wrap { position: relative; max-width: 760px; }
+.goal-overlay {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 4px;
+  background: rgba(6, 10, 18, 0.45); border-radius: 10px;
+  animation: goal-overlay-in 240ms var(--ease);
+  pointer-events: none;
+}
+.go-title {
+  font-family: var(--font-display); font-size: 44px; font-weight: 700;
+  color: var(--color-gold); text-shadow: 0 2px 16px rgba(0, 0, 0, 0.6);
+  letter-spacing: 2px;
+}
+.go-scorer { font-size: 18px; font-weight: 700; color: #fff; text-shadow: 0 1px 8px rgba(0,0,0,0.7); }
+.go-score { font-size: 14px; color: rgba(255,255,255,0.85); text-shadow: 0 1px 8px rgba(0,0,0,0.7); }
+@keyframes goal-overlay-in {
+  from { opacity: 0; transform: scale(1.06); }
+  to { opacity: 1; transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .goal-overlay { animation: none; }
+}
+
+/* 소프트 중계(M5 D2) — 조용한 구간을 채우는 흐름 문구. */
+.feed li.flavor-feed { opacity: 0.75; }
+
+/* 경기 후 개입 타임라인(M5 E5) */
+.intervention-timeline { margin: 4px 0 14px; text-align: left; }
+.intervention-timeline h3 { margin: 0 0 6px; }
+.intervention-timeline ul { list-style: none; margin: 0; padding: 0; }
+.intervention-timeline li {
+  display: flex; gap: 8px; padding: 4px 0; font-size: 13px;
+  border-bottom: 1px solid var(--line);
+}
+.intervention-timeline li:last-child { border-bottom: none; }
