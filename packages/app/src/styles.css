@@ -1875,3 +1875,14 @@ h3 { font-size: 14px; margin: 0 0 10px; color: var(--muted); text-transform: upp
 @media (prefers-reduced-motion: reduce) {
   .sbh-score, .feed li { animation: none; }
 }
+
+/* 교체 보드 오버레이(M7 D10) — 피치 하단에 잠깐 뜨는 IN/OUT 카드. */
+.sub-overlay {
+  position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%);
+  display: flex; gap: 14px; align-items: center;
+  background: rgba(6, 10, 18, 0.78); border: 1px solid var(--line);
+  border-radius: var(--radius-pill); padding: 7px 16px; font-size: 13px; font-weight: 700;
+  animation: goal-overlay-in 200ms var(--ease); pointer-events: none;
+}
+.so-out { color: var(--color-danger); }
+.so-in { color: var(--accent); }
