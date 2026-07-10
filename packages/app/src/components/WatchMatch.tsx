@@ -48,9 +48,29 @@ const SUBTICKS = 4;
 /** 경기당 자유 교체 허용 횟수(부상 교체도 이 카운트를 함께 소모한다). */
 const SUB_LIMIT = 3;
 
-const OUTCOME: Record<string, string> = {
-  GOAL: '⚽ 골!', SAVE: '🧤 선방', OFF_TARGET: '➡️ 빗나감', BLOCKED: '🛡️ 블록', OWN_GOAL: '🥅 자책골',
+/** 이벤트별 중계 문구 후보(M5 D1) — 같은 이벤트는 항상 같은 문구가 나오도록
+ *  분·선수 id 해시로 결정적으로 고른다(리렌더에도 안정적). */
+const OUTCOME_PHRASES: Record<string, string[]> = {
+  GOAL: ['⚽ 골! 그물이 출렁입니다!', '⚽ 골! 완벽한 마무리!', '⚽ 골! 스타디움이 터져 나갑니다!'],
+  SAVE: ['🧤 선방! 골키퍼가 막아냅니다', '🧤 슈퍼 세이브!', '🧤 선방 — 슈팅 각도를 지워버립니다'],
+  OFF_TARGET: ['➡️ 빗나갑니다', '➡️ 골대를 스치듯 벗어납니다', '➡️ 아깝게 빗나감'],
+  BLOCKED: ['🛡️ 수비 블록에 막힙니다', '🛡️ 몸을 던져 막아냅니다', '🛡️ 블록!'],
+  OWN_GOAL: ['🥅 자책골! 이런 일이…', '🥅 통한의 자책골'],
 };
+function phraseFor(ev: MatchEvent): string {
+  const list = OUTCOME_PHRASES[ev.outcome] ?? [ev.outcome];
+  let h = ev.minute * 31;
+  for (const ch of ev.playerId) h = ((h * 33) + ch.charCodeAt(0)) >>> 0;
+  return list[h % list.length]!;
+}
+
+/** 조용한 구간을 채우는 소프트 중계(M5 D2) — 10분 연속 무이벤트면 하나 흘린다. */
+const FLAVOR_LINES = [
+  '중원에서 탐색전이 이어집니다',
+  '양 팀 모두 신중하게 볼을 돌립니다',
+  '측면 돌파를 시도하지만 번번이 끊깁니다',
+  '경기 템포가 잠시 가라앉습니다',
+];
 
 type QuickTacticValues = Partial<Pick<Tactic, 'mentality' | 'tempo' | 'pressing' | 'width' | 'defensiveLine'>>;
 type SliderKey = 'mentality' | 'tempo' | 'pressing' | 'width' | 'defensiveLine';
@@ -138,6 +158,11 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
   const [view, setView] = useState<View>({ minute: 0, frac: 0, score: [0, 0], ball: { x: 0.5, y: 0.5 } });
   const [goalFlash, setGoalFlash] = useState<'home' | 'away' | null>(null);
   const goalFlashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** 골 리플레이 오버레이(M5 A11)·세리머니 링(D4)용 — 마지막 득점 정보. */
+  const [lastGoal, setLastGoal] = useState<{ side: 'home' | 'away'; name: string; minute: number; slotIndex: number } | null>(null);
+  /** 소프트 중계(M5 D2) — 무이벤트 연속 분 카운터와 흘린 문구들. */
+  const quietRef = useRef(0);
+  const [flavorLog, setFlavorLog] = useState<{ minute: number; text: string }[]>([]);
   const [cardFlash, setCardFlash] = useState<{ side: 'home' | 'away'; slotIndex: number; type: 'yellow' | 'red' } | null>(null);
   const cardFlashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [injuryFlash, setInjuryFlash] = useState<{ side: 'home' | 'away'; slotIndex: number } | null>(null);
@@ -177,7 +202,7 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
   /** 패널을 연 시점의 전술 스냅샷 — 닫을 때 diff를 요약해 변경 이력(E1)에 남긴다. */
   const tacticSnapshotRef = useRef<Tactic | null>(null);
   /** 전술 변경 이력(M2 E1) — 중계 피드에 함께 흐른다. */
-  const [tacticLog, setTacticLog] = useState<{ minute: number; text: string }[]>([]);
+  const [tacticLog, setTacticLog] = useState<{ minute: number; text: string; shotsAt?: [number, number] }[]>([]);
   const toast = useToast();
   /** 마지막 전술 변경 시각(분, M4 B11) — 쿨다운 계산용. -999 = 아직 변경 없음. */
   const lastTacticChangeRef = useRef(-999);
@@ -276,6 +301,12 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
       if (goalFlashTimerRef.current) clearTimeout(goalFlashTimerRef.current);
       setGoalFlash(goal.side);
       goalFlashTimerRef.current = setTimeout(() => setGoalFlash(null), GOAL_FLASH_MS);
+      // 리플레이 오버레이(A11)·세리머니 링(D4)용 득점자 정보 — 자책골은 상대 득점.
+      const scorerTactic = goal.side === 'home' ? homeTactic : awayTactic;
+      setLastGoal({
+        side: goal.side, name: goal.playerName, minute: goal.minute,
+        slotIndex: scorerTactic.lineup.findIndex((sl) => sl.playerId === goal.playerId),
+      });
       // 골 후 자동 일시정지(M1 A5) — 스코어가 바뀐 순간이 전술을 다시 생각할 시점이다.
       if (allowAutoPause && prefs.pauseOnGoal) setPaused(true);
     }
@@ -284,6 +315,16 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
     allEventsRef.current.push(...evs);
     const notable = evs.filter((e) => e.outcome === 'GOAL' || e.outcome === 'OWN_GOAL' || e.outcome === 'SAVE');
     if (notable.length) setFeed((f) => [...notable.reverse(), ...f]);
+    // 소프트 중계(D2): 이벤트 없는 분이 10번 이어지면 흐름 문구 하나(스킵 구간 제외).
+    if (evs.length > 0 || !allowAutoPause) {
+      quietRef.current = 0;
+    } else {
+      quietRef.current++;
+      if (quietRef.current >= 10) {
+        quietRef.current = 0;
+        setFlavorLog((l) => [{ minute: target, text: FLAVOR_LINES[target % FLAVOR_LINES.length]! }, ...l]);
+      }
+    }
   }
 
   // 진행 타이머 — 1분을 SUBTICKS개의 시각 서브틱으로 쪼갠다(M1 A1/A3). 서브틱에서는
@@ -402,9 +443,14 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
     setSubModalOpen(false);
   }
 
-  /** 전술 변경 이력(E1)에 한 줄 기록. */
+  /** 전술 변경 이력(E1)에 한 줄 기록 — 변경 시점 슈팅을 함께 저장해 이후 효과(E2)를 보여준다. */
   function logTactic(text: string) {
-    setTacticLog((l) => [{ minute: minuteRef.current, text }, ...l]);
+    const st = live.stats();
+    const mineIdx = userSide === 'home' ? 0 : 1;
+    setTacticLog((l) => [{
+      minute: minuteRef.current, text,
+      shotsAt: [st.shots[mineIdx]!, st.shots[1 - mineIdx]!] as [number, number],
+    }, ...l]);
   }
 
   /** 전술 변경 쿨다운 잔여(경기 분, M4 B11). 0이면 변경 가능. */
@@ -605,6 +651,8 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
   const pitch: PitchState = {
     homeName, awayName, score: view.score, minute: view.minute + view.frac,
     ball: view.ball, goalFlash, cardFlash, injuryFlash, userIsHome: watch.userIsHome,
+    goalCelebrate: goalFlash && lastGoal && lastGoal.slotIndex >= 0
+      ? { side: lastGoal.side, slotIndex: lastGoal.slotIndex } : null,
     homeFormation: homeTactic.lineup.map((s) => s.position),
     awayFormation: awayTactic.lineup.map((s) => s.position),
     homeLabels: homeTactic.lineup.map((slot) => playerInitials(homeClub, slot.playerId)),
@@ -628,7 +676,16 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
             phase={phase} kit={kit} userIsHome={watch.userIsHome} goalFlash={goalFlash}
             isDerby={isDerby} isFinal={isFinal}
           />
-          <MatchPitch {...pitch} />
+          <div className="pitch-wrap">
+            <MatchPitch {...pitch} />
+            {goalFlash && lastGoal && (
+              <div className="goal-overlay" aria-live="polite">
+                <div className="go-title">⚽ GOAL!</div>
+                <div className="go-scorer">{lastGoal.minute}' {lastGoal.name}</div>
+                <div className="go-score">{homeName} {view.score[0]} : {view.score[1]} {awayName}</div>
+              </div>
+            )}
+          </div>
           <div className="watch-controls">
             {phase === 'ready' && (
               <button className="btn-advance big" onClick={() => setPhase('playing')}>킥오프 ▶</button>
@@ -789,7 +846,7 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
             <FullTime
               result={live.result()} homeName={homeName} awayName={awayName} score={view.score}
               myClubId={myClub.id} isDerby={isDerby} isFinal={isFinal} userIsHome={watch.userIsHome}
-              aiHalftimeNote={aiHalftimeNote}
+              aiHalftimeNote={aiHalftimeNote} tacticLog={tacticLog}
             />
 
           ) : tacticPanelOpen && (phase === 'playing' || phase === 'playing2') ? (
@@ -822,7 +879,12 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
               <LiveStatsPanel stats={stats} homeName={homeName} awayName={awayName} userSide={userSide} momentum={momentum} />
               {aiHalftimeNote && <p className="muted small ai-halftime-note">🔄 {aiHalftimeNote}</p>}
               <h3>중계</h3>
-              <Feed events={feed} injuries={injuryFeed} cards={cardFeed} tacticLog={tacticLog} userSide={userSide} />
+              <Feed
+                events={feed} injuries={injuryFeed} cards={cardFeed} tacticLog={tacticLog}
+                flavorLog={flavorLog}
+                currentShots={[stats.shots[userSide === 'home' ? 0 : 1]!, stats.shots[userSide === 'home' ? 1 : 0]!]}
+                userSide={userSide}
+              />
             </div>
           )}
         </div>
@@ -1137,19 +1199,25 @@ type FeedItem =
   | { kind: 'match'; minute: number; ev: MatchEvent }
   | { kind: 'injury'; minute: number; ev: InjuryEvent }
   | { kind: 'card'; minute: number; ev: CardEvent }
-  | { kind: 'tactic'; minute: number; ev: { minute: number; text: string } };
+  | { kind: 'tactic'; minute: number; ev: { minute: number; text: string; shotsAt?: [number, number] } }
+  | { kind: 'flavor'; minute: number; ev: { minute: number; text: string } };
 
 function Feed({
-  events, injuries, cards, tacticLog, userSide,
+  events, injuries, cards, tacticLog, flavorLog, currentShots, userSide,
 }: {
   events: MatchEvent[]; injuries: InjuryEvent[]; cards: CardEvent[];
-  tacticLog: { minute: number; text: string }[]; userSide: 'home' | 'away';
+  tacticLog: { minute: number; text: string; shotsAt?: [number, number] }[];
+  flavorLog?: { minute: number; text: string }[];
+  /** 현재 [내 팀, 상대] 슈팅 — 전술 변경 이후 효과 표시(E2)에 사용. */
+  currentShots?: [number, number];
+  userSide: 'home' | 'away';
 }) {
   const items: FeedItem[] = [
     ...events.map((ev): FeedItem => ({ kind: 'match', minute: ev.minute, ev })),
     ...injuries.map((ev): FeedItem => ({ kind: 'injury', minute: ev.minute, ev })),
     ...cards.map((ev): FeedItem => ({ kind: 'card', minute: ev.minute, ev })),
     ...tacticLog.map((ev): FeedItem => ({ kind: 'tactic', minute: ev.minute, ev })),
+    ...(flavorLog ?? []).map((ev): FeedItem => ({ kind: 'flavor', minute: ev.minute, ev })),
   ];
   // 각 목록은 이미 최신순으로 쌓이므로, 삽입 순서를 보존하며 안정적으로 합친다.
   items.sort((a, b) => b.minute - a.minute);
@@ -1159,7 +1227,17 @@ function Feed({
       {items.map((it, idx) => it.kind === 'tactic' ? (
         <li key={`tactic-${it.minute}-${idx}`} className="tactic-feed">
           <span className="feed-min">{it.minute}'</span>
-          <span className="feed-text">📋 {it.ev.text}</span>
+          <span className="feed-text">
+            📋 {it.ev.text}
+            {it.ev.shotsAt && currentShots && (currentShots[0] - it.ev.shotsAt[0] > 0 || currentShots[1] - it.ev.shotsAt[1] > 0) && (
+              <span className="muted small"> · 이후 슈팅 {currentShots[0] - it.ev.shotsAt[0]}:{currentShots[1] - it.ev.shotsAt[1]}</span>
+            )}
+          </span>
+        </li>
+      ) : it.kind === 'flavor' ? (
+        <li key={`flavor-${it.minute}-${idx}`} className="flavor-feed">
+          <span className="feed-min">{it.minute}'</span>
+          <span className="feed-text muted">{it.ev.text}</span>
         </li>
       ) : it.kind === 'match' ? (
         <li
@@ -1168,7 +1246,7 @@ function Feed({
             ? (it.ev.side === userSide ? 'goal mine' : 'goal') : ''}
         >
           <span className="feed-min">{it.ev.minute}'</span>
-          <span className="feed-text">{it.ev.playerName} — {OUTCOME[it.ev.outcome]}</span>
+          <span className="feed-text">{it.ev.playerName} — {phraseFor(it.ev)}</span>
         </li>
       ) : it.kind === 'injury' ? (
         <li key={`injury-${it.ev.minute}-${it.ev.playerId}`} className="injury-feed">
@@ -1348,10 +1426,12 @@ function FreeSubModal({
 }
 
 function FullTime({
-  result, homeName, awayName, score, myClubId, isDerby, isFinal, userIsHome, aiHalftimeNote,
+  result, homeName, awayName, score, myClubId, isDerby, isFinal, userIsHome, aiHalftimeNote, tacticLog,
 }: {
   result: MatchResult; homeName: string; awayName: string; score: [number, number]; myClubId: string;
   isDerby: boolean; isFinal: boolean; userIsHome: boolean; aiHalftimeNote: string | null;
+  /** 이번 경기 내 개입(전술 변경·팀토크·교체 예약) 타임라인(M5 E5). */
+  tacticLog?: { minute: number; text: string }[];
 }) {
   const myGoals = userIsHome ? score[0] : score[1];
   const oppGoals = userIsHome ? score[1] : score[0];
@@ -1399,6 +1479,19 @@ function FullTime({
             </li>
           ))}
         </ul>
+      )}
+      {tacticLog && tacticLog.length > 0 && (
+        <div className="intervention-timeline">
+          <h3>🧠 개입 타임라인</h3>
+          <ul>
+            {[...tacticLog].sort((a, b) => a.minute - b.minute).map((t, i) => (
+              <li key={`${t.minute}-${i}`}>
+                <span className="feed-min">{t.minute}'</span>
+                <span>{t.text}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
       <MatchStats result={result} myClubId={myClubId} />
     </div>
