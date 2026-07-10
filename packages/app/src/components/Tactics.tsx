@@ -399,25 +399,27 @@ export function Tactics({ club, tactic, onChange, disabled }: Props) {
           />
         )}
 
-        <table className="data-table lineup-table">
-          <thead>
-            <tr><th>슬롯</th><th>선수</th><th>CA</th><th>개인 지시</th></tr>
-          </thead>
-          <tbody>
-            {tactic.lineup.map((slot, i) => (
-              <LineupSlotRow
-                key={i}
-                index={i}
-                slot={slot}
-                player={byId.get(slot.playerId)}
-                tactic={tactic}
-                onChange={onChange}
-                disabled={disabled}
-                onOpenPicker={() => setPickerSlotIndex(i)}
-              />
-            ))}
-          </tbody>
-        </table>
+        <div className="lineup-table-wrap">
+          <table className="data-table lineup-table">
+            <thead>
+              <tr><th>슬롯</th><th>선수</th><th>CA</th><th>개인 지시</th></tr>
+            </thead>
+            <tbody>
+              {tactic.lineup.map((slot, i) => (
+                <LineupSlotRow
+                  key={i}
+                  index={i}
+                  slot={slot}
+                  player={byId.get(slot.playerId)}
+                  tactic={tactic}
+                  onChange={onChange}
+                  disabled={disabled}
+                  onOpenPicker={() => setPickerSlotIndex(i)}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
 
         <div className="lineup-roster">
           <div className="label">선수 목록 — 드래그해서 슬롯에 배치</div>

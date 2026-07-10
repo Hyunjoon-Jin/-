@@ -385,6 +385,18 @@ body {
 .modal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .modal-head h2 { margin: 0; }
 
+/* 선수상세 헤더 — 포지션 라인 색상을 반영한 히어로 배경(밋밋함 개선) */
+.player-detail .modal-head {
+  margin: -22px -26px 16px; padding: 20px 26px 16px;
+  border-radius: 12px 12px 0 0; border-bottom: 1px solid var(--line);
+  background: linear-gradient(135deg, rgba(61, 220, 132, 0.12), transparent 75%);
+}
+.player-detail .modal-head:has(.pos-gk) { background: linear-gradient(135deg, rgba(224, 190, 70, 0.14), transparent 75%); }
+.player-detail .modal-head:has(.pos-def) { background: linear-gradient(135deg, rgba(74, 163, 255, 0.14), transparent 75%); }
+.player-detail .modal-head:has(.pos-mid) { background: linear-gradient(135deg, rgba(61, 220, 132, 0.14), transparent 75%); }
+.player-detail .modal-head:has(.pos-att) { background: linear-gradient(135deg, rgba(224, 87, 75, 0.14), transparent 75%); }
+.player-detail .modal-head h2 { font-family: var(--font-display); letter-spacing: .2px; }
+
 /* 전역 선수 검색(선수관리 개선 항목42) */
 .modal.global-search-modal { max-width: 460px; }
 .global-search-input { margin-bottom: 10px; }
@@ -1007,6 +1019,13 @@ h3 { font-size: 14px; margin: 0 0 10px; color: var(--muted); text-transform: upp
   box-shadow: var(--shadow-glow-accent2);
 }
 .chip.auto { margin-left: auto; }
+.lineup-table-wrap {
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm); overflow: hidden;
+}
+.lineup-table-wrap .lineup-table { margin: 0; }
+.lineup-table thead th { background: var(--panel-2); }
+.lineup-table tbody tr:hover { background: var(--panel-2); }
 .lineup-table select {
   background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
   border-radius: 6px; padding: 4px 8px; width: 100%; font-size: 13px;
@@ -1067,7 +1086,11 @@ h3 { font-size: 14px; margin: 0 0 10px; color: var(--muted); text-transform: upp
 
 .slider { margin-bottom: 14px; }
 .slider-head { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; }
-.slider input[type=range] { width: 100%; accent-color: var(--accent); }
+.slider-head b { font-variant-numeric: tabular-nums; color: var(--accent); }
+.slider input[type=range] { width: 100%; accent-color: var(--accent); cursor: pointer; }
+.slider input[type=range]::-webkit-slider-thumb {
+  box-shadow: 0 0 0 4px rgba(61, 220, 132, 0.22), var(--shadow-sm);
+}
 .slider-ends { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
 
 .bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
