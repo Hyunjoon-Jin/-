@@ -1,4 +1,5 @@
 import { useMemo, useState, type MouseEvent } from 'react';
+import type { DragEndEvent } from '@dnd-kit/core';
 import {
   formatMoney, currentAbility, marketValue, isInjured, isSuspended, lineOf, MENTOR_PAIRING_MAX, hasTrait,
   ROTATION_WARNING_THRESHOLD, TRAINING_FOCUSES, TRAINING_LABELS, TRAIT_LABELS,
@@ -13,12 +14,17 @@ import { useContextMenu, ContextMenu, type ContextMenuItem } from './ContextMenu
 import type { ActionOutcome } from '../game.js';
 import { RELEASE_TAG, LOAN_REVIEW_TAG } from '../playerTags.js';
 import {
-  loadSquadViewSettings, saveSquadViewSettings, OPTIONAL_COLUMNS,
+  loadSquadViewSettings, saveSquadViewSettings, OPTIONAL_COLUMNS, REORDERABLE_COLUMN_KEYS,
   type SquadViewSettings, type SquadDensity, type SquadViewMode,
 } from '../squadViewSettings.js';
 import {
   loadSquadFilterPresets, saveSquadFilterPreset, deleteSquadFilterPreset, type SquadFilterPreset,
 } from '../squadFilterPresets.js';
+import {
+  DndScope, useDraggableItem, useDroppableZone,
+  SortableContext, useSortable, arrayMove, verticalListSortingStrategy,
+} from './dnd/DndPrimitives.js';
+import { CSS } from '@dnd-kit/utilities';
 
 /** 멘토링 대상은 아직 성장 중인 유망주(엔진 MENTEE_MAX_AGE와 동일 기준)만. */
 const MENTEE_MAX_AGE = 23;
@@ -61,6 +67,39 @@ function suggestMentorPairs(club: Club): { mentorId: string; menteeId: string }[
   return suggestions;
 }
 
+/** 드래그 가능한 멘티 칩 하나(멘토 드롭 대상 위로 끌어다 놓으면 페어링). */
+function DraggableMenteeChip({ player }: { player: Player }) {
+  const { setNodeRef, attributes, listeners, isDragging, style } = useDraggableItem(
+    `mentee-${player.id}`, { menteeId: player.id },
+  );
+  return (
+    <div
+      ref={setNodeRef} {...attributes} {...listeners} style={style}
+      className={`roster-chip dnd-draggable${isDragging ? ' dragging' : ''}`}
+      title={`${player.name} (${player.age}세, ${player.position}) — 드래그해서 멘토에 배치`}
+    >
+      <span className="rc-name">{player.name}</span>
+      <span className="rc-pos muted small">{player.age}세</span>
+    </div>
+  );
+}
+
+/** 멘토 드롭 대상 칩 하나 — 멘티 칩을 이 위로 놓으면 페어링을 시도한다. */
+function MentorDropChip({ player, currentMenteeName }: { player: Player; currentMenteeName?: string }) {
+  const { setNodeRef, isOver } = useDroppableZone(`mentor-${player.id}`, { mentorId: player.id });
+  return (
+    <div
+      ref={setNodeRef}
+      className={`roster-chip dnd-drop-zone${isOver ? ' drop-over' : ''}${currentMenteeName ? ' in-lineup' : ''}`}
+      title={`${player.name} (${player.age}세, ${player.position})${currentMenteeName ? ` — 현재 ${currentMenteeName} 멘토링 중` : ''}`}
+    >
+      <span className="rc-name">{player.name}</span>
+      <span className="rc-pos muted small">{player.age}세</span>
+      {currentMenteeName && <span className="rc-ca">→ {currentMenteeName}</span>}
+    </div>
+  );
+}
+
 function MentorPanel({ club, onAssignMentor, onClearMentor }: {
   club: Club;
   onAssignMentor: (mentorId: string, menteeId: string) => ActionOutcome;
@@ -79,6 +118,16 @@ function MentorPanel({ club, onAssignMentor, onClearMentor }: {
     && hasTrait(selectedMentor, 'hothead') && hasTrait(mentee, 'rock');
   const nameOf = (id: string) => club.players.find((p) => p.id === id)?.name ?? '(이적/방출됨)';
   const suggestions = suggestMentorPairs(club);
+
+  const unpairedMentees = mentees.filter((p) => !pairings.some((pr) => pr.menteeId === p.id));
+  const mentorCandidates = club.players.filter((p) => p.age > MENTEE_MAX_AGE);
+
+  function handleMentorDragEnd(e: DragEndEvent) {
+    const overData = e.over?.data.current as { mentorId?: string } | undefined;
+    const activeData = e.active.data.current as { menteeId?: string } | undefined;
+    if (!overData?.mentorId || !activeData?.menteeId) return;
+    toast(onAssignMentor(overData.mentorId, activeData.menteeId));
+  }
 
   function applySuggestions() {
     let assigned = 0;
@@ -136,12 +185,60 @@ function MentorPanel({ club, onAssignMentor, onClearMentor }: {
           ⚠️ 다혈질 멘토×차분한 멘티 조합은 성향이 맞지 않아 지정 멘토링 효과가 크게 줄어듭니다.
         </p>
       )}
+      {unpairedMentees.length > 0 && mentorCandidates.length > 0 && (
+        <DndScope onDragEnd={handleMentorDragEnd}>
+          <div className="mentor-dnd">
+            <div className="mentor-dnd-col">
+              <div className="label small">멘티 후보 — 드래그해서 멘토에 배치</div>
+              <div className="lineup-roster-list">
+                {unpairedMentees.map((p) => <DraggableMenteeChip key={p.id} player={p} />)}
+              </div>
+            </div>
+            <div className="mentor-dnd-col">
+              <div className="label small">멘토 후보</div>
+              <div className="lineup-roster-list">
+                {mentorCandidates.map((p) => (
+                  <MentorDropChip
+                    key={p.id}
+                    player={p}
+                    currentMenteeName={(() => {
+                      const pr = pairings.find((x) => x.mentorId === p.id);
+                      return pr ? nameOf(pr.menteeId) : undefined;
+                    })()}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        </DndScope>
+      )}
       <p className="muted small">
         지정한 멘토는 같은 라인 자동 멘토링보다 성장 보너스가 더 큽니다(성향 충돌 시 예외). 멘토가
         멘티보다 나이가 많아야 하며, 동시에 최대 {MENTOR_PAIRING_MAX}쌍까지 지정할 수 있습니다.
         페어링이 유지되는 동안 멘토도 소폭 사기 보너스를 받으며, 멘티가 나이를 넘기거나 멘토를
         추월하면 자동으로 "졸업"합니다.
       </p>
+    </div>
+  );
+}
+
+/** 컬럼 토글 패널의 드래그 가능한 항목 하나(선수관리 전면 도입 Phase 2 — 컬럼 순서 재배열). */
+function SortableColumnItem({ colKey, label, checked, onToggle }: {
+  colKey: string; label: string; checked: boolean; onToggle: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: colKey });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+  return (
+    <div ref={setNodeRef} style={style} className="column-toggle-item sortable-column-item">
+      <span className="drag-handle" {...attributes} {...listeners} title="드래그해서 순서 변경">⠿</span>
+      <label>
+        <input type="checkbox" checked={checked} onChange={onToggle} />
+        {label}
+      </label>
     </div>
   );
 }
@@ -401,6 +498,20 @@ export function Squad({
     });
   }
 
+  /** 컬럼 토글 패널의 드래그 재정렬(선수관리 전면 도입 Phase 2). */
+  function handleColumnDragEnd(e: DragEndEvent) {
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+    setViewSettings((prev) => {
+      const from = prev.columnOrder.indexOf(String(active.id));
+      const to = prev.columnOrder.indexOf(String(over.id));
+      if (from < 0 || to < 0) return prev;
+      const next = { ...prev, columnOrder: arrayMove(prev.columnOrder, from, to) };
+      saveSquadViewSettings(next);
+      return next;
+    });
+  }
+
   function setDensity(density: SquadDensity) {
     setViewSettings((prev) => {
       const next = { ...prev, density };
@@ -418,6 +529,9 @@ export function Squad({
   }
 
   const isColVisible = (key: string) => !viewSettings.hiddenColumns.includes(key);
+  /** 표시 가능한(allowed) 컬럼 중, 사용자가 드래그로 정한 순서대로 보이는 것만 남긴다. */
+  const orderedVisibleColumns = (allowed: string[]) =>
+    viewSettings.columnOrder.filter((k) => allowed.includes(k) && isColVisible(k));
 
   function applyFilterPreset(p: SquadFilterPreset) {
     setLine(p.line);
@@ -486,16 +600,31 @@ export function Squad({
           <button className="chip small" onClick={() => setColumnsOpen((v) => !v)}>⚙ 컬럼</button>
           {columnsOpen && (
             <div className="column-toggle-panel">
-              {OPTIONAL_COLUMNS.map((c) => (
-                <label key={c.key} className="column-toggle-item">
-                  <input
-                    type="checkbox"
-                    checked={isColVisible(c.key)}
-                    onChange={() => toggleColumn(c.key)}
-                  />
-                  {c.label}
-                </label>
-              ))}
+              <label className="column-toggle-item">
+                <input
+                  type="checkbox"
+                  checked={isColVisible('potential')}
+                  onChange={() => toggleColumn('potential')}
+                />
+                잠재력
+              </label>
+              <DndScope onDragEnd={handleColumnDragEnd}>
+                <SortableContext items={viewSettings.columnOrder} strategy={verticalListSortingStrategy}>
+                  {viewSettings.columnOrder.map((key) => {
+                    const col = OPTIONAL_COLUMNS.find((c) => c.key === key);
+                    if (!col) return null;
+                    return (
+                      <SortableColumnItem
+                        key={key}
+                        colKey={key}
+                        label={col.label}
+                        checked={isColVisible(key)}
+                        onToggle={() => toggleColumn(key)}
+                      />
+                    );
+                  })}
+                </SortableContext>
+              </DndScope>
             </div>
           )}
         </div>
@@ -532,8 +661,9 @@ export function Squad({
                 <SortableTh label="CA" k="ca" sort={reserveSort} dir={reserveDir} onClick={toggleReserveSort} />
                 {isColVisible('potential') && <th>잠재력</th>}
                 <SortableTh label="컨디션" k="condition" sort={reserveSort} dir={reserveDir} onClick={toggleReserveSort} />
-                {isColVisible('nationality') && <th>국적</th>}
-                {isColVisible('training') && <th>훈련 포커스</th>}
+                {orderedVisibleColumns(['nationality', 'training']).map((key) => (
+                  key === 'nationality' ? <th key={key}>국적</th> : <th key={key}>훈련 포커스</th>
+                ))}
               </tr>
             </thead>
             <tbody>
@@ -553,8 +683,11 @@ export function Squad({
                   <td><b>{ca.toFixed(0)}</b></td>
                   {isColVisible('potential') && <td className="muted">{p.potential.toFixed(0)}</td>}
                   <td><ConditionCell player={p} /></td>
-                  {isColVisible('nationality') && <td className="muted">{flagFor(p.nationality)} {p.nationality}</td>}
-                  {isColVisible('training') && <td className="muted">{TRAINING_LABELS[p.trainingFocus]}</td>}
+                  {orderedVisibleColumns(['nationality', 'training']).map((key) => (
+                    key === 'nationality'
+                      ? <td key={key} className="muted">{flagFor(p.nationality)} {p.nationality}</td>
+                      : <td key={key} className="muted">{TRAINING_LABELS[p.trainingFocus]}</td>
+                  ))}
                 </tr>
               ))}
             </tbody>
@@ -702,11 +835,17 @@ export function Squad({
               <SortableTh label="CA" k="ca" sort={sort} dir={dir} onClick={toggleSort} />
               {isColVisible('potential') && <th>잠재력</th>}
               <SortableTh label="컨디션" k="condition" sort={sort} dir={dir} onClick={toggleSort} />
-              {isColVisible('nationality') && <th>국적</th>}
-              {isColVisible('contract') && <th>계약</th>}
-              {isColVisible('value') && <SortableTh label="가치" k="value" sort={sort} dir={dir} onClick={toggleSort} />}
-              {isColVisible('wage') && <SortableTh label="주급" k="wage" sort={sort} dir={dir} onClick={toggleSort} />}
-              {isColVisible('training') && <th>훈련 포커스</th>}
+              {orderedVisibleColumns(['nationality', 'contract', 'value', 'wage', 'training']).map((key) => {
+                switch (key) {
+                  case 'nationality': return <th key={key}>국적</th>;
+                  case 'contract': return <th key={key}>계약</th>;
+                  case 'value':
+                    return <SortableTh key={key} label="가치" k="value" sort={sort} dir={dir} onClick={toggleSort} />;
+                  case 'wage':
+                    return <SortableTh key={key} label="주급" k="wage" sort={sort} dir={dir} onClick={toggleSort} />;
+                  default: return <th key={key}>훈련 포커스</th>;
+                }
+              })}
             </tr>
           </thead>
           <tbody>
@@ -743,13 +882,21 @@ export function Squad({
                 <td><b>{ca.toFixed(0)}</b></td>
                 {isColVisible('potential') && <td className="muted">{player.potential.toFixed(0)}</td>}
                 <td><ConditionCell player={player} /></td>
-                {isColVisible('nationality') && <td className="muted">{flagFor(player.nationality)} {player.nationality}</td>}
-                {isColVisible('contract') && (
-                  <td className={player.contractYears <= CONTRACT_SOON ? 'neg' : ''}>{player.contractYears}년</td>
-                )}
-                {isColVisible('value') && <td>{formatMoney(value)}</td>}
-                {isColVisible('wage') && <td className="muted">{formatMoney(player.wage)}</td>}
-                {isColVisible('training') && <td className="muted">{TRAINING_LABELS[player.trainingFocus]}</td>}
+                {orderedVisibleColumns(['nationality', 'contract', 'value', 'wage', 'training']).map((key) => {
+                  switch (key) {
+                    case 'nationality':
+                      return <td key={key} className="muted">{flagFor(player.nationality)} {player.nationality}</td>;
+                    case 'contract':
+                      return (
+                        <td key={key} className={player.contractYears <= CONTRACT_SOON ? 'neg' : ''}>
+                          {player.contractYears}년
+                        </td>
+                      );
+                    case 'value': return <td key={key}>{formatMoney(value)}</td>;
+                    case 'wage': return <td key={key} className="muted">{formatMoney(player.wage)}</td>;
+                    default: return <td key={key} className="muted">{TRAINING_LABELS[player.trainingFocus]}</td>;
+                  }
+                })}
               </tr>
             ))}
           </tbody>

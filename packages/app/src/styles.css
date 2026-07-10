@@ -1248,6 +1248,14 @@ h3 { font-size: 14px; margin: 0 0 10px; color: var(--muted); text-transform: upp
   box-shadow: var(--shadow-lg); min-width: 130px;
 }
 .column-toggle-item { display: flex; align-items: center; gap: 6px; font-size: 12px; white-space: nowrap; cursor: pointer; }
+.sortable-column-item { cursor: default; }
+.sortable-column-item label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.drag-handle { cursor: grab; color: var(--muted); touch-action: none; padding: 0 2px; }
+.drag-handle:active { cursor: grabbing; }
+
+/* 멘토 페어링 드래그(선수관리 전면 도입 Phase 2) */
+.mentor-dnd { display: flex; gap: 16px; margin: 10px 0; flex-wrap: wrap; }
+.mentor-dnd-col { flex: 1 1 240px; min-width: 200px; }
 .filter-preset-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 10px; }
 .preset-save-form { display: inline-flex; align-items: center; gap: 6px; }
 

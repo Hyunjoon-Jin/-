@@ -9,6 +9,8 @@ export interface SquadViewSettings {
   hiddenColumns: string[];
   density: SquadDensity;
   viewMode: SquadViewMode;
+  /** 드래그로 바꾼 컬럼 표시 순서(REORDERABLE_COLUMN_KEYS의 순열). */
+  columnOrder: string[];
 }
 
 export const OPTIONAL_COLUMNS: { key: string; label: string }[] = [
@@ -20,13 +22,27 @@ export const OPTIONAL_COLUMNS: { key: string; label: string }[] = [
   { key: 'training', label: '훈련 포커스' },
 ];
 
+/** 드래그로 순서를 바꿀 수 있는 컬럼(잠재력은 CA 옆에 고정 배치라 순서 변경 대상에서 제외). */
+export const REORDERABLE_COLUMN_KEYS = OPTIONAL_COLUMNS
+  .filter((c) => c.key !== 'potential')
+  .map((c) => c.key);
+
 const KEY = 'st_squad_view_settings';
 
 const DEFAULT_SETTINGS: SquadViewSettings = {
   hiddenColumns: [],
   density: 'default',
   viewMode: 'table',
+  columnOrder: REORDERABLE_COLUMN_KEYS,
 };
+
+/** 저장된 순서가 낡았거나(신규 컬럼 추가 등) 손상됐을 때, 알려진 키만 남기고 빠진 키는 뒤에 붙인다. */
+function sanitizeColumnOrder(order: unknown): string[] {
+  const known = Array.isArray(order) ? order.filter((k): k is string =>
+    typeof k === 'string' && REORDERABLE_COLUMN_KEYS.includes(k)) : [];
+  const missing = REORDERABLE_COLUMN_KEYS.filter((k) => !known.includes(k));
+  return [...known, ...missing];
+}
 
 export function loadSquadViewSettings(storage: Storage = window.localStorage): SquadViewSettings {
   const raw = storage.getItem(KEY);
@@ -37,6 +53,7 @@ export function loadSquadViewSettings(storage: Storage = window.localStorage): S
       hiddenColumns: Array.isArray(parsed.hiddenColumns) ? parsed.hiddenColumns : [],
       density: parsed.density === 'compact' ? 'compact' : 'default',
       viewMode: parsed.viewMode === 'cards' ? 'cards' : 'table',
+      columnOrder: sanitizeColumnOrder(parsed.columnOrder),
     };
   } catch {
     return { ...DEFAULT_SETTINGS };
