@@ -39,6 +39,7 @@ import { Cup } from './components/Cup.js';
 import { Staff } from './components/Staff.js';
 import { History } from './components/History.js';
 import { Help } from './components/Help.js';
+import { GlobalPlayerSearch } from './components/GlobalPlayerSearch.js';
 import { PlayerDetail, FULL_SCOUTING } from './components/PlayerDetail.js';
 import { WatchMatch } from './components/WatchMatch.js';
 import type { Player } from '@soccer-tycoon/engine';
@@ -81,6 +82,7 @@ export function App() {
   const [watching, setWatching] = useState<WatchSetup | null>(null);
   const [watchKind, setWatchKind] = useState<'league' | 'cup'>('league');
   const [showHelp, setShowHelp] = useState(false);
+  const [showGlobalSearch, setShowGlobalSearch] = useState(false);
   // 선택된 선수는 id만 저장하고 매 렌더 game.clubs에서 다시 찾는다(선수관리 개선
   // 항목17-24) — 예전에는 클릭 시점의 Player 객체 스냅샷을 그대로 들고 있어서, 모달을
   // 띄운 채로 등번호·태그·즐겨찾기 등을 바꿔도 화면에 갱신된 값이 반영되지 않았다.
@@ -144,6 +146,7 @@ export function App() {
     setWatching(null);
     setDetailPlayerId(null);
     setShowHelp(false);
+    setShowGlobalSearch(false);
     setSaveError(false);
   }
 
@@ -380,11 +383,24 @@ export function App() {
             : (savedLabel && <span className="saved-badge">{savedLabel}</span>)}
           <span className="club-name">{club.name}</span>
           <span className="season-badge">시즌 {game.season}{game.live ? ' 진행중' : ' 프리시즌'}</span>
+          <button
+            className="btn-ghost help-btn" onClick={() => setShowGlobalSearch(true)}
+            title="선수 검색 — 현재 탭과 무관하게 전 스쿼드에서 바로 찾기(선수관리 개선 항목42)"
+          >
+            🔎
+          </button>
           <button className="btn-ghost help-btn" onClick={() => setShowHelp(true)} title="도움말">?</button>
         </div>
       </header>
 
       {showHelp && <Help onClose={() => setShowHelp(false)} />}
+      {showGlobalSearch && (
+        <GlobalPlayerSearch
+          club={club}
+          onSelect={(p) => { setShowGlobalSearch(false); setDetailPlayerId(p.id); }}
+          onClose={() => setShowGlobalSearch(false)}
+        />
+      )}
       {detailPlayer && (() => {
         const isMine = club.players.some((p) => p.id === detailPlayer.id);
         // 이전/다음 선수 네비게이션(선수관리 개선 항목17)은 내 스쿼드에서만 — Squad
@@ -551,6 +567,7 @@ export function App() {
                 onPanicBuy={handlePanicBuy}
                 onRivalSnipe={handleRivalSnipe}
                 onToggleWatchlist={(id) => runAction(toggleWatchlistAction, id)}
+                onSetPlayerTags={handleSetPlayerTags}
               />
             )}
           </div>
