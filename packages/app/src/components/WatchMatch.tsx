@@ -3,7 +3,7 @@ import type { DragEndEvent } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import {
   LiveMatch, HALF_TIME, MATCH_LENGTH, currentAbility, isAvailable, SEVERITY_LABEL,
-  CUP_FINAL_ROUND_NAME, decideAiHalftimeTactic,
+  CUP_FINAL_ROUND_NAME, decideAiHalftimeTactic, lineOf,
   type Club, type Player, type Tactic, type MatchEvent, type MatchResult, type LiveStats,
   type InjuryEvent, type CardEvent,
 } from '@soccer-tycoon/engine';
@@ -138,7 +138,15 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
   }, []);
   const [feed, setFeed] = useState<MatchEvent[]>([]);
   const [tactic, setTactic] = useState<Tactic>(initialTactic);
-  const [stats, setStats] = useState<LiveStats>({ possession: [50, 50], shots: [0, 0], shotsOnTarget: [0, 0] });
+  const [stats, setStats] = useState<LiveStats>({
+    possession: [50, 50], shots: [0, 0], shotsOnTarget: [0, 0], bigChances: [0, 0],
+  });
+  /** 실시간 선수 평점(M3 C1) — 분이 지날 때마다 엔진 statMap에서 갱신. */
+  const [ratings, setRatings] = useState<Map<string, number>>(() => live.liveRatings());
+  /** 모멘텀(M3 C4) 계산용 전체 이벤트 누적 — 피드(주요 장면만)와 달리 모든 슈팅을 담는다. */
+  const allEventsRef = useRef<MatchEvent[]>([]);
+  /** 선수별 투입 시점(분) — 체력 추정(C2)에 사용. 선발은 0분, 교체 투입은 그 시점 기록. */
+  const entryMinuteRef = useRef<Map<string, number>>(new Map());
   const [injuryFeed, setInjuryFeed] = useState<InjuryEvent[]>([]);
   const [cardFeed, setCardFeed] = useState<CardEvent[]>([]);
   const [activeInjury, setActiveInjury] = useState<InjuryEvent | null>(null);
@@ -255,6 +263,8 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
       if (allowAutoPause && prefs.pauseOnGoal) setPaused(true);
     }
     setStats(live.stats());
+    setRatings(live.liveRatings());
+    allEventsRef.current.push(...evs);
     const notable = evs.filter((e) => e.outcome === 'GOAL' || e.outcome === 'OWN_GOAL' || e.outcome === 'SAVE');
     if (notable.length) setFeed((f) => [...notable.reverse(), ...f]);
   }
@@ -356,6 +366,7 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
     setTactic(next);
     live.setTactic(userSide, next);
     setSubsUsed((n) => n + 1);
+    entryMinuteRef.current.set(inPlayerId, minuteRef.current);
   }
 
   /** 부상 교체 확정: 라인업을 즉시 교체하고(경기 재개), 하프타임 UI에도 반영. */
@@ -450,6 +461,62 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
   /** 현재 멘탈리티에 가장 가까운 스테퍼 단계(활성 표시용). */
   const nearestMentality = MENTALITY_STEPS.reduce((a, b) =>
     Math.abs(b.value - tactic.mentality) < Math.abs(a.value - tactic.mentality) ? b : a).value;
+
+  /** 경고(옐로) 보유 선수(M3 C3) — 공개된 카드 피드에서 파생. 레드는 이미 퇴장 처리. */
+  const yellowIds = new Set(cardFeed.filter((c) => c.type === 'yellow' && c.side === userSide).map((c) => c.playerId));
+
+  /** 체력 추정(M3 C2) — 표시 전용. 킥오프 컨디션에서 출전 시간·전술 강도만큼 깎는다.
+   *  엔진 시뮬레이션에는 영향을 주지 않는 파생 지표라 "추정"으로 명시한다. */
+  function staminaEstimate(p: Player): number {
+    const entered = entryMinuteRef.current.get(p.id) ?? 0;
+    const minutesOn = Math.max(0, view.minute - entered);
+    const intensity = (tactic.tempo + tactic.pressing) / 2;
+    const drainPerMin = 0.0035 + 0.003 * intensity;
+    return Math.max(0, Math.min(1, p.condition - minutesOn * drainPerMin));
+  }
+
+  /** 최근 10분 모멘텀(M3 C4) — 슈팅 이벤트 가중 합(골 3·유효 2·기타 1)의 내 팀 비중. */
+  const momentum = (() => {
+    const from = view.minute - 10;
+    let mine = 0, opp = 0;
+    for (const e of allEventsRef.current) {
+      if (e.minute <= from) continue;
+      const w = e.outcome === 'GOAL' ? 3 : e.outcome === 'SAVE' || e.outcome === 'OWN_GOAL' ? 2 : 1;
+      if (e.side === userSide) mine += w;
+      else opp += w;
+    }
+    return mine + opp === 0 ? 0.5 : mine / (mine + opp);
+  })();
+
+  /** 코치 제안(M3 C7) — 지금 데이터로 판단 가능한 조언 최대 2개. */
+  const coachTips = (() => {
+    const tips: string[] = [];
+    if (phase !== 'playing' && phase !== 'playing2') return tips;
+    const m = view.minute;
+    if (subsUsed < SUB_LIMIT) {
+      const tired = tactic.lineup
+        .map((s) => myClub.players.find((p) => p.id === s.playerId))
+        .find((p) => p && staminaEstimate(p) < 0.35);
+      if (tired) tips.push(`${tired.name} 체력 저하 — 교체를 고려하세요`);
+    }
+    if (m >= 30) {
+      let worst: { name: string; r: number } | null = null;
+      for (const s of tactic.lineup) {
+        const r = ratings.get(s.playerId);
+        const p = myClub.players.find((pl) => pl.id === s.playerId);
+        if (r !== undefined && p && r <= 5.4 && (!worst || r < worst.r)) worst = { name: p.name, r };
+      }
+      if (worst) tips.push(`${worst.name} 부진(평점 ${worst.r.toFixed(1)}) — 교체 고려`);
+    }
+    const yellowDef = tactic.lineup.find((s) => yellowIds.has(s.playerId) && lineOf(s.position) === 'DEF');
+    if (yellowDef) {
+      const p = myClub.players.find((pl) => pl.id === yellowDef.playerId);
+      if (p) tips.push(`경고 보유 수비수 ${p.name} — 퇴장 위험을 관리하세요`);
+    }
+    if (userBehind && m >= 65) tips.push('뒤지고 있습니다 — 🔥 추격 프리셋을 고려하세요');
+    if (userAhead && m >= 80) tips.push('리드 막판 — 🛡 리드 지키기·⏳ 시간 끌기를 고려하세요');
+    return tips.slice(0, 2);
+  })();
   const pitch: PitchState = {
     homeName, awayName, score: view.score, minute: view.minute + view.frac,
     ball: view.ball, goalFlash, cardFlash, injuryFlash, userIsHome: watch.userIsHome,
@@ -599,7 +666,11 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
                     ? '🔥 라이벌전 하프타임 — 전술을 조정할 수 있습니다'
                     : '하프타임 — 전술을 조정할 수 있습니다'}
               </div>
-              <LiveStatsPanel stats={stats} homeName={homeName} awayName={awayName} userSide={userSide} />
+              <HalftimeReport
+                stats={stats} ratings={ratings} tactic={tactic} club={myClub}
+                userSide={userSide} myGoals={myGoals} oppGoals={oppGoals}
+              />
+              <LiveStatsPanel stats={stats} homeName={homeName} awayName={awayName} userSide={userSide} momentum={momentum} />
               <Tactics club={myClub} tactic={tactic} onChange={setTactic} />
             </>
           ) : phase === 'fulltime' ? (
@@ -617,6 +688,11 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
             </>
           ) : (
             <div className="commentary">
+              {coachTips.length > 0 && (
+                <div className="coach-tips">
+                  {coachTips.map((t) => <p key={t}>💡 {t}</p>)}
+                </div>
+              )}
               <BenchPanel
                 club={myClub}
                 tactic={tactic}
@@ -625,8 +701,11 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
                 subPriority={subPriority}
                 onReorderPriority={handleReorderSubPriority}
                 onSubstitute={performSubstitution}
+                ratings={ratings}
+                staminaOf={staminaEstimate}
+                yellowIds={yellowIds}
               />
-              <LiveStatsPanel stats={stats} homeName={homeName} awayName={awayName} userSide={userSide} />
+              <LiveStatsPanel stats={stats} homeName={homeName} awayName={awayName} userSide={userSide} momentum={momentum} />
               {aiHalftimeNote && <p className="muted small ai-halftime-note">🔄 {aiHalftimeNote}</p>}
               <h3>중계</h3>
               <Feed events={feed} injuries={injuryFeed} cards={cardFeed} tacticLog={tacticLog} userSide={userSide} />
@@ -702,15 +781,32 @@ function ScoreboardHero({
   );
 }
 
-/** 라인업 슬롯 하나(벤치 교체 드래그 드롭 대상, D27) — 상시 노출되는 미니 라인업 목록의 한 행. */
-function BenchLineupRow({ index, position, player }: {
+/** 라인업 슬롯 하나(벤치 교체 드래그 드롭 대상, D27) — 상시 노출되는 미니 라인업 목록의 한 행.
+ *  M3(C1/C2/C3): 실시간 평점·체력 추정 바·경고 보유 표시가 붙어 교체 판단 근거가 된다. */
+function BenchLineupRow({ index, position, player, rating, stamina, hasYellow }: {
   index: number; position: string; player: Player | undefined;
+  rating?: number; stamina?: number; hasYellow?: boolean;
 }) {
   const { setNodeRef, isOver } = useDroppableZone(`lineup-slot-${index}`, { slotIndex: index });
+  const ratingCls = rating === undefined ? '' : rating >= 7 ? ' good' : rating <= 5.7 ? ' poor' : '';
   return (
     <div ref={setNodeRef} className={`bench-lineup-row dnd-drop-zone${isOver ? ' drop-over' : ''}`}>
       <span className="blr-pos">{position}</span>
-      <span className="blr-name">{player ? player.name : '(선수 없음)'}</span>
+      <span className="blr-name">
+        {hasYellow && <span className="blr-yellow" title="경고 보유 — 다음 경고 시 퇴장">🟨</span>}
+        {player ? player.name : '(선수 없음)'}
+      </span>
+      {rating !== undefined && (
+        <span className={`blr-rating${ratingCls}`} title="실시간 평점">{rating.toFixed(1)}</span>
+      )}
+      {stamina !== undefined && (
+        <span className="blr-stamina" title={`체력(추정) ${Math.round(stamina * 100)}%`}>
+          <span
+            className={`blr-stamina-fill${stamina < 0.35 ? ' low' : ''}`}
+            style={{ width: `${Math.round(stamina * 100)}%` }}
+          />
+        </span>
+      )}
     </div>
   );
 }
@@ -741,11 +837,15 @@ function BenchChip({ player, disabled }: { player: Player; disabled?: boolean })
  *  그 순서가 "선호 교체 우선순위"로 저장돼 다음 경기에도 이어진다. */
 function BenchPanel({
   club, tactic, subsUsed, subLimit, subPriority, onReorderPriority, onSubstitute,
+  ratings, staminaOf, yellowIds,
 }: {
   club: Club; tactic: Tactic; subsUsed: number; subLimit: number;
   subPriority: string[];
   onReorderPriority: (order: string[]) => void;
   onSubstitute: (outPlayerId: string, inPlayerId: string) => void;
+  ratings?: Map<string, number>;
+  staminaOf?: (p: Player) => number;
+  yellowIds?: Set<string>;
 }) {
   const exhausted = subsUsed >= subLimit;
   const benchPlayers = sortByPriority(
@@ -780,14 +880,20 @@ function BenchPanel({
       <h3>🪑 벤치{exhausted && <span className="muted small"> (교체 카드 소진)</span>}</h3>
       <DndScope onDragEnd={handleDragEnd}>
         <div className="bench-lineup-mini">
-          {tactic.lineup.map((slot, i) => (
-            <BenchLineupRow
-              key={i}
-              index={i}
-              position={slot.position}
-              player={club.players.find((p) => p.id === slot.playerId)}
-            />
-          ))}
+          {tactic.lineup.map((slot, i) => {
+            const player = club.players.find((p) => p.id === slot.playerId);
+            return (
+              <BenchLineupRow
+                key={i}
+                index={i}
+                position={slot.position}
+                player={player}
+                rating={ratings?.get(slot.playerId)}
+                stamina={player && staminaOf ? staminaOf(player) : undefined}
+                hasYellow={yellowIds?.has(slot.playerId) ?? false}
+              />
+            );
+          })}
         </div>
         <div className="label small">벤치 — 드래그로 순서 변경(교체 우선순위) · 라인업 위로 드래그하면 교체</div>
         <SortableContext items={benchPlayers.map((p) => `bench-${p.id}`)} strategy={verticalListSortingStrategy}>
@@ -805,12 +911,17 @@ function BenchPanel({
 }
 
 function LiveStatsPanel({
-  stats, homeName, awayName, userSide,
-}: { stats: LiveStats; homeName: string; awayName: string; userSide: 'home' | 'away' }) {
+  stats, homeName, awayName, userSide, momentum,
+}: {
+  stats: LiveStats; homeName: string; awayName: string; userSide: 'home' | 'away';
+  /** 최근 10분 흐름에서 내 팀 비중(0~1, M3 C4). 생략하면 표시하지 않는다. */
+  momentum?: number;
+}) {
   const [hp, ap] = stats.possession;
   const rows: { label: string; h: number; a: number }[] = [
     { label: '슈팅', h: stats.shots[0], a: stats.shots[1] },
     { label: '유효슈팅', h: stats.shotsOnTarget[0], a: stats.shotsOnTarget[1] },
+    { label: '빅찬스', h: stats.bigChances[0], a: stats.bigChances[1] },
   ];
   return (
     <div className="live-stats">
@@ -833,6 +944,57 @@ function LiveStatsPanel({
           <span className={`ls-num ${r.a >= r.h ? 'lead' : ''}`}>{r.a}</span>
         </div>
       ))}
+      {momentum !== undefined && (
+        <div className="ls-momentum" title="최근 10분 슈팅 이벤트 가중 흐름 — 내 팀 쪽일수록 초록">
+          <span className="muted small">최근 10분 흐름</span>
+          <div className="ls-momentum-bar">
+            <div className="ls-seg mine" style={{ width: `${Math.round(momentum * 100)}%` }} />
+            <div className="ls-seg opp" style={{ width: `${Math.round((1 - momentum) * 100)}%` }} />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** 하프타임 리포트(M3 C10) — 전반 수치를 코치의 짧은 코멘트로 번역해 후반 조정의 근거를 준다. */
+function HalftimeReport({
+  stats, ratings, tactic, club, userSide, myGoals, oppGoals,
+}: {
+  stats: LiveStats; ratings: Map<string, number>; tactic: Tactic; club: Club;
+  userSide: 'home' | 'away'; myGoals: number; oppGoals: number;
+}) {
+  const idx = userSide === 'home' ? 0 : 1;
+  const myPoss = stats.possession[idx];
+  const myShots = stats.shots[idx];
+  const oppShots = stats.shots[1 - idx]!;
+  const lines: string[] = [];
+
+  if (myGoals > oppGoals) lines.push('리드를 잡았습니다 — 이대로면 승점 3점입니다.');
+  else if (myGoals < oppGoals) lines.push('뒤지고 있습니다 — 후반에 변화가 필요합니다.');
+  else lines.push('팽팽한 균형 — 후반 첫 골이 승부를 가를 겁니다.');
+
+  if (myPoss >= 55) lines.push(`점유율 ${myPoss}%로 주도권을 쥐고 있습니다.`);
+  else if (myPoss <= 45) lines.push(`점유율 ${myPoss}% 열세 — 템포·압박 조정을 고려하세요.`);
+  if (myShots < oppShots) lines.push(`슈팅 ${myShots}:${oppShots} 열세 — 공격 루트가 막혀 있습니다.`);
+
+  let best: { name: string; r: number } | null = null;
+  let worst: { name: string; r: number } | null = null;
+  for (const slot of tactic.lineup) {
+    const r = ratings.get(slot.playerId);
+    const p = club.players.find((pl) => pl.id === slot.playerId);
+    if (r === undefined || !p) continue;
+    if (!best || r > best.r) best = { name: p.name, r };
+    if (!worst || r < worst.r) worst = { name: p.name, r };
+  }
+  if (best && worst && best.name !== worst.name) {
+    lines.push(`전반 최고 ${best.name}(${best.r.toFixed(1)}) · 최저 ${worst.name}(${worst.r.toFixed(1)}).`);
+  }
+
+  return (
+    <div className="ht-report">
+      <h3>📋 전반 리포트</h3>
+      {lines.map((l) => <p key={l}>{l}</p>)}
     </div>
   );
 }
