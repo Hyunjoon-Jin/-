@@ -1579,6 +1579,23 @@ h3 { font-size: 14px; margin: 0 0 10px; color: var(--muted); text-transform: upp
 .ht-report h3 { margin: 0 0 8px; }
 .ht-report p { margin: 0 0 4px; }
 .ht-report p:last-child { margin-bottom: 0; }
+
+/* 전술 쿨다운 배지(M4 B11) + 교체 예약(B16) */
+.qb-cooldown { color: var(--color-warning); font-size: 12px; font-weight: 600; white-space: nowrap; }
+.btn-quick:disabled, .mentality-stepper .speed-btn:disabled { opacity: .4; cursor: not-allowed; }
+.sub-plans { list-style: none; margin: 0 0 8px; padding: 0; }
+.sub-plans li {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  background: rgba(74, 163, 255, 0.08); border: 1px solid rgba(74, 163, 255, 0.3);
+  border-radius: var(--radius-sm); padding: 4px 8px; font-size: 12px; margin-bottom: 4px;
+}
+.sub-plan-cancel { padding: 1px 7px; font-size: 11px; }
+.sub-reserve-minute { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.sub-reserve-minute input {
+  width: 64px; background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+  border-radius: 6px; padding: 4px 8px; font-size: 13px;
+}
+.sub-actions { display: flex; gap: 4px; }
 .quick-tactic.chase { border-color: rgba(224,87,75,0.4); color: var(--color-danger); }
 .quick-tactic.chase:hover { border-color: var(--color-danger); }
 .quick-tactic.protect { border-color: rgba(74,163,255,0.4); color: var(--accent-2); }
