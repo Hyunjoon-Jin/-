@@ -119,6 +119,8 @@ interface View {
   frac: number;
   score: [number, number];
   ball: { x: number; y: number };
+  /** 현재 공격 중인(공을 잡은) 팀 — 피치 운동 모델의 전진/후퇴·캐리어 판정에 사용. */
+  possession: 'home' | 'away';
 }
 
 /** 하이라이트 모드(M6 A6)에서 장면을 보여준 뒤 다음 장면으로 건너뛰기까지의 관찰 시간(ms). */
@@ -158,7 +160,7 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
     });
   }
   const subtickRef = useRef(0);
-  const [view, setView] = useState<View>({ minute: 0, frac: 0, score: [0, 0], ball: { x: 0.5, y: 0.5 } });
+  const [view, setView] = useState<View>({ minute: 0, frac: 0, score: [0, 0], ball: { x: 0.5, y: 0.5 }, possession: 'home' });
   const [goalFlash, setGoalFlash] = useState<'home' | 'away' | null>(null);
   const goalFlashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** 골 리플레이 오버레이(M5 A11)·세리머니 링(D4)용 — 마지막 득점 정보. */
@@ -302,7 +304,11 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
     const ball = last
       ? { x: last.side === 'home' ? 0.84 : 0.16, y: 0.28 + Math.random() * 0.44 }
       : { x: 0.4 + Math.random() * 0.2, y: 0.34 + Math.random() * 0.32 };
-    setView({ minute: target, frac: 0, score: live.score(), ball });
+    setView((v) => ({
+      minute: target, frac: 0, score: live.score(), ball,
+      // 마지막 이벤트의 공격 측을 점유로 삼고, 이벤트 없는 분은 직전 점유를 유지한다.
+      possession: last ? last.side : v.possession,
+    }));
     if (last) {
       // 슈팅 궤적선(D5): 이 분의 마지막 슈팅을 공 위치에서 골문 방향으로 표시.
       setShotTrail({ side: last.side, fromX: ball.x, fromY: ball.y, outcome: last.outcome, start: performance.now() });
@@ -340,9 +346,9 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
     }
   }
 
-  // 진행 타이머 — 1분을 SUBTICKS개의 시각 서브틱으로 쪼갠다(M1 A1/A3). 서브틱에서는
-  // 공이 현재 위치 주변을 짧게 드리프트하며 "경기가 흐르는" 감각만 만들고, 마지막
-  // 서브틱에서 엔진을 정확히 1분 전진시킨다(엔진 결정성은 분 단위 그대로).
+  // 진행 타이머 — 1분을 SUBTICKS개의 서브틱으로 쪼개 경기 시각(frac)만 잘게 흐르게 한다.
+  // 공·선수의 연속 움직임은 이제 피치 운동 모델(matchMotion)이 프레임 단위로 담당하므로,
+  // 서브틱은 페이싱(시각 진행)만 맡고 공 위치를 임의로 흔들지 않는다.
   useEffect(() => {
     if (phase !== 'playing' && phase !== 'playing2') return;
     if (prefs.mode === 'highlight') return; // 하이라이트 모드는 아래 전용 루프가 진행(M6 A6)
@@ -353,14 +359,7 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
       if (subtickRef.current < SUBTICKS - 1) {
         subtickRef.current++;
         const frac = subtickRef.current / SUBTICKS;
-        setView((v) => ({
-          ...v,
-          frac,
-          ball: {
-            x: Math.min(0.94, Math.max(0.06, v.ball.x + (Math.random() - 0.5) * 0.07)),
-            y: Math.min(0.9, Math.max(0.1, v.ball.y + (Math.random() - 0.5) * 0.07)),
-          },
-        }));
+        setView((v) => ({ ...v, frac }));
         return;
       }
       subtickRef.current = 0;
@@ -724,6 +723,7 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
       ? { side: lastGoal.side, slotIndex: lastGoal.slotIndex } : null,
     shotTrail,
     weather: live.weather(),
+    possession: view.possession,
     homeFormation: homeTactic.lineup.map((s) => s.position),
     awayFormation: awayTactic.lineup.map((s) => s.position),
     homeLabels: homeTactic.lineup.map((slot) => playerInitials(homeClub, slot.playerId)),
