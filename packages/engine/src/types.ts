@@ -72,6 +72,9 @@ export interface AddOnTier {
   fee: number;
 }
 
+/** 선수가 구단에 기대하는 지위(드레싱룸 P1, A2) — 각기 다른 출전 비중을 기대한다. */
+export type SquadStatus = 'key' | 'rotation' | 'prospect' | 'fringe';
+
 export interface Player {
   id: string;
   name: string;
@@ -91,6 +94,19 @@ export interface Player {
   condition: number;
   /** 사기 (0~1). 0.5 = 중립. 승패·출전시간으로 변동. */
   morale: number;
+  /** 구단 만족도(드레싱룸 P1, A1) — morale과 별개로 시즌에 걸쳐 완만히 누적되는
+   *  "이 구단에서 뛰는 게 만족스러운가". 출전시간·성적·연봉이 입력. 0~1, 0.5=중립.
+   *  구버전 세이브는 없을 수 있어 optional(없으면 0.5 취급). */
+  happiness?: number;
+  /** 감독이 약속한 지위(A4의 토대) — 설정 시 출전시간 기대치가 자연 서열이 아니라
+   *  이 지위 기준이 된다. 미설정이면 능력치 서열로 자동 산출(A2). */
+  squadStatus?: SquadStatus;
+  /** 행복도가 임계 이하로 연속된 경기 수(A3) — UNHAPPY_STREAK_LIMIT 도달 시 이적 요청.
+   *  시즌 경계에서 리셋. 구버전 세이브는 없을 수 있어 optional(없으면 0 취급). */
+  unhappyStreak?: number;
+  /** 이적 요청 상태(A3) — 지속된 불만으로 선수가 이적을 요청한 상태. 감독이 설득/거부하거나
+   *  판매로 해소. 구버전 세이브는 없을 수 있어 optional(없으면 false 취급). */
+  transferRequested?: boolean;
   /** 이번 시즌 선발 출전 수 (시즌 경계 리셋). */
   seasonApps: number;
   /** 남은 부상 경기 수. 0 = 정상. >0 이면 출전 불가. */

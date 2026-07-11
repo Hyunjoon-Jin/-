@@ -717,6 +717,8 @@ export function runOffseason(clubs: Club[], rng: Rng): OffseasonResult {
       player.seasonGoals = 0;
       player.seasonAssists = 0;
       player.seasonCleanSheets = 0;
+      // 드레싱룸(P1) — seasonApps가 리셋됐으니 출전시간 불만 카운트도 새 시즌 새 출발로 리셋.
+      player.unhappyStreak = 0;
     }
 
     // 은퇴 (스냅샷 보존 후 제거 — 통산 기록은 은퇴와 함께 사라지므로 여기서 캡처)
