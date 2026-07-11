@@ -80,10 +80,21 @@ export class MatchMotion {
   private zone: Vec = { x: 0.5, y: 0.5 };
   private clock = 0;
   private initialized = false;
+  /** 팀별 수비 라인 x(플랫 백라인 협응, step마다 갱신). */
+  private homeBackLineX = 0.2;
+  private awayBackLineX = 0.8;
+  /** 직전 점유 팀·전환 시각 — 공수 전환 버스트(역습 느낌)에 사용. */
+  private prevPossession: Side = 'home';
+  private transitionAt = -999;
 
   /** 매 프레임 최신 전술 진실을 주입. 첫 호출 시 선수를 앵커에 스냅해 초기화한다. */
   setInput(input: MotionInput): void {
     this.zone = input.ballZone;
+    // 점유가 바뀌면 전환 시각을 기록 — 이후 잠깐 대형 전환이 강조된다(역습 느낌).
+    if (input.possession !== this.prevPossession) {
+      this.transitionAt = this.clock;
+      this.prevPossession = input.possession;
+    }
     this.possession = input.possession;
     if (!this.initialized) {
       this.players = [
@@ -125,9 +136,35 @@ export class MatchMotion {
     this.carrier = this.pickCarrier();
     this.updateBall(dt, this.carrier);
 
+    // 팀별 수비 라인 x를 먼저 계산(플랫 백라인이 한 덩어리로 오르내리게).
+    this.homeBackLineX = this.computeBackLine('home');
+    this.awayBackLineX = this.computeBackLine('away');
+
     // 1) 속도 갱신(모든 선수의 pos 스냅샷을 읽어 계산) → 2) 위치 적분.
     for (const p of this.players) this.accelerate(p, dt);
     for (const p of this.players) this.integrate(p, dt);
+  }
+
+  /** 선수 역할 분류(앵커의 자기 골 기준 전진도로 판정). */
+  private roleOf(p: MotionPlayer): 'gk' | 'def' | 'mid' | 'att' {
+    if (p.isGK) return 'gk';
+    const ownness = p.side === 'home' ? p.anchor.x : 1 - p.anchor.x; // 0=자기 골 .. 1=상대 골
+    if (ownness < 0.28) return 'def';
+    if (ownness > 0.5) return 'att';
+    return 'mid';
+  }
+
+  /** 한 팀의 수비 라인 x — 공보다 일정 간격 뒤에서 함께 오르내리되 자기 진영을 크게 벗어나지 않는다. */
+  private computeBackLine(side: Side): number {
+    const dir = attackDir(side);
+    const defs = this.players.filter((p) => p.side === side && this.roleOf(p) === 'def');
+    const baseX = defs.length ? defs.reduce((s, p) => s + p.anchor.x, 0) / defs.length : (dir > 0 ? 0.2 : 0.8);
+    const gap = 0.22; // 공보다 이만큼 자기 골 쪽에 라인을 형성
+    let lineX = this.ball.pos.x - dir * gap;
+    const nearGoal = dir > 0 ? 0.1 : 0.9;
+    const maxUp = dir > 0 ? 0.55 : 0.45;
+    lineX = clamp(lineX, Math.min(nearGoal, maxUp), Math.max(nearGoal, maxUp));
+    return baseX * 0.35 + lineX * 0.65;
   }
 
   /** 공에 가장 가까운 선수를 캐리어로 뽑되, 공격(점유) 팀에 약간 가중을 준다. */
@@ -213,13 +250,22 @@ export class MatchMotion {
     }
     const dir = attackDir(p.side);
     const attacking = p.side === this.possession;
+    const role = this.roleOf(p);
 
     // 공을 향한 블록 슬라이드(팀이 한 덩어리로 공 쪽으로 미끄러짐).
     let tx = p.anchor.x + (ball.x - p.anchor.x) * 0.12;
     let ty = p.anchor.y + (ball.y - p.anchor.y) * 0.18;
 
+    // 공수 전환 버스트 — 점유가 막 바뀐 직후 잠깐 전진/후퇴를 강조(역습·복귀 느낌).
+    const transBoost = 1 + 0.9 * Math.exp(-(this.clock - this.transitionAt) / 0.5);
     // 점유 시 전진 / 비점유 시 후퇴(자기 골 쪽).
-    tx += dir * (attacking ? 0.05 : -0.03);
+    tx += dir * (attacking ? 0.05 : -0.03) * transBoost;
+
+    // 공격 시 와이드 선수는 터치라인으로 폭을 벌리고, 수비 시 안쪽으로 압축한다.
+    if (role === 'att' || role === 'mid') {
+      if (p.anchor.y < 0.4) ty += (attacking ? -0.05 : 0.03);
+      else if (p.anchor.y > 0.6) ty += (attacking ? 0.05 : -0.03);
+    }
 
     // 거리 기반 압박·지원 끌림 — 공에 가까울수록 강하게 달려든다(수비가 더 강하게 압박).
     const dx = ball.x - p.pos.x;
@@ -241,6 +287,14 @@ export class MatchMotion {
         tx += dir * amt;
         ty += Math.sin(p.idx * 1.9) * 0.06 * gate; // 채널로 벌리는 횡 이동
       }
+    }
+
+    // 수비 라인 협응 — 수비수는 팀 공유 라인 x로 강하게 당겨져 한 덩어리(플랫 백라인)로
+    // 오르내린다(개별 슬라이드보다 조직적). 압박은 위에서 이미 반영돼 최근접 수비수는
+    // 라인에서 살짝 튀어나가 공을 견제한다.
+    if (role === 'def') {
+      const lineX = p.side === 'home' ? this.homeBackLineX : this.awayBackLineX;
+      tx = tx * 0.3 + lineX * 0.7;
     }
 
     // 미세한 개인 흔들림(생동감) — 결정적 사인.

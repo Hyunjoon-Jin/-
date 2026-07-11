@@ -159,6 +159,48 @@ describe('MatchMotion — 관전 운동 모델', () => {
     expect(dCarrier).toBeLessThan(0.12);
   });
 
+  it('수비팀 수비수들은 한 라인(비슷한 x)으로 협응한다', () => {
+    const a = anchors();
+    const m = new MatchMotion();
+    // 원정 점유(홈이 수비) — 공을 홈 진영(x=0.35)에 두고 오래 진행.
+    for (let i = 0; i < 360; i++) {
+      m.setInput({
+        homeAnchors: a.home, awayAnchors: a.away, homeIsGK: a.homeGK, awayIsGK: a.awayGK,
+        ballZone: { x: 0.35, y: 0.5 }, possession: 'away',
+      });
+      m.step(1 / 60);
+    }
+    // 홈 수비수(앵커 x가 낮은 필드플레이어 4명)의 현재 x 분산이 작아야 한다(플랫 라인).
+    const defs = m.players
+      .filter((p) => p.side === 'home' && !p.isGK)
+      .sort((x, y) => x.anchor.x - y.anchor.x)
+      .slice(0, 4);
+    const xs = defs.map((p) => p.pos.x);
+    const mean = xs.reduce((s, v) => s + v, 0) / xs.length;
+    const std = Math.sqrt(xs.reduce((s, v) => s + (v - mean) ** 2, 0) / xs.length);
+    expect(std).toBeLessThan(0.05); // 좁은 x 폭 = 협응된 한 라인
+  });
+
+  it('수비 라인은 공이 전진하면(자기 진영에서 멀어지면) 함께 올라간다', () => {
+    const a = anchors();
+    const settle = (ballX: number): number => {
+      const m = new MatchMotion();
+      for (let i = 0; i < 300; i++) {
+        m.setInput({
+          homeAnchors: a.home, awayAnchors: a.away, homeIsGK: a.homeGK, awayIsGK: a.awayGK,
+          ballZone: { x: ballX, y: 0.5 }, possession: 'away',
+        });
+        m.step(1 / 60);
+      }
+      const defs = m.players.filter((p) => p.side === 'home' && !p.isGK)
+        .sort((x, y) => x.anchor.x - y.anchor.x).slice(0, 4);
+      return defs.reduce((s, p) => s + p.pos.x, 0) / defs.length;
+    };
+    const lineDeep = settle(0.2);   // 공이 홈 골 가까이
+    const lineHigh = settle(0.6);   // 공이 중앙/상대 진영 쪽
+    expect(lineHigh).toBeGreaterThan(lineDeep); // 라인이 더 높이 올라감
+  });
+
   it('골키퍼는 자기 골문 근처를 벗어나지 않는다', () => {
     const m = new MatchMotion();
     m.setInput(baseInput({ x: 0.9, y: 0.5 })); // 원정 골문 쪽으로 공
