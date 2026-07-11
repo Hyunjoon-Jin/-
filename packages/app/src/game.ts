@@ -55,6 +55,11 @@ import {
   computeTeamStrength, currentAbility, recentForm, buildScoutingReport, lineOf,
   dispatchScout as engineDispatchScout,
   assignMentor as engineAssignMentor, clearMentorPairing as engineClearMentorPairing,
+  happinessFactors, effectiveStatus, promiseStatus as enginePromiseStatus,
+  persuadeToStay as enginePersuadeToStay, rejectTransferRequest as engineRejectTransferRequest,
+  holdTeamMeeting as engineHoldTeamMeeting, individualTalk as engineIndividualTalk,
+  HAPPINESS_UNHAPPY,
+  type SquadStatus, type HappinessFactors, type TeamMeetingTone, type IndividualTalkKind,
   type Club, type Tactic, type MatchResult, type MatchSetup, type SeasonSummary,
   type Fixture, type TableRow, type PlayerSeasonStat, type CupState, type StaffKind, type NamedStaffKind,
   type PlayerFormEntry, type Player, type YouthProspect, type YouthProspectUpdate,
@@ -1178,6 +1183,87 @@ export function clearMentorPairingAction(state: GameState, menteeId: string): Ac
   const club = myClub(state);
   engineClearMentorPairing(club, menteeId);
   return { state: { ...state }, ok: true, message: '멘토 페어링을 해제했습니다.' };
+}
+
+// ── 드레싱룸 (P1: 선수 심리) ──────────────────────────────
+
+/** 특정 선수의 행복도 요인 분해(왜 오르내리는지) — PlayerDetail에서 노출. */
+export function happinessInfoFor(state: GameState, playerId: string): HappinessFactors | undefined {
+  const p = myClub(state).players.find((pl) => pl.id === playerId);
+  if (!p) return undefined;
+  return happinessFactors(p, myClub(state).players);
+}
+
+/** 감독이 선수에게 지위를 약속(A4) — undefined면 약속 해제(자연 기대치로 복귀). */
+export function promiseStatusAction(state: GameState, playerId: string, status: SquadStatus | undefined): GameState {
+  const p = myClub(state).players.find((pl) => pl.id === playerId);
+  if (p) {
+    if (status === undefined) p.squadStatus = undefined;
+    else enginePromiseStatus(p, status);
+  }
+  return { ...state };
+}
+
+/** 개인 면담(A9) — 칭찬/경고. */
+export function individualTalkAction(state: GameState, playerId: string, kind: IndividualTalkKind): ActionOutcome {
+  const p = myClub(state).players.find((pl) => pl.id === playerId);
+  if (!p) return { state, ok: false, message: '선수를 찾을 수 없습니다.' };
+  engineIndividualTalk(p, kind);
+  return {
+    state: { ...state }, ok: true,
+    message: kind === 'praise' ? `${p.name} 선수를 격려했습니다.` : `${p.name} 선수에게 분발을 주문했습니다.`,
+  };
+}
+
+/** 이적 요청 설득(A3) — 요청 철회 + 행복도 소폭 회복. */
+export function persuadeToStayAction(state: GameState, playerId: string): ActionOutcome {
+  const p = myClub(state).players.find((pl) => pl.id === playerId);
+  if (!p) return { state, ok: false, message: '선수를 찾을 수 없습니다.' };
+  enginePersuadeToStay(p);
+  return { state: { ...state }, ok: true, message: `${p.name} 선수를 달래 잔류를 설득했습니다.` };
+}
+
+/** 이적 요청 거부(A3) — 요청만 무시(불만은 남아 다시 요청할 수 있음). */
+export function rejectTransferRequestAction(state: GameState, playerId: string): ActionOutcome {
+  const p = myClub(state).players.find((pl) => pl.id === playerId);
+  if (!p) return { state, ok: false, message: '선수를 찾을 수 없습니다.' };
+  engineRejectTransferRequest(p);
+  return { state: { ...state }, ok: true, message: `${p.name} 선수의 이적 요청을 거부했습니다. 불만은 남아 있습니다.` };
+}
+
+/** 팀 미팅(A8) — 스쿼드 전체 사기 단기 보정. */
+export function holdTeamMeetingAction(state: GameState, tone: TeamMeetingTone): ActionOutcome {
+  const avgDelta = engineHoldTeamMeeting(myClub(state), tone);
+  const pct = Math.round(avgDelta * 100);
+  const label = tone === 'encourage' ? '격려' : tone === 'unite' ? '단합 독려' : '분발 촉구';
+  const dir = avgDelta >= 0 ? `평균 사기 +${pct}%p` : `평균 사기 ${pct}%p`;
+  return { state: { ...state }, ok: true, message: `팀 미팅(${label}) — ${dir}.` };
+}
+
+/** 대시보드 불만 경고용 — 불만 선수/이적 요청 요약(A10). */
+export interface UnrestEntry {
+  playerId: string;
+  name: string;
+  status: SquadStatus;
+  happiness: number;
+  transferRequested: boolean;
+}
+export function squadUnrest(state: GameState): UnrestEntry[] {
+  const squad = myClub(state).players;
+  const out: UnrestEntry[] = [];
+  for (const p of squad) {
+    if (p.loanFromClubId !== undefined) continue;
+    const happiness = p.happiness ?? 0.5;
+    const requested = p.transferRequested ?? false;
+    if (!requested && happiness >= HAPPINESS_UNHAPPY) continue;
+    out.push({
+      playerId: p.id, name: p.name, status: effectiveStatus(p, squad),
+      happiness, transferRequested: requested,
+    });
+  }
+  // 이적 요청 → 행복도 낮은 순.
+  return out.sort((a, b) =>
+    (b.transferRequested ? 1 : 0) - (a.transferRequested ? 1 : 0) || a.happiness - b.happiness);
 }
 
 /** 프리시즌에서 한 시즌 전체를 한 번에 진행(킥오프→전 경기→정산). */

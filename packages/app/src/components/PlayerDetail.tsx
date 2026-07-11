@@ -5,9 +5,11 @@ import {
   formatMoney, buildScoutingReport, retireChance, RETIRE_MIN_AGE, scoutDispatchCost,
   loyaltyTier, loyaltyDiscount, LOYALTY_TRUSTED_SEASONS, LOYALTY_LEGEND_SEASONS,
   POSITION_MASTERY_MILESTONES,
+  SQUAD_STATUS_LABEL,
   type AttrKey, type Player, type DerivedRatings, type TrainingFocus, type Position,
   type PlayerFormEntry, type OverallTier, type PotentialTier, type AgeProfile, type ScoutingReport,
   type PlayerInstruction, type PlayerInstructionKind,
+  type SquadStatus, type HappinessFactors, type IndividualTalkKind,
 } from '@soccer-tycoon/engine';
 import { useEffect, useState } from 'react';
 import {
@@ -32,6 +34,14 @@ function moraleLabel(m: number): { text: string; cls: string } {
   if (m >= 0.65) return { text: '😀 만족', cls: 'cond-good' };
   if (m >= 0.4) return { text: '😐 보통', cls: '' };
   return { text: '😠 불만', cls: 'injury' };
+}
+
+/** 구단 만족도(행복도, P1 A1) 라벨 — morale과 별개의 장기 만족도. */
+function happinessLabel(h: number): { text: string; cls: string } {
+  if (h >= 0.7) return { text: '💚 행복', cls: 'cond-good' };
+  if (h >= 0.45) return { text: '🙂 무난', cls: '' };
+  if (h >= 0.3) return { text: '😕 시무룩', cls: '' };
+  return { text: '💢 불만', cls: 'injury' };
 }
 
 /** 로열티(신규 개선 항목 10) 등급 배지 — newcomer는 특별히 표시하지 않는다. */
@@ -174,6 +184,18 @@ interface Props {
   onTogglePin?: () => void;
   /** 태그 편집(선수관리 개선 항목23). */
   onSetTags?: (tags: string[]) => void;
+  /** 드레싱룸(P1) — 행복도 요인 분해. 내 선수면 전달. */
+  happinessInfo?: HappinessFactors;
+  /** 지위 약속(A4) 설정/해제 — undefined면 약속 해제(자연 기대치로). */
+  onPromiseStatus?: (status: SquadStatus | undefined) => void;
+  /** 개인 면담(A9) — 칭찬/경고. */
+  onIndividualTalk?: (kind: IndividualTalkKind) => { ok: boolean; message: string };
+  /** 이적 요청 설득(A3). */
+  onPersuade?: () => { ok: boolean; message: string };
+  /** 이적 요청 거부(A3). */
+  onRejectRequest?: () => { ok: boolean; message: string };
+  /** 이적 요청 수락(A3) — 이적 시장으로 이동해 매각 진행. */
+  onAcceptRequest?: () => void;
 }
 
 type PdTab = 'overview' | 'development' | 'career';
@@ -221,12 +243,109 @@ function RenewPanel({
   );
 }
 
+const SQUAD_STATUS_ORDER: SquadStatus[] = ['key', 'rotation', 'prospect', 'fringe'];
+
+/** 드레싱룸(P1) — 행복도 요인 분해·지위 약속·개인 면담·이적 요청 대응(A1/A2/A3/A4/A9). */
+function DressingRoomPanel({
+  player, info, onPromiseStatus, onIndividualTalk, onPersuade, onRejectRequest, onAcceptRequest, toast,
+}: {
+  player: Player;
+  info: HappinessFactors;
+  onPromiseStatus?: (status: SquadStatus | undefined) => void;
+  onIndividualTalk?: (kind: IndividualTalkKind) => { ok: boolean; message: string };
+  onPersuade?: () => { ok: boolean; message: string };
+  onRejectRequest?: () => { ok: boolean; message: string };
+  onAcceptRequest?: () => void;
+  toast: (r: { ok: boolean; message: string }) => void;
+}) {
+  const h = happinessLabel(info.happiness);
+  const pct = (v: number) => `${Math.round(v * 100)}%`;
+  // 요인 방향 → 표시(플러스/마이너스/중립).
+  const ptTone = info.playingTime > 0.03 ? 'pos' : info.playingTime < -0.03 ? 'neg' : 'muted';
+  const wageTone = info.wage > 0.1 ? 'pos' : info.wage < -0.1 ? 'neg' : 'muted';
+  const ptText = info.teamMatches < 5
+    ? '표본 부족(시즌 초반)'
+    : info.playingTime > 0.03 ? '기대 이상 출전'
+    : info.playingTime < -0.03 ? '기대보다 적은 출전' : '기대에 부합';
+
+  return (
+    <div className="pd-dressing">
+      <div className="pd-dressing-head">
+        <span className={`pd-happiness ${h.cls}`}>구단 만족도 {h.text} <b>{pct(info.happiness)}</b></span>
+        {info.transferRequested && <span className="pd-transfer-req">🚪 이적 요청</span>}
+      </div>
+
+      <ul className="pd-happy-factors">
+        <li>
+          <span className="muted">기대 지위</span>
+          <span>
+            {SQUAD_STATUS_LABEL[info.status]}
+            {info.promised && <span className="pd-promise-badge" title="감독이 약속한 지위"> · 약속</span>}
+          </span>
+        </li>
+        <li>
+          <span className="muted">출전 비중</span>
+          <span className={ptTone}>
+            {pct(info.actualShare)} / 기대 {pct(info.expectedShare)} — {ptText}
+          </span>
+        </li>
+        <li>
+          <span className="muted">대우(연봉)</span>
+          <span className={wageTone}>
+            {info.wage > 0.1 ? '능력 대비 후한 대우' : info.wage < -0.1 ? '능력 대비 저평가' : '적정 수준'}
+          </span>
+        </li>
+      </ul>
+
+      {info.transferRequested && (onPersuade || onRejectRequest || onAcceptRequest) && (
+        <div className="pd-transfer-actions">
+          <span className="muted small">지속된 불만으로 이적을 요청했습니다.</span>
+          <div className="pd-btn-row">
+            {onPersuade && (
+              <button className="btn-small" onClick={() => toast(onPersuade())}>설득(잔류)</button>
+            )}
+            {onRejectRequest && (
+              <button className="btn-small btn-ghost" onClick={() => toast(onRejectRequest())}>거부</button>
+            )}
+            {onAcceptRequest && (
+              <button className="btn-small danger" onClick={onAcceptRequest}>수락(매각)</button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {onPromiseStatus && (
+        <label className="pd-promise loan-field">
+          <span>지위 약속</span>
+          <select
+            value={player.squadStatus ?? ''}
+            onChange={(e) => onPromiseStatus(e.target.value ? (e.target.value as SquadStatus) : undefined)}
+          >
+            <option value="">약속 없음(자연 기대치)</option>
+            {SQUAD_STATUS_ORDER.map((s) => (
+              <option key={s} value={s}>{SQUAD_STATUS_LABEL[s]} 보장</option>
+            ))}
+          </select>
+        </label>
+      )}
+
+      {onIndividualTalk && (
+        <div className="pd-btn-row">
+          <button className="btn-small btn-ghost" onClick={() => toast(onIndividualTalk('praise'))}>👏 격려</button>
+          <button className="btn-small btn-ghost" onClick={() => toast(onIndividualTalk('warn'))}>📣 분발 촉구</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function PlayerDetail({
   player, onClose, onSetFocus, onSetTrainingPosition, onRenew, recentForm, timeline, ratingHistory, scouting,
   scouted, onDispatchScout, loanFromClubName,
   onNavigate, canNavigatePrev, canNavigateNext, onRelease, onGoToTransfers,
   onSetInstruction, currentInstruction, instructionKinds,
   onSetSquadNumber, onSetNote, onTogglePin, onSetTags,
+  happinessInfo, onPromiseStatus, onIndividualTalk, onPersuade, onRejectRequest, onAcceptRequest,
 }: Props) {
   const toast = useResultToast();
   const ca = currentAbility(player);
@@ -418,6 +537,14 @@ export function PlayerDetail({
             <span key={b.cls} className={b.cls} title="복귀 직후 일정 기간 지속되는 효과입니다">{b.text}</span>
           ))}
           <span className={moraleLabel(player.morale).cls}>사기 {moraleLabel(player.morale).text}</span>
+          {happinessInfo && (
+            <span className={happinessLabel(happinessInfo.happiness).cls} title="구단 만족도(행복도) — 출전시간·성적·연봉이 입력">
+              만족도 {happinessLabel(happinessInfo.happiness).text}
+            </span>
+          )}
+          {happinessInfo?.transferRequested && (
+            <span className="injury" title="지속된 불만으로 이적을 요청한 상태">🚪 이적요청</span>
+          )}
           <span className="muted">시즌 {player.seasonApps}경 {player.seasonGoals ?? 0}골</span>
           {((player.careerApps ?? 0) > 0 || (player.careerGoals ?? 0) > 0) && (
             <span className="muted" title="이전 시즌까지 통산 기록">통산 {player.careerApps ?? 0}경 {player.careerGoals ?? 0}골</span>
@@ -466,6 +593,18 @@ export function PlayerDetail({
                   <span className="muted small">계약 {player.contractYears}년 남음 — 재계약 불필요.</span>
                 )}
               </div>
+            )}
+            {happinessInfo && (
+              <DressingRoomPanel
+                player={player}
+                info={happinessInfo}
+                onPromiseStatus={onPromiseStatus}
+                onIndividualTalk={onIndividualTalk}
+                onPersuade={onPersuade}
+                onRejectRequest={onRejectRequest}
+                onAcceptRequest={onAcceptRequest}
+                toast={toast}
+              />
             )}
             {(player.traits ?? []).length > 0 && (
               <div className="pd-traits">
