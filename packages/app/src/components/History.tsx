@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { Landmark } from 'lucide-react';
-import { myClub, rivalClub, DIVISION_LABELS, type GameState } from '../game.js';
+import { myClub, rivalClub, DIVISION_LABELS, managerReputationInfo, type GameState } from '../game.js';
 import {
   careerScorers, STAFF_TRAIT_LABEL, STAFF_TRAIT_TIER_LABEL, type SeasonSquadEntry, type NamedStaffKind,
 } from '@soccer-tycoon/engine';
 import { computeClubRecords, type ClubRecordEntry } from '../records.js';
+import { loadCareer, careerTrend, type CareerStint } from '../career.js';
 import { useModalA11y } from './useModalA11y.js';
 import { onKeyActivate } from '../a11y.js';
 import { EmptyState } from './EmptyState.js';
@@ -17,7 +18,13 @@ const STAFF_KIND_LABEL: Record<NamedStaffKind, string> = {
 };
 
 type HistorySeason = GameState['history'][number];
-type HistoryTab = 'seasons' | 'titles' | 'scorers' | 'records' | 'legends' | 'staffLegends' | 'rivals';
+type HistoryTab = 'career' | 'seasons' | 'titles' | 'scorers' | 'records' | 'legends' | 'staffLegends' | 'rivals';
+
+const TREND_LABEL = {
+  rising: { text: '📈 상승세', cls: 'pos' },
+  falling: { text: '📉 하락세', cls: 'neg' },
+  steady: { text: '➡️ 유지', cls: 'muted' },
+} as const;
 
 export function History({ game }: { game: GameState }) {
   const club = myClub(game);
@@ -76,7 +83,30 @@ export function History({ game }: { game: GameState }) {
   const records = computeClubRecords(game);
   const hasRecords = Object.values(records).some((r) => r !== undefined);
 
+  // 감독 커리어(B4) — 현재 재임 + 과거(경질) 재임 아카이브를 합쳐 통산으로 집계.
+  const rep = managerReputationInfo(game);
+  const pastStints = loadCareer();
+  const currentStint: CareerStint = {
+    clubName: club.name,
+    seasons: seasons.length,
+    bestFinish,
+    leagueTitles: leagueTitlesD0 + leagueTitlesD1,
+    cupTitles,
+    endedAt: '',
+  };
+  const allStints = [...pastStints, currentStint];
+  const careerTotals = allStints.reduce(
+    (acc, s) => ({
+      seasons: acc.seasons + s.seasons,
+      leagueTitles: acc.leagueTitles + s.leagueTitles,
+      cupTitles: acc.cupTitles + s.cupTitles,
+    }),
+    { seasons: 0, leagueTitles: 0, cupTitles: 0 },
+  );
+  const trend = careerTrend(allStints);
+
   const tabDefs: { key: HistoryTab; label: string; show: boolean }[] = [
+    { key: 'career', label: '감독 커리어', show: true },
     { key: 'seasons', label: '역대 시즌', show: true },
     { key: 'titles', label: '리그 우승 순위', show: true },
     { key: 'scorers', label: '통산 득점 순위', show: leaders.length > 0 },
@@ -122,6 +152,54 @@ export function History({ game }: { game: GameState }) {
           </button>
         ))}
       </div>
+
+      {activeTab === 'career' && (
+        <div className="career-tab">
+          <div className="career-rep">
+            <span className="career-rep-label">🎖️ 감독 평판</span>
+            <b className="rep-tier">{rep.tierLabel}</b>
+            <span className="muted">({Math.round(rep.value)}/100)</span>
+            {trend && <span className={`career-trend ${TREND_LABEL[trend].cls}`}>{TREND_LABEL[trend].text}</span>}
+            <div className="rep-bar" aria-hidden="true">
+              <div className="rep-bar-fill" style={{ width: `${Math.round(rep.value)}%` }} />
+            </div>
+          </div>
+
+          <div className="cards career-totals">
+            <HonorCard title="통산 시즌" value={`${careerTotals.seasons}시즌`} />
+            <HonorCard title="거쳐온 구단" value={`${allStints.length}팀`} />
+            <HonorCard title="통산 리그 우승" value={`${careerTotals.leagueTitles}회`} />
+            <HonorCard title="통산 컵 우승" value={`${careerTotals.cupTitles}회`} />
+          </div>
+
+          <h3>재임 이력</h3>
+          <p className="muted small">경질로 끝난 재임은 세이브와 별개로 이 기기에 영구 기록됩니다(B4).</p>
+          <div className="table-scroll">
+            <table className="data-table career-stints">
+              <thead>
+                <tr>
+                  <th>구단</th><th>시즌</th><th>최고 순위</th><th>리그 우승</th><th>컵 우승</th><th>상태</th>
+                </tr>
+              </thead>
+              <tbody>
+                {allStints.map((s, i) => {
+                  const isCurrent = i === allStints.length - 1;
+                  return (
+                    <tr key={`${s.clubName}-${i}`} className={isCurrent ? 'career-current' : undefined}>
+                      <td>{s.clubName}</td>
+                      <td className="num">{s.seasons}</td>
+                      <td className="num">{s.bestFinish ? `${s.bestFinish}위` : '-'}</td>
+                      <td className="num">{s.leagueTitles}</td>
+                      <td className="num">{s.cupTitles}</td>
+                      <td>{isCurrent ? <span className="pos">재임 중</span> : <span className="muted">경질</span>}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {activeTab === 'seasons' && (
         <div>
