@@ -26,6 +26,10 @@ export interface MotionPlayer {
   pos: Vec;
   vel: Vec;
   anchor: Vec;
+  /** 이동 속도·가속 배율(선수 pace/가속 능력 반영, 0.8~1.2). 기본 1. */
+  pace: number;
+  /** 오프더볼 침투 런 성향(0.2~1.4). 기본 0.7. */
+  run: number;
 }
 
 /** 매 분(또는 프레임마다) 갱신되는 전술 진실 입력 — 실제 피치 좌표(0~1, x=0 왼쪽 골). */
@@ -40,6 +44,12 @@ export interface MotionInput {
   ballZone: Vec;
   /** 현재 공을 잡은(공격 중인) 팀. */
   possession: Side;
+  /** 슬롯별 이동 배율(선수 pace/가속). 생략 시 전원 1. */
+  homePace?: number[];
+  awayPace?: number[];
+  /** 슬롯별 오프더볼 런 성향. 생략 시 전원 0.7. */
+  homeRun?: number[];
+  awayRun?: number[];
 }
 
 // ── 운동 상수(정규화 좌표/초 단위, 부드럽고 과하지 않게 튜닝) ──
@@ -64,6 +74,8 @@ function clamp(v: number, lo: number, hi: number): number {
 export class MatchMotion {
   players: MotionPlayer[] = [];
   ball: { pos: Vec; vel: Vec } = { pos: { x: 0.5, y: 0.5 }, vel: { x: 0, y: 0 } };
+  /** 현재 공을 잡은 선수(렌더에서 캐리어 하이라이트에 사용). step 후 갱신. */
+  carrier: MotionPlayer | null = null;
   private possession: Side = 'home';
   private zone: Vec = { x: 0.5, y: 0.5 };
   private clock = 0;
@@ -75,22 +87,32 @@ export class MatchMotion {
     this.possession = input.possession;
     if (!this.initialized) {
       this.players = [
-        ...input.homeAnchors.map((a, i) => this.makePlayer('home', i, input.homeIsGK[i] ?? false, a)),
-        ...input.awayAnchors.map((a, i) => this.makePlayer('away', i, input.awayIsGK[i] ?? false, a)),
+        ...input.homeAnchors.map((a, i) => this.makePlayer('home', i, input.homeIsGK[i] ?? false, a,
+          input.homePace?.[i] ?? 1, input.homeRun?.[i] ?? 0.7)),
+        ...input.awayAnchors.map((a, i) => this.makePlayer('away', i, input.awayIsGK[i] ?? false, a,
+          input.awayPace?.[i] ?? 1, input.awayRun?.[i] ?? 0.7)),
       ];
       this.ball = { pos: { x: 0.5, y: 0.5 }, vel: { x: 0, y: 0 } };
       this.initialized = true;
       return;
     }
-    // 앵커만 갱신(교체·포메이션 변경이 있으면 선수가 새 앵커로 부드럽게 달려간다).
+    // 앵커·능력만 갱신(교체·포메이션 변경이 있으면 선수가 새 앵커로 부드럽게 달려간다).
     const home = this.players.filter((p) => p.side === 'home');
     const away = this.players.filter((p) => p.side === 'away');
-    input.homeAnchors.forEach((a, i) => { if (home[i]) { home[i]!.anchor = a; home[i]!.isGK = input.homeIsGK[i] ?? false; } });
-    input.awayAnchors.forEach((a, i) => { if (away[i]) { away[i]!.anchor = a; away[i]!.isGK = input.awayIsGK[i] ?? false; } });
+    input.homeAnchors.forEach((a, i) => {
+      const p = home[i]; if (!p) return;
+      p.anchor = a; p.isGK = input.homeIsGK[i] ?? false;
+      p.pace = input.homePace?.[i] ?? p.pace; p.run = input.homeRun?.[i] ?? p.run;
+    });
+    input.awayAnchors.forEach((a, i) => {
+      const p = away[i]; if (!p) return;
+      p.anchor = a; p.isGK = input.awayIsGK[i] ?? false;
+      p.pace = input.awayPace?.[i] ?? p.pace; p.run = input.awayRun?.[i] ?? p.run;
+    });
   }
 
-  private makePlayer(side: Side, idx: number, isGK: boolean, anchor: Vec): MotionPlayer {
-    return { side, idx, isGK, pos: { ...anchor }, vel: { x: 0, y: 0 }, anchor: { ...anchor } };
+  private makePlayer(side: Side, idx: number, isGK: boolean, anchor: Vec, pace: number, run: number): MotionPlayer {
+    return { side, idx, isGK, pos: { ...anchor }, vel: { x: 0, y: 0 }, anchor: { ...anchor }, pace, run };
   }
 
   /** 물리를 dt초만큼 진행. */
@@ -100,8 +122,8 @@ export class MatchMotion {
     if (dt <= 0) return;
     this.clock += dt;
 
-    const carrier = this.pickCarrier();
-    this.updateBall(dt, carrier);
+    this.carrier = this.pickCarrier();
+    this.updateBall(dt, this.carrier);
 
     // 1) 속도 갱신(모든 선수의 pos 스냅샷을 읽어 계산) → 2) 위치 적분.
     for (const p of this.players) this.accelerate(p, dt);
@@ -150,8 +172,9 @@ export class MatchMotion {
   /** 선수 목표점 계산 + 가속(분리 포함). 위치는 아직 옮기지 않는다. */
   private accelerate(p: MotionPlayer, dt: number): void {
     const target = this.targetFor(p);
-    let ax = (target.x - p.pos.x) * ACCEL;
-    let ay = (target.y - p.pos.y) * ACCEL;
+    // 가속·최고속을 선수 pace로 스케일 — 빠른 선수가 더 민첩하게 반응한다.
+    let ax = (target.x - p.pos.x) * ACCEL * p.pace;
+    let ay = (target.y - p.pos.y) * ACCEL * p.pace;
 
     // 분리 — 반경 내 다른 선수에게서 밀려난다(뭉침 방지, 자연스러운 간격).
     for (const q of this.players) {
@@ -170,8 +193,9 @@ export class MatchMotion {
     p.vel.y += ay * dt;
     const damp = Math.max(0, 1 - DAMP * dt);
     p.vel.x *= damp; p.vel.y *= damp;
+    const maxSp = MAX_SPEED * p.pace;
     const sp = Math.hypot(p.vel.x, p.vel.y);
-    if (sp > MAX_SPEED) { p.vel.x *= MAX_SPEED / sp; p.vel.y *= MAX_SPEED / sp; }
+    if (sp > maxSp) { p.vel.x *= maxSp / sp; p.vel.y *= maxSp / sp; }
   }
 
   private integrate(p: MotionPlayer, dt: number): void {
@@ -205,6 +229,19 @@ export class MatchMotion {
     const pullK = (attacking ? 0.3 : 0.42) * pull * pull;
     tx += dx * pullK;
     ty += dy * pullK;
+
+    // 오프더볼 침투 런 — 우리 팀 점유 + 공이 전진했을 때, 전진 성향 선수(공격 라인)가
+    // 캐리어가 아니면 주기적으로 상대 골 쪽 공간으로 침투한다(선수마다 다른 타이밍).
+    if (attacking && p !== this.carrier) {
+      const advancedRole = dir > 0 ? p.anchor.x > 0.5 : p.anchor.x < 0.5;
+      const ballAdvanced = dir > 0 ? ball.x > 0.55 : ball.x < 0.45;
+      if (advancedRole && ballAdvanced) {
+        const gate = Math.max(0, Math.sin(this.clock * 0.8 + p.idx * 2.3)); // 0~1 맥동
+        const amt = 0.14 * p.run * gate;
+        tx += dir * amt;
+        ty += Math.sin(p.idx * 1.9) * 0.06 * gate; // 채널로 벌리는 횡 이동
+      }
+    }
 
     // 미세한 개인 흔들림(생동감) — 결정적 사인.
     tx += Math.sin(this.clock * 1.3 + p.idx * 2.1 + (p.side === 'home' ? 0 : 3)) * 0.004;

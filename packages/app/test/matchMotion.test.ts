@@ -99,6 +99,66 @@ describe('MatchMotion — 관전 운동 모델', () => {
     expect(b.ball.pos.y).toBeCloseTo(a.ball.pos.y, 10);
   });
 
+  it('pace가 높은 선수가 같은 목표까지 더 빨리 이동한다', () => {
+    // 앵커에서 멀리 떨어진 공(코너)으로 끌어당겨, pace 차이가 이동 속도에 드러나게 한다.
+    const mk = (pace: number) => {
+      const a = anchors();
+      const m = new MatchMotion();
+      const input: MotionInput = {
+        homeAnchors: a.home, awayAnchors: a.away, homeIsGK: a.homeGK, awayIsGK: a.awayGK,
+        ballZone: { x: 0.5, y: 0.5 }, possession: 'home',
+        homePace: a.home.map(() => pace),
+      };
+      m.setInput(input);
+      // 한 필드플레이어(공에서 가장 가까운)를 추적.
+      run(m, 0.5, 1 / 60);
+      return m;
+    };
+    const slow = mk(0.8);
+    const fast = mk(1.2);
+    // 같은 초를 진행했을 때 빠른 팀의 평균 이동량이 더 크다.
+    const disp = (m: MatchMotion) => m.players
+      .filter((p) => p.side === 'home' && !p.isGK)
+      .reduce((s, p) => s + Math.hypot(p.pos.x - p.anchor.x, p.pos.y - p.anchor.y), 0);
+    expect(disp(fast)).toBeGreaterThan(disp(slow));
+  });
+
+  it('점유 중 공이 전진하면 공격 성향 선수가 앵커보다 상대 골 쪽으로 침투한다', () => {
+    const a = anchors();
+    const m = new MatchMotion();
+    // 공을 홈 공격 진영 깊숙이(x=0.7) 두고 홈 점유. 전진 성향 선수에게 높은 run.
+    m.setInput({
+      homeAnchors: a.home, awayAnchors: a.away, homeIsGK: a.homeGK, awayIsGK: a.awayGK,
+      ballZone: { x: 0.7, y: 0.5 }, possession: 'home',
+      homeRun: a.home.map(() => 1.4),
+    });
+    // 가장 전진한(앵커 x 최대) 홈 필드플레이어를 추적.
+    const striker = m.players.filter((p) => p.side === 'home' && !p.isGK)
+      .reduce((x, y) => (x.anchor.x > y.anchor.x ? x : y));
+    const anchorX = striker.anchor.x;
+    // 침투 게이트가 열리는 구간을 포함하도록 넉넉히 진행하며 최대 전진 x를 관찰.
+    let maxX = striker.pos.x;
+    for (let i = 0; i < 480; i++) {
+      m.setInput({
+        homeAnchors: a.home, awayAnchors: a.away, homeIsGK: a.homeGK, awayIsGK: a.awayGK,
+        ballZone: { x: 0.7, y: 0.5 }, possession: 'home', homeRun: a.home.map(() => 1.4),
+      });
+      m.step(1 / 60);
+      maxX = Math.max(maxX, striker.pos.x);
+    }
+    expect(maxX).toBeGreaterThan(anchorX + 0.03);
+  });
+
+  it('step 후 볼 캐리어가 지정되고, 캐리어는 공 근처의 필드플레이어다', () => {
+    const m = new MatchMotion();
+    m.setInput(baseInput({ x: 0.6, y: 0.4 }));
+    run(m, 3);
+    expect(m.carrier).not.toBeNull();
+    expect(m.carrier!.isGK).toBe(false);
+    const dCarrier = Math.hypot(m.carrier!.pos.x - m.ball.pos.x, m.carrier!.pos.y - m.ball.pos.y);
+    expect(dCarrier).toBeLessThan(0.12);
+  });
+
   it('골키퍼는 자기 골문 근처를 벗어나지 않는다', () => {
     const m = new MatchMotion();
     m.setInput(baseInput({ x: 0.9, y: 0.5 })); // 원정 골문 쪽으로 공

@@ -728,6 +728,11 @@ export function WatchMatch({ watch, myClub, initialTactic, preview, rivalClubId,
     awayFormation: awayTactic.lineup.map((s) => s.position),
     homeLabels: homeTactic.lineup.map((slot) => playerInitials(homeClub, slot.playerId)),
     awayLabels: awayTactic.lineup.map((slot) => playerInitials(awayClub, slot.playerId)),
+    // 선수 능력치 → 운동 파라미터: pace/가속은 이동 속도, offTheBall은 침투 런 성향.
+    homePace: homeTactic.lineup.map((slot) => paceFactor(homeClub, slot.playerId)),
+    awayPace: awayTactic.lineup.map((slot) => paceFactor(awayClub, slot.playerId)),
+    homeRun: homeTactic.lineup.map((slot) => runFactor(homeClub, slot.playerId)),
+    awayRun: awayTactic.lineup.map((slot) => runFactor(awayClub, slot.playerId)),
     isDerby,
     isFinal,
     kit,
@@ -1620,4 +1625,23 @@ function playerInitials(club: Club, playerId: string): string {
   const parts = player.name.trim().split(/\s+/);
   if (parts.length >= 2) return (parts[0]![0]! + parts[1]![0]!).toUpperCase();
   return player.name.slice(0, 2).toUpperCase();
+}
+
+function clampNum(v: number, lo: number, hi: number): number {
+  return v < lo ? lo : v > hi ? hi : v;
+}
+
+/** 피치 이동 속도 배율(0.8~1.2) — pace·가속 능력(1~20)에서 파생. 능력치 없으면 1. */
+function paceFactor(club: Club, playerId: string): number {
+  const p = club.players.find((pl) => pl.id === playerId);
+  if (!p) return 1;
+  const raw = (p.attributes.pace + p.attributes.acceleration) / 2; // 1~20
+  return clampNum(0.8 + (raw / 20) * 0.4, 0.8, 1.2);
+}
+
+/** 오프더볼 침투 런 성향(0.2~1.4) — offTheBall 능력에서 파생. 능력치 없으면 0.7. */
+function runFactor(club: Club, playerId: string): number {
+  const p = club.players.find((pl) => pl.id === playerId);
+  if (!p) return 0.7;
+  return clampNum((p.attributes.offTheBall / 20) * 1.4, 0.2, 1.4);
 }
