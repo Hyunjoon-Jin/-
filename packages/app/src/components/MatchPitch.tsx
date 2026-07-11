@@ -31,6 +31,12 @@ export interface PitchState {
   /** 각 슬롯 선수의 이니셜(2자) — 포메이션과 같은 순서. 점 안에 라벨로 표시. */
   homeLabels: string[];
   awayLabels: string[];
+  /** 슬롯별 이동 배율(pace, 0.8~1.2) — 운동 모델 속도 차등화. 생략 시 전원 1. */
+  homePace?: number[];
+  awayPace?: number[];
+  /** 슬롯별 오프더볼 런 성향(0.2~1.4). 생략 시 전원 0.7. */
+  homeRun?: number[];
+  awayRun?: number[];
   /** 라이벌전이면 스코어보드를 강조 표시. */
   isDerby?: boolean;
   /** 컵 결승이면 스코어보드를 금색으로 강조 표시(라이벌전보다 우선). */
@@ -120,6 +126,8 @@ export function MatchPitch(props: PitchState) {
         awayIsGK: p.awayFormation.map((pos) => pos === 'GK'),
         ballZone: p.ball,
         possession: p.possession ?? 'home',
+        homePace: p.homePace, awayPace: p.awayPace,
+        homeRun: p.homeRun, awayRun: p.awayRun,
       });
       motion.step(dt);
 
@@ -194,6 +202,15 @@ function draw(ctx: CanvasRenderingContext2D, s: PitchState, motion: MatchMotion,
     const speed = Math.hypot(p.vel.x, p.vel.y);
     const ang = speed > 0.001 ? Math.atan2(p.vel.y, p.vel.x) : 0;
 
+    // 볼 캐리어 하이라이트 — 공을 잡은 선수 발밑에 부드러운 링(누가 공을 다루는지 명확히).
+    if (motion.carrier === p) {
+      ctx.beginPath();
+      ctx.arc(px, py, 12, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+
     // 접지 그림자.
     ctx.beginPath();
     ctx.ellipse(px, py + 7, 7, 2.6, 0, 0, Math.PI * 2);
@@ -242,15 +259,20 @@ function draw(ctx: CanvasRenderingContext2D, s: PitchState, motion: MatchMotion,
   ctx.textBaseline = 'alphabetic';
 
   // 공 — 잔상(속도감) 후 본체. 캐리어 발끝에 붙어 자연스럽게 굴러다닌다.
-  ctx.lineWidth = 3;
+  // 공이 빠를수록(패스·전환) 잔상이 밝고 두꺼워져 "패스 선"처럼 보인다.
+  const ballSpeed = Math.hypot(motion.ball.vel.x, motion.ball.vel.y);
+  const passK = Math.min(1, ballSpeed / 0.6);
+  ctx.lineCap = 'round';
+  ctx.lineWidth = 2 + passK * 2.5;
   for (let i = 1; i < trail.length; i++) {
     const a = trail[i - 1]!, b = trail[i]!;
     ctx.beginPath();
     ctx.moveTo(m + a.x * pw, m + a.y * ph);
     ctx.lineTo(m + b.x * pw, m + b.y * ph);
-    ctx.strokeStyle = `rgba(255,255,255,${0.05 * i})`;
+    ctx.strokeStyle = `rgba(255,255,255,${(0.04 + passK * 0.06) * i})`;
     ctx.stroke();
   }
+  ctx.lineCap = 'butt';
   const bx = m + motion.ball.pos.x * pw;
   const by = m + motion.ball.pos.y * ph;
   ctx.beginPath();
