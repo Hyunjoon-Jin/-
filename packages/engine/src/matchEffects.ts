@@ -12,6 +12,7 @@ import { REINJURY_RISK_WINDOW, RECOVERY_ATTR_WINDOW } from './injury.js';
 import { effectiveMedical } from './staffActions.js';
 import { WEATHER_FATIGUE_MULTIPLIER, type Weather } from './weather.js';
 import { TRAVEL_CONDITION_PENALTY, type TravelBurden } from './travel.js';
+import { applyDressingRoomEffects } from './dressingRoom.js';
 
 const TUNING = {
   /** 선발 출전 시 기본 컨디션 하락(스태미너로 경감). */
@@ -206,4 +207,7 @@ export function applyMatchEffects(
   accumulateSeasonStats(home, result.playerStats.home);
   accumulateSeasonStats(away, result.playerStats.away);
   processDiscipline(home, away, result.cards);
+  // 드레싱룸(P1) — seasonApps가 위에서 갱신된 뒤라야 출전 비중이 정확하므로 마지막에 반영.
+  applyDressingRoomEffects(home, homeOutcome);
+  applyDressingRoomEffects(away, awayOutcome);
 }

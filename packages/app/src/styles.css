@@ -543,6 +543,43 @@ body {
 }
 .pd-form-stability { margin: -8px 0 16px; }
 
+/* 드레싱룸(P1) — 행복도 요인·지위 약속·면담·이적요청 */
+.pd-dressing {
+  margin: 4px 0 16px; padding: 12px 14px;
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.pd-dressing-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.pd-happiness { font-weight: 600; font-size: 14px; }
+.pd-happiness b { font-variant-numeric: tabular-nums; }
+.pd-transfer-req {
+  font-size: 12px; font-weight: 700; color: var(--color-danger);
+  padding: 2px 8px; border-radius: 6px; border: 1px solid rgba(224,87,75,0.4);
+  background: rgba(224,87,75,0.12);
+}
+.pd-happy-factors { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.pd-happy-factors li { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; }
+.pd-happy-factors li > span:last-child { text-align: right; }
+.pd-promise-badge { color: var(--accent-2); font-weight: 600; }
+.pd-transfer-actions {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 10px; border-radius: 8px; background: rgba(224,87,75,0.08);
+  border: 1px solid rgba(224,87,75,0.25);
+}
+.pd-btn-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.pd-promise { margin-bottom: 0; }
+
+/* 대시보드 불만 배너(A10) */
+.unrest-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; align-items: center; }
+.unrest-chip {
+  font-size: 12px; padding: 4px 10px; border-radius: 7px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--panel-2); color: var(--text);
+  transition: border-color .15s, transform .1s;
+}
+.unrest-chip:hover { border-color: var(--accent-2); transform: translateY(-1px); }
+.unrest-chip.req { border-color: rgba(224,87,75,0.5); background: rgba(224,87,75,0.1); }
+.team-meeting-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+
 .pd-timeline { margin: 6px 0 16px; }
 .pd-timeline h3 { margin: 0 0 6px; }
 .timeline-list { list-style: none; padding: 0; margin: 0; max-height: 200px; overflow-y: auto; }

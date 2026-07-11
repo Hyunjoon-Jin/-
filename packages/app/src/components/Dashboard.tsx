@@ -1,15 +1,16 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import {
   myClub, rivalClub, lastSummary, myLastPosition, managerPersona, managerSnsReputation, contractOptions,
-  thinSquadLines, LINE_DEPTH_RECOMMENDED,
+  thinSquadLines, LINE_DEPTH_RECOMMENDED, squadUnrest,
   DIFFICULTIES, DIVISION_LABELS, type GameState, type ActionOutcome,
 } from '../game.js';
 import {
   formatMoney, currentAbility, wageBudget, annualWageBill, inFinancialCrisis,
   boardStatus, DEMAND_LABEL, SPONSOR_GOAL_LABEL, sponsorStreakMultiplier, SPONSOR_CONTRACT_LABEL,
   boldPredictionTarget, ADD_ON_CONDITION_LABEL,
-  FAN_SATISFACTION_DEFAULT, FAN_PROTEST_THRESHOLD,
+  FAN_SATISFACTION_DEFAULT, FAN_PROTEST_THRESHOLD, SQUAD_STATUS_LABEL,
   type BoardStatus, type ManagerPersona, type BoardPersona, type Line, type NamedStaffKind,
+  type TeamMeetingTone,
 } from '@soccer-tycoon/engine';
 import { Landmark } from 'lucide-react';
 import { Banner } from './Banner.js';
@@ -51,11 +52,15 @@ interface Props {
   onGoToTab: (tab: 'tactics' | 'transfers' | 'match') => void;
   onRenegotiateDemand: () => ActionOutcome;
   onDeclareBoldPrediction: () => ActionOutcome;
+  /** 팀 미팅(A8) — 스쿼드 사기 단기 보정. */
+  onTeamMeeting: (tone: TeamMeetingTone) => ActionOutcome;
+  /** 선수 상세 열기(불만 배너에서 바로 대응). */
+  onOpenPlayer: (playerId: string) => void;
 }
 
 export function Dashboard({
   game, onSignContract, visitedTactics, visitedSquadPrep, onGoToTab, onRenegotiateDemand,
-  onDeclareBoldPrediction,
+  onDeclareBoldPrediction, onTeamMeeting, onOpenPlayer,
 }: Props) {
   const club = myClub(game);
   const rival = rivalClub(game);
@@ -74,6 +79,8 @@ export function Dashboard({
   const crisis = inFinancialCrisis(club);
   const overWages = annualWageBill(club) > wageBudget(club);
   const thinLines = thinSquadLines(game);
+  const unrest = squadUnrest(game); // 드레싱룸 불만·이적요청(A10)
+  const transferRequests = unrest.filter((u) => u.transferRequested);
   const retiredThisSeason = last ? game.legends.filter((l) => l.season === last.season) : [];
   const persona = managerPersona(game);
   const sns = managerSnsReputation(game);
@@ -509,6 +516,37 @@ export function Dashboard({
           ⚠ 스쿼드 뎁스 부족 — {thinLines.map(({ line, count }) => (
             `${LINE_LABEL[line]}(${count}/${LINE_DEPTH_RECOMMENDED[line]}명)`
           )).join(', ')}. 부상·정지가 겹치면 라인이 통째로 빌 수 있습니다. 이적 시장에서 보강을 고려하세요.
+        </Banner>
+      )}
+
+      {unrest.length > 0 && (
+        <Banner tone={transferRequests.length > 0 ? 'danger' : 'warning'}>
+          <p>
+            {transferRequests.length > 0
+              ? <>🚪 <b>이적 요청</b> — {transferRequests.length}명이 이적을 요청했습니다. </>
+              : <>😕 <b>드레싱룸 불만</b> — 만족도가 낮은 선수가 있습니다. </>}
+            방치하면 사기·경기력이 떨어지고 이적 요청으로 번집니다.
+          </p>
+          <div className="unrest-list">
+            {unrest.slice(0, 6).map((u) => (
+              <button
+                key={u.playerId}
+                className={`unrest-chip${u.transferRequested ? ' req' : ''}`}
+                onClick={() => onOpenPlayer(u.playerId)}
+                title="선수 상세를 열어 대응(설득·지위 약속·면담)"
+              >
+                {u.transferRequested ? '🚪 ' : ''}{u.name}
+                <span className="muted"> · {SQUAD_STATUS_LABEL[u.status]} · 만족도 {Math.round(u.happiness * 100)}%</span>
+              </button>
+            ))}
+            {unrest.length > 6 && <span className="muted small">외 {unrest.length - 6}명</span>}
+          </div>
+          <div className="team-meeting-row">
+            <span className="muted small">팀 미팅:</span>
+            <button className="btn-small btn-ghost" onClick={() => toast(onTeamMeeting('encourage'))}>격려</button>
+            <button className="btn-small btn-ghost" onClick={() => toast(onTeamMeeting('unite'))}>단합</button>
+            <button className="btn-small btn-ghost" onClick={() => toast(onTeamMeeting('demand'))}>분발 촉구</button>
+          </div>
         </Banner>
       )}
 

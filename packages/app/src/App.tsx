@@ -21,6 +21,8 @@ import {
   playerForm, playerTimeline, playerRatingHistory, respondMedia, dismissMedia, signContract,
   dispatchScoutAction, isScouted, assignMentorAction, clearMentorPairingAction, renegotiateDemandAction,
   declareBoldPredictionAction,
+  happinessInfoFor, promiseStatusAction, individualTalkAction, persuadeToStayAction,
+  rejectTransferRequestAction, holdTeamMeetingAction, squadUnrest,
   type GameState, type ActionOutcome, type WatchSetup, type Difficulty, type MediaEvent,
 } from './game.js';
 import { eligibleInstructionKinds, currentAbility, type Tactic, type MatchResult, type LoanTerms, type AddOnTier, type NamedStaffKind } from '@soccer-tycoon/engine';
@@ -464,6 +466,24 @@ export function App() {
             onSetNote={isMine ? (note) => handleSetNote(detailPlayer.id, note) : undefined}
             onTogglePin={isMine ? () => handleTogglePin(detailPlayer.id) : undefined}
             onSetTags={isMine ? (tags) => handleSetPlayerTags(detailPlayer.id, tags) : undefined}
+            happinessInfo={isMine ? happinessInfoFor(game, detailPlayer.id) : undefined}
+            onPromiseStatus={isMine && !game.live ? (status) => update(promiseStatusAction(game, detailPlayer.id, status)) : undefined}
+            onIndividualTalk={isMine && !game.live ? (kind) => {
+              const o = individualTalkAction(game, detailPlayer.id, kind);
+              if (o.ok) update(o.state);
+              return o;
+            } : undefined}
+            onPersuade={isMine && !game.live ? () => {
+              const o = persuadeToStayAction(game, detailPlayer.id);
+              if (o.ok) update(o.state);
+              return o;
+            } : undefined}
+            onRejectRequest={isMine && !game.live ? () => {
+              const o = rejectTransferRequestAction(game, detailPlayer.id);
+              if (o.ok) update(o.state);
+              return o;
+            } : undefined}
+            onAcceptRequest={isMine && !game.live ? () => { setDetailPlayerId(null); setTab('transfers'); } : undefined}
           />
         );
       })()}
@@ -507,6 +527,12 @@ export function App() {
                 onGoToTab={setTab}
                 onRenegotiateDemand={handleRenegotiateDemand}
                 onDeclareBoldPrediction={() => runAction(declareBoldPredictionAction, undefined)}
+                onTeamMeeting={(tone) => {
+                  const o = holdTeamMeetingAction(game, tone);
+                  if (o.ok) update(o.state);
+                  return o;
+                }}
+                onOpenPlayer={(id) => setDetailPlayerId(id)}
               />
             )}
             {tab === 'squad' && (

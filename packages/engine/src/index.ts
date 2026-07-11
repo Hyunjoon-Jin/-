@@ -19,6 +19,15 @@ export {
   type DerivedRatings,
 } from './derived.js';
 export { applyMatchEffects, ROTATION_WARNING_THRESHOLD } from './matchEffects.js';
+export {
+  type SquadStatus, SQUAD_STATUS_LABEL, EXPECTED_SHARE,
+  expectedStatus, effectiveStatus, promiseStatus,
+  NEUTRAL_HAPPINESS, HAPPINESS_UNHAPPY, HAPPINESS_CONTENT, UNHAPPY_STREAK_LIMIT,
+  teamMatchesPlayed, happinessFactors, applyDressingRoomEffects,
+  holdTeamMeeting, individualTalk, persuadeToStay, rejectTransferRequest,
+  resetDressingRoomForNewSeason,
+  type HappinessFactors, type TeamMeetingTone, type IndividualTalkKind,
+} from './dressingRoom.js';
 export { buildRotationWarningReport, type RotationWarningEntry } from './rotation.js';
 export { decideAiHalftimeTactic, simulateMatchWithAiTactics } from './aiInMatch.js';
 export {
