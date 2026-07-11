@@ -103,6 +103,10 @@ export function MatchPitch(props: PitchState) {
   const motionRef = useRef(new MatchMotion());
   const lastNowRef = useRef<number | null>(null);
   const trailRef = useRef<Vec[]>([]); // 공 잔상(속도감)
+  // 슈팅·골 순간을 감지해 운동 모델에 이벤트 반응(GK 다이브·세리머니)을 트리거하기 위한
+  // 이전 값 추적 — start 시각·플래시 전환으로 "새 이벤트"를 판정한다.
+  const lastShotStartRef = useRef<number>(-1);
+  const lastGoalKeyRef = useRef<string>('');
 
   // requestAnimationFrame으로 매 프레임 모델을 dt만큼 전진시키고 다시 그린다.
   // propsRef가 항상 최신 props를 담고 있어, 스코어·분·플래시 등도 자연히 반영된다.
@@ -130,6 +134,19 @@ export function MatchPitch(props: PitchState) {
         homeRun: p.homeRun, awayRun: p.awayRun,
       });
       motion.step(dt);
+
+      // 이벤트 반응 트리거 — 새 슈팅이면 수비 GK 다이브, 새 골이면 세리머니 군집.
+      if (p.shotTrail && p.shotTrail.start !== lastShotStartRef.current) {
+        lastShotStartRef.current = p.shotTrail.start;
+        motion.pulse('shot', p.shotTrail.side, { y: p.shotTrail.fromY });
+      }
+      if (p.goalFlash && p.goalCelebrate) {
+        const key = `${p.goalCelebrate.side}-${p.goalCelebrate.slotIndex}-${p.score[0]}-${p.score[1]}`;
+        if (key !== lastGoalKeyRef.current) {
+          lastGoalKeyRef.current = key;
+          motion.pulse('goal', p.goalCelebrate.side, { scorerIdx: p.goalCelebrate.slotIndex });
+        }
+      }
 
       // 공 잔상 갱신(최근 8프레임).
       const trail = trailRef.current;

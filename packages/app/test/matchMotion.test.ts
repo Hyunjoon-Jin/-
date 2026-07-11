@@ -201,6 +201,41 @@ describe('MatchMotion — 관전 운동 모델', () => {
     expect(lineHigh).toBeGreaterThan(lineDeep); // 라인이 더 높이 올라감
   });
 
+  it("pulse('goal') 후 득점 팀 필드플레이어가 득점자에게 몰려든다(세리머니 군집)", () => {
+    const a = anchors();
+    const m = new MatchMotion();
+    m.setInput(baseInput({ x: 0.7, y: 0.5 }, 'home'));
+    run(m, 1);
+    const scorer = m.players.find((p) => p.side === 'home' && !p.isGK)!;
+    // 세리머니 전, 다른 홈 필드플레이어들의 득점자까지 평균 거리.
+    const others = m.players.filter((p) => p.side === 'home' && !p.isGK && p !== scorer);
+    const meanDist = () => others.reduce((s, p) => s + Math.hypot(p.pos.x - scorer.pos.x, p.pos.y - scorer.pos.y), 0) / others.length;
+    const before = meanDist();
+    m.pulse('goal', 'home', { scorerIdx: scorer.idx });
+    for (let i = 0; i < 90; i++) { m.setInput(baseInput({ x: 0.7, y: 0.5 }, 'home')); m.step(1 / 60); }
+    expect(meanDist()).toBeLessThan(before); // 득점자 주위로 몰려듦
+  });
+
+  it("pulse('shot') 후 수비 측 골키퍼가 슛 라인(shotY) 쪽으로 다이브한다(대조군 대비)", () => {
+    const a = anchors();
+    const input = (): MotionInput => ({
+      homeAnchors: a.home, awayAnchors: a.away, homeIsGK: a.homeGK, awayIsGK: a.awayGK,
+      ballZone: { x: 0.9, y: 0.5 }, possession: 'home', // 홈이 원정 골문 쪽 공격
+    });
+    const play = (withPulse: boolean): number => {
+      const m = new MatchMotion();
+      m.setInput(input());
+      run(m, 1);
+      if (withPulse) m.pulse('shot', 'home', { y: 0.8 }); // 아래 구석으로 슈팅
+      for (let i = 0; i < 24; i++) { m.setInput(input()); m.step(1 / 60); }
+      return m.players.find((p) => p.side === 'away' && p.isGK)!.pos.y;
+    };
+    const control = play(false);
+    const dived = play(true);
+    // 슈팅 반응이 있으면 GK가 슛 방향(아래=y↑)으로 뚜렷이 더 내려가 있어야 한다.
+    expect(dived - control).toBeGreaterThan(0.08);
+  });
+
   it('골키퍼는 자기 골문 근처를 벗어나지 않는다', () => {
     const m = new MatchMotion();
     m.setInput(baseInput({ x: 0.9, y: 0.5 })); // 원정 골문 쪽으로 공

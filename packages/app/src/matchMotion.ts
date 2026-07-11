@@ -86,6 +86,14 @@ export class MatchMotion {
   /** 직전 점유 팀·전환 시각 — 공수 전환 버스트(역습 느낌)에 사용. */
   private prevPossession: Side = 'home';
   private transitionAt = -999;
+  /** 슈팅 반응(GK 다이브) 트랜지언트 — pulse('shot')로 설정. */
+  private shotAt = -999;
+  private shotSide: Side = 'home';
+  private shotY = 0.5;
+  /** 골 세리머니 군집 트랜지언트 — pulse('goal')로 설정. */
+  private goalAt = -999;
+  private goalSide: Side = 'home';
+  private goalScorer = -1;
 
   /** 매 프레임 최신 전술 진실을 주입. 첫 호출 시 선수를 앵커에 스냅해 초기화한다. */
   setInput(input: MotionInput): void {
@@ -124,6 +132,24 @@ export class MatchMotion {
 
   private makePlayer(side: Side, idx: number, isGK: boolean, anchor: Vec, pace: number, run: number): MotionPlayer {
     return { side, idx, isGK, pos: { ...anchor }, vel: { x: 0, y: 0 }, anchor: { ...anchor }, pace, run };
+  }
+
+  /**
+   * 순간 이벤트 반응(순수 표시용 트랜지언트) — 렌더 레이어가 슈팅·골 순간에 호출한다.
+   * 'shot'(side=공격 측): 수비 측 GK가 슛 라인으로 잠깐 다이브한다.
+   * 'goal'(side=득점 측): 득점 팀 필드플레이어가 득점자에게 몰려드는 세리머니 군집.
+   * pulse를 호출하지 않으면 창이 열리지 않아 순수 코어 거동·재현성에 영향이 없다.
+   */
+  pulse(kind: 'shot' | 'goal', side: Side, opts?: { y?: number; scorerIdx?: number }): void {
+    if (kind === 'shot') {
+      this.shotAt = this.clock;
+      this.shotSide = side;
+      this.shotY = opts?.y ?? this.ball.pos.y;
+    } else {
+      this.goalAt = this.clock;
+      this.goalSide = side;
+      this.goalScorer = opts?.scorerIdx ?? -1;
+    }
   }
 
   /** 물리를 dt초만큼 진행. */
@@ -243,9 +269,26 @@ export class MatchMotion {
   /** 한 선수의 전술 목표점(실제 좌표). */
   private targetFor(p: MotionPlayer): Vec {
     const ball = this.ball.pos;
+
+    // 골 세리머니 군집(트랜지언트) — 득점 팀 필드플레이어는 잠깐 득점자에게 몰려간다.
+    // 분리(separation)가 자연스럽게 벌려줘 겹치지 않고 무리를 이룬다.
+    if (!p.isGK && p.side === this.goalSide && this.clock - this.goalAt < 2.5) {
+      const scorer = this.players.find((q) => q.side === this.goalSide && q.idx === this.goalScorer);
+      const cx = scorer ? scorer.pos.x : (p.side === 'home' ? 0.82 : 0.18);
+      const cy = scorer ? scorer.pos.y : 0.5;
+      return {
+        x: clamp(cx + Math.sin(p.idx * 2.3) * 0.03, 0.05, 0.95),
+        y: clamp(cy + Math.cos(p.idx * 1.7) * 0.05, 0.08, 0.92),
+      };
+    }
+
     if (p.isGK) {
       // 골키퍼는 자기 골문을 지키며 공 y를 살짝 따라간다.
       const gx = p.side === 'home' ? 0.04 : 0.96;
+      // 슈팅 반응 다이브 — 수비 측 GK가 잠깐 슛 라인(shotY)으로 몸을 던진다.
+      if (this.clock - this.shotAt < 0.6 && p.side !== this.shotSide) {
+        return { x: gx, y: clamp(this.shotY, 0.1, 0.9) };
+      }
       return { x: gx, y: 0.5 + (ball.y - 0.5) * 0.35 };
     }
     const dir = attackDir(p.side);
