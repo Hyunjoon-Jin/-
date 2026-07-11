@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { Position, Weather } from '@soccer-tycoon/engine';
 import type { KitColors } from '../clubColors.js';
+import { MatchMotion, type Vec } from '../matchMotion.js';
 
 export interface PitchState {
   homeName: string;
@@ -21,6 +22,8 @@ export interface PitchState {
   shotTrail?: { side: 'home' | 'away'; fromX: number; fromY: number; outcome: string; start: number } | null;
   /** 경기 날씨(M7 D8) — 비/혹한이면 캔버스에 파티클을 얹는다. */
   weather?: Weather;
+  /** 현재 공을 잡은(공격 중인) 팀 — 운동 모델의 전진/후퇴·캐리어 판정에 쓰인다. */
+  possession?: 'home' | 'away';
   userIsHome: boolean;
   /** 홈/원정 선발 포메이션(슬롯 포지션 순서). 선수 점 배치에 사용. */
   homeFormation: Position[];
@@ -38,16 +41,6 @@ export interface PitchState {
 
 const W = 760;
 const H = 460;
-
-/** 볼 이동 보간(트윈) 지속시간(ms, 고도화 항목 A1) — 이전에는 분(minute)이 바뀔 때마다
- *  목표 위치로 순간이동했다. 고배속 관전 중 트윈이 끝나기 전에 다음 목표가 도착해도,
- *  그 시점의 화면상 보간 위치에서 새 목표로 다시 시작해 끊김 없이 이어진다. */
-const BALL_TWEEN_MS = 260;
-
-/** ease-out — 도착 직전에 감속해 더 자연스러운 멈춤을 준다. */
-function easeOutQuad(t: number): number {
-  return 1 - (1 - t) * (1 - t);
-}
 
 // 우측 공격(홈) 기준 포지션별 기본 좌표(0~1). 원정은 x를 반전.
 // PlayerDetail의 포지션 숙련도 맵(신규 개선 항목 15)도 같은 좌표계를 재사용해
@@ -98,36 +91,44 @@ export function MatchPitch(props: PitchState) {
   const propsRef = useRef(props);
   propsRef.current = props;
 
-  // 볼 트윈 상태(고도화 항목 A1): from(트윈 시작 시점의 화면상 위치) → to(새 목표),
-  // start(트윈 시작 시각, performance.now() 기준).
-  const tweenRef = useRef({ from: props.ball, to: props.ball, start: performance.now() });
-  const lastInterpolatedRef = useRef(props.ball);
+  // 관전 운동 모델(시뮬 관전 고도화) — 22명 선수·공의 연속적 움직임을 담당한다.
+  // 엔진 props.ball(분 단위 플레이 존)과 포메이션을 매 프레임 주입하고, 모델이
+  // 스프링-댐퍼로 자연스러운 위치를 만들어 낸다.
+  const motionRef = useRef(new MatchMotion());
+  const lastNowRef = useRef<number | null>(null);
+  const trailRef = useRef<Vec[]>([]); // 공 잔상(속도감)
 
-  // 새 목표 위치(props.ball)가 도착하면, 현재 화면에 보이는 보간 위치에서 새 목표로
-  // 다시 트윈을 시작한다(이전 트윈이 끝났든 진행 중이든 항상 끊김 없이 이어짐).
-  useEffect(() => {
-    tweenRef.current = { from: lastInterpolatedRef.current, to: props.ball, start: performance.now() };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.ball.x, props.ball.y]);
-
-  // requestAnimationFrame으로 매 프레임 트윈 진행률을 계산해 다시 그린다(고도화 항목 A1).
-  // propsRef가 항상 최신 props를 담고 있어, 볼 이외의 변경(스코어·분·포메이션·골 플래시 등)도
-  // 별도 effect 없이 이 루프 안에서 다음 프레임에 자연히 반영된다.
+  // requestAnimationFrame으로 매 프레임 모델을 dt만큼 전진시키고 다시 그린다.
+  // propsRef가 항상 최신 props를 담고 있어, 스코어·분·플래시 등도 자연히 반영된다.
   useEffect(() => {
     const canvas = ref.current;
     const ctx = canvas?.getContext('2d');
     if (!ctx) return;
     let raf = 0;
     const frame = (now: number) => {
-      const tw = tweenRef.current;
-      const t = Math.min(1, (now - tw.start) / BALL_TWEEN_MS);
-      const eased = easeOutQuad(t);
-      const interpolated = {
-        x: tw.from.x + (tw.to.x - tw.from.x) * eased,
-        y: tw.from.y + (tw.to.y - tw.from.y) * eased,
-      };
-      lastInterpolatedRef.current = interpolated;
-      draw(ctx, { ...propsRef.current, ball: interpolated }, now);
+      const p = propsRef.current;
+      const dt = lastNowRef.current === null ? 0 : (now - lastNowRef.current) / 1000;
+      lastNowRef.current = now;
+
+      const motion = motionRef.current;
+      const homeCoords = formationCoords(p.homeFormation);
+      const awayCoords = formationCoords(p.awayFormation).map((c) => ({ x: 1 - c.x, y: c.y }));
+      motion.setInput({
+        homeAnchors: homeCoords,
+        awayAnchors: awayCoords,
+        homeIsGK: p.homeFormation.map((pos) => pos === 'GK'),
+        awayIsGK: p.awayFormation.map((pos) => pos === 'GK'),
+        ballZone: p.ball,
+        possession: p.possession ?? 'home',
+      });
+      motion.step(dt);
+
+      // 공 잔상 갱신(최근 8프레임).
+      const trail = trailRef.current;
+      trail.push({ ...motion.ball.pos });
+      if (trail.length > 8) trail.shift();
+
+      draw(ctx, p, motion, trail, now);
       raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
@@ -137,7 +138,7 @@ export function MatchPitch(props: PitchState) {
   return <canvas ref={ref} width={W} height={H} className="pitch-canvas" />;
 }
 
-function draw(ctx: CanvasRenderingContext2D, s: PitchState, now: number) {
+function draw(ctx: CanvasRenderingContext2D, s: PitchState, motion: MatchMotion, trail: Vec[], now: number) {
   const m = 24; // 여백
   const pw = W - m * 2;
   const ph = H - m * 2;
@@ -177,72 +178,86 @@ function draw(ctx: CanvasRenderingContext2D, s: PitchState, now: number) {
   };
   drawBox(true); drawBox(false);
 
-  // ── 선수 점 배치 ──────────────────────────────────────────
-  // 공 x에 따라 양 팀이 함께 밀린다(콤팩트 블록). y는 미세하게 흔들려 생동감.
-  const shift = (s.ball.x - 0.5) * 0.12;
+  // ── 선수 배치(운동 모델) ──────────────────────────────────
+  // 각 선수는 모델이 계산한 연속 위치에 그린다. 속도 방향으로 살짝 늘려(모션 블러
+  // 느낌) 진행감을 주고, 접지 그림자로 입체감을 더한다.
+  const meta = (side: 'home' | 'away', idx: number) =>
+    side === 'home'
+      ? { label: s.homeLabels[idx], color: s.homeFormation[idx] === 'GK' ? s.kit.homeGk : s.kit.home }
+      : { label: s.awayLabels[idx], color: s.awayFormation[idx] === 'GK' ? s.kit.awayGk : s.kit.away };
 
-  const drawTeam = (
-    formation: Position[], labels: string[], mirror: boolean,
-    color: string, gkColor: string, side: 'home' | 'away',
-  ) => {
-    const coords = formationCoords(formation);
-    const isMine = side === (s.userIsHome ? 'home' : 'away');
-    coords.forEach((c, i) => {
-      const baseX = mirror ? 1 - c.x : c.x;
-      const sway = Math.sin(s.minute * 0.6 + i * 1.7) * 0.015;
-      const nx = Math.min(0.97, Math.max(0.03, baseX + shift));
-      const ny = Math.min(0.95, Math.max(0.05, c.y + sway));
-      const px = m + nx * pw;
-      const py = m + ny * ph;
+  for (const p of motion.players) {
+    const isMine = p.side === (s.userIsHome ? 'home' : 'away');
+    const { label, color } = meta(p.side, p.idx);
+    const px = m + p.pos.x * pw;
+    const py = m + p.pos.y * ph;
+    const speed = Math.hypot(p.vel.x, p.vel.y);
+    const ang = speed > 0.001 ? Math.atan2(p.vel.y, p.vel.x) : 0;
+
+    // 접지 그림자.
+    ctx.beginPath();
+    ctx.ellipse(px, py + 7, 7, 2.6, 0, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(0,0,0,0.28)';
+    ctx.fill();
+
+    // 몸통 — 속도 방향으로 약간 늘어난 타원(정지 시 원).
+    const stretch = Math.min(0.5, speed * 0.9);
+    ctx.save();
+    ctx.translate(px, py);
+    ctx.rotate(ang);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 8 * (1 + stretch), 8 * (1 - stretch * 0.4), 0, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.strokeStyle = isMine ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.55)';
+    ctx.lineWidth = isMine ? 2.2 : 1.5;
+    ctx.stroke();
+    ctx.restore();
+
+    if (label) {
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 7px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(label, px, py + 0.5);
+    }
+    if (s.cardFlash && s.cardFlash.side === p.side && s.cardFlash.slotIndex === p.idx) {
+      ctx.font = '14px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+      ctx.fillText(s.cardFlash.type === 'red' ? '🟥' : '🟨', px, py - 12);
+    }
+    if (s.injuryFlash && s.injuryFlash.side === p.side && s.injuryFlash.slotIndex === p.idx) {
+      ctx.font = '14px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+      ctx.fillText('🚑', px, py - 12);
+    }
+    // 득점자 세리머니 링(M5 D4) — 0.6초 주기로 확장·소멸을 반복하는 금색 링.
+    if (s.goalCelebrate && s.goalCelebrate.side === p.side && s.goalCelebrate.slotIndex === p.idx) {
+      const t = (now / 600) % 1;
       ctx.beginPath();
-      ctx.arc(px, py, 8, 0, Math.PI * 2);
-      ctx.fillStyle = formation[i] === 'GK' ? gkColor : color;
-      ctx.fill();
-      // 내 팀은 흰색 굵은 테두리로 한눈에 구분되게 한다(킷 색상이 실제 구단색으로
-      // 바뀌면서(항목 C1) 기존 초록/빨강 고정 색으로 하던 아군 식별을 대체).
-      ctx.strokeStyle = isMine ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.55)';
-      ctx.lineWidth = isMine ? 2.2 : 1.5;
+      ctx.arc(px, py, 10 + t * 14, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(255, 215, 0, ${(1 - t) * 0.9})`;
+      ctx.lineWidth = 2.5;
       ctx.stroke();
-      const label = labels[i];
-      if (label) {
-        ctx.fillStyle = '#fff';
-        ctx.font = 'bold 7px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(label, px, py + 0.5);
-      }
-      if (s.cardFlash && s.cardFlash.side === side && s.cardFlash.slotIndex === i) {
-        ctx.font = '14px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'alphabetic';
-        ctx.fillText(s.cardFlash.type === 'red' ? '🟥' : '🟨', px, py - 12);
-      }
-      if (s.injuryFlash && s.injuryFlash.side === side && s.injuryFlash.slotIndex === i) {
-        ctx.font = '14px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'alphabetic';
-        ctx.fillText('🚑', px, py - 12);
-      }
-      // 득점자 세리머니 링(M5 D4) — 0.6초 주기로 확장·소멸을 반복하는 금색 링.
-      if (s.goalCelebrate && s.goalCelebrate.side === side && s.goalCelebrate.slotIndex === i) {
-        const t = (now / 600) % 1;
-        ctx.beginPath();
-        ctx.arc(px, py, 10 + t * 14, 0, Math.PI * 2);
-        ctx.strokeStyle = `rgba(255, 215, 0, ${(1 - t) * 0.9})`;
-        ctx.lineWidth = 2.5;
-        ctx.stroke();
-      }
-    });
-  };
-  drawTeam(s.homeFormation, s.homeLabels, false, s.kit.home, s.kit.homeGk, 'home');
-  drawTeam(s.awayFormation, s.awayLabels, true, s.kit.away, s.kit.awayGk, 'away');
+    }
+  }
   ctx.textBaseline = 'alphabetic';
 
-  // 공
-  const bx = m + s.ball.x * pw;
-  const by = m + s.ball.y * ph;
+  // 공 — 잔상(속도감) 후 본체. 캐리어 발끝에 붙어 자연스럽게 굴러다닌다.
+  ctx.lineWidth = 3;
+  for (let i = 1; i < trail.length; i++) {
+    const a = trail[i - 1]!, b = trail[i]!;
+    ctx.beginPath();
+    ctx.moveTo(m + a.x * pw, m + a.y * ph);
+    ctx.lineTo(m + b.x * pw, m + b.y * ph);
+    ctx.strokeStyle = `rgba(255,255,255,${0.05 * i})`;
+    ctx.stroke();
+  }
+  const bx = m + motion.ball.pos.x * pw;
+  const by = m + motion.ball.pos.y * ph;
   ctx.beginPath();
-  ctx.arc(bx, by, 6, 0, Math.PI * 2);
+  ctx.ellipse(bx, by + 5, 4, 1.6, 0, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.fill();
+  ctx.beginPath();
+  ctx.arc(bx, by, 5, 0, Math.PI * 2);
   ctx.fillStyle = '#ffffff';
   ctx.fill();
   ctx.strokeStyle = '#111'; ctx.lineWidth = 1.5; ctx.stroke();
