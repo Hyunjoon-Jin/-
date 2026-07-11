@@ -590,6 +590,20 @@ body {
   transition: width .4s ease;
 }
 
+/* 감독 커리어 탭(P2 B4) */
+.career-tab { display: flex; flex-direction: column; gap: 14px; }
+.career-rep {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 10px;
+  padding: 12px 14px; border-radius: 10px;
+  background: var(--panel-2); border: 1px solid var(--line);
+}
+.career-rep-label { font-weight: 600; }
+.career-rep .rep-bar { flex-basis: 100%; }
+.career-trend { font-size: 13px; font-weight: 600; }
+.career-totals { margin-bottom: 4px; }
+.career-stints .career-current { background: rgba(61, 220, 132, 0.08); }
+.career-stints .career-current td { font-weight: 600; }
+
 .pd-timeline { margin: 6px 0 16px; }
 .pd-timeline h3 { margin: 0 0 6px; }
 .timeline-list { list-style: none; padding: 0; margin: 0; max-height: 200px; overflow-y: auto; }
