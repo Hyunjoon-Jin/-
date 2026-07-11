@@ -20,6 +20,10 @@ export {
 } from './derived.js';
 export { applyMatchEffects, ROTATION_WARNING_THRESHOLD } from './matchEffects.js';
 export {
+  START_REPUTATION, REPUTATION_TIER_LABEL, reputationTier, reputationDelta, applyReputation,
+  type ManagerReputationTier, type ReputationInput,
+} from './managerCareer.js';
+export {
   type SquadStatus, SQUAD_STATUS_LABEL, EXPECTED_SHARE,
   expectedStatus, effectiveStatus, promiseStatus,
   NEUTRAL_HAPPINESS, HAPPINESS_UNHAPPY, HAPPINESS_CONTENT, UNHAPPY_STREAK_LIMIT,

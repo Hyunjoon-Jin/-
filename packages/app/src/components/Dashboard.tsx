@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import {
   myClub, rivalClub, lastSummary, myLastPosition, managerPersona, managerSnsReputation, contractOptions,
-  thinSquadLines, LINE_DEPTH_RECOMMENDED, squadUnrest,
+  thinSquadLines, LINE_DEPTH_RECOMMENDED, squadUnrest, managerReputationInfo,
   DIFFICULTIES, DIVISION_LABELS, type GameState, type ActionOutcome,
 } from '../game.js';
 import {
@@ -582,6 +582,32 @@ export function Dashboard({
           </span>
         )}
       </Banner>
+
+      {(() => {
+        const rep = managerReputationInfo(game);
+        const delta = rep.lastDelta;
+        return (
+          <Banner tone="info">
+            <div className="rep-banner">
+              <span>
+                🎖️ 감독 평판 <b className="rep-tier">{rep.tierLabel}</b>{' '}
+                <span className="muted">({Math.round(rep.value)}/100)</span>
+                {delta !== undefined && delta !== 0 && (
+                  <span className={delta > 0 ? 'pos' : 'neg'}>
+                    {' '}지난 시즌 {delta > 0 ? '+' : ''}{delta}
+                  </span>
+                )}
+              </span>
+              <div className="rep-bar" aria-hidden="true">
+                <div className="rep-bar-fill" style={{ width: `${Math.round(rep.value)}%` }} />
+              </div>
+            </div>
+            <span className="muted small">
+              성적·우승·구단 규모로 축구계에서 쌓는 명성입니다(이사회 신뢰도와 별개).
+            </span>
+          </Banner>
+        );
+      })()}
 
       {persona !== 'neutral' && (
         <Banner tone="special">

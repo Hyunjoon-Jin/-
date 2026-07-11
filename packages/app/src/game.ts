@@ -28,6 +28,8 @@ import {
   runInternationalTournament, TOURNAMENT_INTERVAL_SEASONS, checkInternationalRetirements,
   clubTournamentHighlight, type ClubTournamentHighlight,
   confidenceDelta, applyConfidence, isSacked, START_CONFIDENCE, boardStatus, boardTierUpgradeBonus,
+  START_REPUTATION, reputationTier, reputationDelta, applyReputation,
+  REPUTATION_TIER_LABEL, type ManagerReputationTier,
   boldPredictionTarget, evaluateBoldPrediction, type BoldPredictionResult,
   crossedLongTermProjectMilestone, longTermProjectBonus,
   type BoardStatus,
@@ -164,6 +166,11 @@ export interface GameState {
   boardConfidence: number;
   /** 경질 여부(게임 오버). 신뢰도가 하한 미만이 되면 설정. */
   sacked?: boolean;
+  /** 감독 평판(P2 B1, 0~100) — 이사회 신뢰도와 별개로 축구계 전체의 명성. 성적·우승·
+   *  구단 규모로 시즌마다 누적. 구버전 세이브는 없을 수 있어 optional(없으면 START_REPUTATION). */
+  managerReputation?: number;
+  /** 지난 시즌 평판 변화량(대시보드 표시용). 프리시즌 첫 진입 등에서는 undefined. */
+  lastReputationDelta?: number;
   /** 이번 시즌 이사회 특별 요구(없을 수 있음). */
   demand?: BoardDemand | null;
   /** 이번 시즌 이사회 요구 재협상을 이미 시도했는가(신규 개선 항목 22, 시즌당 1회 제한).
@@ -374,6 +381,7 @@ export function startGame(seed: number, myClubId: string, difficulty: Difficulty
     difficulty,
     objective,
     boardConfidence: START_CONFIDENCE,
+    managerReputation: START_REPUTATION,
     demand: generateDemand(
       { overWages: annualWageBill(mine) > wageBudget(mine) }, new Rng(seed + 4242), mine.boardPersona?.style,
     ),
@@ -945,6 +953,19 @@ export function finishSeason(state: GameState): GameState {
   );
   const sacked = isSacked(boardConfidence);
 
+  // 감독 평판(P2 B1) — 성적·우승·승강·구단 규모로 시즌마다 누적.
+  const prevReputation = state.managerReputation ?? START_REPUTATION;
+  const repDelta = reputationDelta({
+    position: myPosition, objective: state.objective, leagueSize: myTable.length,
+    division: myClub(state).division === 0 ? 1 : 2,
+    leagueTitle: myTable[0]!.clubId === state.myClubId,
+    cupTitle: cupChampionId === state.myClubId,
+    promoted, relegated,
+    clubReputation: myClub(state).finance.reputation,
+    currentReputation: prevReputation,
+  });
+  const managerReputation = applyReputation(prevReputation, repDelta);
+
   // 이사회 신뢰 등급이 이번 시즌 실제로 올랐으면(예: 불안정→안정) 일회성 투자 예산 승인(C-new1).
   const prevBoardStatus = boardStatus(state.boardConfidence);
   const newBoardStatus = boardStatus(boardConfidence);
@@ -1039,6 +1060,8 @@ export function finishSeason(state: GameState): GameState {
     // 새 부 기준으로 목표 재설정(장기 계약 누적치만큼 더 엄격하게)
     objective: divisionObjective(myClub(state).division, state.difficulty, state.ambition),
     boardConfidence,
+    managerReputation,
+    lastReputationDelta: repDelta,
     sacked,
     demand: nextDemand,
     demandRenegotiated: false,
@@ -1806,6 +1829,15 @@ export function managerPersona(state: GameState): ManagerPersona {
 export function managerSnsReputation(state: GameState): SnsReputation {
   const { bold, humble } = toneTally(state);
   return snsReputation(bold, humble);
+}
+
+/** 감독 평판(P2 B1) 현재값·등급·지난 시즌 변화. */
+export function managerReputationInfo(state: GameState): {
+  value: number; tier: ManagerReputationTier; tierLabel: string; lastDelta?: number;
+} {
+  const value = state.managerReputation ?? START_REPUTATION;
+  const tier = reputationTier(value);
+  return { value, tier, tierLabel: REPUTATION_TIER_LABEL[tier], lastDelta: state.lastReputationDelta };
 }
 
 /** 인터뷰를 답변 없이 넘김(효과 없음, 재노출만 방지). */
